@@ -97,13 +97,15 @@ describe('SourceRings', () => {
     expect(ring.textContent).not.toMatch(/212|471/)
     expect(container.querySelector('section')).toBeNull()
     expect(screen.queryByText(/visitors from/i)).toBeNull()
-    // The flip is a 3D turn on hover/focus: one coin, two faces, the share face
-    // pre-turned so it reads correctly once the coin is over.
+    // The mark and the share live on the same coin (one hover/focus target, two
+    // faces) rather than a mark plus a separate detail underneath. There is no
+    // data-state for "flipped" (jsdom cannot fire real hover), so the rotate
+    // classes are the only signal that hover/focus turns it, and that the share
+    // face is pre-turned so it reads right once the coin is over — kept to just
+    // those, not the coin's other 3D/backface plumbing.
     const coin = ring.querySelector('[data-coin]')!
-    expect(coin.className).toMatch(/\btransform-3d\b/)
     expect(coin.className).toMatch(/group-hover:rotate-y-180/)
     expect(coin.className).toMatch(/group-focus-visible:rotate-y-180/)
-    for (const face of ['[data-mark]', '[data-share]']) expect(coin.querySelector(face)!.className).toMatch(/\bbackface-hidden\b/)
     expect(coin.querySelector('[data-share]')!.className).toMatch(/\brotate-y-180\b/)
     expect(coin.querySelector('[data-mark]')!.className).not.toMatch(/\brotate-y-180\b/)
     expect(ring.getAttribute('tabindex')).toBe('0')

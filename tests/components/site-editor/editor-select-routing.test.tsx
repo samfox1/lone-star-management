@@ -263,7 +263,6 @@ describe('a routed select is VISIBLE where it lands', () => {
     const current = document.querySelectorAll('[data-social-button][aria-current="true"]')
     expect(current).toHaveLength(1)
     expect(current[0].textContent).toContain('Apple Music')
-    expect(current[0].className).toContain('ring-accent')
     expect(scrollSpy).toHaveBeenCalled()
     // …and the outline follows: the same target goes back as the highlight.
     expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'link', id: 'apple music' })

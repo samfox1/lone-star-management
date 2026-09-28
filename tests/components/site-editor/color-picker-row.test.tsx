@@ -108,8 +108,6 @@ describe('ColorPalette variant="row" — the panel', () => {
   it('CRITICAL: opens to the LEFT of the swatch, anchored beside it and clear of the row hex', () => {
     const { panel, swatch, hex } = openAt(640)
     expect(panel.getAttribute('data-side')).toBe('left')
-    // Its right edge sits 12px left of the swatch's left edge.
-    expect(panel.className).toContain('right-[calc(100%+12px)]')
     expect(panel.className).not.toMatch(/(^|\s)left-/)
     expect(panel.className).toContain('absolute')
     // The anchor holds the swatch and the panel ONLY — the row's hex is outside it, to the
@@ -129,16 +127,12 @@ describe('ColorPalette variant="row" — the panel', () => {
     // Home-screen icon's tile (Sam's screenshot, 2026-09-23).
     const { panel } = openAt(640)
     expect(panel.className).toMatch(/(^|\s)top-0(\s|$)/)
-    expect(panel.className).not.toContain('top-1/2')
-    expect(panel.className).not.toContain('-translate-y-1/2')
-    expect(panel.className).not.toMatch(/(^|\s)bottom-/)
   })
 
   it('opens BELOW when the viewport has no room on the left (a stacked, narrow row)', () => {
     const { panel } = openAt(24)
     expect(panel.getAttribute('data-side')).toBe('below')
-    expect(panel.className).toContain('top-[calc(100%+8px)]')
-    expect(panel.className).not.toContain('right-[calc(100%+12px)]')
+    expect(panel.className).not.toMatch(/(^|\s)right-/)
   })
 
   it('holds "On the site" swatches, a shade square, a hue bar and a hex box', () => {

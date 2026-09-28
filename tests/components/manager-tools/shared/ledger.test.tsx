@@ -29,9 +29,6 @@ describe('LedgerSection', () => {
     )
     const region = screen.getByRole('region', { name: 'Colors' })
     const word = within(region).getByText('Colors')
-    expect(word.className).toContain('font-space')
-    expect(word.className).toContain('uppercase')
-    expect(word.className).toContain('text-ink-faint')
     // The word and the rows are siblings in the grid, rows after the word.
     const rows = within(region).getByText('row one').parentElement!
     expect(word.parentElement).toBe(rows.parentElement)

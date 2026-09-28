@@ -27,17 +27,14 @@ describe('AddRow', () => {
     render(<AddRow noun="font" onAdd={vi.fn()} />)
     const btn = screen.getByRole('button', { name: 'Add font' })
     expect(btn.textContent).toBe('Add font')
-    expect(btn.className).toContain('hover:text-ink')
-    expect(btn.className).not.toMatch(/(^|\s)(hover:)?bg-/)
-    expect(btn.className).not.toMatch(/(^|\s)border(\s|-)/)
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('open: a focused name field with ✓ (accent on hover) and × (red on hover)', () => {
+  it('open: a focused name field with a confirm (✓) and a cancel (×)', () => {
     const { input } = openForm()
     expect(document.activeElement).toBe(input)
-    expect(screen.getByRole('button', { name: 'Add' }).className).toContain('hover:text-accent')
-    expect(screen.getByRole('button', { name: 'Cancel' }).className).toContain('hover:text-accent-red')
+    expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Add logo' })).toBeNull()
   })
 

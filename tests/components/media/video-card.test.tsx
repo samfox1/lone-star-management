@@ -67,10 +67,9 @@ describe('the video modal', () => {
     expect(within(dialog).getByRole('link', { name: /Open the video/ })).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abc123def')
   })
 
-  it('a Short links to /shorts/ and keeps a portrait player', () => {
+  it('a Short links to /shorts/', () => {
     const dialog = openVideo({ ...video, is_short: true })
     expect(within(dialog).getByRole('link', { name: /Open the video/ })).toHaveAttribute('href', 'https://www.youtube.com/shorts/abc123def')
-    expect(dialog.querySelector('iframe')?.parentElement?.className).toMatch(/aspect-\[9\/16\]/)
   })
 
   it('Share and Analytics sit in the corner; the footer is Delete and Save; no Rename sheet', () => {

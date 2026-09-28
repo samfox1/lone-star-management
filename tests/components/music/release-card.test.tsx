@@ -150,13 +150,12 @@ describe('the release modal', () => {
     expect(opts(oneSongEp)).toEqual(['Single', 'Remix', 'Live set', 'EP'])
   })
 
-  it('the listen links sit in their own column, labelled by logo — black when set, grey when empty', () => {
+  it('the listen links sit in their own column, and only a set one shows its value', () => {
     const dialog = openRelease()
-    // The Spotify row has a link, Apple Music does not; the logo's colour says which.
-    const spotifyLogo = rowOf(dialog, 'Spotify').querySelector('svg')
-    const appleLogo = rowOf(dialog, 'Apple Music').querySelector('svg')
-    expect(spotifyLogo?.getAttribute('class')).toMatch(/text-ink(?!-faint)/)
-    expect(appleLogo?.getAttribute('class')).toMatch(/text-ink-faint/)
+    // The Spotify row has a link, Apple Music does not — checked by what the row shows,
+    // not by the logo's colour (that's a styling detail, not the behavior).
+    expect(within(rowOf(dialog, 'Spotify')).getByText('https://open.spotify.com/album/x')).toBeInTheDocument()
+    expect(within(rowOf(dialog, 'Apple Music')).queryByText(/^https?:\/\//)).toBeNull()
   })
 
   it('a platform row saves the release link under that platform, and shows the current one', async () => {

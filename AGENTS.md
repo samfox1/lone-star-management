@@ -42,6 +42,31 @@ anon-executable for weeks.
   not an intended door (`scripts/audit-grants.ts` holds the allowlist). Run it after any
   migration that creates or replaces a function.
 
+# Test depth: match it to how settled the thing is (Sam, 2026-09-28)
+
+Sam: "I dont know how smart it is to continue building tests at such a rapid pace when we
+havent reached the final output that we want." Test effort follows how SETTLED and how
+COSTLY-TO-GET-WRONG a thing is — not a flat "test everything strictly":
+
+- **Always, test-first and strict** (everything in the section below applies): security
+  and permissions (RLS, grants, isolation), data that can be lost (publish, revert,
+  deletes, migrations, storage GC), money (Shopify/merch), what the live site receives
+  (`get_public_site`, the preview payload, the bridge), and parsers/validators (handles,
+  links, ids, anything that ends up in a URL or a `<style>`).
+- **Light**: UI flows still being designed — ONE test that the main path works (the
+  action is called with the right thing; the state that matters shows). Not every label,
+  class or layout detail.
+- **Skip for now**: exact styling, class strings, wording and layout that are still
+  moving — check them with a screenshot instead, and add a test once the design settles.
+  A test that pins a CSS class string or a sentence of copy breaks on every design tweak
+  and catches no bug.
+- **Mutation testing (Stryker)** runs on the stable core only, not on UI that is still
+  changing.
+
+Finding a bug and then fixing the test that locked it in is normal — a test proves the
+code does what we SAID, not that what we said is right. Run the FULL suite once before
+every push; while building, run only the related tests.
+
 # Test discipline: a test must be able to FAIL
 
 The 2026-08-04/05 review found the same defect shape over and over, across every

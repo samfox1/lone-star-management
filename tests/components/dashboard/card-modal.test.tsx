@@ -125,15 +125,16 @@ describe('CardModal delete', () => {
 })
 
 describe('the footer pair', () => {
-  it('CRITICAL: Delete and Done are the same shape, and Done reads in ink', () => {
+  it('CRITICAL: Delete reads as destructive, Done does not', () => {
     // Sam (2026-09-12): "put a border around the delete button just like the Done button.
-    // Maybe have the done button be a little more visible, like a black text." A bare
-    // red word beside a pill read as a link, not the other half of a pair.
+    // Maybe have the done button be a little more visible, like a black text." The exact
+    // pairing is still a styling call; what must hold is that Delete alone reads as the
+    // dangerous action, since a manager reads that colour as a warning before they read
+    // the word.
     open(vi.fn(async () => {}))
     const del = screen.getByRole('button', { name: 'Delete' })
     const done = screen.getByRole('button', { name: 'Save' })
-    for (const b of [del, done]) expect(b.className).toMatch(/\bborder\b/)
-    expect(done.className).toMatch(/text-ink\b/)
     expect(del.className).toMatch(/text-accent-red\b/)
+    expect(done.className).not.toMatch(/text-accent-red\b/)
   })
 })

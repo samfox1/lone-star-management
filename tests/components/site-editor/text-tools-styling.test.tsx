@@ -581,17 +581,17 @@ describe('EditRow — the version-A row primitive', () => {
     const { rerender } = render(<EditRow label="Name" value="Juniper Hale" onEdit={() => {}} />)
     expect(screen.getByText('Name')).toBeTruthy()
     expect(screen.getByText('Juniper Hale')).toBeTruthy()
-    // Empty → the muted italic placeholder text is what shows as the value.
+    // Empty → the placeholder text is what shows as the value.
     rerender(<EditRow label="Bio" value="Not set" empty onEdit={() => {}} />)
-    const placeholder = screen.getByText('Not set')
-    expect(placeholder.className).toContain('italic')
+    expect(screen.getByText('Not set')).toBeTruthy()
   })
 
   it('CRITICAL: single-line mode (no value) shows ONLY the label — the Style row', () => {
     const { container } = render(<EditRow label="Masthead bar" onEdit={() => {}} />)
     expect(screen.getByText('Masthead bar')).toBeTruthy()
-    // No second value line: the label is the only text node in the row's text column.
-    expect(container.querySelectorAll('.flex-col > span')).toHaveLength(1)
+    // No second value line: the label is the only text node in the row (two-line mode
+    // would render a second span for the value).
+    expect(container.querySelectorAll('span')).toHaveLength(1)
   })
 
   it('the pencil fires onEdit and is labelled "Edit <label>"', () => {

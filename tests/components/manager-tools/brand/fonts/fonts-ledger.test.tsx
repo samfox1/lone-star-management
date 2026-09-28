@@ -340,7 +340,7 @@ describe('FontsLedger — Change font', () => {
 
   it('opens to the LEFT of the control, never over the row', () => {
     show()
-    expect(openMenu('Primary').className).toContain('right-[calc(100%+12px)]')
+    expect(openMenu('Primary').className).toMatch(/right-\[calc\(100%/)
   })
 
   it('CRITICAL: picking the font already there writes nothing', async () => {
