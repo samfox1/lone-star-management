@@ -47,12 +47,16 @@ const PAIR = 'min-w-[88px] justify-center'
 export function ConnectModal({
   artistId,
   taken,
+  defs,
   onClose,
   onDone,
 }: {
   artistId: string
   /** Keys already on the page — dimmed in the grid, not addable twice. */
   taken: string[]
+  /** What the grid offers; every connection by default. The editor's Add button passes
+   *  the socials alone — a service is never a site button. */
+  defs?: readonly ConnectionDef[]
   onClose: () => void
   /** Called once when the manager leaves with at least one connection made. */
   onDone: () => void
@@ -78,7 +82,7 @@ export function ConnectModal({
   }
 
   const takenSet = new Set(taken)
-  const shown = searchConnections(query, connectionsAtoZ())
+  const shown = searchConnections(query, connectionsAtoZ(defs))
 
   function togglePick(def: ConnectionDef) {
     setPicks((all) => (all.some((p) => p.def.key === def.key) ? all.filter((p) => p.def.key !== def.key) : [...all, { def, input: seed(def), status: 'wait' }]))

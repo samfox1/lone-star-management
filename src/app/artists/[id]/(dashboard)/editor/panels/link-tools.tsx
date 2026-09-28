@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
 import { safeHref } from '@/lib/url'
-import { platformFromUrl } from '@samfox1/site-bridge/social'
+import { displayAddress } from '@/lib/settings'
+import { connectionHandle, connectionOfLink } from '@/lib/connections'
 import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
 import {
@@ -16,13 +16,15 @@ import {
   INVALID_FIELD,
   FIELD,
   FIELD_ON_TINT,
+  onSiteOnly,
   useCollapseOnOutsideClick,
 } from '../inspector-shared'
 import { useSignal } from '../use-signal'
 import { useDragReorder } from '../use-drag-reorder'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
-import { addContentAction, saveEditorLinkAction, updateContentAction } from '../../actions'
-import { AddSocialModal } from '../add-social-modal'
+import { saveEditorLinkAction, updateContentAction } from '../../actions'
+import { ConnectionMark } from '../../(manager-tools)/connections/connection-mark'
+import { AddButtonModal } from '../add-button-modal'
 
 /* ── Site-link tools: set the href for each manifest-declared link button ────────────
  * Mirrors StyleTools (manifest-driven, Phase 2): the site declares its link-powered
@@ -182,7 +184,13 @@ export function SiteLinkTools({
     </div>
   )
 }
-/* ── Link tools: edit / reorder / remove the site's outbound links ───────────── */
+/** A frame click on a link lands as `item:link:<label lowercased>` — the LABEL, because the
+ *  row id never reaches the deployed site (socials arrive there as label-mapped config
+ *  values), and lowercasing is the exact normalization that pipeline already joins on. */
+function focusedLinkLabel(focusedKey: string | null | undefined): string | null {
+  return focusedKey?.startsWith('item:link:') ? focusedKey.slice('item:link:'.length) : null
+}
+
 /** A link row that shows WHERE a frame click landed: scrolls into view and carries
  *  aria-current when it is the focused region. A plain div otherwise — every drag
  *  handler and class passes straight through. */
@@ -212,15 +220,114 @@ function FocusScroll({
   )
 }
 
-export function LinkTools({
+/* ── Social buttons: the site's socials, each one a connection's link ──────────────
+ * Sam, 2026-09-28: "when the connection is added, and I travel to the socials list in the
+ * site editor, I can add a new button based on one of the existing connections that I
+ * have… it should reference the link provided by the connection." And where a button is
+ * switched on and off: "Only in the editor."
+ *
+ * So this lists the BUTTONS — the social links ON the site (`onSiteOnly`, the rule every
+ * item panel lists by) — each as mark · name · handle. None is a URL box: a button is the
+ * connection's own links row, and its link is edited in Connections. "Add button" picks
+ * from the connections not on the site yet and turns THAT row on (AddButtonModal); the ×
+ * takes a button off the site and deletes nothing, so the connection stays. Rows drag to
+ * reorder by id across the WHOLE list, so the links not shown here keep their place. */
+export function SocialButtons({
+  links,
+  artistId,
+  onReorder,
+  onToggleOnSite,
+  focusedKey,
+}: {
+  /** Every social link, on the site and off it: the off ones are the picker's choices. */
+  links: EditorLink[]
+  artistId: string
+  onReorder: (fromId: string, toId: string) => void
+  /** The live toggle: on from the picker, off from a row's ×. */
+  onToggleOnSite: (l: EditorLink) => void
+  /** The selected region's stable key (`item:link:<label lowercased>`). */
+  focusedKey?: string | null
+}) {
+  const [adding, setAdding] = useState(false)
+  const { dragProps, isOver } = useDragReorder(onReorder)
+  const focusedLabel = focusedLinkLabel(focusedKey)
+
+  return (
+    <div className="pb-2 pt-1">
+      {onSiteOnly(links).map((l) => {
+        const def = connectionOfLink(l)
+        // A row no connection owns (a label from before the vocabulary closed) still shows,
+        // so it can be taken off the site; it just has no mark of its own.
+        const name = def?.label ?? l.label
+        const handle = def ? connectionHandle(def, l.url) : displayAddress(l.url)
+        const isFocused = focusedLabel !== null && l.label.trim().toLowerCase() === focusedLabel
+        return (
+          <FocusScroll
+            key={l.id}
+            focused={isFocused}
+            data-social-button={name}
+            {...dragProps(l.id)}
+            className={cx(
+              'group flex items-center gap-3 px-4 py-2.5 hover:bg-surface',
+              (isOver(l.id) || isFocused) && 'ring-2 ring-accent ring-inset',
+            )}
+          >
+            <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
+              <Icon name="grip" size={16} />
+            </span>
+            <span className="flex w-4 flex-none justify-center text-ink">
+              {def ? <ConnectionMark def={def} size={15} /> : <Icon name="links" size={15} />}
+            </span>
+            <span className="flex-none text-[13px] text-ink">{name}</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{handle}</span>
+            <button
+              type="button"
+              aria-label={`Remove the ${name} button`}
+              title="Take it off the site. The connection stays."
+              onClick={() => onToggleOnSite(l)}
+              className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <Icon name="close" size={15} />
+            </button>
+          </FocusScroll>
+        )
+      })}
+
+      {/* The same footer the socials always had — a button that opens in place, never a
+          link out of the editor (Sam, 2026-08-09) — now picking from the connections. */}
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
+      >
+        <Icon name="plus" size={16} />
+        <span className="text-[13px]">Add button</span>
+      </button>
+
+      {adding && (
+        <AddButtonModal
+          artistId={artistId}
+          links={links}
+          onCancel={() => setAdding(false)}
+          onPick={(l) => {
+            setAdding(false)
+            onToggleOnSite(l)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ── Contact links: edit / reorder / remove a booking address ────────────────────
+ * A mailto:/tel: row is a contact route, not a profile to follow, so it is not a button
+ * made from a connection: its label and address are edited here, in place. */
+export function ContactLinkTools({
   links,
   artistId,
   onRemove,
   onReorder,
   onToggleOnSite,
-  group,
-  showAdd = true,
-  inferPlatform = false,
   focusedKey,
   collapseAt = 0,
 }: {
@@ -228,22 +335,8 @@ export function LinkTools({
   artistId: string
   onRemove: (l: EditorLink) => void
   onReorder: (fromId: string, toId: string) => void
-  /** Names this list in the accessible labels. The panel renders LinkTools TWICE
-   *  (Socials and Contact) and row labels used to be numbered per-list, so
-   *  "Link 1 label" existed twice in the DOM — ambiguous to a screen reader and to
-   *  getByLabelText. The group disambiguates them. */
-  group: string
-  /** The "Add link" footer. Off for the Contact group, which is a slice of the same
-   *  list — one add affordance per panel, not one per group. */
-  showAdd?: boolean
-  /** Infer the label (and so the icon) from the URL, hiding the Label field. On for
-   *  Socials, off for Contact (whose label is a manager-chosen name, not a platform). */
-  inferPlatform?: boolean
   onToggleOnSite: (l: EditorLink) => void
-  /** The selected region's stable key. A social icon in the frame posts
-   *  `item:link:<label lowercased>` — the LABEL, because the row id never reaches the
-   *  deployed site (socials arrive there as label-mapped config values), and lowercasing
-   *  is the exact normalization that pipeline already joins on. */
+  /** The selected region's stable key (`item:link:<label lowercased>`). */
   focusedKey?: string | null
   /** Ticks when a preview click hit nothing editable — collapse the open row. */
   collapseAt?: number
@@ -251,8 +344,6 @@ export function LinkTools({
   const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
     Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
   )
-  const [adding, setAdding] = useState(false)
-  const router = useRouter()
   const [invalid, setInvalid] = useState<Set<string>>(new Set())
   // Which row is expanded. Rows collapse to just their label; clicking one opens the
   // edit/remove controls below it (single-open accordion — keeps the list short).
@@ -266,11 +357,10 @@ export function LinkTools({
     setOpen(null)
   }
 
-  // A social selected in the FRAME lands as `item:link:<label lowercased>` — join by the
-  // same normalization and OPEN that row, or the "selected link" is a closed accordion
-  // line indistinguishable from its neighbours. Render-time reset on prop change (the
-  // repo's selectedStyle pattern), so the manager's own accordion clicks still win after.
-  const focusedLabel = focusedKey?.startsWith('item:link:') ? focusedKey.slice('item:link:'.length) : null
+  // A link selected in the FRAME opens its row, or the "selected link" is a closed
+  // accordion line indistinguishable from its neighbours. Render-time reset on prop change
+  // (the repo's selectedStyle pattern), so the manager's own accordion clicks still win after.
+  const focusedLabel = focusedLinkLabel(focusedKey)
   const focusedRow = focusedLabel != null ? links.find((l) => l.label.trim().toLowerCase() === focusedLabel) : undefined
   const [lastFocusedLabel, setLastFocusedLabel] = useState<string | null>(null)
   if (focusedLabel !== lastFocusedLabel) {
@@ -326,8 +416,7 @@ export function LinkTools({
             {/* The shared version-A row (EditRow): label over URL as plain text, a
                 hover grip (the reorder handle — the whole row still drags), an "Off"
                 tag for an off-site link, and the hover pencil that reveals the box
-                below. The pencil is numbered per list so Socials + Contact don't
-                collide. */}
+                below. */}
             <EditRow
               grip
               label={v.label.trim() || 'Untitled link'}
@@ -335,39 +424,29 @@ export function LinkTools({
               empty={urlBlank}
               trailing={!l.onSite ? <span className={cx(EYEBROW, 'flex-none')}>Off</span> : undefined}
               expanded={isOpen}
-              editLabel={`${group.toLowerCase()} link ${i + 1}`}
+              editLabel={`contact link ${i + 1}`}
               onEdit={() => setOpen(isOpen ? null : l.id)}
             />
 
             {isOpen && (
               // Condensed box (Sam, 2026-08-12): bare inputs, no per-field icon/label
-              // chrome, a tight toggle + remove line. A social has no Label field — the
-              // platform (and icon) is inferred from the URL; a CONTACT link keeps its
-              // manager-chosen name.
+              // chrome, a tight toggle + remove line. A contact keeps its manager-chosen
+              // name, so it has a Label field.
               <div className="space-y-1.5 bg-surface px-4 pb-2.5 pt-1.5">
-                {!inferPlatform && (
-                  <input
-                    aria-label={`${group} link ${i + 1} label`}
-                    aria-invalid={(rowInvalid && labelBlank) || undefined}
-                    value={v.label}
-                    onChange={(e) => edit(l.id, { label: e.target.value })}
-                    placeholder="Label"
-                    className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
-                  />
-                )}
                 <input
-                  aria-label={`${group} link ${i + 1} URL`}
+                  aria-label={`Contact link ${i + 1} label`}
+                  aria-invalid={(rowInvalid && labelBlank) || undefined}
+                  value={v.label}
+                  onChange={(e) => edit(l.id, { label: e.target.value })}
+                  placeholder="Label"
+                  className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
+                />
+                <input
+                  aria-label={`Contact link ${i + 1} URL`}
                   aria-invalid={(rowInvalid && urlBlank) || undefined}
                   type="url"
                   value={v.url}
-                  onChange={(e) => {
-                    const url = e.target.value
-                    // Infer the platform (→ label → icon) from the URL for a social. A
-                    // recognised host renames the row; an unknown one keeps whatever
-                    // label the modal set, so the row still has a name.
-                    const inferred = inferPlatform ? platformFromUrl(url) : null
-                    edit(l.id, inferred ? { url, label: inferred.label } : { url })
-                  }}
+                  onChange={(e) => edit(l.id, { url: e.target.value })}
                   placeholder="https://…"
                   className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
                 />
@@ -375,7 +454,7 @@ export function LinkTools({
                   <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
                   <button
                     type="button"
-                    aria-label={`Remove ${group.toLowerCase()} link ${i + 1}`}
+                    aria-label={`Remove contact link ${i + 1}`}
                     onClick={() => onRemove(l)}
                     className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
                   >
@@ -388,40 +467,6 @@ export function LinkTools({
           </FocusScroll>
         )
       })}
-
-      {showAdd && (
-        // A BUTTON, not a link out. The old footer navigated to /artists/[id]/links,
-        // which threw away the whole editor session — frame, scroll, open panel — to
-        // type one URL (Sam, 2026-08-09). The new row joins THIS list, so it lands in
-        // the site's socials container and the row re-centres itself.
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
-        >
-          <Icon name="plus" size={16} />
-          <span className="text-[13px]">Add social</span>
-        </button>
-      )}
-
-      {adding && (
-        <AddSocialModal
-          existingLabels={links.map((l) => l.label)}
-          onCancel={() => setAdding(false)}
-          onAdd={async (label, url) => {
-            const fd = new FormData()
-            fd.set('label', label)
-            fd.set('url', url)
-            // The generic content path, so a social added here is the same row shape as
-            // one added anywhere else — no second creation story to keep in step.
-            const res = await addContentAction('link', artistId, fd)
-            if (res?.error) return res.error
-            setAdding(false)
-            router.refresh()
-            return null
-          }}
-        />
-      )}
 
       <SaveLine status={status} />
     </div>

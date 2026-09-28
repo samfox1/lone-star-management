@@ -28,6 +28,7 @@ import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-in
 import type { DroppedRegion } from '@samfox1/site-bridge/manifest'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
 
 afterEach(cleanup)

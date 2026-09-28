@@ -22,6 +22,7 @@ import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-in
 import type { EditorImageField } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 import { DEFAULT_BUDGETS, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
   saveEditorFieldAction: vi.fn(async () => ({ ok: true })),

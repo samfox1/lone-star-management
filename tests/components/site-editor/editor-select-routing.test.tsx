@@ -30,6 +30,7 @@ import type {
 } from '@/app/artists/[id]/(dashboard)/editor/inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   deleteMediaAction: vi.fn(async () => ({})),
   saveEditorFieldAction: vi.fn(async () => ({ ok: true })),
@@ -245,25 +246,27 @@ describe('a routed select is VISIBLE where it lands', () => {
     expect(scrollSpy).toHaveBeenCalled()
   })
 
-  it('CRITICAL: a social-button select opens Links with ITS row open and current', () => {
+  it('CRITICAL: a social-button select opens Links with ITS row current and scrolled to', () => {
     // Sam, 2026-08-06: "I should also see the editor responding to … the socials
     // buttons." skeen posts item:link:<label lowercased> — the label, because the row id
     // never reaches the deployed site; this side re-joins on the identical
     // normalization, so "Apple Music" finds "apple music" and case never splits them.
+    // (A button has nothing to open since 2026-09-28 — its link is edited in Connections —
+    // so current + scrolled + ringed is the whole of "you are here".)
     const { onHighlight } = renderInspector({
       links: [
-        { id: 'l1', label: 'Instagram', url: 'https://ig', onSite: true },
-        { id: 'l2', label: 'Spotify', url: 'https://sp', onSite: true },
+        { id: 'l1', label: 'Instagram', url: 'https://instagram.com/skeen', onSite: true },
+        { id: 'l2', label: 'Apple Music', url: 'https://music.apple.com/us/artist/1', onSite: true },
       ],
-      selectedRegion: select({ kind: 'item', assetType: 'link', id: 'instagram' }),
+      selectedRegion: select({ kind: 'item', assetType: 'link', id: 'apple music' }),
     })
-    const row = document.querySelector('[aria-current="true"]')
-    expect(row).not.toBeNull()
-    expect(row!.textContent).toContain('Instagram')
-    expect(row!.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('true')
+    const current = document.querySelectorAll('[data-social-button][aria-current="true"]')
+    expect(current).toHaveLength(1)
+    expect(current[0].textContent).toContain('Apple Music')
+    expect(current[0].className).toContain('ring-accent')
     expect(scrollSpy).toHaveBeenCalled()
     // …and the outline follows: the same target goes back as the highlight.
-    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'link', id: 'instagram' })
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'link', id: 'apple music' })
   })
 
   it('CRITICAL: a tour-date select marks its row current and scrolls to it', () => {

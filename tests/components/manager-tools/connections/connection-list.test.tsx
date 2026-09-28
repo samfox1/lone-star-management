@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-// The Connections list: one row per platform — ring, mark, name, handle, state — click to edit.
+// The Connections list: one row per platform — mark, name, handle, state — click to edit; no on-site ring.
 /**
  * ConnectionList (Sam, 2026-09-13). What has to hold:
  *
  *   - the handle reads as a handle (no scheme, no www);
  *   - THE ROW IS THE BUTTON: a click opens the connection's modal, where the Link row
  *     saves the URL alone through updateContentAction('link'); there is no ⋯;
- *   - the ring flips the link on/off the site INSTANTLY — links are LIVE_TOGGLE — never
- *     opens the modal, and a refused flip puts the ring back and says why;
+ *   - there is NO on-site ring: a site button is made in the editor, from the connection
+ *     (Sam, 2026-09-28: "Only in the editor");
  *   - the right-hand chip says what the state IS: synced, failed offers Retry, a profile
  *     whose catalog was never pulled offers Sync (never "Connect" — the check beside it
  *     already says it is), a plain social says nothing;
@@ -44,10 +44,10 @@ afterEach(() => {
 
 const def = (k: string) => connectionByKey(k)!
 const ROWS: ConnectionRow[] = [
-  { def: def('spotify'), key: 'spotify', label: 'Spotify', linkId: 'l-sp', url: 'https://open.spotify.com/artist/26K', onSite: true, sourceId: '26K', state: 'synced' },
-  { def: def('bandsintown'), key: 'bandsintown', label: 'Bandsintown', onSite: true, sourceId: 'Skeen', state: 'failed' },
-  { def: def('apple music'), key: 'apple music', label: 'Apple Music', linkId: 'l-am', url: 'https://music.apple.com/artist/1', onSite: true, state: 'connect' },
-  { def: def('instagram'), key: 'instagram', label: 'Instagram', linkId: 'l-ig', url: 'https://www.instagram.com/skeen/', onSite: true, state: 'none' },
+  { def: def('spotify'), key: 'spotify', label: 'Spotify', linkId: 'l-sp', url: 'https://open.spotify.com/artist/26K', sourceId: '26K', state: 'synced' },
+  { def: def('bandsintown'), key: 'bandsintown', label: 'Bandsintown', sourceId: 'Skeen', state: 'failed' },
+  { def: def('apple music'), key: 'apple music', label: 'Apple Music', linkId: 'l-am', url: 'https://music.apple.com/artist/1', state: 'connect' },
+  { def: def('instagram'), key: 'instagram', label: 'Instagram', linkId: 'l-ig', url: 'https://www.instagram.com/skeen/', state: 'none' },
 ]
 
 function mount(rows = ROWS, dirty = false) {
@@ -92,10 +92,19 @@ describe('the rows', () => {
     expect(rowOf('Instagram')).not.toHaveTextContent(/synced|Sync|Connect|Retry/)
   })
 
-  it('a source with no profile has no ring — the column stays, the control does not', () => {
+  it('CRITICAL: no row carries an on-site ring — a button is switched on and off only in the editor', async () => {
+    // Sam, 2026-09-28: "Only in the editor." The ring put a connection's link straight on
+    // the site from here. The check is the ring's own role, so none may be left, and the
+    // live toggle is never reached however the rows are clicked.
     mount()
-    expect(within(rowOf('Bandsintown')).queryByRole('checkbox')).toBeNull()
-    expect(within(rowOf('Spotify')).getByRole('checkbox')).toBeInTheDocument()
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    for (const r of ROWS) {
+      expect(within(rowOf(r.label)).queryByLabelText(/on site|off site/)).toBeNull()
+      fireEvent.click(rowOf(r.label))
+      fireEvent.click(within(screen.getByRole('dialog', { name: r.label })).getByRole('button', { name: 'Close' }))
+    }
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(setOnSiteAction).not.toHaveBeenCalled()
   })
 })
 
@@ -155,24 +164,6 @@ describe('click to edit', () => {
     fireEvent.click(within(sp).getByRole('button', { name: /Pull now/ }))
     await waitFor(() => expect(pullConnectionAction).toHaveBeenCalledWith('a1', 'spotify'))
     await waitFor(() => expect(sp).toHaveTextContent('24 songs'))
-  })
-})
-
-describe('the ring', () => {
-  it('CRITICAL: flips the link off the site instantly through the LIVE toggle — and does not open the modal', async () => {
-    mount()
-    fireEvent.click(within(rowOf('Instagram')).getByRole('checkbox'))
-    await waitFor(() => expect(setOnSiteAction).toHaveBeenCalledWith('link', 'l-ig', 'a1', false))
-    expect(within(rowOf('Instagram')).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false')
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('a refused flip puts the ring back and says why', async () => {
-    vi.mocked(setOnSiteAction).mockResolvedValueOnce({ error: 'Not yours.' })
-    mount()
-    fireEvent.click(within(rowOf('Instagram')).getByRole('checkbox'))
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('Not yours.', 'error'))
-    expect(within(rowOf('Instagram')).getByRole('checkbox')).toHaveAttribute('aria-checked', 'true')
   })
 })
 

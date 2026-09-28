@@ -20,8 +20,8 @@
  * how fixtures and sync write rows, and a global uniqueness rule there coupled every
  * live-DB suite through one shared seed artist — tests colliding on each other's labels,
  * which is the failure AGENTS.md rule 6 describes. Keeping the rule pure and calling it
- * from `addContentAction` closes both user doors (the editor's picker and the /links
- * page's form) without constraining the primitive.
+ * from `addContentAction` closes both user doors (the editor's picker and Connections'
+ * Connect form) without constraining the primitive.
  */
 import { socialPlatform, socialSlug } from '@samfox1/site-bridge/social'
 import { isContactLink, looksLikeEmail } from '@/lib/url'

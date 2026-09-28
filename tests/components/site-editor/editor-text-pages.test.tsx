@@ -30,6 +30,7 @@ import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 // The inspector reaches for the app router (useSessionRevert) and the dashboard's server
 // actions. Neither is what this suite is about; both must exist for it to render.
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
 
 afterEach(cleanup)

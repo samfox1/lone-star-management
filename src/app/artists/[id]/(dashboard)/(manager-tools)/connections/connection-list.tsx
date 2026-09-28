@@ -7,9 +7,8 @@ import { displayAddress } from '@/lib/settings'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, listRowClass } from '@/components/ui/ui'
 import type { ConnectionRow } from '@/lib/connections'
-import { publishEntityAction, setOnSiteAction } from '../../actions'
+import { publishEntityAction } from '../../actions'
 import { PublishBar } from '../../publish-bar'
-import { SelectToggle } from '../../select-toggle'
 import { toast } from '../../toast'
 import { useSeeded } from '../_ui/use-seeded'
 import { ConnectModal } from './connect-modal'
@@ -19,16 +18,17 @@ import { pullConnectionAction, syncProfileAction } from './actions'
 
 /**
  * THE CONNECTIONS LIST (Sam, 2026-09-13): "one organized list with all of the current
- * platform accounts hooked up". One row per platform — ring, mark, name, handle, and on
- * the right what it pulls in. No headings: the rail names the tool.
+ * platform accounts hooked up". One row per platform — mark, name, handle, and on the
+ * right what it pulls in. No headings: the rail names the tool.
  *
  * Rows follow the tour list: no hairlines, the rhythm is the rows' own spacing, the
  * handle truncates before it can touch the chip beside it, and THE ROW IS THE BUTTON —
  * click it to open the connection's modal (Sam: "remove the 2 dots… You click on the row
- * and then you can edit it"). The ring and the chip's own actions stop the click there.
+ * and then you can edit it"). The chip's own actions stop the click there.
  *
- * Links flip on and off the site INSTANTLY (LIVE_TOGGLE, lib/content.ts), so the ring
- * is ink or empty — never the blue/red pending states the publish-gated grids wear.
+ * No on-site ring (Sam, 2026-09-28: asked where a button is switched on and off, "Only in
+ * the editor"). A connection is an account; the editor's Socials makes a site button from
+ * it, and that button is this same link — so an edit here changes the button.
  */
 export function ConnectionList({ artistId, rows: initial, dirty = false }: { artistId: string; rows: ConnectionRow[]; dirty?: boolean }) {
   const router = useRouter()
@@ -38,7 +38,8 @@ export function ConnectionList({ artistId, rows: initial, dirty = false }: { art
   const [connect, setConnect] = useState(false)
 
   async function publish(password: string) {
-    // Snapshot only — links are already live or not by their ring; publish pushes edits.
+    // Snapshot only — whether a link is a button is the editor's live toggle; publish
+    // pushes the edits made here.
     const res = await publishEntityAction('link', artistId, password)
     if (res.ok) router.refresh()
     return res
@@ -81,17 +82,6 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
 
   const shown = row.url ? displayAddress(row.url) : (row.sourceId ?? '')
 
-  async function toggle() {
-    if (!row.linkId) return
-    const next = !row.onSite
-    onChange({ ...row, onSite: next }) // optimistic
-    const res = await setOnSiteAction('link', row.linkId, artistId, next)
-    if (res?.error) {
-      onChange(row)
-      toast(res.error, 'error')
-    }
-  }
-
   /** The chip's own action: first pull for a never-synced profile (the id comes out of
    *  the link, nothing typed), or a retry for one that failed. */
   async function pull(e: React.MouseEvent) {
@@ -111,8 +101,6 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
     }
   }
 
-  const dim = row.linkId ? !row.onSite : false
-
   return (
     <>
       <div
@@ -128,15 +116,10 @@ function ConnectionRowView({ artistId, row, onChange }: { artistId: string; row:
         }}
         className={`group ${listRowClass} gap-4 py-3`}
       >
-        {row.linkId ? (
-          <SelectToggle selected={row.onSite} onSite={row.onSite} onToggle={toggle} label={row.label} />
-        ) : (
-          <span className="h-5 w-5 flex-none" aria-hidden />
-        )}
-        <span className={cx('flex w-5 flex-none justify-center', dim ? 'text-ink-faint' : 'text-ink')}>
+        <span className="flex w-5 flex-none justify-center text-ink">
           <ConnectionMark def={row.def} size={16} />
         </span>
-        <span className={cx('w-28 flex-none truncate text-sm font-semibold', dim && 'text-ink-faint')}>{row.label}</span>
+        <span className="w-28 flex-none truncate text-sm font-semibold">{row.label}</span>
         <span className={cx('block h-6 min-w-0 flex-1 truncate font-space text-[13px] leading-6 text-ink-muted group-hover:text-ink', !shown && 'text-hairline')}>
           {shown || '—'}
         </span>

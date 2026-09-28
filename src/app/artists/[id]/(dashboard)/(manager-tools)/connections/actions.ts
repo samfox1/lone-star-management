@@ -61,13 +61,16 @@ export async function connectOneAction(artistId: string, key: string, input: Con
       if ('error' in link) return { ok: false, error: link.error }
       const url = link.url
       // Idempotent: a Retry after the link saved but the pull failed must not be refused
-      // with "Spotify is already on this site". The profile link that exists is the one.
+      // with "Spotify is already on this site". The profile link that exists is the one,
+      // and its on-site flag is left as it is — the manager may have made it a button.
       const existing = (await profileLinks(artistId)).find((l) => socialSlug(l.label ?? '') === def.social)
       if (!existing) {
         const fd = new FormData()
         fd.set('label', def.label)
         fd.set('url', url)
-        const added = await addContentAction('link', artistId, fd)
+        // OFF the site (Sam, 2026-09-28: connecting X put the link on the site unasked).
+        // A connection is an account; the editor's Socials is where it becomes a button.
+        const added = await addContentAction('link', artistId, fd, { offSite: true })
         if (added.error) return { ok: false, error: added.error }
       }
       // Sync off (Sam, 2026-09-28): the profile is linked, nothing is pulled.

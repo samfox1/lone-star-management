@@ -12,7 +12,7 @@ import { TourAddButton } from './tour-add'
 /**
  * Tour dates: a centered, spacious date list with the Music-page toolbar (filter ·
  * sort · sync · + Add · publish). "+ Add" opens the two-pane modal (manual). Sync
- * from Bandsintown / Ticketmaster lives in Integrations. New/imported dates land
+ * from Bandsintown / Ticketmaster lives in Connections. New/imported dates land
  * off-site; the per-row toggle puts one ON the site live, here or in the editor
  * (ADR 0009) — a date must be published once first, since the door serves the
  * published snapshot and gates it on the working row. (Map is a later opt-in view.)

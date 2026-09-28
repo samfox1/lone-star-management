@@ -561,13 +561,19 @@ const INSERT_OFF_SITE: readonly CrudEntity[] = ['video']
 /** Where a NEW row lands (lib/insert-position): merch on top, a tour date by its date. */
 const INSERT_POSITION: Partial<Record<CrudEntity, 'front' | 'by-date'>> = { merch: 'front', tour_date: 'by-date' }
 
+/** `offSite`: land this one row off the site whatever its type's default — a connection's
+ *  profile link, which becomes a site button only when the editor picks it (Sam,
+ *  2026-09-28). Every other caller keeps the type's default. */
+export type CreateOptions = { offSite?: boolean }
+
 export async function createContent(
   supabase: SupabaseClient,
   type: CrudEntity,
   artistId: string,
   input: Record<string, unknown>,
+  opts: CreateOptions = {},
 ): Promise<ContentRow> {
-  const offSite = INSERT_OFF_SITE.includes(type) ? { on_site: false } : {}
+  const offSite = opts.offSite || INSERT_OFF_SITE.includes(type) ? { on_site: false } : {}
   const table = PUBLISHABLE[type].table
   const position = INSERT_POSITION[type]
 

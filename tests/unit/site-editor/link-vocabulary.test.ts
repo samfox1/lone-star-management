@@ -11,9 +11,9 @@
  *     twice")
  *
  * The editor's picker enforces neither — it disables what is present and offers only the
- * shared vocabulary, but that is presentation: a second tab, a stale panel, or the
- * /links page's own form all walk past it. This is the rule itself, pure, so both doors
- * call the same thing and it can be tested without a database.
+ * shared vocabulary, but that is presentation: a second tab, a stale panel, or
+ * Connections' own Connect form all walk past it. This is the rule itself, pure, so both
+ * doors call the same thing and it can be tested without a database.
  */
 import { describe, expect, it } from 'vitest'
 import { linkAddError } from '@/lib/site-editor/link-vocabulary'

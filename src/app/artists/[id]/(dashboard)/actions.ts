@@ -33,6 +33,7 @@ import {
   TOGGLE_KIND,
   PUBLISHABLE,
   createContent,
+  type CreateOptions,
   deleteContent,
   diffUnpublished,
   publishAll,
@@ -83,6 +84,7 @@ export async function addContentAction(
   type: GenericEntity,
   artistId: string,
   formData: FormData,
+  opts: CreateOptions = {},
 ): Promise<{ error?: string; id?: string }> {
   const input = extractFields(type, formData)
   if (Object.keys(input).length === 0) return { error: 'Fill in at least one field.' }
@@ -90,7 +92,7 @@ export async function addContentAction(
 
   // A LINK's label is the ADDRESS a connected site maps its mark by, so it must name a
   // platform we know and must not repeat. Checked HERE — the user-facing door both the
-  // editor's picker and the /links page form come through — rather than in
+  // editor's picker and Connections' Connect form come through — rather than in
   // `createContent`, which is also how fixtures and sync write rows (see
   // lib/site-editor/link-vocabulary.ts for why that distinction matters).
   if (type === 'link') {
@@ -106,7 +108,7 @@ export async function addContentAction(
 
   let id: string
   try {
-    const row = await createContent(supabase, type, artistId, input)
+    const row = await createContent(supabase, type, artistId, input, opts)
     id = row.id as string
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Add failed.' }
@@ -1025,8 +1027,12 @@ export async function saveYoutubeChannelAction(artistId: string, formData: FormD
 
 /** Pull the artist's YouTube uploads into draft videos. Requires YOUTUBE_API_KEY. */
 /** Shared pull: import the channel's uploads into draft videos (Shorts classified),
- *  returning status so callers can surface an error. Manual videos are preserved. */
-async function pullYouTube(artistId: string): Promise<{ ok: boolean; error?: string }> {
+ *  returning status so callers can surface an error. Manual videos are preserved.
+ *
+ * The `SyncResult` is REPORTED via `syncOutcome`, not discarded (see lib/sync.ts's
+ * header — a partial failure used to come back as a bare `{ ok: true }`, same as
+ * Ticketmaster, indistinguishable from a clean import). */
+async function pullYouTube(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1035,22 +1041,23 @@ async function pullYouTube(artistId: string): Promise<{ ok: boolean; error?: str
     .single()
   if (!artist?.youtube_channel_id) return { ok: false, error: 'No YouTube channel linked yet.' }
 
+  let result
   try {
     const client = createYouTubeClient()
     const videos = await client.getChannelVideos(artist.youtube_channel_id)
     // Global YouTube view counts, cached on each row (ANALYTICS_STATS_PLAN.md).
     const vc = await client.viewCounts(videos.map((v) => v.youtube_id))
     for (const v of videos) v.views = vc.get(v.youtube_id) ?? null
-    await syncYouTubeVideos(supabase, artistId, videos)
+    result = await syncYouTubeVideos(supabase, artistId, videos)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Import failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return syncOutcome(result, 'video')
 }
 
 /** Integrations "Import uploads". Returns status so the panel can toast. */
-export async function syncYouTubeAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+export async function syncYouTubeAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   return pullYouTube(artistId)
 }
 
@@ -1572,8 +1579,12 @@ export async function saveTicketmasterIdAction(artistId: string, formData: FormD
 }
 
 /** Pull the artist's Ticketmaster events into draft tour dates (a second source
- *  alongside Bandsintown). Requires TICKETMASTER_API_KEY configured. */
-export async function syncTicketmasterAction(artistId: string): Promise<{ ok: boolean; error?: string }> {
+ *  alongside Bandsintown). Requires TICKETMASTER_API_KEY configured.
+ *
+ * The `SyncResult` is REPORTED via `syncOutcome`, not discarded (see lib/sync.ts's
+ * header — this used to always answer `{ ok: true }`, so a pull that partly failed
+ * looked exactly like a clean one, same bug `syncBandsintownAction` already fixed). */
+export async function syncTicketmasterAction(artistId: string): Promise<{ ok: boolean; error?: string; message?: string }> {
   const supabase = await createClient()
   const { data: artist } = await supabase
     .from('artists')
@@ -1582,15 +1593,16 @@ export async function syncTicketmasterAction(artistId: string): Promise<{ ok: bo
     .single()
   if (!artist?.ticketmaster_attraction_id) return { ok: false, error: 'No Ticketmaster attraction linked yet.' }
 
+  let result
   try {
     const client = createTicketmasterClient()
     const events = await client.getArtistEvents(artist.ticketmaster_attraction_id)
-    await syncTicketmasterTourDates(supabase, artistId, events)
+    result = await syncTicketmasterTourDates(supabase, artistId, events)
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Pull failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return { ok: true }
+  return syncOutcome(result, 'tour date')
 }
 
 /* ------------------------------------------------------------------------- *
@@ -1604,7 +1616,7 @@ async function driveFolderFor(artistId: string): Promise<{ folderId: string } | 
   const { data } = await supabase.from('artists').select('drive_folder_id').eq('id', artistId).single()
   if (!data) return { error: 'Artist not found.' }
   if (!data.drive_folder_id)
-    return { error: 'No Drive folder linked yet — connect one under Manager tools → Integrations.' }
+    return { error: 'No Drive folder linked yet — connect one under Manager tools → Connections.' }
   return { folderId: data.drive_folder_id as string }
 }
 

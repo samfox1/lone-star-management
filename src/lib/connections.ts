@@ -27,7 +27,8 @@ import {
   type IntegrationSection,
 } from './integrations-registry'
 import { isContactLink, looksLikeEmail } from './url'
-import { CONNECT_METHODS, parseHandle, withArticle, type ConnectMethod } from './connect-methods'
+import { displayAddress } from './settings'
+import { CONNECT_METHODS, handleFromUrl, parseHandle, withArticle, type ConnectMethod } from './connect-methods'
 
 export const SHOPIFY_KEY = 'shopify'
 
@@ -210,10 +211,10 @@ export type ConnectionRow = {
   def: ConnectionDef
   key: string
   label: string
-  /** The profile link, when the artist has one. */
+  /** The profile link, when the artist has one. Whether it is a button on the site is the
+   *  editor's business, not this list's (Sam, 2026-09-28: "Only in the editor"). */
   linkId?: string
   url?: string
-  onSite: boolean
   /** The source id as stored, when the source is connected. */
   sourceId?: string
   state: ConnectionState
@@ -257,7 +258,6 @@ export function buildConnectionRows(opts: {
       label: def.label,
       linkId: link?.id,
       url: link?.url ?? undefined,
-      onSite: link ? link.on_site !== false : connected,
       sourceId,
       state: connectionState(def, connected, opts.counts[def.source?.key ?? ''] ?? 0),
     })
@@ -265,9 +265,49 @@ export function buildConnectionRows(opts: {
   return sortConnectionRows(rows)
 }
 
-/** Synced first, then anything that needs attention, then profiles, then what is off the
- *  site; A to Z within each. A failure sits high because it is the row to act on. */
+/** Synced first, then anything that needs attention, then the rest; A to Z within each.
+ *  A failure sits high because it is the row to act on. Being on the site moves nothing:
+ *  that is a button, and buttons live in the editor. */
 export function sortConnectionRows(rows: readonly ConnectionRow[]): ConnectionRow[] {
-  const rank = (r: ConnectionRow) => (r.state === 'synced' ? 0 : r.state === 'failed' ? 1 : r.onSite ? 2 : 3)
+  const rank = (r: ConnectionRow) => (r.state === 'synced' ? 0 : r.state === 'failed' ? 1 : 2)
   return [...rows].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }))
+}
+
+/**
+ * SITE BUTTONS (Sam, 2026-09-28): "when the connection is added, and I travel to the socials
+ * list in the site editor, I can add a new button based on one of the existing connections
+ * that I have… it should reference the link provided by the connection."
+ *
+ * A button is not a second row: it is the connection's own profile link with `on_site` set,
+ * so editing the handle in Connections changes the button. Services (Shopify, Bandsintown…)
+ * have no profile link and are never buttons — Shopify feeds the merch buttons instead.
+ */
+
+/** The social connection a link is the profile of; undefined for a contact row, a
+ *  role-bound button, or a label no platform owns. */
+export function connectionOfLink(link: LinkRowLike): ConnectionDef | undefined {
+  if (!isProfileLink(link)) return undefined
+  const slug = socialSlug(link.label ?? '')
+  return CONNECTIONS.find((d) => d.social === slug)
+}
+
+/** What the editor's picker offers: every profile link that is not a button yet, with its
+ *  connection, A to Z. The link is the artist's own row, so picking it turns THAT row on. */
+export function buttonChoices<L extends LinkRowLike & { onSite: boolean }>(links: readonly L[]): { def: ConnectionDef; link: L }[] {
+  return links
+    .filter((l) => !l.onSite)
+    .flatMap((link) => {
+      const def = connectionOfLink(link)
+      return def ? [{ def, link }] : []
+    })
+    .sort((a, b) => a.def.label.localeCompare(b.def.label, 'en', { sensitivity: 'base' }))
+}
+
+/** How a connection's account reads in a row: the handle for a handle platform
+ *  (`skeenmusic`), otherwise the link as a person says it (`open.spotify.com/artist/26K`) —
+ *  which is also what a handle platform's link with no handle in it (a channel id) shows. */
+export function connectionHandle(def: ConnectionDef, url: string): string {
+  const method = methodOf(def)
+  const handle = method?.kind === 'handle' ? handleFromUrl(method, url) : null
+  return handle ?? displayAddress(url)
 }

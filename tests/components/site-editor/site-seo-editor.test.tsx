@@ -22,6 +22,7 @@ import { saveArtistFactAction, saveSeoFieldAction } from '@/app/artists/[id]/(da
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({ GallerySlotUploader: () => null, MediaUploader: () => null }))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
 
 const seoMock = vi.mocked(saveSeoFieldAction)

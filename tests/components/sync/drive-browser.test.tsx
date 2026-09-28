@@ -144,7 +144,7 @@ describe('DriveBrowser', () => {
   })
 
   it('renders a list error (e.g. folder not linked) as the panel body', async () => {
-    setup({ ok: false, error: 'No Drive folder linked yet — connect one under Manager tools → Integrations.' })
+    setup({ ok: false, error: 'No Drive folder linked yet — connect one under Manager tools → Connections.' })
     expect(await screen.findByText(/No Drive folder linked yet/)).toBeInTheDocument()
   })
 })

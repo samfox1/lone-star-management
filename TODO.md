@@ -178,7 +178,7 @@ Decisions that don't change the sequence:
       project → enable "Google Drive API" → Credentials → API key → paste into
       `.env.local` as `GOOGLE_API_KEY`. Free; public-data reads only.
 - [ ] **Get Ticketmaster + Apple Music credentials, then turn them on.** Both are
-      code-complete + tested but have no keys, so they show in the Integrations hub
+      code-complete + tested but have no keys, so they show in the Connections tool
       as clickable and fail at runtime. Apple needs a MusicKit Team ID + Key ID +
       private key (Apple Developer account); Ticketmaster needs a Discovery API key.
       Once Sam provides them: add to env, wire in, verify the pulls, and add
@@ -252,7 +252,7 @@ later if those templates grow a real booking anchor.
 ## Google Drive integration — BUILT 2026-07-09 (needs GOOGLE_API_KEY to go live)
 
 Public-folder-link model: the manager pastes a link-shared folder URL in
-Integrations → Files; the dashboard browses it (names/sizes/thumbnails stream
+Connections → Files; the dashboard browses it (names/sizes/thumbnails stream
 from Drive, zero storage cost) and **copy-imports** selected files server-side
 into our buckets so they behave exactly like uploads. Audio → Unreleased songs
 (gated `audio` bucket), videos → uploaded/off-site rows (`videos`), images → the

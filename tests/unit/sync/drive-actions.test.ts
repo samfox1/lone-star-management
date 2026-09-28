@@ -174,12 +174,12 @@ describe('checkDriveFolderAction', () => {
     expect((await checkDriveFolderAction(ARTIST)).message).toBe('Found 1 media file.')
   })
 
-  it('steers the manager to Integrations when no folder is linked', async () => {
+  it('steers the manager to Connections when no folder is linked', async () => {
     artistRow = { id: ARTIST, drive_folder_id: null }
     const { checkDriveFolderAction } = await load()
     const res = await checkDriveFolderAction(ARTIST)
     expect(res.ok).toBe(false)
-    expect(res.error).toMatch(/No Drive folder linked yet/)
+    expect(res.error).toBe('No Drive folder linked yet — connect one under Manager tools → Connections.')
     expect(drive.getFolder).not.toHaveBeenCalled()
   })
 

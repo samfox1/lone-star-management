@@ -94,6 +94,15 @@ describe('connectOneAction — one paste, two jobs', () => {
     expect([fd.get('label'), fd.get('url')]).toEqual(['X', 'https://x.com/skeenmusic'])
   })
 
+  it('CRITICAL: a new connection’s link is made OFF the site — the editor is where it becomes a button', async () => {
+    // Sam, 2026-09-28: "I just added the X connection… and the twitter link was already
+    // there. That shouldn't be the case." (The row itself is pinned against the database
+    // in tests/integration/manager-tools/connections/connect-off-site.test.ts.)
+    const { connectOneAction } = await actions()
+    await connectOneAction('a1', 'x', { handle: 'skeenmusic' })
+    expect(vi.mocked(addContentAction).mock.calls[0]).toEqual(['link', 'a1', expect.any(FormData), { offSite: true }])
+  })
+
   it('CRITICAL: sync turned off links the profile and pulls nothing', async () => {
     const { connectOneAction } = await actions()
     expect(await connectOneAction('a1', 'spotify', { url: 'https://open.spotify.com/artist/26K', sync: false })).toEqual({ ok: true })

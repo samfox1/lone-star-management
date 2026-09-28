@@ -28,7 +28,7 @@ Most of the dashboard pipe is built. The inventory, so nothing gets rebuilt by a
 
 | Piece | Where | State |
 | --- | --- | --- |
-| Connect a store (domain + Storefront token → Vault) | `shopify-panel.tsx`, `connect_shopify` | done |
+| Connect a store (domain + Storefront token → Vault) | Connections → Connect → Shopify (`connections/actions.ts` `connectShopify`), `connect_shopify` | done |
 | Read products (Storefront GraphQL, paginated, throttle-safe) | `lib/shopify.ts` | done |
 | Sync into `merch` (upsert by `shopify_product_id`, never clobbers manual edits) | `lib/sync.ts` `syncShopifyMerch` | done |
 | Pick which products are on the site | `merch-browser.tsx` — `on_site` + PublishBar | done |
@@ -193,8 +193,9 @@ render.
   `shopify.ts` (Storefront client), `sync.ts` (products → merch rows), `index.ts`
   (the one door). `syncExternal` stays in `@/lib/sync` — the conflict policy is one
   rule for every provider (ADR-0005). Dashboard half lives beside it in
-  `app/artists/[id]/(dashboard)/merch/`: `actions.ts` (connect/pull/disconnect) and
-  `shopify-panel.tsx`.
+  `app/artists/[id]/(dashboard)/merch/`: `actions.ts` (connect/pull/disconnect). Connect now
+  happens from Connections → Connect → Shopify (`connections/actions.ts` `connectShopify`),
+  not the old `shopify-panel.tsx`, which the 2026-09-13 Connections tool replaced.
 - Query now pulls `handle`, `description`, `images`, `variants` (id, title,
   availability, price, currency). Migration `20260902120000` adds the four columns
   plus a partial unique index on `(artist_id, handle)`.

@@ -34,7 +34,8 @@ import { budgetFor, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import {
   PhotoTools,
   TextTools,
-  LinkTools,
+  SocialButtons,
+  ContactLinkTools,
   SiteLinkTools,
   StyleTools,
   VideoTools,
@@ -163,6 +164,9 @@ const NO_STYLES: Record<string, string> = {}
 /** Stable empty default, for the same reason NO_STYLES is one: a fresh `[]` per render is
  *  a new identity in every dependency array that reads it. */
 const NO_DROPPED: DroppedRegion[] = []
+/** Stable empty default for `links`, which re-seeds on identity (below) — a fresh `[]`
+ *  would re-seed on every render, the NO_STYLES crash again. */
+const NO_LINKS: EditorLink[] = []
 
 /** The SEO/GEO editor's debounce key: the store rides in the key because the hook keys
  *  its timers by one string and the write may run after the editor has closed. */
@@ -239,7 +243,7 @@ export function EditorInspector({
   photos: initial,
   imageFields = [],
   textFields = [],
-  links: initialLinks = [],
+  links: initialLinks = NO_LINKS,
   supportLinks = [],
   videos: initialVideos = [],
   videoSlots = [],
@@ -375,6 +379,15 @@ export function EditorInspector({
   const [active, setActive] = useState<Component | null>(null)
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initial)
   const [links, setLinks] = useState<EditorLink[]>(initialLinks)
+  // Links RE-SEED from the server's list when it changes: a connection made from the Add
+  // button's picker lands through a refresh, and must be pickable at once (Sam,
+  // 2026-09-28). Reset during render, the repo's "state from a prop" pattern; the default
+  // is a module constant, or every render would read as a new list.
+  const [seededLinks, setSeededLinks] = useState(initialLinks)
+  if (seededLinks !== initialLinks) {
+    setSeededLinks(initialLinks)
+    setLinks(initialLinks)
+  }
   const [videos, setVideos] = useState<EditorVideo[]>(initialVideos)
   const [merch, setMerch] = useState<EditorMerch[]>(initialMerch)
   const [releases, setReleases] = useState<EditorProject[]>(initialReleases)
@@ -580,7 +593,7 @@ export function EditorInspector({
     merch: 'merch',
     // A social icon. Its id is the link's LABEL, lowercased — the row id never reaches
     // the deployed site (socials arrive there as label-mapped config), and the label is
-    // the join key that pipeline already runs on. LinkTools re-joins by it.
+    // the join key that pipeline already runs on. SocialButtons re-joins by it.
     link: 'links',
   }
 
@@ -1132,20 +1145,17 @@ export function EditorInspector({
         }}
       />
     ),
-    // One Links panel, grouped by purpose: outbound social links, tour-support links
-    // (moved into the per-date editor, Sam 2026-08-09), then the declared link buttons.
+    // One Links panel, grouped by purpose: the social buttons (each a connection's link,
+    // Sam 2026-09-28), contact addresses, then the declared link buttons. Tour-support
+    // links moved into the per-date editor (Sam 2026-08-09).
     links: () => (
       <>
         <GroupLabel>Socials</GroupLabel>
-        <LinkTools
+        <SocialButtons
           links={links.filter((l) => !isContactish(l.url))}
-          group="Social"
-          collapseAt={deselectedAt}
           artistId={artistId}
-          onRemove={removeLink}
           onReorder={reorderLinks}
           onToggleOnSite={toggleLinkOnSite}
-          inferPlatform
           focusedKey={focusedKey}
         />
         {/* A booking address is a contact route, not a profile to follow — its own
@@ -1153,15 +1163,14 @@ export function EditorInspector({
         {links.some((l) => isContactish(l.url)) && (
           <>
             <GroupLabel>Contact</GroupLabel>
-            <LinkTools
+            <ContactLinkTools
               links={links.filter((l) => isContactish(l.url))}
-              group="Contact"
               collapseAt={deselectedAt}
               artistId={artistId}
               onRemove={removeLink}
               onReorder={reorderLinks}
               onToggleOnSite={toggleLinkOnSite}
-              showAdd={false}
+              focusedKey={focusedKey}
             />
           </>
         )}

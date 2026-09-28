@@ -16,7 +16,6 @@ import {
   type GalleryPhoto,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
-  addContentAction,
   deleteContentAction,
   deleteMediaAction,
   renameVideoAction,
@@ -41,7 +40,6 @@ import {
 import type { ManifestComponent, ManifestLinkRegion, ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { buildStyleControls, withStyleVars, type SiteStyleOptions,
 } from '@/lib/site-editor/style-controls'
-import { SOCIAL_PLATFORMS } from '@samfox1/site-bridge/social'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import type {
@@ -55,6 +53,7 @@ import type {
   EditorVideo,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
@@ -89,7 +88,6 @@ const saveMock = vi.mocked(saveEditorFieldAction)
 const updateContentMock = vi.mocked(updateContentAction)
 const deleteContentMock = vi.mocked(deleteContentAction)
 const reorderContentMock = vi.mocked(reorderContentAction)
-const addContentMock = vi.mocked(addContentAction)
 const renameVideoMock = vi.mocked(renameVideoAction)
 const setOnSiteMock = vi.mocked(setOnSiteAction)
 const placePhotoMock = vi.mocked(placeGalleryPhotoAction)
@@ -621,190 +619,69 @@ describe('EditorInspector — Text component', () => {
   })
 })
 
-describe('EditorInspector — Links component', () => {
-  function openLinks() {
-    renderInspector([], { links: LINKS })
+// The Socials group (the site's buttons, each a connection's link, 2026-09-28) has its own
+// file: tests/components/site-editor/editor-social-buttons.test.tsx. What is left to edit
+// in place here is a CONTACT row — a booking address is not a connection, so its label and
+// address are still typed in the panel.
+describe('EditorInspector — Links: Contact rows', () => {
+  const CONTACTS: EditorLink[] = [
+    { id: 'c1', label: 'Bookings', url: 'mailto:book@x.com', onSite: true },
+    { id: 'c2', label: 'Press', url: 'mailto:press@x.com', onSite: true },
+    // Off-site, to prove the toggle reflects state rather than always reading "On site".
+    { id: 'c3', label: 'Phone', url: 'tel:+15125550100', onSite: false },
+  ]
+  function openLinks(extra: Partial<Parameters<typeof renderInspector>[1]> = {}) {
+    const view = renderInspector([], { links: CONTACTS, ...extra })
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+    return view
   }
   // Rows show label + URL as plain text; the inputs mount only once the pencil opens
   // the row (version A, 2026-08-12). Open by the row index (1-based).
   function expandLink(n: number) {
-    fireEvent.click(screen.getByRole('button', { name: `Edit social link ${n}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Edit contact link ${n}` }))
   }
   /** The same button, which reads "Close …" once the row is open (2026-08-14). */
   function collapseLink(n: number) {
-    fireEvent.click(screen.getByRole('button', { name: `Close social link ${n}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Close contact link ${n}` }))
   }
 
-  it('CRITICAL: Add opens a MODAL — the editor session is never navigated away', () => {
-    // Sam, 2026-08-09: "when they hit the add social button, a modal should come up
-    // instead of redirecting the user to another page. They should stay on the editor
-    // page." The footer was a <Link> to /artists/[id]/links, which discarded the frame,
-    // the scroll position and the open panel to type one URL. An anchor with an href is
-    // the failure — assert on the ROLE, since a button cannot navigate.
+  it('shows label + URL as plain text; the pencil opens the label AND the URL', () => {
     openLinks()
-    const add = screen.getByRole('button', { name: /Add social/i })
-    expect(add.getAttribute('href')).toBeNull()
-    fireEvent.click(add)
-    expect(screen.getByRole('dialog', { name: /Add a social link/i })).toBeTruthy()
-  })
-
-  it('CRITICAL: the modal offers the shared platform list, so the label is one a site knows', () => {
-    // The label IS the join key a connected site maps its icon by (`item:link:instagram`).
-    // Free text lands "insta" in the payload and renders as an unrecognized link, so the
-    // picker exists to make the recognizable spelling the easy path.
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    const dialog = within(screen.getByRole('dialog', { name: /Add a social link/i }))
-    // Addable platforms are plain tiles; Instagram is already on the fixture, so its
-    // tile is the disabled "(already added)" form. (Before version A this line matched
-    // the collapsed ROW button named "Instagram" by accident — the row is plain text now.)
-    // DERIVED from the registry, not a two-name sample: a platform added to
-    // SOCIAL_PLATFORMS with no tile — or a tile for something not in it — fails here
-    // (AGENTS.md rule 4).
-    // The modal matches a platform by SLUG against the artist's existing labels, so the
-    // expectation is built the same way rather than by eye.
-    const taken = new Set(LINKS.map((l) => l.label.trim().toLowerCase()))
-    const tiles = dialog
-      .getAllByRole('button')
-      .map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '')
-      .filter((n) => n !== 'Close')
-    expect(new Set(tiles)).toEqual(
-      new Set(SOCIAL_PLATFORMS.map((p) => (taken.has(p.slug) ? `${p.label} (already added)` : p.label))),
-    )
-    expect(dialog.getByRole('button', { name: /Instagram \(already added\)/i })).toBeTruthy()
-    /**
-     * …and NOTHING else. The vocabulary is closed (Sam, 2026-08-10): a free-text escape
-     * hatch produced a label no site can map to a mark, which rendered as raw text in a
-     * row of glyphs. `createContent` refuses one on the write side too, so this is the
-     * affordance rather than the enforcement.
-     *
-     * THE TWO LINES THIS REPLACES named strings that exist nowhere in `src`: a button
-     * matching /Something else/ (the phrase survives only in two bridge COMMENTS, which
-     * still describe a picker that has one) and a field labelled "Link name". Nothing
-     * could be deleted, renamed or re-added that turned either of them red — an
-     * escape hatch called anything else would have walked straight past both. The set
-     * equality above is the assertion that actually closes the vocabulary; what remains
-     * here is the other half of "no free text": no input at all before a platform is
-     * picked.
-     */
-    expect(dialog.queryAllByRole('textbox')).toHaveLength(0)
-    expect(dialog.queryAllByRole('combobox')).toHaveLength(0)
-  })
-
-  it('a platform already on the site cannot be added twice', () => {
-    // LINKS carries Spotify and Instagram. A second Instagram row renders a second
-    // identical icon in the socials row, which the manager cannot tell apart.
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    expect((screen.getByRole('button', { name: /Instagram \(already added\)/i }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: 'TikTok' }) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('picking a platform prefills its URL, and adding writes ONE link row', async () => {
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }))
-    const url = screen.getByLabelText('Link URL') as HTMLInputElement
-    expect(url.value).toBe('https://tiktok.com/@')
-
-    fireEvent.change(url, { target: { value: 'https://tiktok.com/@juniper' } })
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Add to the site/i }))
-    })
-    expect(addContentMock).toHaveBeenCalledTimes(1)
-    const [entity, artistId, fd] = addContentMock.mock.calls[0]
-    expect(entity).toBe('link')
-    expect(artistId).toBe('artist-1')
-    expect((fd as FormData).get('label')).toBe('TikTok')
-    expect((fd as FormData).get('url')).toBe('https://tiktok.com/@juniper')
-  })
-
-  it('CRITICAL: two fast clicks add ONE link, not two', () => {
-    // AGENTS.md rule 5: the latch is a REF. `disabled={saving}` only applies after React
-    // re-renders, and both clicks read pre-render state — so a state-only guard inserted
-    // the social twice (2026-08-09 review, verified at two onAdd calls).
-    //
-    // BOTH clicks are dispatched inside ONE act() batch. Dispatching them separately
-    // pins nothing: after the first, React has already disabled the button and the second
-    // click never fires.
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'TikTok' }))
-    fireEvent.change(screen.getByLabelText('Link URL'), { target: { value: 'https://tiktok.com/@juniper' } })
-    const add = screen.getByRole('button', { name: /Add to the site/i })
-    act(() => {
-      fireEvent.click(add)
-      fireEvent.click(add)
-    })
-    expect(addContentMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('CRITICAL: the prefilled platform root alone is not a link', () => {
-    // Picking Substack fills the box with `https://substack.com/@`. That is non-empty,
-    // so the blank check waved it through and a social pointing at the platform's front
-    // page shipped to the site (2026-08-09 review). (Substack, not Instagram: the
-    // fixture already carries Instagram, so its tile is disabled and never opens.)
-    openLinks()
-    fireEvent.click(screen.getByRole('button', { name: /Add social/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Substack' }))
-    fireEvent.click(screen.getByRole('button', { name: /Add to the site/i }))
-    expect(addContentMock).not.toHaveBeenCalled()
-    expect(screen.getByText(/just the site’s address/i)).toBeTruthy()
-  })
-
-  it('shows label + URL as plain text; the pencil opens the editor', () => {
-    openLinks()
-    // Plain text: the label and its URL show, no inputs yet.
-    expect(screen.getByText('Spotify')).toBeTruthy()
-    expect(screen.getByText('https://open.spotify.com/x')).toBeTruthy()
-    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-    // Pencil → the edit box. A social has NO label field (2026-08-12): the platform is
-    // inferred from the URL, so only the URL + on-site + remove show.
+    expect(screen.getByText('Bookings')).toBeTruthy()
+    expect(screen.getByText('mailto:book@x.com')).toBeTruthy()
+    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
     expandLink(1)
-    expect((screen.getByLabelText('Social link 1 URL') as HTMLInputElement).value).toBe('https://open.spotify.com/x')
-    expect(screen.queryByLabelText('Social link 1 label')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
+    expect((screen.getByLabelText('Contact link 1 URL') as HTMLInputElement).value).toBe('mailto:book@x.com')
+    expect((screen.getByLabelText('Contact link 1 label') as HTMLInputElement).value).toBe('Bookings')
+    expect(screen.getByRole('button', { name: 'Remove contact link 1' })).toBeTruthy()
   })
 
   it('is single-open: expanding another row collapses the first', () => {
     openLinks()
     expandLink(1)
-    expect(screen.queryByLabelText('Social link 1 URL')).not.toBeNull()
+    expect(screen.queryByLabelText('Contact link 1 URL')).not.toBeNull()
     expandLink(2)
-    // Spotify's editor is gone; Instagram's is open.
-    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-    expect((screen.getByLabelText('Social link 2 URL') as HTMLInputElement).value).toBe('https://instagram.com/x')
+    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
+    expect((screen.getByLabelText('Contact link 2 URL') as HTMLInputElement).value).toBe('mailto:press@x.com')
   })
 
   it('flags an off-site link with an "Off" tag on the row', () => {
     openLinks()
-    // l3 (Bandcamp) is the only off-site link; exactly one "Off" tag shows.
-    expect(screen.getByText('Bandcamp')).toBeTruthy()
     expect(screen.getAllByText('Off')).toHaveLength(1)
-  })
-
-  it('the add affordance stays IN the editor (was a link out until 2026-08-09)', () => {
-    // This pinned `<Link href="/artists/artist-1/links">` — leaving the editor to add a
-    // URL. Sam: "they should stay on the editor page." Rewritten rather than deleted, so
-    // the regression it guards against is still named: no anchor, and no navigation.
-    openLinks()
-    expect(screen.queryByRole('link', { name: /Add (link|social)/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /Add social/ })).toBeTruthy()
   })
 
   it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
     openLinks()
-    expandLink(1) // l1 (Spotify) is on-site → its toggle offers to take it off.
+    expandLink(1)
     fireEvent.click(screen.getByRole('button', { name: /On the site/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l1', 'artist-1', false)
+    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c1', 'artist-1', false)
   })
 
   it('puts an off-site link back ON the site', () => {
     openLinks()
-    expandLink(3) // l3 (Bandcamp) is the only off-site link.
+    expandLink(3)
     fireEvent.click(screen.getByRole('button', { name: /Off the site/ }))
-    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'l3', 'artist-1', true)
+    expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c3', 'artist-1', true)
   })
 
   it('does NOT save a blank required field and flags it invalid (no false "Saved")', () => {
@@ -812,48 +689,28 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: '' } })
+      fireEvent.change(screen.getByLabelText('Contact link 1 URL'), { target: { value: '' } })
       vi.advanceTimersByTime(500)
       expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Social link 1 URL').getAttribute('aria-invalid')).toBe('true')
+      expect(screen.getByLabelText('Contact link 1 URL').getAttribute('aria-invalid')).toBe('true')
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('CRITICAL: editing the URL infers the platform label, debounced-saves both', () => {
-    // Sam, 2026-08-12: "the tool should pick up the type of button based on the url."
-    // Change Spotify's URL to a TikTok one → the label (and so the icon) becomes TikTok.
+  it('CRITICAL: an edit debounced-saves the label AND the address, to that row', () => {
     vi.useFakeTimers()
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://tiktok.com/@juniper' } })
+      fireEvent.change(screen.getByLabelText('Contact link 1 URL'), { target: { value: 'mailto:agent@x.com' } })
       expect(updateContentMock).not.toHaveBeenCalled()
       vi.advanceTimersByTime(500)
       expect(updateContentMock).toHaveBeenCalledTimes(1)
       const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
-      expect([type, id, artistId]).toEqual(['link', 'l1', 'artist-1'])
-      expect((fd as FormData).get('label')).toBe('TikTok')
-      expect((fd as FormData).get('url')).toBe('https://tiktok.com/@juniper')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('CRITICAL: an UNKNOWN host keeps the existing label — inference never blanks it', () => {
-    // A URL that matches no platform (a personal site) has no icon to infer, so the row
-    // must keep whatever name it had. The false branch of the inference was untested; a
-    // mutant blanking the label survived the whole suite.
-    vi.useFakeTimers()
-    try {
-      openLinks()
-      expandLink(1) // Spotify
-      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://juniperhale.com' } })
-      vi.advanceTimersByTime(500)
-      const fd = updateContentMock.mock.calls.at(-1)![3] as FormData
-      expect(fd.get('label')).toBe('Spotify') // kept, not blanked
-      expect(fd.get('url')).toBe('https://juniperhale.com')
+      expect([type, id, artistId]).toEqual(['link', 'c1', 'artist-1'])
+      expect((fd as FormData).get('label')).toBe('Bookings')
+      expect((fd as FormData).get('url')).toBe('mailto:agent@x.com')
     } finally {
       vi.useRealTimers()
     }
@@ -864,67 +721,60 @@ describe('EditorInspector — Links component', () => {
     try {
       openLinks()
       expandLink(1)
-      fireEvent.change(screen.getByLabelText('Social link 1 URL'), { target: { value: 'https://tiktok.com/@juniper' } })
-      // Close the box; the row's name is the platform inferred from the new URL.
+      fireEvent.change(screen.getByLabelText('Contact link 1 label'), { target: { value: 'Agent' } })
       collapseLink(1)
-      expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
-      expect(screen.getByText('TikTok')).toBeTruthy()
-      expect(screen.queryByText('Spotify')).toBeNull()
+      expect(screen.queryByLabelText('Contact link 1 label')).toBeNull()
+      expect(screen.getByText('Agent')).toBeTruthy()
+      expect(screen.queryByText('Bookings')).toBeNull()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('CRITICAL: clicking outside an open social row closes it too', () => {
+  it('CRITICAL: clicking outside an open row closes it', () => {
     // The same rule as the Style panel (Sam, 2026-08-14). Pinned per PANEL because the
     // boundary ref is wired per panel — Style passing is no evidence Links does.
     openLinks()
     expandLink(1)
-    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
   })
 
-  it('typing in an open social row never closes it', () => {
-    // The field lives inside the boundary; a mousedown to focus it must not collapse
-    // the row out from under the cursor.
+  it('typing in an open row never closes it', () => {
     openLinks()
     expandLink(1)
-    fireEvent.mouseDown(screen.getByLabelText('Social link 1 URL'))
-    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
+    fireEvent.mouseDown(screen.getByLabelText('Contact link 1 URL'))
+    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
     // WITNESS: prove the listener is actually armed. Without this, an unattached
-    // boundary ref makes the assertion above vacuously true — nothing would close the
-    // row, so "it stayed open" would prove nothing at all.
+    // boundary ref makes the assertion above vacuously true.
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
   })
 
-  it('CRITICAL: a preview click on dead space closes an open social row too', () => {
-    // Pinned per PANEL: the collapse tick is threaded independently to each list, so
-    // Style passing proves nothing about Links (the same reason as the outside-click).
-    const view = renderInspector([], { links: LINKS, deselectedAt: 1 })
-    fireEvent.click(screen.getByRole('button', { name: /Links/ }))
+  it('CRITICAL: a preview click on dead space closes an open row too', () => {
+    const view = openLinks({ deselectedAt: 1 })
     expandLink(1)
-    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
-    view.rerender(inspector([], { links: LINKS, deselectedAt: 2 }))
-    expect(screen.queryByLabelText('Social link 1 URL')).toBeNull()
+    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
+    view.rerender(inspector([], { links: CONTACTS, deselectedAt: 2 }))
+    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
   })
 
-  it('removes a link optimistically via deleteContentAction', () => {
+  it('removes a contact optimistically via deleteContentAction', () => {
     openLinks()
     expandLink(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove social link 1' }))
-    expect(deleteContentMock).toHaveBeenCalledWith('link', 'l1', 'artist-1')
-    expect(screen.queryByText('Spotify')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
+    expect(deleteContentMock).toHaveBeenCalledWith('link', 'c1', 'artist-1')
+    expect(screen.queryByText('Bookings')).toBeNull()
   })
 
-  it('reorders links via drag and persists the new order', () => {
+  it('reorders contacts via drag and persists the new order', () => {
     openLinks()
     const rows = document.querySelectorAll('aside div[draggable="true"]')
     expect(rows.length).toBe(3)
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[2])
-    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l3', 'l1'])
+    expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['c2', 'c3', 'c1'])
   })
 })
 
@@ -968,27 +818,21 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
       .map((s) => s.textContent)
       .filter((t) => t === 'Socials' || t === 'Contact')
     expect(headings).toEqual(['Socials', 'Contact'])
-    // One add affordance for the whole panel, not one per group.
-    // ONE add affordance per panel, not one per group — Contact is a slice of the
-    // same list. (A button since 2026-08-09; it opens the modal in place.)
-    expect(screen.getAllByRole('button', { name: /Add social/ }).length).toBe(1)
+    // ONE add affordance per panel, not one per group — Contact is a slice of the same
+    // list, and a contact is typed in place, never picked from the connections.
+    expect(screen.getAllByRole('button', { name: /^Add button$/ }).length).toBe(1)
   })
 
-  it('gives Socials and Contact rows DISTINCT accessible names', () => {
-    // Row labels are numbered per-list, and the panel renders LinkTools twice — so
-    // an unprefixed "Link 1 label" existed twice in the DOM once a booking link
-    // appeared, which is ambiguous to a screen reader and to getByLabelText.
+  it('a Contact row is typed in place; a Socials row is a button with nothing to type', () => {
+    // A booking address is not a connection, so it keeps its label + address editor. A
+    // social is the connection's own link, edited in Connections (Sam, 2026-09-28).
     const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
     openLinks({ links: [...LINKS, booking] })
-    fireEvent.click(screen.getByRole('button', { name: 'Edit social link 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit contact link 1' }))
-    // Both rows are open at once; each name must resolve to exactly one element. A
-    // social has only its URL (label inferred); a CONTACT keeps its manager-set label.
-    expect(screen.getByLabelText('Social link 1 URL')).toBeTruthy()
-    expect(screen.queryByLabelText('Social link 1 label')).toBeNull()
     expect(screen.getByLabelText('Contact link 1 label')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remove social link 1' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remove contact link 1' })).toBeTruthy()
+    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Edit social link/ })).toBeNull()
+    expect(screen.queryByLabelText(/Social link \d/)).toBeNull()
   })
 
   it('shows NO Contact group when every link is a plain profile URL', () => {
@@ -999,11 +843,11 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
   it('reorders by ID, so a drag in one group cannot scramble the other', () => {
     // The panel renders links in two lists; a row's index within its own list is not
     // its index in the full array. Dragging row 0 onto row 1 of SOCIALS must move l1
-    // past l2 and leave the booking link where it is.
+    // past l2 and leave the booking link (and the off-site Bandcamp) where they are.
     const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
     openLinks({ links: [...LINKS, booking] })
     const rows = document.querySelectorAll('aside div[draggable="true"]')
-    expect(rows.length).toBe(4) // 3 socials + 1 contact
+    expect(rows.length).toBe(3) // 2 buttons (Bandcamp is off the site, so not one) + 1 contact
     fireEvent.dragStart(rows[0])
     fireEvent.drop(rows[1])
     expect(reorderContentMock).toHaveBeenCalledWith('link', 'artist-1', ['l2', 'l1', 'l3', 'l9'])

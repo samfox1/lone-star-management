@@ -23,8 +23,11 @@ import {
   CONNECTIONS,
   SHOPIFY_KEY,
   buildConnectionRows,
+  buttonChoices,
   connectInputError,
   connectionByKey,
+  connectionHandle,
+  connectionOfLink,
   connectionState,
   connectionsAtoZ,
   idFromProfileUrl,
@@ -36,6 +39,7 @@ import {
   profileLink,
   wantsSync,
 } from '@/lib/connections'
+import { CONNECT_METHODS, type HandleMethod } from '@/lib/connect-methods'
 
 const byKey = (k: string) => {
   const d = connectionByKey(k)
@@ -238,7 +242,7 @@ describe('buildConnectionRows — only what is hooked up', () => {
 
   it('CRITICAL: Spotify is one row carrying the profile AND the catalog', () => {
     expect(rows.filter((r) => r.label === 'Spotify')).toHaveLength(1)
-    expect(row('spotify')).toMatchObject({ linkId: 'l-sp', sourceId: '26K', state: 'synced', onSite: true })
+    expect(row('spotify')).toMatchObject({ linkId: 'l-sp', sourceId: '26K', state: 'synced' })
   })
 
   it('a connected source with no profile is still a row (YouTube), and one with neither is not (Deezer)', () => {
@@ -256,11 +260,10 @@ describe('buildConnectionRows — only what is hooked up', () => {
     expect(row('bandsintown').state).toBe('failed')
   })
 
-  it('the ring follows the link when there is one, and the connection when there is not', () => {
-    expect(row('x').onSite).toBe(true)
-    expect(row('instagram').onSite).toBe(false)
-    expect(row('tiktok').onSite).toBe(false)
-    expect(row('youtube').onSite).toBe(true) // no link row: connected IS on
+  it('CRITICAL: a row carries no on-site flag — a site button is made in the editor, not here', () => {
+    // Sam, 2026-09-28: "Only in the editor." The page used to wear a ring per row that put
+    // the link on the site; a connection is an account, the button is the editor's.
+    for (const r of rows) expect(r).not.toHaveProperty('onSite')
   })
 
   it('a profile whose source is not connected reads "connect"; a plain social reads "none"', () => {
@@ -268,9 +271,14 @@ describe('buildConnectionRows — only what is hooked up', () => {
     expect(row('instagram').state).toBe('none')
   })
 
-  it('CRITICAL: ranks synced, then failed, then on-site profiles, then off-site — A to Z within', () => {
-    // X is on the site and Instagram is not, so X comes first although I sorts before X.
-    expect(rows.map((r) => r.key)).toEqual(['spotify', 'youtube', 'bandsintown', 'apple music', 'x', 'instagram', 'tiktok'])
+  it('CRITICAL: ranks synced, then failed, then everything else — A to Z within, on the site or not', () => {
+    // X is on the site and Instagram and TikTok are not; that no longer moves anyone.
+    const order = ['spotify', 'youtube', 'bandsintown', 'apple music', 'instagram', 'tiktok', 'x']
+    expect(rows.map((r) => r.key)).toEqual(order)
+    // Every link flipped the other way: the same list, in the same order.
+    const flipped = links.map((l) => ({ ...l, on_site: !l.on_site }))
+    const again = buildConnectionRows({ links: flipped, artist, shopifyConnected: false, counts: { spotify: 24, youtube: 3 } })
+    expect(again.map((r) => r.key)).toEqual(order)
   })
 
   it('Shopify joins the list when connected, and its state follows its products', () => {
@@ -288,5 +296,60 @@ describe('connectionState', () => {
     expect(connectionState(byKey('spotify'), false, 0)).toBe('connect')
     expect(connectionState(byKey('spotify'), true, 0)).toBe('failed')
     expect(connectionState(byKey('spotify'), true, 1)).toBe('synced')
+  })
+})
+
+describe('site buttons — a connection the editor can put on the site', () => {
+  type EditorLinkLike = LinkRowLike & { onSite: boolean }
+  const link = (over: Partial<EditorLinkLike> & { id: string }): EditorLinkLike => ({ label: 'Instagram', url: 'https://instagram.com/skeen', role: null, onSite: false, ...over })
+  // Every service, derived: a row labelled with a service's name is never a button, whatever
+  // it points at (Sam, 2026-09-28: "I will use shopify differently").
+  const services = CONNECTIONS.filter((d) => d.kind === 'service')
+  const links: EditorLinkLike[] = [
+    link({ id: 'l-x', label: 'X', url: 'https://x.com/skeen', onSite: true }),
+    link({ id: 'l-tt', label: 'TikTok', url: 'https://tiktok.com/@skeen' }),
+    link({ id: 'l-ig', label: 'Instagram', url: 'https://instagram.com/skeen' }),
+    link({ id: 'l-usb', label: 'Spotify', url: 'https://open.spotify.com/playlist/0', role: 'usb' }),
+    link({ id: 'l-bk', label: 'Instagram', url: 'mailto:book@example.com' }),
+    link({ id: 'l-odd', label: 'My cool page', url: 'https://example.com' }),
+    ...services.map((d) => link({ id: `l-${d.key}`, label: d.label, url: 'https://example.com/skeen' })),
+  ]
+
+  it('CRITICAL: only profiles that are not buttons yet — A to Z, each with its connection', () => {
+    const choices = buttonChoices(links)
+    expect(choices.map((c) => c.link.id)).toEqual(['l-ig', 'l-tt'])
+    // The SAME row, not a copy: picking it turns that row on.
+    expect(choices[0].link).toBe(links[2])
+    expect(choices.map((c) => c.def.key)).toEqual(['instagram', 'tiktok'])
+  })
+
+  it('CRITICAL: a service is never a button, and neither is a role-bound or contact row', () => {
+    expect(services.length).toBeGreaterThan(0) // the guard has to be guarding something
+    const ids = buttonChoices(links).map((c) => c.link.id)
+    for (const d of services) expect(ids).not.toContain(`l-${d.key}`)
+    expect(ids).not.toContain('l-usb')
+    expect(ids).not.toContain('l-bk')
+    expect(ids).not.toContain('l-odd')
+  })
+
+  it('connectionOfLink: a profile row names its social connection; anything else, none', () => {
+    expect(connectionOfLink(links[0])?.key).toBe('x')
+    expect(connectionOfLink({ id: 'a', label: 'apple music', url: 'https://music.apple.com/us/artist/1' })?.key).toBe('apple music')
+    expect(connectionOfLink(links[3])).toBeUndefined() // the USB playlist
+    expect(connectionOfLink(links[4])).toBeUndefined() // a booking address
+    for (const d of services) expect(connectionOfLink({ id: 's', label: d.label, url: 'https://example.com' })).toBeUndefined()
+  })
+
+  it('connectionHandle: a handle platform shows the handle, round trip, for every one of them', () => {
+    const handles = Object.entries(CONNECT_METHODS).filter((e): e is [string, HandleMethod] => e[1].kind === 'handle')
+    expect(handles.length).toBeGreaterThan(5)
+    for (const [slug, m] of handles) expect(connectionHandle(byKey(slug), m.url(m.example)), slug).toBe(m.example)
+  })
+
+  it('connectionHandle: a link platform, or a link with no handle in it, shows the address as a person says it', () => {
+    expect(connectionHandle(byKey('spotify'), 'https://open.spotify.com/artist/26K/')).toBe('open.spotify.com/artist/26K')
+    expect(connectionHandle(byKey('youtube'), 'https://www.youtube.com/channel/UC123')).toBe('youtube.com/channel/UC123')
+    // A connection with no connect method at all (a service) reads the same way, not a throw.
+    expect(connectionHandle(byKey(SHOPIFY_KEY), 'https://skeen.myshopify.com/')).toBe('skeen.myshopify.com')
   })
 })
