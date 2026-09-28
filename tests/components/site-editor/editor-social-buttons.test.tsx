@@ -192,9 +192,11 @@ describe('Add button — nothing left to pick', () => {
     expect(within(dialog).getByText(/No connected accounts left to add/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Connect an account' }))
     const connect = screen.getByRole('dialog', { name: 'Connect' })
-    // Every social, and nothing else: a service is not a button, so not here either.
-    for (const d of SERVICES) expect(within(connect).queryByRole('button', { name: new RegExp(`^${d.label}`) }), d.label).toBeNull()
-    for (const d of SOCIALS) expect(within(connect).getByRole('button', { name: new RegExp(`^${d.label}`) })).toBeInTheDocument()
+    // Every social, and nothing else: a service is not a button, so not here either. The
+    // whole name (or it + " (connected)"): a prefix would find "YouTube Music" for YouTube.
+    const card = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\(connected\\))?$`)
+    for (const d of SERVICES) expect(within(connect).queryByRole('button', { name: card(d.label) }), d.label).toBeNull()
+    for (const d of SOCIALS) expect(within(connect).getByRole('button', { name: card(d.label) })).toBeInTheDocument()
     expect(within(connect).getByRole('button', { name: 'X (connected)' })).toBeDisabled()
     expect(within(connect).getByRole('button', { name: 'Instagram' })).toBeEnabled()
     // Still the editor: no navigation happened, the Links panel is right there.

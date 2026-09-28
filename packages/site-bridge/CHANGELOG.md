@@ -136,6 +136,43 @@ before/after first. Run it only once the site is on 0.42.
 
 ### Also in 0.42.0 (released from Unreleased)
 
+**Eighteen more platforms in `SOCIAL_PLATFORMS`** (Sam, 2026-09-28), appended after Tidal so
+the first sixteen keep their places: YouTube Music, Amazon Music, Audiomack, Mixcloud,
+Beatport, Pandora, Bluesky, Snapchat, WhatsApp, Telegram, Vimeo, Songkick, Ko-fi, Cash App,
+Venmo, PayPal, Resident Advisor, Eventbrite. Each has a mark in `social-icons.ts`: fifteen from
+simple-icons, and three PLACEHOLDER lettermarks (Amazon Music, Resident Advisor, Eventbrite:
+simple-icons has none) drawn in the generator, not copied from a brand, and marked
+`// PLACEHOLDER` in the file until Sam picks the official brand-kit logos. **Site action: a
+site that renders every bridge platform (by `slug`, or through `socialIcon`) gets them
+automatically after upgrading; one with its own glyph map draws the new slugs as plain
+labelled links until it adds glyphs.** Nothing is removed or renamed.
+
+**`platformFromUrl` host matching: two real bugs fixed.**
+- A platform on ONE subdomain of a bigger site: `music.youtube.com` collapsed to
+  `youtube.com` and read as YouTube. New optional `subdomainOnly` field: such a platform claims
+  only its own host (and its subdomains and aliases), and wins there. YouTube Music and Amazon
+  Music use it; `youtube.com`, `m.youtube.com` and `youtu.be` stay YouTube, and an `amazon.com`
+  shop page is nobody's.
+- Country domains: `eventbrite.co.uk` and `music.amazon.co.uk` collapsed to `co.uk`. The new
+  `registrableDomain(host)` keeps three labels under a SMALL, explicit list of multi-part
+  suffixes (`co.uk`, `com.au`, `co.jp`, `com.br`, `com.mx`, `co.nz`, `co.za`, `com.ar`,
+  `com.pe`), and Eventbrite / Amazon Music list their country sites in `aliasHosts`, one by
+  one. Never "any TLD": a stranger's `music.amazon.xyz` or `eventbrite.co.uk.evil.net` is
+  nobody's.
+- Also: `platformFromUrl` answers only for an http(s) link (a `javascript:` or `ftp:` string
+  naming instagram.com used to read as Instagram); YouTube, Facebook, X and Discord gained
+  their own other domains as aliases (`youtu.be`, `fb.com`, `twitter.com`, `discord.com`),
+  which used to read as nobody. Every earlier answer is otherwise unchanged, pinned by
+  `tests/unit/site-editor/social-hosts.test.ts`.
+- New exports from `./social`: `linkHost(url)` and `registrableDomain(host)`, the one host
+  rule the dashboard's handle parser now shares instead of keeping its own copy.
+- `seo`: `isProfileUrl` answers false for a `youtu.be` link (always a video), so it cannot
+  reach `sameAs` now that `youtu.be` reads as YouTube.
+
+**Site action: none to write.** A site that asks `platformFromUrl` (its "is this link one of
+ours" check, the JSON-LD `sameAs`) gets the corrected answers on upgrade; a YouTube Music link
+it used to draw as YouTube now reads as YouTube Music.
+
 
 **`SOCIAL_PLATFORMS` gains an optional `aliasHosts` field, and `platformFromUrl` reads it**
 (Sam, 2026-09-28: Threads moved to threads.com, and threads.net now redirects there).

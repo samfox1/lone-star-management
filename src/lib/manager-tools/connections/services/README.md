@@ -10,9 +10,14 @@ code map, tests, known gaps.
 
 | Kind | What the manager enters | What happens |
 | --- | --- | --- |
-| **Link only** | The handle alone (`x.com/` [skeenmusic]), or a pasted profile link | A `links` row the site can show as a button. Nothing is pulled. |
+| **Link only** | The handle alone (`x.com/` [skeenmusic]), or a pasted profile link; for a platform with no handle (Tidal, WhatsApp, Eventbrite), its link | A `links` row the site can show as a button. Nothing is pulled. |
 | **Link + sync** | The artist link (or handle, for YouTube), with **Sync** on | The same `links` row, plus the id inside it pulls the catalog into the dashboard. Sync off = link only. |
 | **Service** | The service's own fields (an id, a name, a folder link, a store domain + token) | Feeds the dashboard (tour dates, files, merch). Never a social button on a site. |
+
+A pasted link must be one the site reads as THAT platform (the bridge's `platformFromUrl`,
+2026-09-28): a handle platform reads it back to its handle, and a link platform (Tidal,
+WhatsApp…) refuses anything else by name, on Connect and whenever the link is changed later.
+WhatsApp takes only a channel link, never a link that carries a phone number.
 
 A new connection starts **off the site**. A site button is added in the site editor's
 **Socials → Add button**, which picks from the artist's connections (Sam, 2026-09-28).
@@ -21,26 +26,44 @@ A new connection starts **off the site**. A site button is added in the site edi
 
 | Service | Kind | Feeds | Doc |
 | --- | --- | --- | --- |
+| Amazon Music | Link only (artist link) | — | [amazon-music](amazon-music/README.md) |
 | Apple Music | Link + sync | Music | [apple-music](apple-music/README.md) |
+| Audiomack | Link only | — | [audiomack](audiomack/README.md) |
 | Bandcamp | Link only | — | [bandcamp](bandcamp/README.md) |
 | Bandsintown | Service | Tour dates | [bandsintown](bandsintown/README.md) |
+| Beatport | Link only (artist link) | — | [beatport](beatport/README.md) |
+| Bluesky | Link only | — | [bluesky](bluesky/README.md) |
+| Cash App | Link only (tip page) | — | [cash-app](cash-app/README.md) |
 | Deezer | Link + sync | Music | [deezer](deezer/README.md) |
 | Discord | Link only (invite) | — | [discord](discord/README.md) |
+| Eventbrite | Link only (organizer link) | — | [eventbrite](eventbrite/README.md) |
 | Facebook | Link only | — | [facebook](facebook/README.md) |
 | Google Drive | Service | Files | [google-drive](google-drive/README.md) |
 | Instagram | Link only | — | [instagram](instagram/README.md) |
+| Ko-fi | Link only (tip page) | — | [ko-fi](ko-fi/README.md) |
+| Mixcloud | Link only | — | [mixcloud](mixcloud/README.md) |
+| Pandora | Link only (artist link) | — | [pandora](pandora/README.md) |
 | Patreon | Link only | — | [patreon](patreon/README.md) |
+| PayPal | Link only (tip page) | — | [paypal](paypal/README.md) |
+| Resident Advisor | Link only | — | [resident-advisor](resident-advisor/README.md) |
 | Shopify | Service | Merch | [shopify](shopify/README.md) |
+| Snapchat | Link only | — | [snapchat](snapchat/README.md) |
+| Songkick | Link only (artist link) | — | [songkick](songkick/README.md) |
 | SoundCloud | Link only | — | [soundcloud](soundcloud/README.md) |
 | Spotify | Link + sync | Music | [spotify](spotify/README.md) |
 | Substack | Link only | — | [substack](substack/README.md) |
+| Telegram | Link only | — | [telegram](telegram/README.md) |
 | Threads | Link only | — | [threads](threads/README.md) |
 | Ticketmaster | Service | Tour dates | [ticketmaster](ticketmaster/README.md) |
-| Tidal | Link only | — | [tidal](tidal/README.md) |
+| Tidal | Link only (artist link) | — | [tidal](tidal/README.md) |
 | TikTok | Link only | — | [tiktok](tiktok/README.md) |
 | Twitch | Link only | — | [twitch](twitch/README.md) |
+| Venmo | Link only (tip page) | — | [venmo](venmo/README.md) |
+| Vimeo | Link only | — | [vimeo](vimeo/README.md) |
+| WhatsApp | Link only (channel link) | — | [whatsapp](whatsapp/README.md) |
 | X | Link only | — | [x](x/README.md) |
 | YouTube | Link + sync | Videos | [youtube](youtube/README.md) |
+| YouTube Music | Link only (artist link) | — | [youtube-music](youtube-music/README.md) |
 
 ## Where the code is
 
@@ -65,7 +88,13 @@ Each folder holds a README and an `index.ts`: that service's own code, and only 
 1. Make its folder: `<slug>/index.ts` exporting one `Service`, and add it to `index.ts`
    here. `services.test.ts` fails until every folder is listed.
 2. A social: also add it to the bridge's `SOCIAL_PLATFORMS` (and its icon via
-   `npm run social-icons`). The tests fail until the bridge and the file agree.
+   `npm run social-icons`). The tests fail until the bridge and the file agree. A platform on
+   one subdomain of a bigger site (music.youtube.com) is `subdomainOnly`; its other domains
+   and country sites go in `aliasHosts`, listed one by one (never "any TLD"), and a country
+   domain under a new multi-part suffix needs that suffix in the bridge's
+   `MULTI_PART_SUFFIXES` (`tests/unit/site-editor/social-hosts.test.ts` says so). No
+   simple-icons mark: a `PLACEHOLDER_MARKS` entry in `scripts/generate-social-icons.ts`
+   until the brand's own logo is chosen.
 3. A syncable source: add its key to `INTEGRATION_KEYS` (the order the registry takes) and
    its pull action in the dashboard's `integrations.ts`.
 4. A service: its connect path in `connections/actions.ts` and its mark via

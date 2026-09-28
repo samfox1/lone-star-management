@@ -256,7 +256,8 @@ describe('sitemap + robots', () => {
   it('sameAs: profile pages only', () => {
     for (const ok of ['https://open.spotify.com/artist/abc', 'https://soundcloud.com/skeen', 'https://www.youtube.com/@skeen', 'https://youtube.com/channel/UCx', 'https://instagram.com/skeen', 'https://music.apple.com/us/artist/skeen/1'])
       expect(isProfileUrl(ok), ok).toBe(true)
-    for (const no of ['https://open.spotify.com/playlist/x', 'https://open.spotify.com/track/x', 'https://soundcloud.com/skeen/sets/mix', 'https://www.youtube.com/watch?v=x', 'https://instagram.com/p/abc'])
+    // youtu.be is YouTube's (platformFromUrl, 2026-09-28), and every youtu.be link is a VIDEO.
+    for (const no of ['https://open.spotify.com/playlist/x', 'https://open.spotify.com/track/x', 'https://soundcloud.com/skeen/sets/mix', 'https://www.youtube.com/watch?v=x', 'https://instagram.com/p/abc', 'https://youtu.be/dQw4w9WgXcQ', 'https://music.youtube.com/watch?v=x'])
       expect(isProfileUrl(no), no).toBe(false)
   })
   it('auditGeoFacts: a MusicGroup without genre or location is a finding; a Person needs only a location', () => {

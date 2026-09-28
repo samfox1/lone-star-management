@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
-import { SHOPIFY_KEY, methodOf, type ConnectionRow } from '@/lib/connections'
+import { SHOPIFY_KEY, methodOf, profileLink, type ConnectionRow } from '@/lib/connections'
 import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
@@ -113,6 +113,15 @@ export function ConnectionModal({
   const handle = method && row.url ? handleFromUrl(method, row.url) : null
   const handleLabel = method ? method.noun[0].toUpperCase() + method.noun.slice(1) : ''
 
+  // A link platform's link (Spotify, WhatsApp…) is checked the way Connect checks it, and
+  // saved the way that rule saves it; the server refuses the same (updateContentAction).
+  async function saveLink(raw: string) {
+    const link = found?.kind === 'link' ? profileLink(row.def, { url: raw }) : { url: raw }
+    if ('error' in link) return { error: link.error }
+    if (link.url === row.url) return
+    return saveUrl(link.url)
+  }
+
   async function saveHandle(raw: string) {
     if (!method) return
     const parsed = parseHandle(method, raw)
@@ -176,7 +185,7 @@ export function ConnectionModal({
           <KvField
             {...(method && handle !== null
               ? { label: handleLabel, value: handle, onSave: saveHandle }
-              : { label: 'Link', value: row.url ?? '', type: 'url' as const, onSave: saveUrl })}
+              : { label: 'Link', value: row.url ?? '', type: 'url' as const, onSave: saveLink })}
             mono
             onError={fail}
             trailing={

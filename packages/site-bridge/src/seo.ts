@@ -141,6 +141,8 @@ export function isProfileUrl(url: string): boolean {
   if (host.endsWith('spotify.com')) return segs[0] === 'artist' || segs[0] === 'user'
   if (host.endsWith('soundcloud.com')) return segs.length === 1
   if (host.endsWith('youtube.com')) return segs.length === 1 ? segs[0].startsWith('@') : ['channel', 'c', 'user'].includes(segs[0] ?? '')
+  // YouTube's short links are videos, never a channel.
+  if (host === 'youtu.be') return false
   if (host.endsWith('music.apple.com')) return segs.includes('artist')
   if (host.endsWith('bandcamp.com')) return segs.length === 0
   return segs.length <= 1

@@ -135,10 +135,26 @@ export function methodOf(def: ConnectionDef): ConnectMethod | undefined {
  *  pulls nothing (absent = pull, which is what connecting a source has always meant). */
 export type ConnectInput = { url?: string; handle?: string; id?: string; domain?: string; token?: string; sync?: boolean }
 
+/** A pasted link as https: the scheme added when it has none, `http://` upgraded. Null for
+ *  any other scheme (`javascript:`, `mailto:`): never a profile. */
+function asHttps(raw: string): string | null {
+  if (/^https:\/\//i.test(raw)) return raw
+  if (/^http:\/\//i.test(raw)) return `https://${raw.slice(7)}`
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return null
+  return `https://${raw}`
+}
+
 /**
  * The one link a social connection saves, or why it can't be. A handle platform builds it
  * from the handle (a pasted link is read back to its handle first, so an older caller that
- * sends `url` still works); a music service takes its artist link as pasted.
+ * sends `url` still works); a link platform (a music service) takes its artist link as
+ * pasted, made https.
+ *
+ * A link platform's link must be one `platformFromUrl` reads as THAT platform (2026-09-28):
+ * the site draws it by that reading, and until then any url that was not another platform's
+ * got in — a personal site, a `javascript:` string, a WhatsApp chat link carrying a phone
+ * number. A platform with a `path` (WhatsApp's channel) takes only that path, saved without
+ * its query or fragment. Stored rows from before are not rewritten.
  */
 export function profileLink(def: ConnectionDef, input: ConnectInput): { url: string } | { error: string } {
   const method = methodOf(def)
@@ -146,12 +162,19 @@ export function profileLink(def: ConnectionDef, input: ConnectInput): { url: str
     const parsed = parseHandle(method, input.handle ?? input.url ?? '')
     return 'error' in parsed ? parsed : { url: parsed.url }
   }
-  const url = input.url?.trim() ?? ''
-  if (!url) return { error: `Paste the ${def.label} link.` }
+  const raw = input.url?.trim() ?? ''
+  if (!raw) return { error: `Paste the ${def.label} link.` }
+  const url = asHttps(raw)
   // The bare platform root is not a profile.
-  if (def.urlHint && url.replace(/\/+$/, '') === def.urlHint.replace(/\/+$/, '')) return { error: 'Add the rest of the link — that’s just the site’s address.' }
-  const found = platformFromUrl(url)
+  if (url && def.urlHint && url.replace(/\/+$/, '') === def.urlHint.replace(/\/+$/, '')) return { error: 'Add the rest of the link — that’s just the site’s address.' }
+  const found = url ? platformFromUrl(url) : null
   if (found && found.slug !== def.social) return { error: `That’s ${withArticle(found.label)} link, not ${def.label}.` }
+  const notMine = { error: `That isn’t ${withArticle(def.label)}${method?.pathNoun ? ` ${method.pathNoun}` : ''} link.` }
+  if (!url || !found) return notMine
+  if (method?.path) {
+    const u = new URL(url)
+    return method.path.test(u.pathname) ? { url: `${u.origin}${u.pathname}` } : notMine
+  }
   return { url }
 }
 
@@ -283,6 +306,19 @@ export function connectionOfLink(link: LinkRowLike): ConnectionDef | undefined {
   if (!isProfileLink(link)) return undefined
   const slug = socialSlug(link.label ?? '')
   return CONNECTIONS.find((d) => d.social === slug)
+}
+
+/**
+ * A link row's new url, checked the way Connect checks it, for the door that CHANGES a link
+ * row (`updateContentAction`: the Connections edit window, the editor's link rows). Only a
+ * LINK-kind connection is checked (Spotify, WhatsApp…: the rule `profileLink` applies), and
+ * its url comes back as that rule saves it (https, WhatsApp without a query). A contact row,
+ * a role-bound button, a handle platform's row and a label no platform owns pass untouched.
+ */
+export function checkedLinkUrl(link: LinkRowLike & { url: string }): { url: string } | { error: string } {
+  const def = connectionOfLink(link)
+  if (!def || methodOf(def)?.kind !== 'link') return { url: link.url }
+  return profileLink(def, { url: link.url })
 }
 
 /** What the editor's picker offers: every profile link that is not a button yet, with its

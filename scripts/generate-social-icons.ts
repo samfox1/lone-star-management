@@ -39,14 +39,69 @@ const SI_EXPORT: Record<string, string> = {
   twitch: 'siTwitch',
   deezer: 'siDeezer',
   tidal: 'siTidal',
+  // 2026-09-28
+  'youtube music': 'siYoutubemusic',
+  audiomack: 'siAudiomack',
+  mixcloud: 'siMixcloud',
+  beatport: 'siBeatport',
+  pandora: 'siPandora',
+  bluesky: 'siBluesky',
+  snapchat: 'siSnapchat',
+  whatsapp: 'siWhatsapp',
+  telegram: 'siTelegram',
+  vimeo: 'siVimeo',
+  songkick: 'siSongkick',
+  'ko-fi': 'siKofi',
+  'cash app': 'siCashapp',
+  venmo: 'siVenmo',
+  paypal: 'siPaypal',
 }
 
 type Icon = { title: string; hex: string; path: string }
 
+/**
+ * PLACEHOLDER MARKS — PENDING SAM'S CHOICE OF THE OFFICIAL BRAND-KIT LOGOS (2026-09-28).
+ *
+ * simple-icons (16.28.0) has no Amazon Music, Resident Advisor or Eventbrite mark, and a
+ * platform with no mark reads as a styling bug. So each gets a plain monochrome lettermark,
+ * drawn HERE from straight lines. None is the brand's artwork, and none was copied from a
+ * brand site. Replace each with the brand's own mark (from its press kit, under its terms)
+ * once Sam picks them, and drop it from this list.
+ *
+ * Same format as the rest: one path in a `0 0 24 24` viewBox, filled. A hole winds the
+ * other way from the shape around it, so it shows under nonzero AND evenodd (a site may use
+ * either). Black, since the brand colour is pending too.
+ */
+const PLACEHOLDER_MARKS: Record<string, Icon> = {
+  // PLACEHOLDER: an "A" knocked out of a circle.
+  'amazon music': {
+    title: 'Amazon Music (placeholder)',
+    hex: '000000',
+    path: 'M12 2a10 10 0 0 1 0 20a10 10 0 0 1 0-20zM11.2 7L8.6 17H10.3L10.872 14.8H13.128L13.7 17H15.4L12.8 7zM12 10.46L12.738 13.3H11.262z',
+  },
+  // PLACEHOLDER: "RA" inside a square outline. RA's own mark is RA in a square; this one is
+  // drawn here, not theirs.
+  'resident advisor': {
+    title: 'Resident Advisor (placeholder)',
+    hex: '000000',
+    path: 'M2 2h20v20H2zM3.5 3.5v17h17v-17zM6 7.5H10.5L11.5 8.5V11L10.6 11.9L11.7 16.5H10.1L9.1 12.5H7.5V16.5H6zM7.5 9V11H10V9zM14.5 7.5H16L18.2 16.5H16.6L16.1 14.5H14.4L13.9 16.5H12.3zM15.25 11L14.75 13H15.75z',
+  },
+  // PLACEHOLDER: an "E" knocked out of a square.
+  eventbrite: {
+    title: 'Eventbrite (placeholder)',
+    hex: '000000',
+    path: 'M2 2h20v20H2zM8.5 7V17H15.5V15H10.5V13H14.5V11H10.5V9H15.5V7z',
+  },
+}
+
 export function buildSocialIcons(): string {
   const rows = SOCIAL_PLATFORMS.map((p) => {
+    const placeholder = PLACEHOLDER_MARKS[p.slug]
+    if (placeholder && SI_EXPORT[p.slug]) throw new Error(`"${p.slug}" has a simple-icons mark AND a placeholder — drop the placeholder.`)
+    if (placeholder)
+      return `  ${JSON.stringify(p.slug)}: { path: ${JSON.stringify(placeholder.path)}, hex: ${JSON.stringify('#' + placeholder.hex)} }, // PLACEHOLDER lettermark, pending the brand kit`
     const exportName = SI_EXPORT[p.slug]
-    if (!exportName) throw new Error(`No simple-icons mapping for "${p.slug}" — add one to SI_EXPORT.`)
+    if (!exportName) throw new Error(`No simple-icons mapping for "${p.slug}" — add one to SI_EXPORT (or, with none, a PLACEHOLDER_MARKS entry).`)
     const icon = (si as unknown as Record<string, Icon>)[exportName]
     if (!icon?.path) throw new Error(`simple-icons has no "${exportName}" (for "${p.slug}").`)
     return `  ${JSON.stringify(p.slug)}: { path: ${JSON.stringify(icon.path)}, hex: ${JSON.stringify('#' + icon.hex)} },`
@@ -58,7 +113,8 @@ export function buildSocialIcons(): string {
  *
  * One brand mark per platform: a 24x24 SVG path and the brand's own colour. Icon data
  * from simple-icons (CC0), inlined so neither the editor nor a connected site takes a
- * runtime dependency on it.
+ * runtime dependency on it. A line marked PLACEHOLDER is a plain lettermark drawn in the
+ * generator for a platform simple-icons lacks, pending the brand's own logo.
  *
  * A site is free to ignore all of this and draw its own glyphs — the standard names the
  * platform (./social), it does not dictate a pixel. This exists so that a site which has
@@ -69,7 +125,7 @@ export type SocialIcon = {
   /** SVG path data, drawn in a \`0 0 24 24\` viewBox. */
   path: string
   /** The brand's own colour, for a site that wants it. Monochrome is the safer default:
-   *  sixteen brand colours in one row rarely suits a site's design. */
+   *  a row of brand colours rarely suits a site's design. */
   hex: string
 }
 

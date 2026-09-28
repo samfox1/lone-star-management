@@ -51,6 +51,7 @@ import {
 import { acceptsValue, fieldsFor, type SiteContentField } from '@/lib/site-content-schema'
 import { saveCursorField, saveEditorField, saveEditorLink, saveEditorStyle, saveSeoField, setImageField, type ImageFieldTarget } from '@/lib/site-editor/save'
 import { linkAddError } from '@/lib/site-editor/link-vocabulary'
+import { checkedLinkUrl } from '@/lib/connections'
 import { isCustom } from '@/lib/custom-site'
 import { embedInfo } from '@/lib/embed'
 import { resolveVideo } from '@/lib/video'
@@ -105,6 +106,12 @@ export async function addContentAction(
       typeof input.url === 'string' ? input.url : '',
     )
     if (problem) return { error: problem }
+    // The same link rule the update door applies (see updateContentAction).
+    if (typeof input.url === 'string') {
+      const checked = checkedLinkUrl({ id: '', label: typeof input.label === 'string' ? input.label : null, url: input.url })
+      if ('error' in checked) return { error: checked.error }
+      input.url = checked.url
+    }
   }
 
   let id: string
@@ -138,6 +145,17 @@ export async function updateContentAction(
     }
   }
   const supabase = await createClient()
+  // A link-kind connection's row (Spotify, WhatsApp…) takes only ITS platform's link, as
+  // Connect does (lib/connections `profileLink`): without this, the edit window could turn a
+  // WhatsApp channel into a `wa.me/<phone>` link and publish the number
+  // (tests/unit/manager-tools/connections/link-update-guard.test.ts).
+  if (type === 'link' && typeof input.url === 'string') {
+    const { data: row } = await supabase.from('links').select('label, role').eq('id', id).maybeSingle()
+    const label = typeof input.label === 'string' ? input.label : ((row?.label as string | null | undefined) ?? null)
+    const checked = checkedLinkUrl({ id, label, role: (row?.role as string | null | undefined) ?? null, url: input.url })
+    if ('error' in checked) return { error: checked.error }
+    input.url = checked.url
+  }
   try {
     await updateContent(supabase, type, id, input)
   } catch (e) {

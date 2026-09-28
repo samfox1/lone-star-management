@@ -39,7 +39,7 @@ import {
   profileLink,
   wantsSync,
 } from '@/lib/connections'
-import { CONNECT_METHODS, type HandleMethod } from '@/lib/connect-methods'
+import { CONNECT_METHODS, withArticle, type HandleMethod } from '@/lib/connect-methods'
 
 const byKey = (k: string) => {
   const d = connectionByKey(k)
@@ -95,15 +95,15 @@ describe('the picker', () => {
     const labels = connectionsAtoZ().map((d) => d.label)
     const sorted = [...labels].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
     expect(labels).toEqual(sorted)
-    // Bandsintown (a service) sits between Bandcamp and Deezer (socials): one list.
+    // Bandsintown (a service) sits between Bandcamp and Beatport (socials): one list.
     const i = labels.indexOf('Bandsintown')
     expect(labels[i - 1]).toBe('Bandcamp')
-    expect(labels[i + 1]).toBe('Deezer')
+    expect(labels[i + 1]).toBe('Beatport')
   })
 
   it('search is a case-insensitive substring; blank is everything', () => {
     expect(searchConnections('tik').map((d) => d.label)).toEqual(['TikTok'])
-    expect(searchConnections('MUSIC').map((d) => d.label)).toEqual(['Apple Music'])
+    expect(searchConnections('MUSIC').map((d) => d.label)).toEqual(['Apple Music', 'YouTube Music', 'Amazon Music'])
     expect(searchConnections('   ')).toHaveLength(CONNECTIONS.length)
     expect(searchConnections('zzz')).toEqual([])
   })
@@ -194,6 +194,78 @@ describe('connectInputError — refused before a request is made', () => {
     expect(connectInputError(byKey(SHOPIFY_KEY), { domain: 'x.myshopify.com', token: '   ' })).toMatch(/storefront token/)
     expect(connectInputError(byKey('bandsintown'), { id: '  ' })).toMatch(/Bandsintown artist name/)
     expect(connectInputError(byKey(SHOPIFY_KEY), { domain: 'x.myshopify.com', token: 't' })).toBeNull()
+  })
+})
+
+describe('a link-kind connection takes only ITS platform’s link (2026-09-28)', () => {
+  // Until now a link-kind connection (Spotify, Tidal…) accepted ANY url that was not
+  // recognisably another platform's: a personal site, a `javascript:` string, a WhatsApp
+  // chat link carrying a phone number. Sam: "if its behavior before was not correct, it
+  // should be changed". Derived from the registry, so a new link-kind platform joins by existing.
+  const linkKinds = CONNECTIONS.filter((d) => methodOf(d)?.kind === 'link')
+  const ownLink = (key: string, hint: string) => (key === 'whatsapp' ? 'https://whatsapp.com/channel/0029VaSkeenMusic' : `${hint}skeen-123`)
+
+  it('CRITICAL: every one refuses a link no platform owns, and one that is another platform’s, by name', () => {
+    expect(linkKinds.length).toBeGreaterThanOrEqual(10)
+    for (const d of linkKinds) {
+      expect(connectInputError(d, { url: 'https://juniperhale.com/music' }), d.key).toBe(`That isn’t ${withArticle(d.label)}${d.key === 'whatsapp' ? ' channel' : ''} link.`)
+      expect(connectInputError(d, { url: 'https://instagram.com/skeen' }), d.key).toBe(`That’s an Instagram link, not ${d.label}.`)
+    }
+  })
+
+  it('CRITICAL: every one accepts its own link, as pasted', () => {
+    for (const d of linkKinds) {
+      const url = ownLink(d.key, d.urlHint!)
+      expect(profileLink(d, { url }), d.key).toEqual({ url })
+    }
+  })
+
+  it('only a web link: no javascript:, mailto: or other scheme gets in', () => {
+    for (const url of ['javascript:alert(1)', 'javascript://open.spotify.com/%0Aalert(1)', 'mailto:a@b.com', 'ftp://open.spotify.com/artist/26K'])
+      expect(connectInputError(byKey('spotify'), { url }), url).toBe('That isn’t a Spotify link.')
+  })
+
+  it('a link pasted without https:// gets it, and http:// becomes https://', () => {
+    expect(profileLink(byKey('spotify'), { url: 'open.spotify.com/artist/26K' })).toEqual({ url: 'https://open.spotify.com/artist/26K' })
+    expect(profileLink(byKey('spotify'), { url: 'http://open.spotify.com/artist/26K' })).toEqual({ url: 'https://open.spotify.com/artist/26K' })
+    expect(connectInputError(byKey('spotify'), { url: 'http://open.spotify.com/artist/' })).toMatch(/rest of the link/)
+  })
+
+  it('the host rules decide: a subdomain platform, and a country domain', () => {
+    expect(connectInputError(byKey('youtube music'), { url: 'https://youtube.com/channel/UC1' })).toBe('That’s a YouTube link, not YouTube Music.')
+    expect(connectInputError(byKey('youtube music'), { url: 'https://music.youtube.com/channel/UC1' })).toBeNull()
+    expect(connectInputError(byKey('amazon music'), { url: 'https://www.amazon.com/dp/B00157GJ20' })).toBe('That isn’t an Amazon Music link.')
+    expect(connectInputError(byKey('amazon music'), { url: 'https://music.amazon.co.uk/artists/B00157GJ20/skeen' })).toBeNull()
+    expect(connectInputError(byKey('eventbrite'), { url: 'https://www.eventbrite.co.uk/o/skeen-123' })).toBeNull()
+    expect(connectInputError(byKey('eventbrite'), { url: 'https://skeen.eventbrite.com' })).toBeNull()
+  })
+
+  it('CRITICAL: WhatsApp takes a channel link only — never a link that carries a phone number', () => {
+    const wa = byKey('whatsapp')
+    for (const url of [
+      'https://wa.me/15551234567',
+      'wa.me/15551234567',
+      'https://api.whatsapp.com/send?phone=15551234567',
+      'https://api.whatsapp.com/send/?phone=15551234567&text=hi',
+      'https://chat.whatsapp.com/AbCdEf123',
+      'https://web.whatsapp.com',
+      'https://whatsapp.com/15551234567',
+      // A channel id always has letters in it; digits alone would be a phone number.
+      'https://whatsapp.com/channel/15551234567',
+      'https://whatsapp.com/channel/0029VaSkeen/15551234567',
+    ])
+      expect(connectInputError(wa, { url }), url).toBe('That isn’t a WhatsApp channel link.')
+    // Saved without its query or fragment: nothing rides along after the channel id.
+    expect(profileLink(wa, { url: 'https://www.whatsapp.com/channel/0029VaSkeen?phone=15551234567#x' })).toEqual({ url: 'https://www.whatsapp.com/channel/0029VaSkeen' })
+    expect(connectInputError(wa, { url: 'https://whatsapp.com/channel/' })).toMatch(/rest of the link/)
+  })
+
+  it('Eventbrite: the organizer id comes out of an /o/ link, and nothing out of anyone else’s', () => {
+    const eb = byKey('eventbrite')
+    expect(idFromProfileUrl(eb, 'https://www.eventbrite.com/o/skeenmusic-123456789')).toBe('123456789')
+    expect(idFromProfileUrl(eb, 'https://www.eventbrite.co.uk/o/2666544056')).toBe('2666544056')
+    expect(idFromProfileUrl(eb, 'https://skeenmusic.eventbrite.com')).toBeNull()
+    expect(idFromProfileUrl(eb, 'https://evil.com/eventbrite.com/o/skeen-123')).toBeNull()
   })
 })
 

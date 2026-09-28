@@ -21,8 +21,10 @@
  * Stryker run named the branches the first set left unwatched; their answers were computed
  * from `git show dd3b782`'s copies of the two modules, not from the moved code.
  *
- * Equivalent mutants left (Stryker): a link method's `kind: 'link'` → `kind: ''` (the modules
- * test `'kind' in spec`, never its value).
+ * THE 18 PLATFORMS ADDED 2026-09-28 (youtube music … eventbrite) are new, not moved: their
+ * lines below were printed from their service files on the day they were wired and checked
+ * by hand against each file. PayPal's `fromPath` answers `{ handle: '' }` to every probe
+ * because none is a paypal.me link (it reads only /paypalme/<name> on paypal.com).
  */
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -72,7 +74,7 @@ const ID_PROBES = [
 
 /** A method as comparable data: every function and RegExp replaced by what it does. */
 function pin(m: ConnectMethod) {
-  if (m.kind === 'link') return m
+  if (m.kind === 'link') return m.path ? { ...m, path: String(m.path) } : m
   const fromPath = m.fromPath
   return {
     ...m,
@@ -88,7 +90,12 @@ function pin(m: ConnectMethod) {
 }
 
 const NONE = null
-const BEFORE_METHOD_KEYS = ['instagram', 'tiktok', 'youtube', 'spotify', 'apple music', 'soundcloud', 'bandcamp', 'facebook', 'x', 'threads', 'substack', 'patreon', 'discord', 'twitch', 'deezer', 'tidal']
+const BEFORE_METHOD_KEYS = [
+  'instagram', 'tiktok', 'youtube', 'spotify', 'apple music', 'soundcloud', 'bandcamp', 'facebook', 'x', 'threads', 'substack', 'patreon', 'discord', 'twitch', 'deezer', 'tidal',
+  // 2026-09-28
+  'youtube music', 'amazon music', 'audiomack', 'mixcloud', 'beatport', 'pandora', 'bluesky', 'snapchat', 'whatsapp', 'telegram', 'vimeo', 'songkick', 'ko-fi', 'cash app', 'venmo', 'paypal', 'resident advisor', 'eventbrite',
+]
+const NONE18 = Array(18).fill(null)
 const BEFORE_METHODS = {
   instagram: { kind: 'handle', label: 'Instagram', noun: 'username', hosts: ['instagram.com'], rule: '/^[A-Za-z0-9._]{1,30}$/', example: 'skeenmusic', before: 'instagram.com/', after: '', url: 'https://instagram.com/h4ndle', fromPath: NONE },
   tiktok: { kind: 'handle', label: 'TikTok', noun: 'handle', hosts: ['tiktok.com'], rule: '/^[A-Za-z0-9._]{2,24}$/', example: 'skeenmusic', before: 'tiktok.com/@', after: '', url: 'https://tiktok.com/@h4ndle', fromPath: NONE },
@@ -115,6 +122,29 @@ const BEFORE_METHODS = {
   twitch: { kind: 'handle', label: 'Twitch', noun: 'username', hosts: ['twitch.tv'], rule: '/^[A-Za-z0-9_]{4,25}$/', example: 'skeenmusic', before: 'twitch.tv/', after: '', url: 'https://twitch.tv/h4ndle', fromPath: NONE },
   deezer: { kind: 'link', label: 'Deezer' },
   tidal: { kind: 'link', label: 'Tidal' },
+  // 2026-09-28
+  'youtube music': { kind: 'link', label: 'YouTube Music' },
+  'amazon music': { kind: 'link', label: 'Amazon Music' },
+  audiomack: { kind: 'handle', label: 'Audiomack', noun: 'handle', hosts: ['audiomack.com'], rule: '/^[A-Za-z0-9_-]{1,30}$/', example: 'skeenmusic', before: 'audiomack.com/', after: '', url: 'https://audiomack.com/h4ndle', fromPath: NONE },
+  mixcloud: { kind: 'handle', label: 'Mixcloud', noun: 'handle', hosts: ['mixcloud.com'], rule: '/^[A-Za-z0-9_-]{1,60}$/', example: 'skeenmusic', before: 'mixcloud.com/', after: '', url: 'https://mixcloud.com/h4ndle', fromPath: NONE },
+  beatport: { kind: 'link', label: 'Beatport' },
+  pandora: { kind: 'link', label: 'Pandora' },
+  bluesky: {
+    kind: 'handle', label: 'Bluesky', noun: 'handle', hosts: ['bsky.app'], rule: '/^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/', example: 'skeenmusic.bsky.social', before: 'bsky.app/profile/', after: '', url: 'https://bsky.app/profile/h4ndle', fromPath: NONE18,
+  },
+  snapchat: { kind: 'handle', label: 'Snapchat', noun: 'username', hosts: ['snapchat.com'], rule: '/^[A-Za-z][A-Za-z0-9_.-]{1,13}[A-Za-z0-9]$/', example: 'skeenmusic', before: 'snapchat.com/add/', after: '', url: 'https://snapchat.com/add/h4ndle', fromPath: NONE18 },
+  whatsapp: { kind: 'link', label: 'WhatsApp', path: '/^\\/channel\\/(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]+\\/?$/', pathNoun: 'channel' },
+  telegram: { kind: 'handle', label: 'Telegram', noun: 'username', hosts: ['t.me', 'telegram.me'], rule: '/^[A-Za-z][A-Za-z0-9_]{4,31}$/', example: 'skeenmusic', before: 't.me/', after: '', url: 'https://t.me/h4ndle', fromPath: NONE },
+  vimeo: { kind: 'handle', label: 'Vimeo', noun: 'username', hosts: ['vimeo.com'], rule: '/^[A-Za-z0-9]{1,30}$/', example: 'skeenmusic', before: 'vimeo.com/', after: '', url: 'https://vimeo.com/h4ndle', fromPath: NONE },
+  songkick: { kind: 'link', label: 'Songkick' },
+  'ko-fi': { kind: 'handle', label: 'Ko-fi', noun: 'page name', hosts: ['ko-fi.com'], rule: '/^[A-Za-z0-9_-]{3,30}$/', example: 'skeenmusic', before: 'ko-fi.com/', after: '', url: 'https://ko-fi.com/h4ndle', fromPath: NONE },
+  'cash app': { kind: 'handle', label: 'Cash App', noun: 'handle', hosts: ['cash.app'], rule: '/^(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,20}$/', example: 'skeenmusic', before: 'cash.app/$', after: '', url: 'https://cash.app/$h4ndle', fromPath: NONE },
+  venmo: { kind: 'handle', label: 'Venmo', noun: 'username', hosts: ['venmo.com'], rule: '/^[A-Za-z0-9_-]{5,30}$/', example: 'skeenmusic', before: 'venmo.com/u/', after: '', url: 'https://venmo.com/u/h4ndle', fromPath: NONE18 },
+  paypal: {
+    kind: 'handle', label: 'PayPal', noun: 'page name', hosts: ['paypal.me', 'paypal.com'], rule: '/^[A-Za-z0-9]{1,20}$/', example: 'skeenmusic', before: 'paypal.me/', after: '', url: 'https://paypal.me/h4ndle', fromPath: Array(18).fill({ handle: '' }),
+  },
+  'resident advisor': { kind: 'handle', label: 'Resident Advisor', noun: 'name', hosts: ['ra.co', 'residentadvisor.net'], rule: '/^[A-Za-z0-9-]{1,50}$/', example: 'skeenmusic', before: 'ra.co/dj/', after: '', url: 'https://ra.co/dj/h4ndle', fromPath: NONE18 },
+  eventbrite: { kind: 'link', label: 'Eventbrite' },
 }
 
 const BEFORE_CONNECTIONS = [
@@ -134,6 +164,25 @@ const BEFORE_CONNECTIONS = [
   { key: 'twitch', label: 'Twitch', kind: 'social', social: 'twitch', urlHint: 'https://twitch.tv/' },
   { key: 'deezer', label: 'Deezer', kind: 'social', social: 'deezer', urlHint: 'https://deezer.com/artist/', source: { key: 'deezer', section: 'music', idField: 'deezer_artist_id', placeholder: 'Deezer artist ID' } },
   { key: 'tidal', label: 'Tidal', kind: 'social', social: 'tidal', urlHint: 'https://tidal.com/artist/' },
+  // 2026-09-28
+  { key: 'youtube music', label: 'YouTube Music', kind: 'social', social: 'youtube music', urlHint: 'https://music.youtube.com/channel/' },
+  { key: 'amazon music', label: 'Amazon Music', kind: 'social', social: 'amazon music', urlHint: 'https://music.amazon.com/artists/' },
+  { key: 'audiomack', label: 'Audiomack', kind: 'social', social: 'audiomack', urlHint: 'https://audiomack.com/' },
+  { key: 'mixcloud', label: 'Mixcloud', kind: 'social', social: 'mixcloud', urlHint: 'https://mixcloud.com/' },
+  { key: 'beatport', label: 'Beatport', kind: 'social', social: 'beatport', urlHint: 'https://www.beatport.com/artist/' },
+  { key: 'pandora', label: 'Pandora', kind: 'social', social: 'pandora', urlHint: 'https://www.pandora.com/artist/' },
+  { key: 'bluesky', label: 'Bluesky', kind: 'social', social: 'bluesky', urlHint: 'https://bsky.app/profile/' },
+  { key: 'snapchat', label: 'Snapchat', kind: 'social', social: 'snapchat', urlHint: 'https://snapchat.com/add/' },
+  { key: 'whatsapp', label: 'WhatsApp', kind: 'social', social: 'whatsapp', urlHint: 'https://whatsapp.com/channel/' },
+  { key: 'telegram', label: 'Telegram', kind: 'social', social: 'telegram', urlHint: 'https://t.me/' },
+  { key: 'vimeo', label: 'Vimeo', kind: 'social', social: 'vimeo', urlHint: 'https://vimeo.com/' },
+  { key: 'songkick', label: 'Songkick', kind: 'social', social: 'songkick', urlHint: 'https://songkick.com/artists/' },
+  { key: 'ko-fi', label: 'Ko-fi', kind: 'social', social: 'ko-fi', urlHint: 'https://ko-fi.com/' },
+  { key: 'cash app', label: 'Cash App', kind: 'social', social: 'cash app', urlHint: 'https://cash.app/$' },
+  { key: 'venmo', label: 'Venmo', kind: 'social', social: 'venmo', urlHint: 'https://venmo.com/u/' },
+  { key: 'paypal', label: 'PayPal', kind: 'social', social: 'paypal', urlHint: 'https://paypal.me/' },
+  { key: 'resident advisor', label: 'Resident Advisor', kind: 'social', social: 'resident advisor', urlHint: 'https://ra.co/dj/' },
+  { key: 'eventbrite', label: 'Eventbrite', kind: 'social', social: 'eventbrite', urlHint: 'https://eventbrite.com/o/' },
   { key: 'bandsintown', label: 'Bandsintown', kind: 'service', source: { key: 'bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name' } },
   { key: 'ticketmaster', label: 'Ticketmaster', kind: 'service', source: { key: 'ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID or artist link' } },
   { key: 'drive', label: 'Google Drive', kind: 'service', source: { key: 'drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link' } },

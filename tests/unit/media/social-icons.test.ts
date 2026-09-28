@@ -42,6 +42,16 @@ describe('the generated social marks', () => {
     }
   })
 
+  it('the marks simple-icons lacks are PLACEHOLDERS, and the committed file says so', () => {
+    // Pending Sam's choice of the official brand-kit logos (2026-09-28). A placeholder that
+    // passed quietly as the real mark would never get replaced.
+    const marked = committed()
+      .split('\n')
+      .filter((l) => l.includes('// PLACEHOLDER'))
+      .map((l) => JSON.parse(l.trim().split(':')[0]))
+    expect(marked.sort()).toEqual(['amazon music', 'eventbrite', 'resident advisor'])
+  })
+
   it('CRITICAL: simple-icons is pinned exactly — the diff guard depends on it', () => {
     const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
     expect(pkg.devDependencies['simple-icons']).toBe(PINNED_SIMPLE_ICONS)

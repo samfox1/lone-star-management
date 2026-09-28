@@ -19,13 +19,14 @@
  * modules. And they import those modules for TYPES only (erased at build): the modules
  * import this folder, so a runtime import back would be a cycle.
  */
-import type { HandleMethod } from '@/lib/connect-methods'
+import type { HandleMethod, LinkMethod } from '@/lib/connect-methods'
 import type { ConnectionDef } from '@/lib/connections'
 import type { IntegrationDef } from '@/lib/integrations-registry'
 
 /** How a social is entered: a handle spec (its label comes from the bridge's platform
- *  name), or `link` for a platform whose artists have no handle, only an artist link. */
-export type ConnectSpec = Omit<HandleMethod, 'kind' | 'label'> | { kind: 'link' }
+ *  name), or `link` for a platform whose artists have no handle, only an artist link (with,
+ *  rarely, the one path that link may have: WhatsApp's channel). */
+export type ConnectSpec = Omit<HandleMethod, 'kind' | 'label'> | Omit<LinkMethod, 'label'>
 
 export type Service = {
   /** The folder name, beside its README. */

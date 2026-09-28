@@ -25,7 +25,7 @@
  * Pure. The modal parses as the manager types; the action parses again (the action is the
  * door, the modal the affordance).
  */
-import { SOCIAL_PLATFORMS, platformFromUrl } from '@samfox1/site-bridge/social'
+import { SOCIAL_PLATFORMS, platformFromUrl, registrableDomain } from '@samfox1/site-bridge/social'
 import { SERVICES, type ConnectSpec } from '@/lib/manager-tools/connections/services'
 
 export type HandleMethod = {
@@ -55,7 +55,16 @@ export type HandleMethod = {
   fromPath?: (segments: string[], url: URL) => { handle: string } | { url: string } | undefined
 }
 
-export type LinkMethod = { kind: 'link'; label: string }
+export type LinkMethod = {
+  kind: 'link'
+  label: string
+  /** The only path this platform's profile link may have, when its other links are not a
+   *  profile at all (WhatsApp: a channel, never a chat link that carries a phone number).
+   *  A link with a `path` is saved without its query or fragment. */
+  path?: RegExp
+  /** What that link is called, for the refusal: `channel` → "That isn’t a WhatsApp channel link." */
+  pathNoun?: string
+}
 
 export type ConnectMethod = HandleMethod | LinkMethod
 
@@ -67,7 +76,7 @@ export const CONNECT_METHODS: Readonly<Record<string, ConnectMethod>> = Object.f
   SOCIAL_PLATFORMS.flatMap((p) => {
     const spec = SPECS[p.slug]
     if (!spec) return []
-    const method: ConnectMethod = 'kind' in spec ? { kind: 'link', label: p.label } : { kind: 'handle', label: p.label, ...spec }
+    const method: ConnectMethod = 'kind' in spec ? { ...spec, label: p.label } : { kind: 'handle', label: p.label, ...spec }
     return [[p.slug, method]]
   }),
 )
@@ -75,12 +84,6 @@ export const CONNECT_METHODS: Readonly<Record<string, ConnectMethod>> = Object.f
 /** "an X", "an Instagram", "a TikTok": the article for a platform's name as it is said. */
 export const withArticle = (label: string) => (/^[aeioux]/i.test(label) ? `an ${label}` : `a ${label}`)
 const a = withArticle
-
-/** The last two labels of a host, lowercased, without `www.`/`m.`/`mobile.`. */
-function registrable(host: string): string {
-  const parts = host.toLowerCase().replace(/^(www|m|mobile)\./, '').split('.')
-  return parts.slice(-2).join('.')
-}
 
 export type ParsedHandle = { handle: string | null; url: string } | { error: string }
 
@@ -110,12 +113,13 @@ export function parseHandle(method: HandleMethod, raw: string): ParsedHandle {
       return bad
     }
     const host = url.hostname.toLowerCase().replace(/^(www|m|mobile)\./, '')
-    const mine = method.hosts.includes(registrable(host))
-    if (!mine) {
-      const other = platformFromUrl(url.href)
-      return { error: other ? `That’s ${a(other.label)} link, not ${method.label}.` : `That isn’t ${a(method.label)} link.` }
-    }
-    const sub = host.split('.').length > 2 ? host.split('.')[0] : null
+    // The site's own reading decides (the bridge's platformFromUrl, the same host rules):
+    // `music.youtube.com` sits on youtube.com but is YouTube Music's, not YouTube's. A host
+    // no platform claims falls back to this method's own list.
+    const other = platformFromUrl(url.href)
+    const mine = other ? other.label === method.label : method.hosts.includes(registrableDomain(host))
+    if (!mine) return { error: other ? `That’s ${a(other.label)} link, not ${method.label}.` : `That isn’t ${a(method.label)} link.` }
+    const sub = host !== registrableDomain(host) ? host.split('.')[0] : null
     const segments = url.pathname.split('/').filter(Boolean)
     if (method.subdomain) {
       if (!sub) return enter
@@ -135,6 +139,9 @@ export function parseHandle(method: HandleMethod, raw: string): ParsedHandle {
     handle = text
   }
   handle = handle.replace(/^@/, '')
+  // The address around the field already ends in `$` (Cash App's `cash.app/$`): a typed or
+  // pasted `$` is that same one, not part of the handle.
+  if (method.before.endsWith('$')) handle = handle.replace(/^\$/, '')
   if (!handle) return enter
   if (!method.rule.test(handle)) return bad
   return { handle, url: keepUrl ?? method.url(handle) }
