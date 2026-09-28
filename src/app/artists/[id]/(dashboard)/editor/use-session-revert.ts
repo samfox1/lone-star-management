@@ -93,9 +93,9 @@ export function useSessionRevert({
   )
 
   /**
-   * No confirmation: this undoes what the manager just did, which is the cheap,
-   * expected action. The dialog belongs in front of the one that reaches past the
-   * session (Restore version, next to Publish).
+   * The button in front of this ASKS first (SessionActions, Sam 2026-09-28: "'are you
+   * sure' is good when its a delete or revert"); by the time this runs, the manager said
+   * Revert. The version list stays Restore version's, next to Publish.
    */
   async function revertSession() {
     if (reverting) return

@@ -69,6 +69,7 @@ import { useStyleRegionSave } from './use-style-save'
 import { TextFieldEditor } from './text-field-editor'
 import { TourDateEditor } from './tour-date-editor'
 import { MerchEditor } from './merch-editor'
+import { useConfirm } from '../confirm-dialog'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -257,7 +258,7 @@ export function EditorInspector({
   styleRegions = [],
   styleValues = NO_STYLES,
   styleOptions,
-  hasUnpublished = false,
+  canRevert = false,
   selectedStyle = null,
   deselectedAt = 0,
   linkRegions = [],
@@ -326,11 +327,12 @@ export function EditorInspector({
   styleValues?: Record<string, string>
   /** The site's declared colour + font palette, for the Style panel's dropdowns. */
   styleOptions?: EditorStyleOptions
-  /** The draft differs from the last published edition (computed server-side). Keeps
+  /** Revert has something to undo: the draft differs from the last publish in something
+   *  Revert CAN put back (`revertableChanges`, the restore's own plan, server-side). Keeps
    *  Revert changes visible across refreshes — the in-memory ledger dies with the tab,
-   *  but the CHANGES don't (Sam, 2026-08-17: the divider stayed off after a refresh
-   *  while the button vanished). */
-  hasUnpublished?: boolean
+   *  but the CHANGES don't (Sam, 2026-08-17) — and keeps it hidden for edits it would
+   *  leave in place (a song title, a show's venue, Brand; review 2026-09-28). */
+  canRevert?: boolean
   /** Region the frame reported a click on — jumps the panel to Style, focused there.
    *  Key + nonce so a repeat click on the same region re-fires (the Listen lesson). */
   selectedStyle?: { key: string; nonce: number; measured?: RegionMeasurements } | null
@@ -1294,10 +1296,10 @@ export function EditorInspector({
         <BrowseView onOpen={selectComponent} />
       )}
       {/* Revert changes: back to the last PUBLISHED edition (session walk only for a
-          never-published artist). Shows while anything is unpublished OR touched this
-          session; hidden while the ITEM editor is open (its own revert owns that
-          surface). */}
-      {!itemEditor && !textEditor && !siteTextEditor && !tourEditor && (journalCount > 0 || hasUnpublished) && (
+          never-published artist). Shows while Revert has something to undo OR something
+          was touched this session; hidden while the ITEM editor is open (its own revert
+          owns that surface). */}
+      {!itemEditor && !textEditor && !siteTextEditor && !tourEditor && (journalCount > 0 || canRevert) && (
         <SessionActions busy={reverting} onRemove={revertSession} />
       )}
     </aside>
@@ -1311,9 +1313,12 @@ export function EditorInspector({
  * confusion. What remains is the escape hatch: put everything back the way it was.
  *
  * Revert is anchored to the LAST PUBLISH (Sam, 2026-08-17): it restores the published
- * edition via restorePublishedAction and survives a refresh (`hasUnpublished` is
- * computed server-side). The in-memory session-ledger walk remains only as the
- * fallback for an artist who has never published.
+ * edition via restorePublishedAction and survives a refresh (`canRevert` is computed
+ * server-side). The in-memory session-ledger walk remains only as the fallback for an
+ * artist who has never published.
+ *
+ * It ASKS FIRST (Sam, 2026-09-28: "'are you sure' is good when its a delete or revert"):
+ * every draft change since the last publish goes, and nothing undoes a Revert.
  */
 function SessionActions({
   busy,
@@ -1322,11 +1327,18 @@ function SessionActions({
   busy: boolean
   onRemove: () => void
 }) {
+  const { ask, dialog } = useConfirm()
+  async function revert() {
+    if (busy) return
+    if (!(await ask("Revert to the last publish? This can't be undone.", { action: 'Revert' }))) return
+    onRemove()
+  }
   return (
     <div className="border-t border-hairline px-4 py-2.5">
+      {dialog}
       <button
         type="button"
-        onClick={onRemove}
+        onClick={revert}
         disabled={busy}
         className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
       >

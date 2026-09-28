@@ -178,7 +178,8 @@ function renderInspector(
     styleRegions?: ManifestStyleRegion[]
     styleValues?: Record<string, string>
     styleOptions?: SiteStyleOptions
-    hasUnpublished?: boolean
+    /** Server-side: the last publish differs from the draft in something Revert CAN undo. */
+    canRevert?: boolean
     /** A region key; the harness wraps it in a fresh nonce per render, so every
      *  render with a key set reads as a new click (matching the live channel). */
     selectedStyle?: string | null
@@ -237,7 +238,7 @@ function inspector(
       styleRegions={opts.styleRegions ?? []}
       styleValues={opts.styleValues ?? {}}
       styleOptions={opts.styleOptions}
-      hasUnpublished={opts.hasUnpublished}
+      canRevert={opts.canRevert}
       selectedStyle={opts.selectedStyle ? { key: opts.selectedStyle, nonce: ++styleSelectNonce } : null}
       deselectedAt={opts.deselectedAt ?? 0}
       linkRegions={opts.linkRegions ?? []}
@@ -247,6 +248,15 @@ function inspector(
       onApplyLink={opts.onApplyLink}
     />
   )
+}
+
+/** Revert asks first (Sam, 2026-09-28: "'are you sure' is good when its a delete or
+ *  revert"). Press it, then answer the question with its named action. */
+async function revertAndConfirm() {
+  fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+  await act(async () => {
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revert' }))
+  })
 }
 
 afterEach(() => {
@@ -1538,9 +1548,7 @@ describe('EditorInspector — Style component (no-code controls)', () => {
     // Two keys touched → the walk-back covers BOTH. Driven through the never-published
     // fallback, which is the path that still uses the session ledger (2026-08-14); with a
     // published version the server restore replaces this walk entirely.
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
+    await revertAndConfirm()
     // Reverse order: foot (touched last) first, then nav.
     expect(saveStyleMock).toHaveBeenCalledWith('artist-1', 'foot', 'border-b text-lg')
     expect(saveStyleMock).toHaveBeenLastCalledWith('artist-1', 'nav', '')
@@ -1793,24 +1801,30 @@ describe('EditorInspector — Revert changes survives a refresh (Sam, 2026-08-17
   // draft holds the change) but the button vanished with the in-memory session ledger.
   // "It should still be there until I hit publish or manually undo the change." So the
   // button's real anchor is PUBLISHED: it shows whenever the draft differs from the
-  // last published edition, and clicking it restores that edition.
+  // last published edition IN SOMETHING REVERT CAN UNDO (`canRevert`, computed by the
+  // restore's own plan on the server — revertableChanges), and clicking it restores it.
   const REGIONS: ManifestStyleRegion[] = [
     { key: 'nav', label: 'Nav', base: 'border-t', scope: 'chrome' },
   ]
 
-  it('CRITICAL: shows on arrival when unpublished changes exist, with an empty ledger', () => {
-    renderInspector([], { styleRegions: REGIONS, hasUnpublished: true })
+  it('CRITICAL: shows on arrival when Revert has something to undo, with an empty ledger', () => {
+    renderInspector([], { styleRegions: REGIONS, canRevert: true })
     expect(screen.getByRole('button', { name: 'Revert changes' })).toBeTruthy()
+  })
+
+  it('CRITICAL: hidden when nothing is revertable and nothing was touched', () => {
+    // The reviewer's case (2026-09-28): a song, tour or Brand edit left the button up,
+    // offering an undo it could not do. The server now says "nothing Revert can undo".
+    renderInspector([], { styleRegions: REGIONS, canRevert: false })
+    expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })
 
   it('clicking it restores the last PUBLISHED edition and refreshes the draft', async () => {
     vi.mocked(restorePublishedAction).mockClear()
-    renderInspector([], { styleRegions: REGIONS, hasUnpublished: true })
+    renderInspector([], { styleRegions: REGIONS, canRevert: true })
     const saveStyle = vi.mocked(saveEditorStyleAction)
     saveStyle.mockClear()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
+    await revertAndConfirm()
     expect(restorePublishedAction).toHaveBeenCalledWith('artist-1')
     // The published restore replaces the ledger walk entirely on this path.
     expect(saveStyle).not.toHaveBeenCalled()
@@ -1822,9 +1836,7 @@ describe('EditorInspector — Revert changes survives a refresh (Sam, 2026-08-17
     const saveStyle = vi.mocked(saveEditorStyleAction)
     fireEvent.change(screen.getByLabelText('Nav Padding'), { target: { value: '2' } })
     saveStyle.mockClear()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
+    await revertAndConfirm()
     // No publish to restore → the touched key walks back to its session-start value.
     expect(saveStyle).toHaveBeenLastCalledWith('artist-1', 'nav', '')
   })
@@ -1858,23 +1870,37 @@ describe('EditorInspector — the Revert changes button (session undo; named by 
     // Published-first (Sam, 2026-08-17): the restore IS the revert. Walking the ledger
     // on top of it would double-apply — the ledger's session-start values could differ
     // from the published edition just restored.
+    //
+    // This once also meant a renamed artist or an edited bio stayed changed: the server
+    // restore skipped the profile, and the walk that would have caught it never ran
+    // (review, 2026-09-28). The walk still never runs; the restore now covers the name,
+    // bio and hero itself (tests/integration/publish/restore-published.test.ts).
     const saveStyle = vi.mocked(saveEditorStyleAction)
     editPage()
     saveStyle.mockClear()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
+    await revertAndConfirm()
     expect(restorePublishedAction).toHaveBeenCalledWith('artist-1')
     expect(saveStyle).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: no confirmation and no version list — it is a plain undo', () => {
-    // Both belong to Restore version now. A dialog in front of "undo what I just did"
-    // is friction on the cheap, expected action.
+  it('CRITICAL: asks first — Cancel changes nothing, and there is still no version list', async () => {
+    // Pinned the OPPOSITE until 2026-09-28 ("a plain undo, no confirmation"). Sam: "'are
+    // you sure' is good when its a delete or revert when necessary" — and a Revert throws
+    // away every draft change since the last publish, with nothing to undo it.
     editPage()
     fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
+    const dialog = screen.getByRole('dialog')
+    expect(restorePublishedAction).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
     expect(screen.queryByRole('dialog')).toBeNull()
+    expect(restorePublishedAction).not.toHaveBeenCalled()
+    // The version picker stays Restore version's (the three-dot menu), not this button's.
     expect(listPublishMomentsAction).not.toHaveBeenCalled()
+    // …and answering Revert is what runs it.
+    await revertAndConfirm()
+    expect(restorePublishedAction).toHaveBeenCalledTimes(1)
   })
 
   it('CRITICAL: there is NO Save/Done button', () => {
@@ -2262,9 +2288,27 @@ describe('EditorInspector — tour tools', () => {
     expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't1', 'artist-1', false)
   })
 
-  it('removes a date via deleteContentAction', () => {
+  it('CRITICAL: the trash asks first — Cancel keeps the show', async () => {
+    // Sam, 2026-09-28: "'are you sure' is good when its a delete". Nothing brings a
+    // deleted show back — Revert never re-inserts a library row (its coordinates and
+    // source are not in the publish log) — so the question is the only safety net.
     openTour()
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
+    const dialog = screen.getByRole('dialog')
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    })
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Mohawk')).toBeTruthy()
+  })
+
+  it('removes a date via deleteContentAction once the manager says Delete', async () => {
+    openTour()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+    })
     expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
   })
 
@@ -2327,9 +2371,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /h-lib\.jpg/ }))
     expect(assignSlotMock).toHaveBeenCalledWith('artist-1', 'polaroid_1_photo', 'm2')
     // The never-published fallback — the path that still walks the session ledger.
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
-    })
+    await revertAndConfirm()
     expect(assignSlotMock).toHaveBeenLastCalledWith('artist-1', 'polaroid_1_photo', null)
     expect(screen.queryByRole('button', { name: 'Revert changes' })).toBeNull()
   })

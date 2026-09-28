@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { frontSortOrder, slotByDate } from './insert-position'
-import { safeHref } from '@/lib/url'
+import { isContactLink, looksLikeEmail, safeHref } from '@/lib/url'
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
@@ -797,63 +797,142 @@ function stableJson(value: unknown): string {
   return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`).join(',')}}`
 }
 
-/**
- * What the site editor's "Undo changes" puts back, per entity type (Sam, 2026-08-14:
- * "if they want to clear their changes, it resets to the last published version").
- *
- * `columns` are the ones the EDITOR owns, and only those. Restoring a whole row would
- * let an undo in the styling panel also rename a video someone retitled on the Videos
- * page — an edit the editor never made and its undo has no business reversing.
- *
- * `absent` is what to do with a DRAFT row the last publish knows nothing about:
- *   • 'delete' — the editor creates these whole (a style override, a text row, a link),
- *     so a row added since the publish is exactly the change being undone.
- *   • 'unplace' — the row exists independently of the editor (a photo, a video: a real
- *     uploaded file). Undo takes it out of its slot; it must never delete the file.
- */
-export const EDITOR_RESTORE: {
-  type: TableEntity
-  columns: string[]
-  absent: 'delete' | 'unplace'
-}[] = [
-  { type: 'site_styles', columns: ['region_key', 'class_names'], absent: 'delete' },
-  { type: 'site_content', columns: ['key', 'value'], absent: 'delete' },
-  { type: 'link', columns: ['label', 'url', 'sort_order', 'role'], absent: 'delete' },
-  // Placement only. `site_role` is which slot a photo/video sits in — the one thing the
-  // editor assigns; the file, its title and its storage path are not the editor's.
-  { type: 'media', columns: ['site_role'], absent: 'unplace' },
-  { type: 'video', columns: ['site_role'], absent: 'unplace' },
-]
+/** One row as the restore sees it: a working row or a published snapshot. */
+type RestoreRow = Record<string, unknown>
 
 /**
- * Put the DRAFT back to the last published version, for everything the site editor owns.
- *
- * The inverse of publishContent, and it reads the same log: `latest_revisions` is the
- * newest snapshot per entity, so "what the site looked like at the last publish" is
- * already recorded and needs no extra bookkeeping. Three cases per row, and all three
- * matter — a restore that only handled the first would leave the draft looking published
- * while still carrying additions and missing deletions:
- *
- *   • published AND still in the draft → put the owned columns back to the snapshot.
- *   • in the draft, NOT published (added since, or its latest revision is a tombstone)
- *     → delete it, or unplace it (see EDITOR_RESTORE.absent).
- *   • published but GONE from the draft (deleted since) → re-insert it, id and all, so
- *     the row the manager deleted comes back rather than silently staying gone.
- *
- * RLS scopes every statement to the caller's own artist; the RPC is SECURITY INVOKER for
- * the same reason. Returns per-type counts, which the caller reports and the tests assert.
+ * A `links` row the EDITOR makes and edits whole: a role-bound button (USB / Merch /
+ * booking — created, re-pointed and cleared only by the editor's Buttons panel) or a
+ * contact row (mailto:, tel:, a bare email — edited only in the editor's Contact group).
+ * Every other link is a CONNECTION's profile link (2026-09-13): its URL is edited in
+ * Connections, and the editor only switches it on and off the site and orders it.
+ * Same contact test as the Connections page's `isProfileLink` and the editor's grouping.
  */
-export async function restoreToPublished(
+export function isEditorOwnedLink(row: { role?: unknown; url?: unknown } | null | undefined): boolean {
+  if (!row) return false
+  if (row.role != null && row.role !== '') return true
+  const url = typeof row.url === 'string' ? row.url : null
+  return isContactLink(url) || looksLikeEmail(url)
+}
+
+/** A link is the editor's when EITHER side says so: the working row or its snapshot. Both
+ *  halves of a restore ask the same pair, so a row is never counted by two rules. */
+const editorLink = (row: RestoreRow | undefined, snap: RestoreRow | undefined) =>
+  isEditorOwnedLink(row) || isEditorOwnedLink(snap)
+
+/**
+ * How the editor's Revert (and Restore version) treats one kind of row.
+ *
+ *   whole      the editor makes these rows itself (a style override, a text row, its own
+ *              links), so the row IS the change: `columns` go back to the snapshot, a row
+ *              added since is deleted, a row deleted since is re-inserted, id and all.
+ *   placement  the row exists without the editor (a connection, a song, a show, a
+ *              product, a photo, a video). Only WHERE and WHETHER it sits on the site
+ *              comes back — `columns` is on_site / sort_order / site_role, never content.
+ *              A row the version does not have is taken off the site (`offSite`), never
+ *              deleted; a row deleted since is never re-inserted (a show's coordinates, a
+ *              song's source, a photo's file are not in the log).
+ *
+ * `owns` narrows a rule to some rows of its type, judged on the working row and the
+ * snapshot together (see `editorLink`).
+ */
+export type RestoreRule = {
+  type: TableEntity
+  mode: 'whole' | 'placement'
+  columns: readonly string[]
+  /** placement: the patch that takes a row the chosen version never had off the site. */
+  offSite?: Readonly<RestoreRow>
+  owns?: (row: RestoreRow | undefined, snap: RestoreRow | undefined) => boolean
+}
+
+/**
+ * Everything the site editor's Revert puts back (Sam, 2026-08-14: "it resets to the last
+ * published version"; widened 2026-09-28: it undoes what the editor's Publish would ship,
+ * wherever it CAN). The Revert button counts exactly this (`revertableChanges`), so it
+ * never offers an undo it then leaves in place.
+ *
+ * NOT in reach, on purpose — Revert leaves these and they do not count:
+ *   • content of library rows (a song's title, a show's venue, a product's price, a
+ *     photo's alt text) — the Music, Tour and Merch pages' own edits;
+ *   • a connection's URL and label (Connections edits them), and a connection removed
+ *     there (its page publishes that);
+ *   • a published link's or video's on/off: a LIVE toggle (ADR 0009), never recorded in
+ *     the log, so the live site already shows the current state;
+ *   • library rows deleted since the publish (a show from the editor's trash — which is
+ *     why the trash asks first);
+ *   • Brand: fonts, colours, the browser bar, logos and icons (Sam: "No brand revert for
+ *     now" — the Brand page has its own), and the rest of the profile (press kit, ids).
+ */
+export const EDITOR_RESTORE: readonly RestoreRule[] = [
+  { type: 'site_styles', mode: 'whole', columns: ['region_key', 'class_names'] },
+  { type: 'site_content', mode: 'whole', columns: ['key', 'value'] },
+  // The editor's own links — unchanged from when every link restored whole.
+  { type: 'link', mode: 'whole', columns: ['label', 'url', 'sort_order', 'role'], owns: editorLink },
+  // A connection: its order comes back, and a button the version did not have goes off.
+  {
+    type: 'link',
+    mode: 'placement',
+    columns: ['sort_order'],
+    offSite: { on_site: false },
+    owns: (row, snap) => !editorLink(row, snap),
+  },
+  // Gallery photos only: logos and icons are Brand's, and a profile photo is replaced by
+  // deleting its row, which placement cannot bring back.
+  {
+    type: 'media',
+    mode: 'placement',
+    columns: ['site_role', 'on_site', 'sort_order'],
+    offSite: { site_role: null, on_site: false },
+    owns: (row, snap) => (row ?? snap)?.purpose === 'gallery_image',
+  },
+  { type: 'video', mode: 'placement', columns: ['site_role', 'sort_order'], offSite: { site_role: null, on_site: false } },
+  // Songs, releases, shows, products: presence rides their snapshot (ADR 0010), so the
+  // published on/off is on record. Derived from the registry, so a new draft-presence
+  // kind is in reach the day it joins it.
+  ...(Object.keys(DRAFT_PRESENCE) as DraftPresenceEntity[]).map(
+    (type): RestoreRule => ({ type, mode: 'placement', columns: ['on_site', 'sort_order'], offSite: { on_site: false } }),
+  ),
+]
+
+/** The profile columns the editor edits (Text: name, bio; Images: the hero) and Revert
+ *  puts back. The rest of ARTIST_SNAPSHOT belongs to other pages. */
+export const EDITOR_PROFILE_COLUMNS = ['name', 'bio', 'hero_image_url'] as const
+
+/** One write a restore will make. */
+export type RestoreOp =
+  | { kind: 'restore'; table: string; id: string; patch: RestoreRow }
+  | { kind: 'off'; table: string; id: string; patch: RestoreRow }
+  | { kind: 'delete'; table: string; id: string }
+  | { kind: 'insert'; table: string; row: RestoreRow }
+  | { kind: 'profile'; patch: RestoreRow }
+
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+
+/**
+ * The writes that would put the DRAFT back to a published version — computed, not made.
+ * `restoreToPublished` runs them; `revertableChanges` counts them, which is what keeps the
+ * Revert button honest: it shows exactly when a click would change something.
+ *
+ * The inverse of publishContent, read from the same log: `latest_revisions` (or
+ * `revisions_at`, for an older moment) is the newest snapshot per entity. Per row:
+ *
+ *   • published AND still in the draft → its `columns` back to the snapshot (only the
+ *     ones that differ: a no-op UPDATE still bumps updated_at).
+ *   • in the draft, NOT published (added since, or tombstoned) → deleted (whole) or taken
+ *     off the site (placement).
+ *   • published but GONE from the draft → re-inserted, id and all (whole only).
+ *
+ * A placement column the snapshot never carried (a revision older than the column) is
+ * left alone rather than "restored" to null.
+ */
+export async function planRestore(
   supabase: SupabaseClient,
   artistId: string,
-  /** Go back to the version published at this moment. Omitted = the latest publish,
-   *  which is what the editor's Undo button asks for. */
+  /** The version published at this moment. Omitted = the latest publish (Revert). */
   at?: string,
-): Promise<{ restored: number; removed: number; readded: number; hasPublished: boolean }> {
-  // `revisions_at` is `latest_revisions` with a ceiling on published_at — the newest
-  // snapshot per entity AT OR BEFORE the chosen moment. Both live in SQL because
-  // reducing "latest per entity" in JS means selecting the whole log, which PostgREST
-  // silently caps at 1000 rows.
+): Promise<{ ops: RestoreOp[]; hasPublished: boolean }> {
+  // Both RPCs live in SQL because reducing "latest per entity" in JS means selecting the
+  // whole log, which PostgREST silently caps at 1000 rows.
   const { data: latest, error: revErr } = at
     ? await supabase.rpc('revisions_at', { p_artist_id: artistId, p_at: at })
     : await supabase.rpc('latest_revisions', { p_artist_id: artistId })
@@ -861,78 +940,146 @@ export async function restoreToPublished(
 
   // The published state, by type → id → snapshot. Tombstones are DROPPED here, which is
   // what makes a deleted-then-published row count as "not published" below.
-  const published = new Map<string, Map<string, Record<string, unknown>>>()
-  for (const r of (latest ?? []) as { entity_type: string; entity_id: string | null; data: Record<string, unknown> }[]) {
+  const published = new Map<string, Map<string, RestoreRow>>()
+  for (const r of (latest ?? []) as { entity_type: string; entity_id: string | null; data: RestoreRow }[]) {
     if (r.entity_id === null || r.data?._deleted === true) continue
-    const forType = published.get(r.entity_type) ?? new Map<string, Record<string, unknown>>()
+    const forType = published.get(r.entity_type) ?? new Map<string, RestoreRow>()
     forType.set(r.entity_id, r.data)
     published.set(r.entity_type, forType)
   }
 
-  // NOTHING PUBLISHED → CHANGE NOTHING. Without this the function read "no published
-  // rows" as "every draft row was added since the publish" and deleted the lot — on a
-  // site that has never published, that is the manager's entire body of work, with no
-  // snapshot anywhere to restore it from. It destroyed Juniper's styling on 2026-08-14,
-  // in the first minute this shipped. The caller falls back to undoing the session.
+  // NOTHING PUBLISHED → CHANGE NOTHING. Without this, "no published rows" read as "every
+  // draft row was added since the publish" and the lot was deleted — on a site that has
+  // never published, the manager's entire body of work, with no snapshot to restore it
+  // from. It destroyed Juniper's styling on 2026-08-14, in the first minute this shipped.
+  // The caller falls back to undoing the session.
   //
   // The same guard PER TYPE, below, for the narrower version of the same trap: an artist
-  // who published before a type existed (site_styles arrived long after the log did) has
-  // no revisions for it, and deleting every row of it would be the same wipe one table
-  // down. Leaving a row that was added since a publish is a visible, one-click mistake;
-  // deleting a table's worth of work is not.
+  // who published before a type existed has no revisions for it, and deleting every row
+  // of it would be the same wipe one table down. A placement rule is guarded on its OWN
+  // rows too: a Brand publish records logos, and with no gallery photo on record "take
+  // every photo added since off the site" would take the whole gallery off. Leaving a row
+  // that was added since a publish is a visible, one-click mistake; wiping a table's
+  // worth of work is not.
   const hasPublished = (latest ?? []).length > 0
-  if (!hasPublished) return { restored: 0, removed: 0, readded: 0, hasPublished: false }
+  if (!hasPublished) return { ops: [], hasPublished: false }
 
-  let restored = 0
-  let removed = 0
-  let readded = 0
+  const types = [...new Set(EDITOR_RESTORE.map((r) => r.type))].filter((t) => published.has(t))
+  const working = new Map(
+    await Promise.all(types.map(async (t) => [t, await listContent(supabase, t, artistId)] as const)),
+  )
 
-  for (const { type, columns, absent } of EDITOR_RESTORE) {
-    const wanted = published.get(type)
-    // No published rows of this type: see the note above — skip it rather than read the
-    // absence as "delete everything".
-    if (!wanted) continue
-    const table = PUBLISHABLE[type].table
-    const live = await listContent(supabase, type, artistId)
-    const liveIds = new Set(live.map((row) => String(row.id)))
+  const ops: RestoreOp[] = []
+  for (const rule of EDITOR_RESTORE) {
+    const all = published.get(rule.type)
+    const rows = working.get(rule.type)
+    if (!all || !rows) continue
+    const table = PUBLISHABLE[rule.type].table
+    const owns = rule.owns ?? (() => true)
+    const liveById = new Map(rows.map((row) => [String(row.id), row as RestoreRow]))
+    const wanted = new Map([...all].filter(([id, snap]) => owns(liveById.get(id), snap)))
+    if (rule.mode === 'placement' && wanted.size === 0) continue
 
-    for (const row of live) {
-      const id = String(row.id)
-      const snapshot = wanted.get(id)
-      if (snapshot) {
-        // Only the columns that actually differ: a no-op UPDATE would still bump
-        // updated_at on every row of every publish-clean site.
-        const patch: Record<string, unknown> = {}
-        for (const col of columns) {
-          const next = snapshot[col] ?? null
-          if ((row as Record<string, unknown>)[col] !== next) patch[col] = next
+    for (const [id, row] of liveById) {
+      const snap = all.get(id)
+      if (!owns(row, snap)) continue
+      if (snap) {
+        const patch: RestoreRow = {}
+        for (const col of rule.columns) {
+          if (rule.mode === 'placement' && !(col in snap)) continue
+          if (!sameValue(row[col], snap[col])) patch[col] = snap[col] ?? null
         }
-        if (Object.keys(patch).length === 0) continue
-        const { error } = await supabase.from(table).update(patch).eq('id', id).eq('artist_id', artistId)
-        if (error) throw new Error(error.message)
-        restored++
-        continue
-      }
-      if (absent === 'delete') {
-        const { error } = await supabase.from(table).delete().eq('id', id).eq('artist_id', artistId)
-        if (error) throw new Error(error.message)
-        removed++
-      } else if ((row as Record<string, unknown>).site_role != null) {
-        const { error } = await supabase.from(table).update({ site_role: null }).eq('id', id).eq('artist_id', artistId)
-        if (error) throw new Error(error.message)
-        removed++
+        if (Object.keys(patch).length) ops.push({ kind: 'restore', table, id, patch })
+      } else if (rule.mode === 'whole') {
+        ops.push({ kind: 'delete', table, id })
+      } else {
+        const patch: RestoreRow = {}
+        for (const [col, v] of Object.entries(rule.offSite ?? {})) if (!sameValue(row[col], v)) patch[col] = v
+        if (Object.keys(patch).length) ops.push({ kind: 'off', table, id, patch })
       }
     }
 
-    // Rows deleted since the publish. Only for types the editor creates whole — a photo
-    // whose FILE is gone cannot be brought back by re-inserting its row.
-    if (absent !== 'delete') continue
-    for (const [id, snapshot] of wanted) {
-      if (liveIds.has(id)) continue
-      const insert: Record<string, unknown> = { id, artist_id: artistId }
-      for (const col of columns) insert[col] = snapshot[col] ?? null
-      const { error } = await supabase.from(table).insert(insert)
-      if (error) throw new Error(error.message)
+    // Deleted since the publish: back, for rows the editor makes whole. After the deletes
+    // above, so a re-added row never collides with the one that replaced it on a unique
+    // key (region_key, key, role).
+    if (rule.mode !== 'whole') continue
+    for (const [id, snap] of wanted) {
+      if (liveById.has(id)) continue
+      const row: RestoreRow = { id, artist_id: artistId }
+      for (const col of rule.columns) row[col] = snap[col] ?? null
+      ops.push({ kind: 'insert', table, row })
+    }
+  }
+
+  // The profile singleton: the three columns the editor edits.
+  const profile = published.get('artist')?.get(artistId)
+  if (profile) {
+    const { data, error } = await supabase
+      .from('artists')
+      .select(EDITOR_PROFILE_COLUMNS.join(', '))
+      .eq('id', artistId)
+      .single()
+    if (error) throw new Error(error.message)
+    const now = data as unknown as RestoreRow
+    const patch: RestoreRow = {}
+    for (const col of EDITOR_PROFILE_COLUMNS) {
+      if (!(col in profile)) continue
+      const next = profile[col] ?? null
+      // The name is the artist's identity across the dashboard (and NOT NULL): never
+      // blanked, the same rule as the editor's own save.
+      if (col === 'name' && (typeof next !== 'string' || next.trim() === '')) continue
+      if (!sameValue(now[col], next)) patch[col] = next
+    }
+    if (Object.keys(patch).length) ops.push({ kind: 'profile', patch })
+  }
+
+  return { ops, hasPublished }
+}
+
+/** How many writes Revert would make right now: what the editor's Revert button counts.
+ *  Zero for a site that has never published (nothing to revert to). */
+export async function revertableChanges(supabase: SupabaseClient, artistId: string): Promise<number> {
+  return (await planRestore(supabase, artistId)).ops.length
+}
+
+/**
+ * Put the DRAFT back to a published version, for everything in the editor's reach
+ * (`EDITOR_RESTORE` + `EDITOR_PROFILE_COLUMNS`): runs `planRestore`'s writes in order.
+ *
+ * RLS scopes every statement to the caller's own artist; the RPCs are SECURITY INVOKER
+ * for the same reason. Not atomic — each write is its own request — and running it again
+ * finishes the job. Returns counts the caller reports and the tests assert: `restored`
+ * (rows put back, the profile included), `removed` (deleted or taken off the site),
+ * `readded` (re-inserted).
+ */
+export async function restoreToPublished(
+  supabase: SupabaseClient,
+  artistId: string,
+  /** Go back to the version published at this moment. Omitted = the latest publish,
+   *  which is what the editor's Revert asks for. */
+  at?: string,
+): Promise<{ restored: number; removed: number; readded: number; hasPublished: boolean }> {
+  const { ops, hasPublished } = await planRestore(supabase, artistId, at)
+  let restored = 0
+  let removed = 0
+  let readded = 0
+  const fail = (e: { message: string } | null) => {
+    if (e) throw new Error(e.message)
+  }
+
+  for (const op of ops) {
+    if (op.kind === 'profile') {
+      fail((await supabase.from('artists').update(op.patch).eq('id', artistId)).error)
+      restored++
+    } else if (op.kind === 'restore' || op.kind === 'off') {
+      fail((await supabase.from(op.table).update(op.patch).eq('id', op.id).eq('artist_id', artistId)).error)
+      if (op.kind === 'restore') restored++
+      else removed++
+    } else if (op.kind === 'delete') {
+      fail((await supabase.from(op.table).delete().eq('id', op.id).eq('artist_id', artistId)).error)
+      removed++
+    } else {
+      fail((await supabase.from(op.table).insert(op.row)).error)
       readded++
     }
   }

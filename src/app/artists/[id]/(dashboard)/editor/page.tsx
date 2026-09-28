@@ -1,7 +1,7 @@
 import type { MediaKind } from '@samfox1/site-bridge/payload'
 import { createClient } from '@/lib/supabase/server'
 import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
-import { diffUnpublished, listContent } from '@/lib/content'
+import { listContent, revertableChanges } from '@/lib/content'
 import { loadBrandFonts } from '@/lib/fonts'
 import { groupTracksIntoProjects } from '@/lib/music'
 import { isNewRelease } from '@samfox1/site-bridge/music'
@@ -290,19 +290,18 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     isNew: isNewRelease(p.releaseDate, today),
   }))
 
-  // Draft ≠ published? Computed server-side so Revert changes survives a refresh
-  // (Sam, 2026-08-17: the divider stayed off after a reload while the button vanished).
-  // router.refresh() after a revert or publish re-runs this and the flag follows.
-  const unpublished = await diffUnpublished(supabase, id).catch(() => null)
-  const hasUnpublished = unpublished
-    ? Object.values(unpublished).some((d) => d.dirty)
-    : false
+  // Anything Revert can undo? Computed server-side so Revert changes survives a refresh
+  // (Sam, 2026-08-17: the divider stayed off after a reload while the button vanished),
+  // and from the restore's OWN plan, not the publish diff — the diff also counts song,
+  // tour and Brand edits Revert leaves in place, and the button offered to undo them
+  // (review, 2026-09-28). router.refresh() after a revert or publish re-runs this.
+  const canRevert = (await revertableChanges(supabase, id).catch(() => 0)) > 0
 
   return (
     <EditorShell
       artistId={id}
       customSiteUrl={customSiteUrl}
-      hasUnpublished={hasUnpublished}
+      canRevert={canRevert}
       draft={draft}
       photos={photos}
       imageFields={imageFields}

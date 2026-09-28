@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/icons'
 import { type EditorTour } from '../inspector-types'
 import { OnSiteToggle } from '../inspector-shared'
 import { AddLink, useScrollIntoFocus } from '../inspector-grid'
+import { useConfirm } from '../../confirm-dialog'
 import { type SelectTarget } from '@samfox1/site-bridge/protocol'
 
 /* ── Tour tools: pick which dates are on the site, drag to reorder them ─ */
@@ -77,9 +78,17 @@ export function TourTools({
   onFocus?: (target: SelectTarget) => void
 }) {
   const { dragProps, isOver } = useDragReorder(onReorder)
+  // The trash ASKS (Sam, 2026-09-28: "'are you sure' is good when its a delete"). Nothing
+  // brings a deleted show back: Revert never re-inserts a library row, because a show's
+  // coordinates and source are not in the publish log.
+  const { ask, dialog } = useConfirm()
+  async function remove(t: EditorTour) {
+    if (await ask(`Delete ${t.venue || 'this date'}? This can't be undone.`)) onRemove(t)
+  }
 
   return (
     <div className="space-y-2.5 px-5 py-4">
+      {dialog}
       {/* No empty-state copy (Sam, 2026-08-12): an empty Tour panel just shows nothing —
           dates are entered on the Tour page, and a "No dates yet." line is noise. */}
       {tours.map((t) => {
@@ -141,7 +150,7 @@ export function TourTools({
           <button
             type="button"
             aria-label={`Remove ${t.venue || 'date'}`}
-            onClick={() => onRemove(t)}
+            onClick={() => void remove(t)}
             className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
           >
             <Icon name="trash" size={15} />

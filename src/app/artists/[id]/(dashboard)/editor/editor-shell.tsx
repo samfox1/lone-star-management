@@ -193,7 +193,7 @@ const NO_BRAND_COLORS: NamedSwatch[] = []
 export function EditorShell({
   artistId,
   customSiteUrl,
-  hasUnpublished = false,
+  canRevert = false,
   draft,
   photos,
   imageFields,
@@ -213,8 +213,9 @@ export function EditorShell({
   artistId: string
   /** The artist's external site origin when `site_kind='custom'`, else null. */
   customSiteUrl?: string | null
-  /** Draft differs from the last published edition — keeps Revert changes visible. */
-  hasUnpublished?: boolean
+  /** Revert has something to undo (server-side `revertableChanges`) — keeps Revert
+   *  changes visible across a refresh, and hidden for edits it would leave in place. */
+  canRevert?: boolean
   /** The draft to inject into a custom frame, in the wire shape. Null for a
    *  built-in template, which reads its own draft server-side. */
   draft?: PublicSitePayload | null
@@ -371,7 +372,7 @@ export function EditorShell({
         artistId={artistId}
         bridgeOutdated={bridgeOutdated(manifest?.bridgeVersion)}
         droppedRegions={droppedRegions}
-        hasUnpublished={hasUnpublished}
+        canRevert={canRevert}
         photos={photos}
         imageFields={panels.imageFields}
         textFields={panels.textFields}
