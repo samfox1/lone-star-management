@@ -1,10 +1,28 @@
 /**
- * A healthy artist site, as html, plus the evidence a run would gather from it. Each test
+ * A healthy artist site (its html) and the evidence a run would gather from it. Each SEO test
  * starts from this and breaks ONE thing, so a red test names the rule that broke.
  *
- * Not a *.test.ts file: vitest only collects those, so this is imported, never run.
+ * Code:     support file (not a test): feeds src/lib/seo-tests/who.ts, shared.ts, facts.ts,
+ *           found.ts and the SEO page's component tests
+ * Feature:  every SEO test in the four Test-tab groups
+ * Tier:     STRICT (AGENTS.md "Test depth"): the tests built on it are strict. Every value is
+ *           written by hand as a real site sends it, never copied from the code under test.
+ *           (Not a *.test.ts file: vitest only collects those, so this is imported, never run.)
+ * What it provides:
+ *           • homeHtml / aboutHtml: a healthy home page and About page (title, description,
+ *             share tags, two photos, an Apple Music button, the music section, the fact card)
+ *           • healthyGraph / artistNode / graphBlock / ldScript: the fact card, piece by piece
+ *           • known: what Tapir published for the artist; evidence: one run's whole evidence
+ *           • page: one fetched page (a status, an error, a page cut at the read cap)
+ *           • rowOf / expectPlainWords: read one "Show the details" row; check a result keeps
+ *             the plain-words contract (types.ts)
+ * Not here: bot visits, robots.txt and sitemaps have their own fakes (found-fixtures.ts,
+ *           fake-site.ts); hostile and malformed html lives in parser-corpus.ts.
+ * Fixtures: all made up: the artist "Skeen" at www.example-artist.com, today 2026-09-28.
+ *           Nothing is fetched.
  */
-import type { SeoEvidence, SeoKnown, SeoPageFetch } from '@/lib/seo-tests/types'
+import { expect } from 'vitest'
+import type { SeoEvidence, SeoKnown, SeoPageFetch, SeoTestResult } from '@/lib/seo-tests/types'
 
 export const ORIGIN = 'https://www.example-artist.com'
 export const TODAY = '2026-09-28'
@@ -202,4 +220,24 @@ export function evidence(o: EvidenceOpts = {}): SeoEvidence {
     musicbrainz: o.musicbrainz ?? { looked: true, artistUrl: null, matchedOn: null },
     known: o.known ?? known(),
   }
+}
+
+/** The value of the first "Show the details" row with this label (a string is an exact label). */
+export function rowOf(r: SeoTestResult, label: string | RegExp): string | undefined {
+  return r.evidence.find((e) => (typeof label === 'string' ? e.label === label : label.test(e.label)))?.value
+}
+
+/** Code names for the tags: a manager never reads these in a result. */
+const JARGON = /json-ld|\bmeta\b|og:|canonical|schema|@type|sameAs/i
+
+/** One result keeps the contract's plain words (types.ts): a short value (28 characters at
+ *  most), no tag names in its sentence or to-do, a fail's sentence starting lower-case (the
+ *  page puts "Not yet:" in front of it; a name like "MusicBrainz" keeps its capital), and no
+ *  html in "Show the details". */
+export function expectPlainWords(r: SeoTestResult): void {
+  expect(r.value.length).toBeLessThanOrEqual(28)
+  expect(r.sentence).not.toMatch(JARGON)
+  if (r.status === 'fail') expect(r.sentence).toMatch(/^(?:[a-z0-9]|MusicBrainz|Apple|Google)/)
+  if (r.todo) expect(r.todo).not.toMatch(JARGON)
+  for (const e of r.evidence) expect(e.value).not.toMatch(/<[a-z!/]/i)
 }

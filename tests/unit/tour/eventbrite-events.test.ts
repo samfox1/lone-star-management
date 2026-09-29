@@ -1,20 +1,27 @@
-// Eventbrite's API, read: the artist's organizations and organizer pages, and their upcoming
-//   public events as tour dates whose ticket link is the event's own Eventbrite page.
 /**
- * `src/lib/eventbrite.ts` (Sam, 2026-09-28: "by adding eventbrite, I will allow users to be
- * redirected to the artist's event information via eventbrite"). Eventbrite is a mocked
- * fetch here; nothing leaves the machine.
+ * Eventbrite's events become tour dates only when they are public and upcoming, with the right
+ * local date, a safe ticket link and a truthful place; and the token never leaks.
  *
- * What has to hold, because each piece ends up on a live site or in a URL:
- *
- *   - an event becomes a show only when it is PUBLIC and UPCOMING: live or started, listed,
- *     not invite-only, no password. Draft, cancelled, ended and completed events never land;
- *   - the date is the show's own LOCAL date (9pm in Los Angeles is not "tomorrow" because
- *     UTC has rolled over);
- *   - the ticket link is the event's https Eventbrite page, or the event is not used;
- *   - an online event reads "Online"; an event with no venue yet has no place, not a guess;
- *   - every id that goes into a path is digits, checked before a request is built;
- *   - the token rides in the Authorization header only: never a URL, never an error message.
+ * Code:     src/lib/eventbrite.ts (showFromEvent, createEventbriteClient: listUpcomingShows,
+ *           listOrganizations, listOrganizers)
+ * Feature:  Connect with Eventbrite: shows pull into Tour as drafts (Sam, 2026-09-28: "users
+ *           redirected to the artist's event information via eventbrite")
+ * Tier:     STRICT (AGENTS.md "Test depth"): a parser of outside data whose output reaches the
+ *           live site and URLs, and it carries a sign-in token.
+ * Covers:   • only PUBLIC, UPCOMING events land: live or started, listed, not invite-only, no
+ *             password; draft, cancelled, ended and completed never do
+ *           • the date is the show's own LOCAL date (9pm in Los Angeles is not "tomorrow")
+ *           • the ticket link is the event's https Eventbrite page, or the event is not used
+ *           • an online event reads "Online"; no venue yet means no place, not a guess; the
+ *             country is written out and a state only counts inside the US
+ *           • every id that goes into a path is digits, checked before any request is built
+ *           • the client asks for the right events, follows pages to a cap, and says "sign in
+ *             again" for a refused token; the token rides in the header only, never a URL or error
+ *           • the organizations and organizer pages a signed-in account can pick from
+ * Not here: what a pull WRITES to the tour table (tour-pull.test.ts, eventbrite-sync.test.ts); the
+ *           sign-in trip (tests/unit/manager-tools/connections/eventbrite-oauth*.test.ts).
+ * Fixtures: one realistic Eventbrite event, changed per test; Eventbrite's API is a mocked fetch
+ *           that records every request. Nothing leaves the machine.
  */
 import { describe, expect, it, vi } from 'vitest'
 import { EventbriteApiError, createEventbriteClient, showFromEvent } from '@/lib/eventbrite'
@@ -41,6 +48,8 @@ const event = (over: Record<string, unknown> = {}) => ({
 })
 
 describe('showFromEvent — which events land, and how', () => {
+  // The normal case, in full: a public upcoming event becomes a show with its venue, place, pin
+  // and its own Eventbrite page as the ticket link.
   it('CRITICAL: a public upcoming event becomes a show whose ticket link is its Eventbrite page', () => {
     expect(showFromEvent(event())).toEqual({
       externalId: '801234567890',
@@ -57,6 +66,7 @@ describe('showFromEvent — which events land, and how', () => {
     })
   })
 
+  // Only events that are on sale or under way land; drafts, cancelled and finished events never do.
   it('CRITICAL: draft, cancelled, ended and completed events never land; a started one does', () => {
     for (const status of ['draft', 'canceled', 'cancelled', 'ended', 'completed', '', undefined]) {
       expect(showFromEvent(event({ status })), String(status)).toBeNull()
@@ -64,6 +74,7 @@ describe('showFromEvent — which events land, and how', () => {
     expect(showFromEvent(event({ status: 'started' }))).not.toBeNull()
   })
 
+  // A private event (unlisted, invite-only or behind a password) never reaches a public site.
   it('CRITICAL: a private event never lands — unlisted, invite-only, or behind a password', () => {
     expect(showFromEvent(event({ listed: false }))).toBeNull()
     expect(showFromEvent(event({ invite_only: true }))).toBeNull()
@@ -74,6 +85,8 @@ describe('showFromEvent — which events land, and how', () => {
     expect(showFromEvent(event({ listed: undefined, invite_only: undefined }))).not.toBeNull()
   })
 
+  // The date is the show's own local day, whether Eventbrite sends the local time or only UTC
+  // and a timezone: a 9pm show in Los Angeles is not listed on the next day.
   it('CRITICAL: the date is the show’s own local date, not UTC’s', () => {
     const la = event({ start: { timezone: 'America/Los_Angeles', local: '2026-11-05T21:00:00', utc: '2026-11-06T05:00:00Z' } })
     expect(showFromEvent(la)!.values.date).toBe('2026-11-05')
@@ -86,6 +99,7 @@ describe('showFromEvent — which events land, and how', () => {
     expect(showFromEvent(event({ start: { local: '2026-11-05T23:30:00', utc: '2026-11-06T05:30:00Z' } }))!.values.date).toBe('2026-11-05')
   })
 
+  // An event with no start, or an impossible date, is left out: a show without a date is nothing.
   it('an event with no readable start is not used (a date is what a show is)', () => {
     expect(showFromEvent(event({ start: undefined }))).toBeNull()
     expect(showFromEvent(event({ start: { local: 'soon' } }))).toBeNull()
@@ -96,6 +110,8 @@ describe('showFromEvent — which events land, and how', () => {
     expect(showFromEvent(event({ start: { timezone: 'Not/AZone', utc: '2026-11-06T05:00:00Z' } }))).toBeNull()
   })
 
+  // The ticket link must be an https Eventbrite page (any country's); a look-alike host, plain http
+  // or a script link drops the event, because the link goes on the live site.
   it('CRITICAL: the ticket link must be the event’s https Eventbrite page', () => {
     expect(showFromEvent(event({ url: 'https://www.eventbrite.co.uk/e/skeen-live-tickets-1' }))!.values.ticket_url).toBe('https://www.eventbrite.co.uk/e/skeen-live-tickets-1')
     for (const url of ['http://www.eventbrite.com/e/1', 'https://evil.example/eventbrite.com/e/1', 'https://eventbrite.com.evil.net/e/1', 'javascript:alert(1)', '', undefined, 42]) {
@@ -103,11 +119,13 @@ describe('showFromEvent — which events land, and how', () => {
     }
   })
 
+  // An online event says "Online" and has no city or map pin.
   it('CRITICAL: an online event reads "Online", with no place and no pin', () => {
     const online = showFromEvent(event({ online_event: true, venue: null, venue_id: null }))!
     expect(online.values).toMatchObject({ venue: 'Online', city: null, state: null, country: null, latitude: null, longitude: null })
   })
 
+  // An event whose venue is not set yet has no place at all, rather than a guessed one.
   it('CRITICAL: an event with no venue yet has no place — nothing guessed', () => {
     const tba = showFromEvent(event({ venue: null, venue_id: null }))!
     expect(tba.values).toMatchObject({ venue: null, city: null, state: null, country: null, latitude: null, longitude: null })
@@ -115,6 +133,8 @@ describe('showFromEvent — which events land, and how', () => {
     expect(bare.values).toMatchObject({ venue: null, city: null, country: null })
   })
 
+  // Outside the US the country is written out and the state is empty (Western Australia's "WA"
+  // is not Washington); a US region that is not a state code is left out too.
   it('outside the US the country is written out and there is no state', () => {
     const london = showFromEvent(event({ venue: { name: 'Lexington', address: { city: 'London', region: 'LND', country: 'GB' } } }))!
     expect(london.values).toMatchObject({ city: 'London', state: null, country: 'United Kingdom' })
@@ -126,6 +146,7 @@ describe('showFromEvent — which events land, and how', () => {
     expect(perth.values).toMatchObject({ state: null, country: 'Australia' })
   })
 
+  // The map pin comes from the venue, or from its address when the venue has none; no numbers, no pin.
   it('the pin comes from the venue, or from its address when the venue has none', () => {
     const fromAddress = showFromEvent(event({ venue: { name: 'Mohawk', address: { city: 'Austin', country: 'US', latitude: '30.1', longitude: '-97.1' } } }))!
     expect(fromAddress.values).toMatchObject({ latitude: 30.1, longitude: -97.1 })
@@ -133,6 +154,7 @@ describe('showFromEvent — which events land, and how', () => {
     expect(none.values).toMatchObject({ latitude: null, longitude: null })
   })
 
+  // An event id must be digits (it becomes part of a path); anything else, or no event at all, is dropped.
   it('an id that is not digits is not used', () => {
     expect(showFromEvent(event({ id: '../../users/me' }))).toBeNull()
     expect(showFromEvent(event({ id: 801234567890 }))!.externalId).toBe('801234567890')
@@ -156,6 +178,8 @@ function client(routes: (url: URL) => Response) {
 }
 
 describe('listUpcomingShows', () => {
+  // The request asks for exactly this organizer's upcoming, on-sale events, venue included,
+  // with the token in the Authorization header only and redirects not followed.
   it('CRITICAL: asks for this organization’s upcoming events by this organizer, venue expanded, token in the header only', async () => {
     const { eb, calls } = client(() => json({ events: [event()], pagination: { has_more_items: false } }))
     const shows = await eb.listUpcomingShows(TOKEN, '111', '222')
@@ -174,6 +198,7 @@ describe('listUpcomingShows', () => {
     expect(init.redirect).toBe('manual')
   })
 
+  // It reads every page Eventbrite offers and still drops the events that should not land.
   it('CRITICAL: follows the continuation to the last page, and drops what should not land', async () => {
     const { eb, calls } = client((url) =>
       url.searchParams.get('continuation') === 'page2'
@@ -185,23 +210,27 @@ describe('listUpcomingShows', () => {
     expect(calls).toHaveLength(2)
   })
 
+  // A page with no events list, or a broken continuation, ends the list quietly instead of looping.
   it('a page with no events list, or a continuation that is not a string, ends the list quietly', async () => {
     const { eb, calls } = client(() => json({ events: null, pagination: { has_more_items: true, continuation: 42 } }))
     expect(await eb.listUpcomingShows(TOKEN, '111', '222')).toEqual([])
     expect(calls).toHaveLength(1)
   })
 
+  // A maintenance page instead of JSON is reported as a shape error, not a crash.
   it('an answer that is not JSON is a shape error, not a crash', async () => {
     const { eb } = client(() => new Response('<html>maintenance</html>', { status: 200 }))
     await expect(eb.listUpcomingShows(TOKEN, '111', '222')).rejects.toMatchObject({ kind: 'shape' })
   })
 
+  // It stops at 20 pages even if Eventbrite keeps saying there is more.
   it('stops at the page cap even if Eventbrite keeps saying there is more', async () => {
     const { eb, calls } = client(() => json({ events: [], pagination: { has_more_items: true, continuation: 'again' } }))
     await eb.listUpcomingShows(TOKEN, '111', '222')
     expect(calls.length).toBeLessThanOrEqual(20)
   })
 
+  // An organization or organizer id that is not digits is refused before any request is sent.
   it('CRITICAL: an id that is not digits never reaches a URL', async () => {
     const { eb, calls } = client(() => json({ events: [] }))
     await expect(eb.listUpcomingShows(TOKEN, '1/../../users/me', '222')).rejects.toBeInstanceOf(EventbriteApiError)
@@ -209,6 +238,7 @@ describe('listUpcomingShows', () => {
     expect(calls).toHaveLength(0)
   })
 
+  // A refused token tells the manager to connect again, and the error never contains the token.
   it('CRITICAL: a refused token says "sign in again", and no error ever carries the token', async () => {
     const { eb } = client(() => json({ error: 'INVALID_AUTH', error_description: `bad token ${TOKEN}`, status_code: 400 }, 400))
     const err = await eb.listUpcomingShows(TOKEN, '111', '222').catch((e) => e)
@@ -218,6 +248,8 @@ describe('listUpcomingShows', () => {
     expect(String(err.message)).not.toContain(TOKEN)
   })
 
+  // Other refusals say the HTTP status and Eventbrite's own UPPER_CASE code and nothing else
+  // (never the token, never odd text from the answer); 401 and NO_AUTH mean "sign in again".
   it('other refusals name the status and Eventbrite’s own code, nothing more', async () => {
     const { eb } = client(() => json({ error: 'NOT_AUTHORIZED', error_description: `no ${TOKEN}` }, 403))
     const err = await eb.listUpcomingShows(TOKEN, '111', '222').catch((e) => e)
@@ -239,6 +271,7 @@ describe('listUpcomingShows', () => {
 })
 
 describe('the artist’s organizations and organizer pages', () => {
+  // It lists the account's organizations, keeping only those with digit ids.
   it('lists the organizations the signed-in account belongs to', async () => {
     const { eb, calls } = client(() =>
       json({ organizations: [{ id: '111', name: 'Skeen' }, { id: 'bad/id', name: 'x' }, { id: 112 }, { id: '113x', name: 'y' }], pagination: { has_more_items: false } }),
@@ -250,6 +283,7 @@ describe('the artist’s organizations and organizer pages', () => {
     expect(calls[0].url.pathname).toBe('/v3/users/me/organizations/')
   })
 
+  // It lists an organization's organizer pages with their public link, dropping bad ids.
   it('lists an organization’s organizer pages, with their public link', async () => {
     const { eb, calls } = client(() =>
       json({ organizers: [{ id: '222', name: 'Skeen', url: 'https://www.eventbrite.com/o/skeen-222' }, { id: 'x', name: 'bad' }], pagination: { has_more_items: false } }),
@@ -258,6 +292,8 @@ describe('the artist’s organizations and organizer pages', () => {
     expect(calls[0].url.pathname).toBe('/v3/organizations/111/organizers/')
   })
 
+  // An organizer link that is not an https Eventbrite page is replaced by the plain
+  // eventbrite.com/o/<id> page, so a hostile link never reaches the Connections page.
   it('an organizer link that is not an https Eventbrite page becomes the plain /o/<id> page', async () => {
     const { eb } = client(() =>
       json({ organizers: [{ id: '222', name: 'Skeen', url: 'https://evil.example/o/222' }, { id: 333, name: 'B' }, { id: '444', url: 'http://www.eventbrite.com/o/444' }, { id: '4x' }] }),

@@ -1,19 +1,23 @@
-// The Eventbrite pull's WRITES: drafts off the site, one row per event, the manager's edits kept,
-//   new shows slotted by date — through a fake of the one table it may touch.
 /**
- * `syncEventbriteTourDates` (src/lib/sync.ts) carries out `planTourPull`'s plan. The plan's
- * rules are pinned in tour-pull.test.ts; this pins what only the writer can get wrong:
+ * The Eventbrite pull writes new shows as drafts kept off the site, one row per event, keeps the
+ * manager's edits, and touches only the tour table.
  *
- *   - a new show is inserted OFF the site (`on_site: false`), `source: 'eventbrite'`, with its
- *     event id and the memory of what was pulled — a draft in the library, never published:
- *     the writer touches `tour_dates` (and `reorder_rows`) and nothing else, so no revision
- *     is ever written;
- *   - a second pull of the same events adds nothing (the table still has one row per event);
- *   - an update is filtered to rows Eventbrite owns, and never touches a column it does not;
- *   - a race that inserted the same event first is not a failure; RLS refusing is fatal.
- *
- * The integration twin (tests/integration/sync/sync.eventbrite.test.ts) runs the same pull
- * on the hosted database once the migration is pushed.
+ * Code:     src/lib/sync.ts (syncEventbriteTourDates), carrying out src/lib/tour-pull.ts's plan
+ * Feature:  Connect with Eventbrite: shows pull into Tour as drafts
+ * Tier:     STRICT (AGENTS.md "Test depth"): data that can be lost, and what the live site
+ *           receives (a pulled show must never publish itself).
+ * Covers:   • a new show is inserted OFF the site (`on_site: false`), owned by Eventbrite, with
+ *             its event id and a memory of what was pulled; nothing but `tour_dates` is touched,
+ *             so nothing is published
+ *           • a second pull of the same events adds nothing
+ *           • an update is filtered to rows Eventbrite owns and writes only pulled columns
+ *           • new shows are slotted by date in a hand-ordered list
+ *           • a race that inserted the same event first is not a failure; any other insert
+ *             error is counted, and a row-level security refusal stops the pull
+ * Not here: the merge rules themselves (tour-pull.test.ts); the same pull on the hosted database
+ *           (tests/integration/sync/sync.eventbrite.test.ts, once the migration is pushed).
+ * Fixtures: a fake of the one table the pull may touch (tour_dates, plus the reorder_rows
+ *           function), which logs every table, update filter and function call it is asked for.
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -90,6 +94,8 @@ const show = (id: string, over: Partial<IncomingShow['values']> = {}): IncomingS
 })
 
 describe('syncEventbriteTourDates', () => {
+  // New shows land as drafts off the site, owned by Eventbrite and remembering what was pulled;
+  // only the tour table is touched, so nothing is published.
   it('CRITICAL: new shows land as drafts OFF the site, owned by Eventbrite, remembering what was pulled — and nothing is published', async () => {
     const { db, rows, touched } = fakeDb()
     const result = await syncEventbriteTourDates(db, ARTIST, [show('101'), show('102', { date: '2026-12-01' })])
@@ -104,6 +110,7 @@ describe('syncEventbriteTourDates', () => {
     expect(new Set(touched)).toEqual(new Set(['tour_dates']))
   })
 
+  // Pulling the same events again adds nothing: one row per event.
   it('CRITICAL: the same events again add nothing — one row per event, however often it is pulled', async () => {
     const { db, rows } = fakeDb()
     await syncEventbriteTourDates(db, ARTIST, [show('101'), show('102')])
@@ -112,6 +119,8 @@ describe('syncEventbriteTourDates', () => {
     expect(rows).toHaveLength(2)
   })
 
+  // A re-pull keeps the manager's venue fix and their tick onto the site, moves the city they
+  // never touched, and the update is limited to Eventbrite's own row.
   it('CRITICAL: a re-pull keeps the manager’s edits and moves only what they did not touch', async () => {
     const { db, rows, updates } = fakeDb()
     await syncEventbriteTourDates(db, ARTIST, [show('101')])
@@ -126,6 +135,7 @@ describe('syncEventbriteTourDates', () => {
     expect(Object.keys(u.patch).sort()).toEqual(['city', 'pulled'])
   })
 
+  // A hand-added show that carries the same event id is never written.
   it('CRITICAL: a hand-added show carrying the same id is never written', async () => {
     const { db, rows, updates } = fakeDb([{ id: 'm1', artist_id: ARTIST, source: 'manual', eventbrite_id: '101', pulled: {}, venue: 'Mine' }])
     const result = await syncEventbriteTourDates(db, ARTIST, [show('101', { venue: 'Theirs' })])
@@ -134,6 +144,7 @@ describe('syncEventbriteTourDates', () => {
     expect(rows[0].venue).toBe('Mine')
   })
 
+  // In a hand-ordered list the new show is slotted by date; an undragged list gets no reorder.
   it('CRITICAL: in a dragged list new shows are slotted by date; an undragged list is left alone', async () => {
     const dragged = fakeDb([
       { id: 'a', artist_id: ARTIST, source: 'manual', eventbrite_id: null, date: '2026-10-01', sort_order: 0 },
@@ -147,6 +158,8 @@ describe('syncEventbriteTourDates', () => {
     expect(plain.rpcs).toEqual([])
   })
 
+  // Another pull inserting the same event first is not a failure; any other insert error is
+  // counted with the event and the reason.
   it('a race that inserted the event first is not a failure; any other insert error is', async () => {
     const race = fakeDb([], { insertError: { code: '23505', message: 'duplicate key value violates unique constraint' } })
     expect(await syncEventbriteTourDates(race.db, ARTIST, [show('101')])).toMatchObject({ added: 0, failed: 0, skipped: 1 })
@@ -154,6 +167,7 @@ describe('syncEventbriteTourDates', () => {
     expect(await syncEventbriteTourDates(broken.db, ARTIST, [show('101')])).toMatchObject({ added: 0, failed: 1, errors: [{ externalId: '101', op: 'insert', message: 'value too long' }] })
   })
 
+  // Row-level security refusing a write stops the whole pull, never a partial success.
   it('CRITICAL: RLS refusing a write is fatal, never a partial success', async () => {
     const denied = fakeDb([], { insertError: { code: '42501', message: 'new row violates row-level security policy' } })
     await expect(syncEventbriteTourDates(denied.db, ARTIST, [show('101')])).rejects.toThrow(/row-level security/)

@@ -1,9 +1,23 @@
 /**
- * A fake web for the SEO / GEO tests: no network. Each url answers with a real `Response`, so
- * the code under test reads bodies, headers and streams exactly as it would from `fetch`.
+ * A fake web for the SEO / GEO tests: every address answers from a table, with no network.
  *
- * Like a real client, it FOLLOWS a redirect itself unless told `redirect: 'manual'`: the code
- * must walk redirects by hand to check each hop, and dropping that option fails a test.
+ * Code:     src/lib/seo-tests/evidence.ts (gatherSiteEvidence) and src/lib/seo-tests/guarded-fetch.ts
+ *           (guardedFetch): what it is fed to
+ * Feature:  the site visit behind the "Can be found" tests, and safe fetching
+ * Tier:     STRICT support file (AGENTS.md "Test depth"): the code it feeds fetches addresses a
+ *           manager and a site's own files hand the server.
+ * What it provides:
+ *           • `fakeSite(routes)`: a `fetch` where each exact address answers with a real
+ *             `Response` (status, headers, body), so bodies, headers and streams are read exactly
+ *             as from the real `fetch`; anything unlisted is a 404
+ *           • answers that misbehave: a body that never ends, a delay, a request that hangs until
+ *             it is aborted, a dropped connection
+ *           • `calls` (every request, with its User-Agent) and `maxInFlight()` (the most requests
+ *             open at once), to check what was asked for and how politely
+ * Not here: the evidence the ten tests themselves read (tests/unit/seo-tests/found-fixtures.ts).
+ *           Used by tests/unit/seo-tests/can-be-found/evidence.test.ts and tests/unit/safe-fetching/.
+ * Fixtures: like a real client, it FOLLOWS a redirect itself unless told `redirect: 'manual'`, so
+ *           code that stops walking redirects by hand (to check each hop) fails a test.
  */
 
 export type FakeAnswer = {

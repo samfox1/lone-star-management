@@ -1,24 +1,27 @@
-// Connect with Eventbrite, the two routes: start sends a manager to Eventbrite, the callback
-//   keeps the token in Vault, saves the organizer link through the paste door, and pulls.
 /**
- * /api/eventbrite/start and /api/eventbrite/callback (Sam, 2026-09-28). The pure rules are
- * pinned in eventbrite-oauth.test.ts; what only the routes can get wrong is the ORDER and
- * the consequences:
+ * The two Connect with Eventbrite routes: start sends only this artist's manager to Eventbrite,
+ * and the callback stores the token in Vault and nowhere else, saves the organizer link the way
+ * a paste would, and pulls the shows; any refusal saves nothing.
  *
- *   - start: only a signed-in manager of THIS artist is sent to Eventbrite, with a signed,
- *     HttpOnly state cookie scoped to the callback; only https or http://localhost;
- *   - callback: a bad state, another manager, a non-owner, or "cancel" at Eventbrite saves
- *     NOTHING and asks Eventbrite for NOTHING. Every refusal first runs the untouched trip and
- *     sees it save (the planted witness), so a refusal can never pass because the save path
- *     was broken all along;
- *   - the happy path: the token goes to Vault (`connect_eventbrite`) and NOWHERE else — not a
- *     cookie, not the link save, not the pull's arguments, not the redirect, not a log line;
- *     the organizer link is saved through `connectOneAction(artist, 'eventbrite', …)`, the
- *     paste path; then the shows are pulled;
- *   - a save that fails after the token was stored forgets the token again on a FIRST connect,
- *     and puts the previous sign-in back on a RE-connect (never deletes a working one).
- *
- * Supabase, the save door and the pull are faked; Eventbrite is a stubbed global fetch.
+ * Code:     src/app/api/eventbrite/start/route.ts, src/app/api/eventbrite/callback/route.ts
+ * Feature:  Connections page: Connect with Eventbrite (Sam, 2026-09-28)
+ * Tier:     STRICT (AGENTS.md "Test depth"): security (a sign-in token, another artist's page)
+ *           and data (a failed re-connect must never delete a working sign-in).
+ * Covers:   • start: only a signed-in manager of THIS artist is sent on, with a signed, HttpOnly
+ *             state cookie for the callback only; only https or http://localhost
+ *           • callback refusals (wrong trip, late, another manager, a non-owner, an edited or
+ *             missing cookie, plain http, Cancel at Eventbrite) save NOTHING and ask Eventbrite
+ *             for nothing; each first runs the untouched trip and sees it save (the witness)
+ *           • the happy path, in order: token to Vault (connect_eventbrite), organizer link
+ *             through the paste door (connectOneAction), then the pull; the token is nowhere
+ *             else (cookie, save, pull, redirect, log)
+ *           • Eventbrite saying no partway stores nothing; a link save that fails forgets the
+ *             token on a FIRST connect and restores the previous sign-in on a RE-connect
+ * Not here: the rules these routes call (eventbrite-oauth.test.ts); the Vault functions themselves
+ *           (tests/integration/sync/eventbrite-vault.test.ts); the pull (tests/unit/tour).
+ * Fixtures: Supabase is faked (ownership, sign-in, RPC log); the paste door and the pull are
+ *           mocks; Eventbrite is a stubbed global fetch; console output is captured to prove the
+ *           token is never logged.
  */
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -146,6 +149,8 @@ async function startGoesToEventbrite(query: Record<string, string> = { artist: A
 }
 
 describe('start', () => {
+  // An owner is sent to Eventbrite with our app key and an S256 challenge (no secret), and gets
+  // a signed, HttpOnly, Secure, short-lived cookie that only the callback can see.
   it('CRITICAL: an owner is sent to Eventbrite’s authorize page, with a signed state cookie for the callback only', async () => {
     const res = await start(startReq({ artist: ARTIST }))
     expect([302, 303, 307]).toContain(res.status)
@@ -170,6 +175,7 @@ describe('start', () => {
     expect(to.searchParams.get('code_challenge')).toBe(createHash('sha256').update(read.state.verifier).digest('base64url'))
   })
 
+  // A pasted link's organizer id travels inside the signed cookie; anything that is not digits is dropped.
   it('a pasted link’s organizer id travels in the signed state; anything else is dropped', async () => {
     const res = await start(startReq({ artist: ARTIST, organizer: '222' }))
     expect(readState(res.cookies.get(STATE_COOKIE)!.value, SECRET)).toMatchObject({ ok: true, state: { organizer: '222' } })
@@ -177,12 +183,14 @@ describe('start', () => {
     expect(readState(junk.cookies.get(STATE_COOKIE)!.value, SECRET)).toMatchObject({ ok: true, state: { organizer: null } })
   })
 
+  // Development on http://localhost works, and its cookie is not marked Secure (it could not be set).
   it('http://localhost is allowed (dev), and its cookie is not Secure', async () => {
     const res = await start(startReq({ artist: ARTIST }, 'http://localhost:3000'))
     expect(new URL(location(res)).searchParams.get('redirect_uri')).toBe('http://localhost:3000/api/eventbrite/callback')
     expect(setCookie(res)).not.toMatch(/Secure/i)
   })
 
+  // Any other plain-http address is never sent to Eventbrite, and gets no cookie.
   it('CRITICAL: any other http origin is never sent to Eventbrite', async () => {
     await startGoesToEventbrite()
     const res = await start(startReq({ artist: ARTIST }, 'http://app.test'))
@@ -190,6 +198,7 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // Nobody signed in goes to the login page, not to Eventbrite.
   it('CRITICAL: nobody signed in goes to /login, not to Eventbrite', async () => {
     await startGoesToEventbrite()
     w.user = null
@@ -198,6 +207,7 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // A manager of another artist gets "not found" and no cookie.
   it('CRITICAL: a manager of another artist gets a 404 and no cookie', async () => {
     await startGoesToEventbrite()
     w.owns = false
@@ -206,12 +216,14 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // An artist id that is not an id (or none) is "not found".
   it('an artist id that is not an id is a 404', async () => {
     await startGoesToEventbrite()
     expect((await start(startReq({ artist: '../../admin' }))).status).toBe(404)
     expect((await start(startReq({}))).status).toBe(404)
   })
 
+  // Without the app's credentials it goes back to the Connections page with a "not set up" code.
   it('without the two credentials, it goes back and says so', async () => {
     await startGoesToEventbrite()
     process.env.EVENTBRITE_CLIENT_SECRET = ''
@@ -266,6 +278,8 @@ function expectTokenOnlyInVault(res: Response) {
 }
 
 describe('callback — the happy path', () => {
+  // The happy path, in order: the token is stored in Vault, the organizer link is saved the way a
+  // paste would be, then the shows are pulled; the code is traded with this trip's verifier.
   it('CRITICAL: the token goes to Vault, the organizer link through the paste door, then the shows are pulled', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -291,6 +305,7 @@ describe('callback — the happy path', () => {
     expect(body.get('code_verifier')).toBe(read.state.verifier)
   })
 
+  // The token is kept in Vault and nowhere else: not in a URL, cookie, save, pull, redirect or log line.
   it('CRITICAL: the token is kept in Vault and nowhere else — no cookie, no save, no redirect, no log', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -300,6 +315,7 @@ describe('callback — the happy path', () => {
     expectTokenOnlyInVault(res)
   })
 
+  // The state cookie is spent: cleared on the way out, so the trip cannot be replayed.
   it('CRITICAL: the state cookie is spent — cleared on the way out', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -307,6 +323,7 @@ describe('callback — the happy path', () => {
     expect(setCookie(res)).toMatch(/Max-Age=0/)
   })
 
+  // Among several organizer pages, the one the pasted link named is the one connected.
   it('the pasted link’s organizer is the one connected, among several', async () => {
     eventbrite.organizers = () =>
       json({ organizers: [{ id: '222', name: 'Skeen', url: ORGANIZER_URL }, { id: '333', name: 'Gulf Static', url: 'https://www.eventbrite.com/o/gulf-333' }] })
@@ -316,6 +333,7 @@ describe('callback — the happy path', () => {
     expect(connectOneAction).toHaveBeenCalledWith(ARTIST, 'eventbrite', { url: 'https://www.eventbrite.com/o/gulf-333' })
   })
 
+  // The whole trip works on http://localhost for development.
   it('works on http://localhost (dev)', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie, 'http://localhost:3000'))
@@ -324,6 +342,7 @@ describe('callback — the happy path', () => {
 })
 
 describe('callback — refusals save nothing and ask Eventbrite for nothing', () => {
+  // A return carrying another trip's nonce saves nothing.
   it('CRITICAL: another trip’s nonce (state)', async () => {
     await witnessSaves()
     const mine = trip()
@@ -333,6 +352,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expect(location(res)).toBe(back('state'))
   })
 
+  // A return after the time limit saves nothing.
   it('CRITICAL: a late return (state expired)', async () => {
     await witnessSaves()
     const t = trip({ now: Date.now() - STATE_TTL_MS - 1000 })
@@ -341,6 +361,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expect(location(res)).toBe(back('state'))
   })
 
+  // A trip finished in another manager's session, or after signing out, saves nothing.
   it('CRITICAL: finished in another manager’s session, or signed out', async () => {
     await witnessSaves()
     const t = trip()
@@ -351,6 +372,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expectNothingHappened()
   })
 
+  // A manager who lost the artist during the trip saves nothing.
   it('CRITICAL: a manager who no longer manages the artist', async () => {
     await witnessSaves()
     const t = trip()
@@ -360,6 +382,8 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expect(location(res)).toBe(back('auth'))
   })
 
+  // No cookie, or one edited to name another artist, goes back to the dashboard (not to any
+  // artist's page) and saves nothing.
   it('CRITICAL: no state cookie, or one edited to another artist — back to the dashboard, not to any artist', async () => {
     await witnessSaves()
     const t = trip()
@@ -370,6 +394,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expectNothingHappened()
   })
 
+  // A return over plain http (not localhost) saves nothing.
   it('CRITICAL: an http origin that is not localhost', async () => {
     await witnessSaves()
     const t = trip()
@@ -378,6 +403,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expect(location(res)).toBe('http://app.test/')
   })
 
+  // Pressing Cancel at Eventbrite comes back as "cancelled", and no code is exchanged.
   it('CRITICAL: Cancel at Eventbrite (error=access_denied) → cancelled; nothing exchanged', async () => {
     await witnessSaves()
     const t = trip()
@@ -386,6 +412,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expect(location(res)).toBe(back('denied'))
   })
 
+  // Any other error from Eventbrite, or no code at all, saves nothing.
   it('any other error, or no code at all, saves nothing', async () => {
     await witnessSaves()
     const t = trip()
@@ -395,6 +422,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
     expectNothingHappened()
   })
 
+  // Without the app's credentials nothing can be checked, so it goes back to the dashboard.
   it('without the credentials nothing can be checked: back to the dashboard', async () => {
     await witnessSaves()
     const t = trip()
@@ -405,6 +433,8 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
 })
 
 describe('callback — Eventbrite says no partway', () => {
+  // Eventbrite refusing the code: nothing is read, stored or saved; the refusal is logged
+  // without any secret.
   it('CRITICAL: the code is refused → exchange; nothing read, nothing stored, nothing saved', async () => {
     eventbrite.token = () => json({ error: 'invalid_grant', error_description: `bad ${CODE}` }, 400)
     const t = trip()
@@ -417,6 +447,7 @@ describe('callback — Eventbrite says no partway', () => {
     expectTokenOnlyInVault(res)
   })
 
+  // No organizer page on the account: the token is not stored.
   it('CRITICAL: no organizer page on the account → none; the token is NOT stored', async () => {
     eventbrite.organizers = () => json({ organizers: [] })
     const t = trip()
@@ -427,6 +458,7 @@ describe('callback — Eventbrite says no partway', () => {
     expectTokenOnlyInVault(res)
   })
 
+  // Several pages and none named like the artist: ask for the link; the token is not stored.
   it('CRITICAL: several pages and none named like the artist → ask; the token is NOT stored', async () => {
     eventbrite.organizers = () =>
       json({ organizers: [{ id: '222', name: 'Lone Pine', url: ORGANIZER_URL }, { id: '333', name: 'Gulf Static', url: 'https://www.eventbrite.com/o/gulf-333' }] })
@@ -437,12 +469,14 @@ describe('callback — Eventbrite says no partway', () => {
     expect(connectOneAction).not.toHaveBeenCalled()
   })
 
+  // A pasted link whose organizer is not on the account: nothing stored.
   it('a pasted link whose organizer is not on the account → elsewhere; nothing stored', async () => {
     const t = trip({ organizer: '999' })
     expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('elsewhere'))
     expect(w.rpc).toEqual([])
   })
 
+  // The account cannot be read: nothing stored.
   it('the account cannot be read → organizer; nothing stored', async () => {
     eventbrite.organizations = () => json({ error: 'INTERNAL_ERROR' }, 500)
     const t = trip()
@@ -452,6 +486,8 @@ describe('callback — Eventbrite says no partway', () => {
     expectTokenOnlyInVault(res)
   })
 
+  // Vault refusing the token (with a message that echoes it): no link saved, nothing pulled,
+  // and the token still appears nowhere.
   it('CRITICAL: Vault refuses the token → connect; no link saved, nothing pulled, no code in the log but its own', async () => {
     // A database message is not trusted to be clean: this one echoes its input.
     w.rpcError.connect_eventbrite = { code: 'P0001', message: `invalid eventbrite token ${TOKEN}` }
@@ -463,6 +499,8 @@ describe('callback — Eventbrite says no partway', () => {
     expectTokenOnlyInVault(res)
   })
 
+  // On a FIRST connect, a link save that is refused or throws after the token was stored
+  // forgets the token again, and nothing is pulled.
   it('CRITICAL: the link save refused (or thrown) after the token was stored → the token is forgotten again', async () => {
     vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
     const t = trip()
@@ -479,6 +517,9 @@ describe('callback — Eventbrite says no partway', () => {
 
   const PREVIOUS = { organization_id: '70', organizer_id: '71', token: 'EB-PREVIOUS-token-still-good' }
 
+  // On a RE-connect, a failed link save puts the previous sign-in back and never deletes it:
+  // the stored token is renewed in place, so forgetting would destroy a working sign-in
+  // (security review 2026-09-29, L6).
   it('CRITICAL: on a RE-connect, a refused (or thrown) link save puts the previous sign-in back and never deletes it', async () => {
     // connect_eventbrite renews the secret IN PLACE, so forgetting after a failed re-connect
     // would destroy the sign-in that was working before (security review 2026-09-29, L6).
@@ -500,6 +541,7 @@ describe('callback — Eventbrite says no partway', () => {
     }
   })
 
+  // The previous sign-in is read before the new token overwrites it, or there is nothing to restore.
   it('CRITICAL: the previous sign-in is read BEFORE the new token is stored', async () => {
     w.rpcData = { eventbrite_credentials: [PREVIOUS] }
     vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
@@ -510,6 +552,7 @@ describe('callback — Eventbrite says no partway', () => {
     expect(order.indexOf('eventbrite_credentials')).toBeLessThan(order.indexOf('connect_eventbrite'))
   })
 
+  // If putting the previous sign-in back fails too, nothing is deleted: the new token stays.
   it('a restore that fails still deletes nothing: the new token stays, a working sign-in all the same', async () => {
     w.rpcData = { eventbrite_credentials: [PREVIOUS] }
     w.rpcFailWhen = (fn, args) => fn === 'connect_eventbrite' && args.p_token === PREVIOUS.token
@@ -520,6 +563,8 @@ describe('callback — Eventbrite says no partway', () => {
     expect(logged()).not.toContain(PREVIOUS.token)
   })
 
+  // If the previous sign-in cannot be read, a failed save deletes nothing either: "unknown" is
+  // not "none".
   it('when the previous sign-in cannot be READ, a failed save deletes nothing either (unknown is not "none")', async () => {
     w.rpcError.eventbrite_credentials = { code: 'XX000', message: 'down' }
     vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
@@ -528,6 +573,7 @@ describe('callback — Eventbrite says no partway', () => {
     expect(rpcs('disconnect_eventbrite')).toEqual([])
   })
 
+  // A first pull that fails reports it, and the connection stays so "Pull now" can retry.
   it('the first pull fails → sync; the connection stays (Pull now can retry)', async () => {
     vi.mocked(syncEventbriteAction).mockResolvedValueOnce({ ok: false, error: 'Eventbrite is busy', notes: [] })
     const t = trip()

@@ -1,16 +1,26 @@
 /**
- * STORED SEO / GEO RUNS FOR THE PAGE'S TESTS, MADE BY THE REAL ENGINE (review 2026-09-29, P3:
- * the first fixture hand-wrote results the engine never produces: "ok" values, a Bing FAIL the
- * engine can only answer `unknown`, sentences it never says). Each scenario is a made-up SITE
- * (tests/unit/seo-tests/_page-fixture.ts, the engine's own fixture), run through the 24 real tests
- * (`runAllTests(SEO_ENGINE.tests, …)`) and capped exactly as the store caps them (`capResults`).
+ * Stored SEO / GEO runs for the page's tests, made by the REAL engine over made-up sites, so the
+ * page is tested against results the engine really gives.
  *
- * It RUNS the engine every time it is imported: when the tests' words change, the page's tests
- * read the new words, and there is no snapshot to go stale. So the page's tests assert what they
- * DERIVE from these results (counts, which rows fail), never a sentence copied from here.
- *
- * `fixtureResults(over)` still lets a test force one status (`na` for the counts, say); use it
- * only for a status the engine can really give that test.
+ * Code:     src/lib/seo-tests/engine.ts (SEO_ENGINE), run.ts (runAllTests), store.ts (capResults)
+ * Feature:  SEO / GEO page · every tab that shows a run (Test, Overview)
+ * Tier:     STRICT (AGENTS.md "Test depth"): the page's counts and states are asserted from these
+ *           results, so a hand-written result the engine never gives would test nothing real
+ *           (the UI review, 2026-09-29: the first fixture had a Bing FAIL the engine can't give,
+ *           so "All 24 pass" went untested).
+ * What it provides:
+ *           • engineResults(scenario): the 24 real results for a made-up site, capped as stored
+ *           • fixtureResults(over, scenario): the same with some tests forced (only to a status
+ *             the engine can really give that test)
+ *           • fixtureRun / engineRun: a stored run around those results (a publish run, or a
+ *             manual one); fixtureHistory: each test's last statuses, oldest first
+ *           • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500,
+ *             trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
+ * Not here: the engine's own tests (tests/unit/seo-tests/).
+ * Fixtures: each scenario is a made-up site built with the engine's own page fixture
+ *           (tests/unit/seo-tests/_page-fixture.ts). It RUNS the engine on import, so when a
+ *           test's words change the page's tests read the new words: tests built on it assert
+ *           states and counts, never a sentence copied from here.
  */
 import { SEO_ENGINE } from '@/lib/seo-tests/engine'
 import { runAllTests } from '@/lib/seo-tests/run'
@@ -104,7 +114,7 @@ export const SCENARIO_NAMES = Object.keys(SCENARIOS) as Scenario[]
 
 const cache = new Map<Scenario, SeoTestResult[]>()
 
-/** The engine's real results for a made-up site, as the store would keep them. */
+/** The engine's real results for a made-up site, as the store would keep them (a fresh copy each call). */
 export function engineResults(s: Scenario): SeoTestResult[] {
   if (!cache.has(s)) cache.set(s, capResults(runAllTests(SEO_ENGINE.tests, SCENARIOS[s]())))
   return structuredClone(cache.get(s)!)
@@ -117,6 +127,27 @@ export function fixtureResults(over: Partial<Record<SeoTestId, Partial<SeoTestRe
 
 export const RAN_AT = '2026-09-28T21:14:00.000Z'
 
+/** A MANUAL run of one scenario (id `run-<scenario>`, no publish): the Overview's tests use this. */
+export function engineRun(s: Scenario, over: Partial<StoredSeoRun> = {}): StoredSeoRun {
+  const results = engineResults(s)
+  return {
+    id: `run-${s}`,
+    artistId: 'a1',
+    ranAt: RAN_AT,
+    trigger: 'manual',
+    siteUrl: ORIGIN,
+    results,
+    finishedAt: RAN_AT,
+    passed: results.filter((r) => r.status === 'pass').length,
+    total: results.filter((r) => r.status !== 'na').length,
+    siteFresh: true,
+    publishedAt: null,
+    note: null,
+    ...over,
+  }
+}
+
+/** A PUBLISH run (id `run-1`) around `results`, the needsWork scenario by default. */
 export function fixtureRun(over: Partial<StoredSeoRun> = {}, results?: SeoTestResult[]): StoredSeoRun {
   const rs = results ?? fixtureResults()
   return {

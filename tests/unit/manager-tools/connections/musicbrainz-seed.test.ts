@@ -1,16 +1,24 @@
-// "Create the MusicBrainz page": MusicBrainz's own artist editor, pre-filled from what we already know.
 /**
- * AI_VISIBILITY_AUDIT.md 4.1: Skeen is not in MusicBrainz, the canonical source most cited for
- * musicians. MusicBrainz documents seeding its artist editor with GET parameters
- * (https://wiki.musicbrainz.org/Development/Seeding/Artist_Editor): the name, the type, the
- * area (text for its search box) and external links as `edit-artist.url.N.text` +
- * `edit-artist.url.N.link_type_id`. The artist signs in there and submits it themselves.
+ * The "Create the MusicBrainz page" link opens MusicBrainz's own artist editor pre-filled from
+ * what we know, with every value safely encoded and only links MusicBrainz can label correctly.
  *
- * Strict (AGENTS.md "Test depth": it ends up in a URL): every value is encoded, only https
- * links go in, only a link whose label and URL agree, and only a platform whose MusicBrainz
- * link type was CONFIRMED (the ids below, read off musicbrainz.org/relationship/<uuid> on
- * 2026-09-28, the uuids from musicbrainz-server's URLCleanup.js). A hard-coded witness, not a
- * copy of the code's table.
+ * Code:     src/lib/manager-tools/connections/services/musicbrainz/seed.ts (musicBrainzCreateUrl,
+ *           MB_LINK_TYPE, MB_LINK_TYPE_OF, MB_ARTIST_TYPE)
+ * Feature:  Connections page: MusicBrainz (AI_VISIBILITY_AUDIT.md 4.1: Skeen is not in MusicBrainz,
+ *           the source most cited for musicians); the artist signs in there and submits it
+ * Tier:     STRICT (AGENTS.md "Test depth"): everything here ends up in a URL.
+ * Covers:   • the link opens musicbrainz.org's artist editor over https, with the name
+ *           • every value is encoded: nothing typed can add or change a parameter
+ *           • the type (person 1, group 2) and the area only when known
+ *           • the site goes first as the official homepage, then each profile with its
+ *             MusicBrainz link type; only https links, only when the label and link agree, only
+ *             platforms with a confirmed type, each once, numbered without gaps
+ *           • the link type ids are MusicBrainz's own, and every mapped platform is one the
+ *             bridge knows
+ * Not here: accepting a MusicBrainz artist link as a connection (identity-only.test.ts).
+ * Fixtures: MusicBrainz's documented editor seeding (wiki.musicbrainz.org/Development/Seeding/Artist_Editor);
+ *           the link type ids were read off musicbrainz.org/relationship/<uuid> on 2026-09-28 and
+ *           are written here by hand: a witness, not a copy of the code's table.
  */
 import { describe, expect, it } from 'vitest'
 import { SOCIAL_PLATFORMS } from '@samfox1/site-bridge/social'
@@ -28,12 +36,15 @@ function seededLinks(url: string): [string, string][] {
 const link = (label: string, url: string) => ({ label, url })
 
 describe('the create link', () => {
+  // The link opens MusicBrainz's own artist editor over https, with the artist's name filled in.
   it('CRITICAL: opens MusicBrainz’s own artist editor, over https, with the name in it', () => {
     const url = musicBrainzCreateUrl({ name: 'Skeen' })
     expect(url.startsWith(`${CREATE}?`)).toBe(true)
     expect(params(url).get('edit-artist.name')).toBe('Skeen')
   })
 
+  // Every value is encoded: an &, =, # or a fake parameter in a name or area stays text and
+  // cannot add or change a parameter.
   it('CRITICAL: every value is encoded — nothing typed can add or change a parameter', () => {
     const name = 'A&B=C #1 ?edit-artist.type_id=2 Beyoncé'
     const url = musicBrainzCreateUrl({ name, area: 'Chicago, IL & more' })
@@ -44,6 +55,7 @@ describe('the create link', () => {
     expect([...params(url).keys()]).toEqual(['edit-artist.name', 'edit-artist.area.name'])
   })
 
+  // The artist type is sent only when known (a person is 1, a group 2); unknown is left to the artist.
   it('the type only when we know it: a person is 1, a group 2; unknown is left to the artist', () => {
     expect(params(musicBrainzCreateUrl({ name: 'S', type: 'person' })).get('edit-artist.type_id')).toBe('1')
     expect(params(musicBrainzCreateUrl({ name: 'S', type: 'group' })).get('edit-artist.type_id')).toBe('2')
@@ -51,17 +63,21 @@ describe('the create link', () => {
     expect(MB_ARTIST_TYPE).toEqual({ person: 1, group: 2 })
   })
 
+  // The area is sent trimmed when there is one; blank or missing sends nothing.
   it('the area from the facts when there is one; blank or missing sends nothing', () => {
     expect(params(musicBrainzCreateUrl({ name: 'S', area: '  Chicago  ' })).get('edit-artist.area.name')).toBe('Chicago')
     for (const area of [null, undefined, '', '   ']) expect(params(musicBrainzCreateUrl({ name: 'S', area })).has('edit-artist.area.name')).toBe(false)
   })
 
+  // A blank name sends no name, so the artist types it there.
   it('a blank name sends no name (the artist types it there)', () => {
     expect(params(musicBrainzCreateUrl({ name: '   ' })).has('edit-artist.name')).toBe(false)
   })
 })
 
 describe('the external links', () => {
+  // The site goes first as the official homepage, then every profile with its own MusicBrainz
+  // link type, in order.
   it('CRITICAL: the site first as the official homepage, then each profile with its MusicBrainz link type', () => {
     const url = musicBrainzCreateUrl({
       name: 'Skeen',
@@ -102,6 +118,8 @@ describe('the external links', () => {
     ])
   })
 
+  // Only https links, only when the label and the link agree, only platforms with a confirmed
+  // type (not payment pages), each once, numbered without gaps.
   it('CRITICAL: only https links, only when the label and the link agree, only a platform with a confirmed type — numbered without gaps', () => {
     const url = musicBrainzCreateUrl({
       name: 'Skeen',
@@ -123,6 +141,7 @@ describe('the external links', () => {
     expect(params(url).has('edit-artist.url.1.text')).toBe(false)
   })
 
+  // A homepage that is not an https web link is left out.
   it('a homepage that is not a web link is left out', () => {
     for (const homepage of ['javascript:alert(1)', 'ftp://skeenmusic.com', 'skeenmusic.com', ''])
       expect(seededLinks(musicBrainzCreateUrl({ name: 'S', homepage })), homepage).toEqual([])
@@ -130,6 +149,7 @@ describe('the external links', () => {
 })
 
 describe('the link types are MusicBrainz’s own', () => {
+  // The link type ids are the ones confirmed on musicbrainz.org, written here by hand.
   it('CRITICAL: the ids confirmed on musicbrainz.org (2026-09-28)', () => {
     expect(MB_LINK_TYPE).toEqual({
       officialHomepage: 183,
@@ -150,6 +170,7 @@ describe('the link types are MusicBrainz’s own', () => {
     })
   })
 
+  // Every platform it maps is one the bridge knows, onto one of those confirmed ids.
   it('every platform it maps is one the bridge knows, onto a confirmed id', () => {
     const slugs = SOCIAL_PLATFORMS.map((p) => p.slug)
     const ids = Object.values(MB_LINK_TYPE)

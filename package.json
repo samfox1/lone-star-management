@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:nodb": "vitest run --config vitest.mutation.config.ts",
+    "test:catalog": "tsx scripts/test-catalog.ts",
     "mutation": "stryker run",
     "db:push": "supabase db push",
     "fn:serve": "supabase functions serve --env-file supabase/functions/.env.local",

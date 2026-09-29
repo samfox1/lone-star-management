@@ -1,28 +1,40 @@
-// A Shopify row can only read, renew or delete the Vault secret bound to its own artist.
 /**
- * PENDING MIGRATION: supabase/migrations/20260929150000_shopify_secret_binding.sql (written
- * 2026-09-29, NOT pushed). Until it is pushed this whole file SKIPS itself. The probe asks the
- * one thing the migration changes for everybody: may a signed-in manager UPDATE integrations
- * at all? Before it, an update matching no row succeeds silently (error null) and the file
- * skips; after it, Postgres refuses the statement (42501) whatever it matches, and the file
- * runs. Any OTHER answer (a network failure) also runs the file, so it fails loudly instead of
- * skipping quietly.
+ * A Shopify connection can only read, renew or delete the stored store token (in Vault) that
+ * belongs to its own artist, even if its pointer is aimed at another artist's.
  *
- * THE HOLE (security review 2026-09-29). `integrations_rw` is FOR ALL to a manager and stock
- * Supabase grants `authenticated` UPDATE, so a manager could repoint their own row's
- * `secret_ref` at another artist's Vault secret; `shopify_credentials` then DECRYPTED it,
- * `connect_shopify` OVERWROTE it and `disconnect_shopify` DELETED it. The migration closes it
- * twice: managers only READ integrations, and every Shopify door checks the secret is bound to
- * its artist (a row in `shopify_secret_bindings`, outside the secret). The binding tests plant a
- * repoint with the SERVICE role (the only writer left), to prove the second layer on its own.
+ * Code:     supabase/migrations/20260929150000_shopify_secret_binding.sql (integrations grants,
+ *           shopify_secret_bindings, shopify_credentials, shopify_store_for_slug, connect_shopify,
+ *           disconnect_shopify, bind_legacy_shopify_secrets)
+ * Feature:  Merch / Shopify: the stored store token behind the shop on an artist's site
+ * Tier:     STRICT (AGENTS.md "Test depth"): security and money. A manager could aim their own
+ *           row's pointer at another artist's secret; the doors then DECRYPTED, OVERWROTE or
+ *           DELETED it (security review 2026-09-29).
+ * Covers:   • layer 1: a manager cannot repoint, rewrite, insert or delete integrations rows, nor
+ *             touch the bindings table or run the backfill; they can still read their own row
+ *           • layer 2: every door checks the binding, so a pointer at another artist's secret
+ *             (planted by the service role) reads nothing, Remove leaves that secret alone, and
+ *             Connect makes a fresh secret instead of overwriting it
+ *           • a Shopify row pointed at an Eventbrite secret reads nothing (the doors do not cross)
+ *           • the one-time backfill binds a secret only when exactly one Shopify row points at
+ *             it, however that pointer is spelled, and never binds an Eventbrite secret
+ * Not here: the Eventbrite sign-in's own storage (tests/integration/sync/eventbrite-vault.test.ts);
+ *           Shopify connect in the dashboard (tests/integration/sync/integrations.test.ts).
+ * Fixtures: TALKS TO THE HOSTED DATABASE. Two throwaway artists (AGENTS.md rule 6), never Skeen;
+ *           every Vault secret a test creates is destroyed through `disconnect_shopify` before its
+ *           artist is dropped, or the cascade would orphan the encrypted token. Repoints are
+ *           planted with the service role, the only writer left.
  *
- * THE BACKFILL (`bind_legacy_shopify_secrets`) runs once at push, on real tokens, and cannot be
- * re-run by hand safely, so it is a function and these tests run it again on throwaway artists:
- * a secret whose binding row is deleted is exactly what an old connect_shopify left behind.
+ * PENDING MIGRATION: 20260929150000 was written 2026-09-29 and is NOT pushed. Until it is, this
+ * whole file SKIPS itself. The probe asks the one thing the migration changes for everybody: may
+ * a signed-in manager UPDATE integrations at all? Before it, an update matching no row succeeds
+ * silently (error null) and the file skips; after it, Postgres refuses the statement (42501)
+ * whatever it matches, and the file runs. Any other answer (a network failure) also runs the
+ * file, so it fails loudly instead of skipping quietly. The two Eventbrite cases also wait for
+ * 20260929120500 (EVENTBRITE_PENDING).
  *
- * Throwaway artists only (AGENTS.md rule 6), never Skeen. Every Vault secret a test creates is
- * destroyed through `disconnect_shopify` before its artist is dropped: the cascade would
- * otherwise orphan the encrypted token in `vault.secrets`.
+ * The backfill runs once at push, on real tokens, and cannot safely be re-run by hand, so it is a
+ * function and these tests run it again on throwaway artists: a secret whose binding row is
+ * deleted is exactly what an old connect_shopify left behind.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -115,6 +127,8 @@ describe.skipIf(PENDING)(
       await deleteThrowawayArtist(svc, b)
     })
 
+    // Witness: before anything is tampered with, each owner reads their own token and the live
+    // shop reads A's, so every "reads nothing" below means the guard, not a broken setup.
     it('witness: each owner reads their own token, and the live lane reads A’s', async () => {
       expect((await creds(asA, a.id)).data).toEqual([{ store_domain: DOMAIN_A, token: TOKEN_A }])
       expect((await creds(asB, b.id)).data).toEqual([{ store_domain: DOMAIN_B, token: TOKEN_B }])
@@ -122,6 +136,8 @@ describe.skipIf(PENDING)(
     })
 
     describe('layer 1: only the definer functions write the pointer', () => {
+      // The hole itself: a manager aiming their own row's pointer at another artist's secret is
+      // refused, and the row and its token are unchanged.
       it('CRITICAL: a manager cannot repoint their OWN row at another artist’s secret (42501), and nothing changes', async () => {
         const before = await row(a.id)
         const bRef = (await row(b.id))!.secret_ref
@@ -132,6 +148,7 @@ describe.skipIf(PENDING)(
         expect((await creds(asA, a.id)).data).toEqual([{ store_domain: DOMAIN_A, token: TOKEN_A }])
       })
 
+      // Nor can they change the store domain directly, skipping connect_shopify's check.
       it('CRITICAL: nor rewrite the store domain around connect_shopify’s check', async () => {
         const before = await row(a.id)
         const { error } = await asA.from('integrations').update({ metadata: { store_domain: 'evil.example.com' } }).eq('artist_id', a.id).eq('provider', 'shopify')
@@ -139,6 +156,7 @@ describe.skipIf(PENDING)(
         expect(await row(a.id)).toEqual(before)
       })
 
+      // Nor add a second row of their own that names someone else's secret.
       it('CRITICAL: nor insert a row of their own that names someone else’s secret', async () => {
         const bRef = (await row(b.id))!.secret_ref
         const { error } = await asA.from('integrations').insert({ artist_id: a.id, provider: 'shopify-forged', secret_ref: bRef })
@@ -146,6 +164,7 @@ describe.skipIf(PENDING)(
         expect(await row(a.id, 'shopify-forged')).toBeNull()
       })
 
+      // Nor delete their own row directly: the encrypted token would be left behind in Vault.
       it('CRITICAL: nor delete their own row (which would orphan the token in Vault)', async () => {
         const before = await row(a.id)
         expect(before).not.toBeNull()
@@ -154,6 +173,7 @@ describe.skipIf(PENDING)(
         expect(await row(a.id)).toEqual(before)
       })
 
+      // The bindings table (which artist owns which secret) is out of a manager's reach both ways.
       it('CRITICAL: nor read or write the bindings table', async () => {
         const read = await asA.from('shopify_secret_bindings').select('secret_id')
         expectRlsDenied(read.error, 'manager reading shopify_secret_bindings')
@@ -163,10 +183,12 @@ describe.skipIf(PENDING)(
         expect(await bindingOf(bRef)).toBe(b.id)
       })
 
+      // Only the push runs the backfill; a manager cannot.
       it('CRITICAL: nor run the backfill', async () => {
         expectExecuteDenied((await asA.rpc('bind_legacy_shopify_secrets')).error, 'bind_legacy_shopify_secrets')
       })
 
+      // Reading their own row still works: the dashboard shows the store domain from it.
       it('the manager can still read their own row (the dashboard does)', async () => {
         const { data, error } = await asA.from('integrations').select('metadata').eq('artist_id', a.id).eq('provider', 'shopify').maybeSingle()
         expect(error).toBeNull()
@@ -175,6 +197,7 @@ describe.skipIf(PENDING)(
     })
 
     describe('layer 2: every door checks the binding (a repoint planted by the service role)', () => {
+      // A's row aimed at B's secret reads nothing, through the manager's door or the live shop's.
       it('CRITICAL: a row pointed at another artist’s secret reads nothing, through either door', async () => {
         const aRef = (await row(a.id))!.secret_ref
         const bRef = (await row(b.id))!.secret_ref
@@ -188,6 +211,7 @@ describe.skipIf(PENDING)(
         expect((await creds(asA, a.id)).data).toEqual([{ store_domain: DOMAIN_A, token: TOKEN_A }])
       })
 
+      // Remove through a pointer at B's secret deletes A's row only; B's token still reads.
       it('CRITICAL: Remove through it deletes A’s row but leaves B’s secret alone', async () => {
         const aRef = (await row(a.id))!.secret_ref
         const bRef = (await row(b.id))!.secret_ref
@@ -201,6 +225,7 @@ describe.skipIf(PENDING)(
         expect((await creds(asA, a.id)).data).toEqual([{ store_domain: DOMAIN_A, token: TOKEN_A }])
       })
 
+      // Connect through a pointer at B's secret never overwrites B's token; A gets a new secret.
       it('CRITICAL: Connect through it never overwrites B’s token; A gets a fresh secret of its own', async () => {
         const aRef = (await row(a.id))!.secret_ref
         const bRef = (await row(b.id))!.secret_ref
@@ -220,6 +245,7 @@ describe.skipIf(PENDING)(
         expect((await creds(asA, a.id)).data).toEqual([{ store_domain: DOMAIN_A, token: TOKEN_A }])
       })
 
+      // A Shopify row aimed at an Eventbrite sign-in reads nothing: each door reads only its own kind.
       it.skipIf(EVENTBRITE_PENDING)('CRITICAL: a Shopify row pointed at an EVENTBRITE secret reads nothing (the doors do not cross)', async () => {
         const { error: ebErr } = await asB.rpc('connect_eventbrite', { p_artist_id: b.id, p_organization_id: '901', p_organizer_id: '902', p_token: EB_TOKEN_B })
         expect(ebErr).toBeNull()
@@ -237,6 +263,7 @@ describe.skipIf(PENDING)(
     })
 
     describe('the backfill (bind_legacy_shopify_secrets): one pointer, one owner, or nobody', () => {
+      // Witness: a secret with no binding row reads nothing, so the binding really is the gate.
       it('witness: an unbound secret reads nothing, so the binding really is the gate', async () => {
         const ref = await unbindA()
         try {
@@ -247,6 +274,8 @@ describe.skipIf(PENDING)(
         }
       })
 
+      // The normal legacy case: one Shopify row points at the secret, so it is bound to that
+      // artist and reads again; a second run binds nothing more.
       it('CRITICAL: a secret only its own Shopify row points at is bound to that artist, and reads again', async () => {
         const ref = await unbindA()
         expect(await backfill()).toBeGreaterThanOrEqual(1)
@@ -260,7 +289,9 @@ describe.skipIf(PENDING)(
         ['braces', (u: string) => `{${u}}`],
         ['no hyphens', (u: string) => u.replace(/-/g, '')],
       ] as const) {
-        it(`CRITICAL (F1): a second row reaching the same secret in ${label} blocks the binding; neither row reads it`, async () => {
+        // Two rows reaching one secret (the second spelling it differently) means the owner is
+        // unclear, so nobody is bound and neither row reads it (security review F1).
+        it(`CRITICAL: a second row reaching the same secret in ${label} blocks the binding; neither row reads it`, async () => {
           const ref = await unbindA()
           const bRef = (await row(b.id))!.secret_ref
           // The old hole, used before the push: B's row names A's secret, spelled differently.
@@ -279,6 +310,7 @@ describe.skipIf(PENDING)(
         })
       }
 
+      // An Eventbrite sign-in is never bound to a Shopify row, even when that row is its only pointer.
       it.skipIf(EVENTBRITE_PENDING)('CRITICAL: a described secret (an Eventbrite sign-in) is never bound to a Shopify row, even as its only pointer', async () => {
         const { error: ebErr } = await asB.rpc('connect_eventbrite', { p_artist_id: b.id, p_organization_id: '911', p_organizer_id: '912', p_token: EB_TOKEN_B })
         expect(ebErr).toBeNull()

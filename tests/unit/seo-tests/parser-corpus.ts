@@ -1,9 +1,23 @@
 /**
- * Malformed-but-small inputs for the page and sitemap readers, with the answers the OLD
- * regex readers gave (recorded 2026-09-29, before the linear rewrite). The rewrite must give
- * the same answers: this is the "keep behaviour" half of tests/unit/seo-tests/hostile-input.test.ts.
- * Recorded output, not a hand-copy of the implementation: regenerate only on purpose. The one
- * deliberate difference is marked where it sits.
+ * Small malformed pages and sitemaps, with the answers the OLD regex readers gave, so the
+ * faster readers can be held to reading them exactly the same.
+ *
+ * Code:     support file (not a test): feeds tests/unit/safe-fetching/slow-parsers.test.ts,
+ *           which reads these with src/lib/seo-tests/html.ts (`parsePage`) and fresh.ts
+ *           (`sitemapLastmods`)
+ * Feature:  the page and sitemap readers every SEO test stands on
+ * Tier:     STRICT (AGENTS.md "Test depth"): the readers are parsers of untrusted html; this is
+ *           the "keep behaviour" half of their rewrite for speed.
+ * What it provides:
+ *           • PAGES: 30 small broken pages (unclosed tags and quotes, tags in scripts and
+ *             comments, odd spacing and capitals, entities)
+ *           • SITEMAPS: 10 small broken sitemaps (spaces, unclosed tags, CDATA, capitals)
+ *           • RECORDED: what the old regex readers returned for each, recorded 2026-09-29
+ *             before the linear rewrite
+ * Not here: the timed worst-case inputs (tests/unit/safe-fetching/slow-parsers.test.ts builds
+ *           them at full size); normal page reading (page-reading/html.test.ts).
+ * Fixtures: recorded output, not a hand-copy of the implementation: regenerate only on
+ *           purpose. The one deliberate difference is marked where it sits.
  */
 export const PAGES: string[] = [
   '<p>one <a href="x two <b>three</b></p>',

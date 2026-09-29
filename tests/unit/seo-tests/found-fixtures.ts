@@ -1,11 +1,26 @@
 /**
- * Evidence fixtures for the "Can be found" tests: a healthy two-page site, and the pieces to
- * break it with. The html is what real sites and real firewalls serve (a Next.js 404, a
- * Cloudflare "Just a moment..." page, a Squarespace-style password page), not what the code
- * under test looks for.
+ * The pretend site every "Can be found" test file reads: a healthy two-page artist site, and the
+ * real-world pages to break it with.
+ *
+ * Code:     src/lib/seo-tests/found.ts (what these fixtures are fed to)
+ * Feature:  the ten "Can be found" tests, Test tab group "Can be found"
+ * Tier:     STRICT support file (AGENTS.md "Test depth"): the tests it feeds decide what a
+ *           manager is told about the live site.
+ * What it provides:
+ *           • `evidence(f)`: one run's evidence for the site at www.example.com (home + /about),
+ *             with any visit, the robots.txt answer, the sitemap, Tapir's data or Bing's file swapped
+ *           • the artist Tapir knows (Skeen: bio, two releases, one upcoming and one past show)
+ *           • pages copied from what real sites and firewalls serve: a Cloudflare challenge, block
+ *             page and "Access denied" page, a Next.js 404 served as 200, a page empty until its
+ *             scripts run, a password page
+ *           • `run(id, f)` and `details(r)`: run one test on a fixture; its "Show the details" rows as text
+ * Not here: fetching a real site (tests/unit/seo-tests/fake-site.ts fakes the web for evidence.ts).
+ * Fixtures: the html is what real sites and real firewalls serve, not what the code under test
+ *           looks for, so a test cannot pass by matching its own fixture.
  */
 import { FETCHING_BOTS } from '@/lib/seo-tests/bots'
-import type { SeoEvidence, SeoKnown, SeoPageFetch } from '@/lib/seo-tests/types'
+import { FOUND_TESTS } from '@/lib/seo-tests/found'
+import type { SeoEvidence, SeoKnown, SeoPageFetch, SeoTestResult } from '@/lib/seo-tests/types'
 
 export const O = 'https://www.example.com'
 export const AT = '2026-09-28T12:00:00.000Z'
@@ -49,8 +64,6 @@ export const SOFT_404 = doc('404: This page could not be found.', '<div style="f
 export const EMPTY_SHELL = doc('Skeen', '<div id="root"></div><script type="module" src="/assets/index-4f1c.js"></script>')
 /** A password page. */
 export const LOGIN = doc('Skeen — Password', '<main><h1>This site is private</h1><form method="post"><label>Password <input type="password" name="password"></label><button>Enter</button></form></main>')
-/** A different page altogether (what a bot wall or cloaking hands a bot). */
-export const OTHER_PAGE = doc('Welcome', '<main><h1>Welcome, crawler</h1><p>Our partner program offers structured data licensing for machine learning companies. Contact sales for a quote and terms of access.</p></main>')
 
 export function fetched(path: string, html: string | null, over: Partial<SeoPageFetch> = {}): SeoPageFetch {
   return { path, finalUrl: `${O}${path}`, status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, html, ...over }
@@ -127,3 +140,12 @@ export function evidence(f: Fixture = {}): SeoEvidence {
     bing: f.bing ?? { siteAuth: { status: 404, hasUser: false } },
   }
 }
+
+/** The ten test ids of the group, as the code names them. */
+export type FoundId = keyof typeof FOUND_TESTS
+
+/** Run one "Can be found" test on a fixture site. */
+export const run = (id: FoundId, f?: Fixture): SeoTestResult => FOUND_TESTS[id](evidence(f))
+
+/** A result's "Show the details" rows, one "label: value" per line. */
+export const details = (r: SeoTestResult) => r.evidence.map((x) => `${x.label}: ${x.value}`).join('\n')

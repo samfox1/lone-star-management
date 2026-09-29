@@ -1,14 +1,22 @@
-// The Connections page tells the list ONE thing about the Eventbrite app — whether it is set up —
-//   reads whether a sign-in is stored (never the token), and turns the callback's code into words.
 /**
- * `page.tsx` is where the server-only credentials meet the browser, so this pins the seam:
+ * The Connections page tells the browser only whether the Eventbrite app is set up and whether a
+ * sign-in is stored (never the credentials or the token), and turns the sign-in's return code
+ * into words.
  *
- *   - `eventbriteApp` follows EVENTBRITE_CLIENT_ID + EVENTBRITE_CLIENT_SECRET (both set → true,
- *     either blank → false: the button is hidden), and neither value is in anything handed to
- *     the client;
- *   - a stored sign-in makes the Eventbrite row a synced source; with the app off and nothing
- *     stored, a pasted Eventbrite link is a plain social (no Sync chip that cannot work);
- *   - `?eventbrite=…&reason=…` becomes the notice's words, chosen here from the code.
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/connections/page.tsx (with
+ *           shopify-return.tsx's EventbriteReturnNotice)
+ * Feature:  Connections page: Connect with Eventbrite
+ * Tier:     STRICT (AGENTS.md "Test depth"): security. page.tsx is where the server-only
+ *           credentials meet the browser.
+ * Covers:   • `eventbriteApp` is true only with both credentials set, and neither credential is in
+ *             anything handed to the browser
+ *           • a stored sign-in makes the Eventbrite row a synced source; with the app on and
+ *             nothing stored it offers Sync; with the app off it is a plain link
+ *           • `?eventbrite=…&reason=…` becomes the notice above the list; no code, no notice
+ * Not here: the buttons themselves (tests/components/manager-tools/connections/eventbrite-connect.test.tsx);
+ *           the words for each code (eventbrite-oauth.test.ts).
+ * Fixtures: the page's data loaders and the database client are mocked; the page is rendered as
+ *           a server component and its children's props are read.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
@@ -59,6 +67,8 @@ async function renderPage(query: Record<string, string> = {}) {
 }
 
 describe('the Connections page and the Eventbrite app', () => {
+  // Both credentials set: the list is told "on", and neither credential appears in any prop sent
+  // to the browser.
   it('CRITICAL: both credentials set → eventbriteApp, and neither credential is in any prop', async () => {
     const { list, kids } = await renderPage({ eventbrite: 'connected' })
     expect(list.props.eventbriteApp).toBe(true)
@@ -67,6 +77,7 @@ describe('the Connections page and the Eventbrite app', () => {
     expect(shipped).not.toContain('EB-KEY-not-for-the-browser')
   })
 
+  // Either credential blank: the list is told "off", so the button is hidden.
   it('CRITICAL: either one blank → the button is hidden', async () => {
     expect((await renderPage()).list.props.eventbriteApp).toBe(true) // witness
     process.env.EVENTBRITE_CLIENT_SECRET = ''
@@ -76,6 +87,8 @@ describe('the Connections page and the Eventbrite app', () => {
     expect((await renderPage()).list.props.eventbriteApp).toBe(false)
   })
 
+  // A stored sign-in makes the row synced; not stored, it offers Sync when the app is on and
+  // is a plain link when it is off (no Sync chip that cannot work).
   it('CRITICAL: a stored sign-in is a synced source; not stored → "Sync" when the app is on, a plain social when off', async () => {
     data.stored = true
     expect((await renderPage()).eb?.state).toBe('synced')
@@ -85,6 +98,7 @@ describe('the Connections page and the Eventbrite app', () => {
     expect((await renderPage()).eb?.state).toBe('none')
   })
 
+  // Back from Eventbrite, the code becomes the notice above the list; without a code there is none.
   it('back from Eventbrite: the code becomes words above the list; no code, no line', async () => {
     expect((await renderPage({ eventbrite: 'connected' })).notice?.props).toEqual({ kind: 'success', message: 'Eventbrite connected.' })
     const several = await renderPage({ eventbrite: 'failed', reason: 'several' })

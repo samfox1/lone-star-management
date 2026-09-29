@@ -1,16 +1,23 @@
 // @vitest-environment jsdom
-// Connect with YouTube: when the Google app is set up, the YouTube row offers a sign-in
-//   button above the paste field; when it is not, the row is the paste field alone.
 /**
- * Sam, 2026-09-28. The page passes ONE server-made boolean, `youtubeApp` — never the client
- * id or the secret. What has to hold:
+ * When the Google app is set up, the YouTube row offers a "Connect with YouTube" sign-in button
+ * above the paste field; when it is not, the row is the paste field alone.
  *
- *   - configured: a "Connect with YouTube" LINK to our start route, carrying the artist (and
- *     `sync=0` when Sync is off), above the paste field, which stays as the fallback;
- *   - the trip to Google never runs `connectOneAction` here — the callback does the save;
- *   - with other picks, leaving for Google never strands a pick nobody ran: Connect runs them
- *     first, a blank YouTube row waits, and the button shows once they have run;
- *   - not configured: no button anywhere.
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/connections/connect-modal.tsx,
+ *           connection-list.tsx
+ * Feature:  Connections page: Connect with YouTube (Sam, 2026-09-28)
+ * Tier:     LIGHT (AGENTS.md "Test depth"): UI still being designed. The main path works and the
+ *           rules that matter hold, not every label or layout detail.
+ * Covers:   • set up: the button links to our start route with the artist (and `sync=0` when
+ *             Sync is off), above the paste field that stays; clicking it never saves here
+ *           • the paste field still connects a handle the old way
+ *           • with other picks, leaving for Google never strands them: Connect runs them first,
+ *             a blank YouTube row waits, then the button shows
+ *           • not set up: no button, the paste field alone
+ * Not here: what the start route does (tests/unit/manager-tools/connections/youtube-oauth-routes.test.ts);
+ *           how the page decides "set up" (connections-page-youtube.test.ts in that folder).
+ * Fixtures: rendered in jsdom with Testing Library; the Connections actions, the dashboard
+ *           actions, the router and the toast are mocks.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -64,6 +71,8 @@ function pick(dialog: HTMLElement, ...names: string[]) {
 }
 
 describe('the YouTube row', () => {
+  // Set up: the button goes to our start route above the paste field, carries Sync off when it
+  // is unticked, is a real link the browser follows, and saves nothing here.
   it('CRITICAL: configured — Connect with YouTube goes to the start route, above the paste field that stays', () => {
     const dialog = openConnect(true)
     pick(dialog, 'YouTube')
@@ -79,6 +88,7 @@ describe('the YouTube row', () => {
     expect(connectOneAction).not.toHaveBeenCalled()
   })
 
+  // The paste field still connects a handle the old way.
   it('the paste fallback still connects the old way', async () => {
     const dialog = openConnect(true)
     pick(dialog, 'YouTube')
@@ -87,6 +97,7 @@ describe('the YouTube row', () => {
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledWith('a1', 'youtube', { handle: 'skeenmusic', sync: true }))
   })
 
+  // Not set up: no button, just the paste field.
   it('CRITICAL: not configured — no button, just the paste field', () => {
     const dialog = openConnect()
     pick(dialog, 'YouTube')
@@ -94,6 +105,8 @@ describe('the YouTube row', () => {
     expect(within(dialog).queryByRole('link', { name: 'Connect with YouTube' })).toBeNull()
   })
 
+  // With other services picked too, Connect runs them first; the blank YouTube row waits (not
+  // refused), and only then does the button show, so leaving for Google strands nothing.
   it('CRITICAL: with other picks, Connect runs THEM, a blank YouTube waits, then the button shows', async () => {
     const dialog = openConnect(true)
     pick(dialog, 'Bandsintown', 'YouTube')
@@ -111,6 +124,7 @@ describe('the YouTube row', () => {
     expect(dialog).not.toHaveTextContent(/didn’t|Enter the YouTube handle/)
   })
 
+  // The list passes "set up" on to the Connect window it opens.
   it('the list hands the flag to the Connect window', () => {
     render(<ConnectionList artistId="a1" rows={[]} youtubeApp />)
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))

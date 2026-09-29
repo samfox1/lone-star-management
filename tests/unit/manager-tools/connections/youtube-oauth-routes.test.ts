@@ -1,22 +1,26 @@
-// Connect with YouTube, the two routes: start sends a manager to Google, the callback saves
-//   the channel only when every check passes, through the same door a pasted link uses.
 /**
- * /api/youtube/start and /api/youtube/callback (Sam, 2026-09-28). The pure rules are pinned
- * in youtube-oauth.test.ts; what only the routes can get wrong is the ORDER and the
- * consequences:
+ * The two Connect with YouTube routes: start sends only this artist's manager to Google, and the
+ * callback saves the channel, the way a pasted link would, only when every check passes; the
+ * Google token is used for one read, revoked, and kept nowhere.
  *
- *   - start: only a signed-in manager of THIS artist is sent to Google, with a signed,
- *     HttpOnly state cookie scoped to the callback; only https or http://localhost;
- *   - callback: a bad state, another manager, a non-owner, or "cancel" at Google saves
- *     NOTHING and asks Google for NOTHING. Every refusal first runs the untouched trip and
- *     sees it save (the planted witness), so a refusal can never pass because the save path
- *     was broken all along;
- *   - the happy path saves through `connectOneAction(artist, 'youtube', …)` — the paste
- *     path — with the channel Google named;
- *   - the access token is used for ONE read, then revoked: it is never in a cookie, the
- *     save, the redirect, or a log line.
- *
- * Supabase and the connect action are faked; Google is a stubbed global fetch.
+ * Code:     src/app/api/youtube/start/route.ts, src/app/api/youtube/callback/route.ts
+ * Feature:  Connections page: Connect with YouTube (Sam, 2026-09-28)
+ * Tier:     STRICT (AGENTS.md "Test depth"): security. A sign-in return decides whose channel
+ *           lands on which artist's site.
+ * Covers:   • start: only a signed-in manager of THIS artist is sent to Google, with a signed,
+ *             HttpOnly state cookie for the callback only; only https or http://localhost
+ *           • callback refusals (wrong trip, late, another manager, signed out, a non-owner, an
+ *             edited or missing cookie, plain http, Cancel at Google) save NOTHING and ask
+ *             Google for nothing; each first runs the untouched trip and sees it save
+ *           • the happy path saves through connectOneAction (the paste path) with the channel
+ *             Google named; the token reads the channel once, is revoked before the save, and
+ *             is never in a cookie, the save, the redirect or a log line
+ *           • Google saying no partway (code refused, scope missing, no channel, read failed)
+ *             saves nothing and still revokes; a refused or thrown save is a clear failure code
+ * Not here: the rules these routes call (youtube-oauth.test.ts); what the save does with the
+ *           channel (connections-actions.test.ts).
+ * Fixtures: Supabase is faked (sign-in and ownership); the paste door is a mock; Google is a
+ *           stubbed global fetch; console output is captured to prove the token is never logged.
  */
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -116,6 +120,8 @@ async function startGoesToGoogle(query: Record<string, string> = { artist: ARTIS
 }
 
 describe('start', () => {
+  // An owner is sent to Google's sign-in with our client id and an S256 challenge (no secret),
+  // and gets a signed, HttpOnly, Secure, short-lived cookie only the callback can see.
   it('CRITICAL: an owner is sent to Google’s sign-in, with a signed state cookie for the callback only', async () => {
     const res = await start(startReq({ artist: ARTIST }))
     expect([302, 303, 307]).toContain(res.status)
@@ -142,17 +148,20 @@ describe('start', () => {
     expect(to.searchParams.get('code_challenge')).toBe(createHash('sha256').update(read.state.verifier).digest('base64url'))
   })
 
+  // Turning Sync off travels inside the signed cookie.
   it('Sync off travels in the signed state', async () => {
     const res = await start(startReq({ artist: ARTIST, sync: '0' }))
     expect(readState(res.cookies.get(STATE_COOKIE)!.value, SECRET)).toMatchObject({ ok: true, state: { sync: false } })
   })
 
+  // Development on http://localhost works, and its cookie is not marked Secure (it could not be set).
   it('http://localhost is allowed (dev), and its cookie is not Secure', async () => {
     const res = await start(startReq({ artist: ARTIST }, 'http://localhost:3000'))
     expect(new URL(location(res)).searchParams.get('redirect_uri')).toBe('http://localhost:3000/api/youtube/callback')
     expect(setCookie(res)).not.toMatch(/Secure/i)
   })
 
+  // Any other plain-http address is never sent to Google, and gets no cookie.
   it('CRITICAL: any other http origin is never sent to Google', async () => {
     await startGoesToGoogle()
     const res = await start(startReq({ artist: ARTIST }, 'http://app.test'))
@@ -160,6 +169,7 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // Nobody signed in goes to the login page, not to Google.
   it('CRITICAL: nobody signed in goes to /login, not to Google', async () => {
     await startGoesToGoogle()
     w.user = null
@@ -168,6 +178,7 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // A manager of another artist gets "not found" and no cookie.
   it('CRITICAL: a manager of another artist gets a 404 and no cookie', async () => {
     await startGoesToGoogle()
     w.owns = false
@@ -177,12 +188,14 @@ describe('start', () => {
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
   })
 
+  // An artist id that is not an id (or none) is "not found".
   it('an artist id that is not an id is a 404', async () => {
     await startGoesToGoogle()
     expect((await start(startReq({ artist: '../../admin' }))).status).toBe(404)
     expect((await start(startReq({}))).status).toBe(404)
   })
 
+  // Without the app's credentials it goes back to the Connections page with a "not set up" code.
   it('without the two credentials, it goes back and says so', async () => {
     await startGoesToGoogle()
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = ''
@@ -231,6 +244,8 @@ function expectTokenNowhere(res: Response) {
 }
 
 describe('callback — the happy path', () => {
+  // The happy path saves the channel Google named through the paste path and goes back saying
+  // so; the code is traded with this trip's verifier, at this address.
   it('CRITICAL: saves the channel through the paste path, and goes back saying so', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -250,6 +265,7 @@ describe('callback — the happy path', () => {
     expect(t.challenge).toBe(createHash('sha256').update(body.get('code_verifier')!).digest('base64url'))
   })
 
+  // The token reads the channel once, is revoked before the save, and is kept nowhere.
   it('CRITICAL: the token reads the channel ONCE, is revoked, and is kept nowhere', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -263,6 +279,7 @@ describe('callback — the happy path', () => {
     expectTokenNowhere(res)
   })
 
+  // A revoke Google refuses does not undo the connection.
   it('a failed revoke does not undo the connection', async () => {
     google.revoke = () => new Response('', { status: 400 })
     const t = trip()
@@ -270,6 +287,7 @@ describe('callback — the happy path', () => {
     expect(location(res)).toContain('youtube=connected')
   })
 
+  // The state cookie is spent: cleared on the way out, so the trip cannot be replayed.
   it('CRITICAL: the state cookie is spent — cleared on the way out', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie))
@@ -277,6 +295,7 @@ describe('callback — the happy path', () => {
     expect(setCookie(res)).toMatch(/Max-Age=0/)
   })
 
+  // A channel with no handle saves its channel link, and Sync off is passed on to the save.
   it('a channel with no handle saves its channel link; Sync off is passed on', async () => {
     google.channels = () => json({ items: [{ id: CHANNEL, snippet: { title: 'Skeen' } }] })
     const t = trip({ sync: false })
@@ -284,6 +303,7 @@ describe('callback — the happy path', () => {
     expect(connectOneAction).toHaveBeenCalledWith(ARTIST, 'youtube', { handle: `https://youtube.com/channel/${CHANNEL}`, id: CHANNEL, sync: false })
   })
 
+  // The whole trip works on http://localhost for development.
   it('works on http://localhost (dev)', async () => {
     const t = trip()
     const res = await callback(callbackReq(returnFor(t), t.cookie, 'http://localhost:3000'))
@@ -292,6 +312,7 @@ describe('callback — the happy path', () => {
 })
 
 describe('callback — refusals save nothing and ask Google for nothing', () => {
+  // A return carrying another trip's nonce saves nothing.
   it('CRITICAL: another trip’s nonce (state)', async () => {
     await witnessSaves()
     const mine = trip()
@@ -301,6 +322,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expect(location(res)).toBe(back('state'))
   })
 
+  // A return after the time limit saves nothing.
   it('CRITICAL: a late return (state expired)', async () => {
     await witnessSaves()
     const t = trip({ now: Date.now() - STATE_TTL_MS - 1000 })
@@ -309,24 +331,18 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expect(location(res)).toBe(back('state'))
   })
 
-  it('CRITICAL: finished in another manager’s session', async () => {
+  // A trip finished in another manager's session, or after signing out, saves nothing.
+  it('CRITICAL: finished in another manager’s session, or signed out in between', async () => {
     await witnessSaves()
     const t = trip()
     w.user = { id: 'user-2' }
-    const res = await callback(callbackReq(returnFor(t), t.cookie))
-    expectNothingHappened()
-    expect(location(res)).toBe(back('auth'))
-  })
-
-  it('CRITICAL: signed out in between', async () => {
-    await witnessSaves()
-    const t = trip()
+    expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
     w.user = null
-    const res = await callback(callbackReq(returnFor(t), t.cookie))
+    expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
     expectNothingHappened()
-    expect(location(res)).toBe(back('auth'))
   })
 
+  // A manager who lost the artist during the trip saves nothing.
   it('CRITICAL: a manager who no longer manages the artist', async () => {
     await witnessSaves()
     const t = trip()
@@ -336,6 +352,8 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expect(location(res)).toBe(back('auth'))
   })
 
+  // No cookie, or one edited to name another artist, goes back to the dashboard (not to any
+  // artist's page) and saves nothing.
   it('CRITICAL: no state cookie, or one edited to another artist — back to the dashboard, not to any artist', async () => {
     await witnessSaves()
     const t = trip()
@@ -348,6 +366,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expectNothingHappened()
   })
 
+  // A return over plain http (not localhost) saves nothing.
   it('CRITICAL: an http origin that is not localhost', async () => {
     await witnessSaves()
     const t = trip()
@@ -356,6 +375,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expect(location(res)).toBe('http://app.test/')
   })
 
+  // Pressing Cancel at Google comes back as "cancelled", and no code is exchanged.
   it('CRITICAL: Cancel at Google (error=access_denied) → cancelled; nothing exchanged', async () => {
     await witnessSaves()
     const t = trip()
@@ -364,6 +384,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expect(location(res)).toBe(back('denied'))
   })
 
+  // Any other error from Google, or no code at all, saves nothing.
   it('any other error from Google, or no code at all, saves nothing', async () => {
     await witnessSaves()
     const t = trip()
@@ -375,6 +396,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
     expectNothingHappened()
   })
 
+  // Without the app's credentials nothing can be checked, so it goes back to the dashboard.
   it('without the credentials nothing can be checked: back to the dashboard', async () => {
     await witnessSaves()
     const t = trip()
@@ -386,6 +408,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
 })
 
 describe('callback — Google says no partway', () => {
+  // Google refusing the code: no channel read, nothing saved; the refusal is logged without any secret.
   it('CRITICAL: the code is refused → exchange; no channel read, nothing saved, no token logged', async () => {
     google.token = () => json({ error: 'invalid_grant', error_description: 'Bad Request' }, 400)
     const t = trip()
@@ -398,6 +421,7 @@ describe('callback — Google says no partway', () => {
     expectTokenNowhere(res)
   })
 
+  // The manager did not grant YouTube access: nothing saved, and the token is still revoked.
   it('CRITICAL: the read scope not granted → scope; the token is still revoked, nothing saved', async () => {
     google.token = () => json({ access_token: TOKEN, scope: 'openid' })
     const t = trip()
@@ -409,6 +433,7 @@ describe('callback — Google says no partway', () => {
     expectTokenNowhere(res)
   })
 
+  // No channel on that Google account: nothing saved, token revoked.
   it('CRITICAL: no channel on that Google account → none; revoked, nothing saved', async () => {
     google.channels = () => json({ pageInfo: { totalResults: 0 } })
     const t = trip()
@@ -419,6 +444,7 @@ describe('callback — Google says no partway', () => {
     expectTokenNowhere(res)
   })
 
+  // The channel read fails: nothing saved, token revoked.
   it('the channel read fails → channel; revoked, nothing saved', async () => {
     google.channels = () => json({ error: { code: 500 } }, 500)
     const t = trip()
@@ -429,6 +455,7 @@ describe('callback — Google says no partway', () => {
     expectTokenNowhere(res)
   })
 
+  // A refused save reports "connect"; a saved link whose first video import failed reports "sync".
   it('the save refused → connect; the link saved but the first import failed → sync', async () => {
     vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
     const t = trip()
@@ -438,6 +465,7 @@ describe('callback — Google says no partway', () => {
     expect(location(await callback(callbackReq(returnFor(t2), t2.cookie)))).toBe(back('sync'))
   })
 
+  // A save that throws is reported as a connect failure, not an error page.
   it('a thrown save is a connect failure, not a 500', async () => {
     vi.mocked(connectOneAction).mockRejectedValueOnce(new Error('db down'))
     const t = trip()

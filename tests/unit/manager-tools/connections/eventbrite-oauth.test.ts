@@ -1,18 +1,31 @@
-// Connect with Eventbrite, the pure pieces: the signed state that binds a trip to Eventbrite to
-//   one manager and one artist, PKCE, Eventbrite's link, the code exchange, finding the
-//   artist's organizer page, and the words the Connections page shows on the way back.
 /**
- * Sam, 2026-09-28: a manager clicks "Connect with Eventbrite", signs in, presses Allow, and we
- * find the artist's organizer page and pull their shows. Everything that decides whether a
- * request is TRUSTED is a plain function in `src/lib/eventbrite-oauth.ts`, pinned here with
- * no route, no database and no network (Eventbrite is a mocked fetch):
+ * The pure rules of "Connect with Eventbrite": the signed note that ties a sign-in trip to one
+ * manager and one artist, the links and code exchange with Eventbrite, choosing the artist's
+ * organizer page, and the words shown on the way back.
  *
- *   - the state cookie is signed (domain-separated from YouTube's and Shopify's), carries the
- *     artist + the manager + the PKCE verifier + an optional organizer hint, and expires;
- *   - PKCE is S256, computed here with node's crypto, never with the code under test;
- *   - an Eventbrite refusal never puts the code, the secret or a token in a message;
- *   - the organizer: none → say so; one → it; several → the one the pasted link names, else
- *     the one named like the artist, else ASK (paste the link, press Connect again).
+ * Code:     src/lib/eventbrite-oauth.ts, src/lib/manager-tools/connections/services/eventbrite
+ *           (eventbriteStartPath)
+ * Feature:  Connections page: Connect with Eventbrite (Sam, 2026-09-28: sign in, press Allow, we
+ *           find the organizer page and pull the shows)
+ * Tier:     STRICT (AGENTS.md "Test depth"): security. Everything that decides whether a sign-in
+ *           return is TRUSTED lives here.
+ * Covers:   • the app is "on" only with both credentials set
+ *           • only https, or http on localhost, may start a trip
+ *           • the state cookie is signed (separately from YouTube's and Shopify's), carries the
+ *             artist, the manager, the PKCE verifier and an organizer hint, and expires; an
+ *             edited, foreign, late, malformed or garbage cookie is refused without throwing
+ *           • the return must match the trip's nonce and the signed-in manager, compared in
+ *             constant time
+ *           • PKCE is S256 (checked here with node's crypto, not the code under test); the code
+ *             exchange never puts the code, secret or verifier in an error
+ *           • the organizer: none → say so; one → it; several → the pasted link's, else the one
+ *             named like the artist, else ASK
+ *           • only codes travel back in the URL, and each becomes plain words
+ * Not here: the two routes that use these rules (eventbrite-oauth-routes.test.ts); the stored
+ *           token (tests/integration/sync/eventbrite-vault.test.ts); reading events
+ *           (tests/unit/tour/eventbrite-events.test.ts).
+ * Fixtures: no route, database or network: Eventbrite is a mocked fetch. node:crypto's
+ *           timingSafeEqual is wrapped (still real) to count its calls.
  */
 import { createHash, createHmac } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -66,6 +79,8 @@ const s256 = (verifier: string) => createHash('sha256').update(verifier).digest(
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 describe('the app credentials', () => {
+  // The app counts as set up only when both credentials are present (spaces trimmed); otherwise
+  // the Connect button is hidden.
   it('both set → the config; either blank or missing → off (the button is hidden)', () => {
     expect(eventbriteOAuthConfig({ EVENTBRITE_CLIENT_ID: ' key ', EVENTBRITE_CLIENT_SECRET: ' s ' })).toEqual({ clientId: 'key', clientSecret: 's' })
     expect(eventbriteOAuthConfig({ EVENTBRITE_CLIENT_ID: 'key', EVENTBRITE_CLIENT_SECRET: '' })).toBeNull()
@@ -73,6 +88,8 @@ describe('the app credentials', () => {
     expect(eventbriteOAuthConfig({})).toBeNull()
   })
 
+  // What the pages are told: a stored sign-in is "signed in"; with the app set up and nothing
+  // stored, "not yet"; with the app off and nothing stored, nothing at all.
   it('what the pages pass as the sign-in state: stored → true; else false with the app, absent without', () => {
     const env = { id: process.env.EVENTBRITE_CLIENT_ID, secret: process.env.EVENTBRITE_CLIENT_SECRET }
     try {
@@ -91,6 +108,8 @@ describe('the app credentials', () => {
 })
 
 describe('allowedOrigin — only https, or http on localhost', () => {
+  // A trip may start only over https, or plain http on localhost for development; any other
+  // http (including a look-alike localhost host) is refused.
   it('CRITICAL: https anywhere and http://localhost pass; any other http is refused', () => {
     expect(allowedOrigin(new URL('https://digitaltapir.com/api/eventbrite/start'))).toBe(true)
     expect(allowedOrigin(new URL('http://localhost:3000/api/eventbrite/start'))).toBe(true)
@@ -104,6 +123,8 @@ describe('the state cookie', () => {
   const trip = (over: Partial<{ artistId: string; userId: string; organizer: string | null }> = {}, secret = SECRET, now = T0) =>
     createState({ artistId: ARTIST, userId: USER, organizer: null, ...over }, secret, now)
 
+  // The cookie carries the artist, the manager, the organizer hint, the nonce and the verifier
+  // back intact, and the challenge sent to Eventbrite is S256 of that verifier.
   it('CRITICAL: round-trips the artist, the manager, the organizer hint, the nonce and the verifier', () => {
     const { nonce, challenge, cookie } = trip({ organizer: '12345' })
     expect(nonce).toMatch(/^[0-9a-f]{32}$/)
@@ -114,11 +135,13 @@ describe('the state cookie', () => {
     expect(challenge).toBe(s256(read.state.verifier))
   })
 
+  // An organizer hint that is not digits is dropped rather than carried into the trip.
   it('an organizer hint that is not digits is dropped, never carried', () => {
     const read = readState(trip({ organizer: '12/../x' }).cookie, SECRET, T0)
     expect(read).toMatchObject({ ok: true, state: { organizer: null } })
   })
 
+  // Two trips never share a nonce or a verifier, so one trip's return cannot finish another.
   it('two trips never share a nonce or a verifier', () => {
     const a = readState(trip().cookie, SECRET, T0)
     const b = readState(trip().cookie, SECRET, T0)
@@ -127,6 +150,7 @@ describe('the state cookie', () => {
     expect(a.state.verifier).not.toBe(b.state.verifier)
   })
 
+  // A cookie edited to name another artist or organizer fails its signature.
   it('CRITICAL: a cookie edited to point at another artist (or another organizer) is refused', () => {
     const { cookie } = trip()
     const [body, sig] = cookie.split('.')
@@ -138,12 +162,15 @@ describe('the state cookie', () => {
     }
   })
 
+  // A cookie signed with a different secret is refused.
   it('CRITICAL: a cookie signed with another secret is refused', () => {
     const { cookie } = trip({}, 'another-secret')
     expect(readState(cookie, 'another-secret', T0).ok).toBe(true) // witness
     expect(readState(cookie, SECRET, T0)).toEqual({ ok: false, reason: 'tampered' })
   })
 
+  // A YouTube (or Shopify) cookie signed with the same secret is not an Eventbrite one: the
+  // signature is tied to its purpose, not just to the payload's shape.
   it('CRITICAL: a YouTube state cookie signed with the SAME secret is not an Eventbrite one', () => {
     const youtube = createYouTubeState({ artistId: ARTIST, userId: USER, sync: true }, SECRET, T0)
     expect(readState(youtube.cookie, SECRET, T0)).toEqual({ ok: false, reason: 'tampered' })
@@ -156,12 +183,15 @@ describe('the state cookie', () => {
     }
   })
 
+  // A return after the time limit is refused, but still names its artist so the page can say so.
   it('CRITICAL: a late return is refused, but still names its artist so the page can say so', () => {
     const { cookie } = trip()
     expect(readState(cookie, SECRET, T0 + STATE_TTL_MS - 1).ok).toBe(true)
     expect(readState(cookie, SECRET, T0 + STATE_TTL_MS + 1)).toEqual({ ok: false, reason: 'expired', artistId: ARTIST })
   })
 
+  // A correctly signed cookie with a wrong shape (any field missing, mistyped, or a verifier
+  // outside the PKCE alphabet) is still refused.
   it('CRITICAL: a correctly SIGNED cookie with a wrong shape is still refused (every field, its type, the verifier alphabet)', () => {
     const sign = (payload: unknown) => {
       const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
@@ -185,11 +215,13 @@ describe('the state cookie', () => {
     expect(readState(sign(null), SECRET, T0)).toEqual({ ok: false, reason: 'tampered' })
   })
 
+  // The signature is compared in constant time, so its bytes cannot be guessed by timing.
   it('compares the signature in constant time', () => {
     expect(readState(trip().cookie, SECRET, T0).ok).toBe(true)
     expect(crypto.calls).toBeGreaterThan(0)
   })
 
+  // No cookie, or garbage, is refused without throwing.
   it('no cookie, or garbage, is refused without throwing', () => {
     expect(readState(trip().cookie, SECRET, T0).ok).toBe(true) // witness
     expect(readState(undefined, SECRET, T0)).toEqual({ ok: false, reason: 'missing' })
@@ -203,15 +235,18 @@ describe('the state cookie', () => {
     const state = { nonce: 'n'.repeat(32), artistId: ARTIST, userId: USER, organizer: null, verifier: 'v'.repeat(43), expiresAt: Infinity }
     const good = { nonce: state.nonce, userId: USER }
 
+    // The matching return passes: the witness that makes each refusal below meaningful.
     it('the matching return passes (the witness for every refusal below)', () => {
       expect(checkCallbackState(state, good)).toBeNull()
     })
+    // A return with another trip's nonce, or none, is refused, compared in constant time.
     it('CRITICAL: another nonce, or none, is refused — compared in constant time', () => {
       crypto.calls = 0
       expect(checkCallbackState(state, { ...good, nonce: 'm'.repeat(32) })).toBe('state')
       expect(crypto.calls).toBeGreaterThan(0)
       expect(checkCallbackState(state, { ...good, nonce: null })).toBe('state')
     })
+    // A return finished by another signed-in manager, or by nobody, is refused.
     it('CRITICAL: another signed-in manager (or nobody) is refused', () => {
       expect(checkCallbackState(state, { ...good, userId: 'user-2' })).toBe('auth')
       expect(checkCallbackState(state, { ...good, userId: null })).toBe('auth')
@@ -220,6 +255,8 @@ describe('the state cookie', () => {
 })
 
 describe('the link to Eventbrite', () => {
+  // The link to Eventbrite carries exactly our app key, redirect, state and S256 challenge, and
+  // never the secret.
   it('CRITICAL: the authorize page with our app key, the exact redirect, our state and an S256 challenge — no secret', () => {
     const url = new URL(authorizeUrl({ clientId: 'app-key', redirectUri: `http://localhost:3000${CALLBACK_PATH}`, nonce: 'nonce-1', challenge: 'chal' }))
     expect(`${url.origin}${url.pathname}`).toBe('https://www.eventbrite.com/oauth/authorize')
@@ -233,6 +270,8 @@ describe('the link to Eventbrite', () => {
     })
   })
 
+  // The Connect button's address carries the artist, plus the organizer id from a pasted link
+  // only when it is digits; the id comes out of the pasted link the same way it always has.
   it('the Connect button’s address: the artist, and the organizer id from a pasted link when there is one', () => {
     expect(eventbriteStartPath('a1')).toBe('/api/eventbrite/start?artist=a1')
     expect(eventbriteStartPath('a1', '12345')).toBe('/api/eventbrite/start?artist=a1&organizer=12345')
@@ -252,6 +291,8 @@ describe('the link to Eventbrite', () => {
 describe('exchangeCode — the one-time code for the artist’s token', () => {
   const opts = { code: 'one-time-code', verifier: 'v'.repeat(43), clientId: 'app-key', clientSecret: SECRET, redirectUri: 'http://localhost:3000/api/eventbrite/callback' }
 
+  // The code exchange posts the code, app key, secret, redirect and verifier form-encoded, and
+  // does not follow redirects (the secret is in the body).
   it('CRITICAL: posts the code, the app key, the secret, the exact redirect and the verifier, form-encoded', async () => {
     const fetchImpl = vi.fn(async () => json({ access_token: TOKEN, token_type: 'bearer' }))
     expect(await exchangeCode(opts, fetchImpl as unknown as typeof fetch)).toBe(TOKEN)
@@ -270,6 +311,7 @@ describe('exchangeCode — the one-time code for the artist’s token', () => {
     expect(init.redirect).toBe('manual')
   })
 
+  // A refused exchange throws with Eventbrite's error code, but never the code, secret or verifier.
   it('CRITICAL: a refusal throws a message with no code, secret or verifier in it', async () => {
     const fetchImpl = vi.fn(async () => json({ error: 'invalid_grant', error_description: `bad one-time-code ${SECRET}` }, 400))
     const err = await exchangeCode(opts, fetchImpl as unknown as typeof fetch).catch((e: Error) => e)
@@ -278,12 +320,14 @@ describe('exchangeCode — the one-time code for the artist’s token', () => {
     for (const secret of ['one-time-code', SECRET, 'v'.repeat(43)]) expect((err as Error).message).not.toContain(secret)
   })
 
+  // A success answer with no token, or a blank one, is a refusal too; spaces around a token are trimmed.
   it('a 200 with no token (or a blank one) is a refusal too', async () => {
     await expect(exchangeCode(opts, (async () => json({ token_type: 'bearer' })) as unknown as typeof fetch)).rejects.toMatchObject({ step: 'exchange' })
     await expect(exchangeCode(opts, (async () => json({ access_token: '   ' })) as unknown as typeof fetch)).rejects.toMatchObject({ step: 'exchange' })
     expect(await exchangeCode(opts, (async () => json({ access_token: ` ${TOKEN}\n` })) as unknown as typeof fetch)).toBe(TOKEN)
   })
 
+  // An error field that is not a short snake_case code is not echoed into the message.
   it('an error field that is not a short snake_case code is not echoed', async () => {
     for (const error of ['Invalid <b>code</b>', 'x invalid_grant', 'invalid_grant x', 42]) {
       const err = await exchangeCode(opts, (async () => json({ error }, 400)) as unknown as typeof fetch).catch((e: Error) => e)
@@ -297,25 +341,32 @@ describe('chooseOrganizer — which organizer page is this artist', () => {
   const skeen = org('222', 'Skeen')
   const other = org('333', 'Gulf Static')
 
+  // No organizer page on the account: say so.
   it('CRITICAL: none → say so', () => {
     expect(chooseOrganizer([], { hint: null, artistName: 'Skeen' })).toEqual({ ok: false, reason: 'none' })
   })
 
+  // One organizer page: that one, whatever it is called.
   it('CRITICAL: one → that one, whatever it is called', () => {
     expect(chooseOrganizer([other], { hint: null, artistName: 'Skeen' })).toEqual({ ok: true, organizer: other })
   })
 
+  // Several: the one named like the artist, ignoring case, spaces, dashes and accents.
   it('CRITICAL: several → the one named like the artist (case, spaces and accents aside)', () => {
     expect(chooseOrganizer([other, skeen], { hint: null, artistName: 'skeen' })).toEqual({ ok: true, organizer: skeen })
     expect(chooseOrganizer([other, org('444', 'Sk-eén')], { hint: null, artistName: 'SKEEN' })).toMatchObject({ ok: true, organizer: { id: '444' } })
   })
 
+  // Several and no single name match (or two with the same name): ask for the organizer link,
+  // never a coin toss.
   it('CRITICAL: several and no single name match → ask (paste the organizer link)', () => {
     expect(chooseOrganizer([other, skeen], { hint: null, artistName: 'Lone Pine' })).toEqual({ ok: false, reason: 'several' })
     // Two called the same is still a question, not a coin toss.
     expect(chooseOrganizer([skeen, org('555', 'Skeen')], { hint: null, artistName: 'Skeen' })).toEqual({ ok: false, reason: 'several' })
   })
 
+  // A pasted link's organizer wins; one that is not on the account is refused, never swapped
+  // for another.
   it('CRITICAL: a pasted link’s organizer wins; one not on the account is refused, never swapped for another', () => {
     expect(chooseOrganizer([other, skeen], { hint: '333', artistName: 'Skeen' })).toEqual({ ok: true, organizer: other })
     expect(chooseOrganizer([other, skeen], { hint: '999', artistName: 'Skeen' })).toEqual({ ok: false, reason: 'elsewhere' })
@@ -324,6 +375,7 @@ describe('chooseOrganizer — which organizer page is this artist', () => {
 })
 
 describe('findOrganizer — every organization on the account, then choose', () => {
+  // It looks through every organization the account belongs to, not just the first.
   it('CRITICAL: looks through every organization the account belongs to', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const path = new URL(String(input)).pathname
@@ -339,6 +391,7 @@ describe('findOrganizer — every organization on the account, then choose', () 
     })
   })
 
+  // An account with no organization at all has no organizer page.
   it('no organization at all → none', async () => {
     const client = createEventbriteClient({ fetchImpl: (async () => json({ organizations: [] })) as unknown as typeof fetch })
     expect(await findOrganizer(TOKEN, { hint: null, artistName: 'Skeen' }, client)).toEqual({ ok: false, reason: 'none' })
@@ -346,11 +399,13 @@ describe('findOrganizer — every organization on the account, then choose', () 
 })
 
 describe('back to the Connections page', () => {
+  // Only short codes travel back in the URL, never a message.
   it('only CODES travel in the URL', () => {
     expect(returnPath(ARTIST, { ok: true })).toBe(`/artists/${ARTIST}/connections?eventbrite=connected`)
     expect(returnPath(ARTIST, { ok: false, reason: 'several' })).toBe(`/artists/${ARTIST}/connections?eventbrite=failed&reason=several`)
   })
 
+  // Every failure code has plain words, and the success reads "Eventbrite connected.".
   it('CRITICAL: every code has plain words; the asks read as asked', () => {
     for (const reason of OAUTH_FAILURES) {
       const notice = eventbriteReturnNotice({ eventbrite: 'failed', reason })
@@ -362,6 +417,8 @@ describe('back to the Connections page', () => {
     expect(eventbriteReturnNotice({ eventbrite: 'failed', reason: 'denied' })?.message).toMatch(/cancel/i)
   })
 
+  // An unknown or repeated code reads as a generic failure, never as its own text (it arrives
+  // in the URL, so anyone can write it).
   it('CRITICAL: an unknown reason reads as a generic failure, never as its own text', () => {
     const notice = eventbriteReturnNotice({ eventbrite: 'failed', reason: '<b>pwned</b>' })
     expect(notice?.kind).toBe('error')
