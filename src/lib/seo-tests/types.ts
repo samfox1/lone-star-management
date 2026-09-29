@@ -15,7 +15,9 @@
  *   2. A test says what it CANNOT see in `limits` (one plain sentence), shown under "Show the
  *      details". A claim the evidence cannot support is cut from the sentence, not softened.
  *   3. `evidence` is plain text the run really observed (a status code, a header, a snippet):
- *      never a value copied from what Tapir expects to be there.
+ *      never a value copied from what Tapir expects to be there. A row that states what TAPIR
+ *      holds (for a comparison) is labelled as Tapir's ("in Tapir: …"), never as the site's.
+ *   4. A test that does not apply is `na`, not `unknown` and not `pass` (see SeoTestStatus).
  */
 
 export type SeoTestGroup = 'found' | 'who' | 'shared' | 'facts'
@@ -44,7 +46,13 @@ export type SeoTestDef = {
   source?: 'Tour' | 'Music'
 }
 
-export type SeoTestStatus = 'pass' | 'fail' | 'unknown'
+/**
+ * `na` = the test DOES NOT APPLY to this artist (a visual artist has no genre; a solo person
+ * has no founding year). It is not a pass and not a miss: it is left out of "19 of 24" on both
+ * sides, shown greyed as "doesn't apply", and says why in its sentence. Never used to hide a
+ * test that could not look: that is `unknown`.
+ */
+export type SeoTestStatus = 'pass' | 'fail' | 'unknown' | 'na'
 
 /** What the manager can do about a result. Drawn as an ICON button with a hover label. */
 export type SeoTestAction =
