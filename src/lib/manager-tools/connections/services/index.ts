@@ -16,6 +16,7 @@ import { beatport } from './beatport'
 import { bluesky } from './bluesky'
 import { cashApp } from './cash-app'
 import { deezer } from './deezer'
+import { discogs } from './discogs'
 import { discord } from './discord'
 import { eventbrite } from './eventbrite'
 import { facebook } from './facebook'
@@ -23,6 +24,7 @@ import { googleDrive } from './google-drive'
 import { instagram } from './instagram'
 import { koFi } from './ko-fi'
 import { mixcloud } from './mixcloud'
+import { musicbrainz } from './musicbrainz'
 import { pandora } from './pandora'
 import { patreon } from './patreon'
 import { paypal } from './paypal'
@@ -42,6 +44,7 @@ import { twitch } from './twitch'
 import { venmo } from './venmo'
 import { vimeo } from './vimeo'
 import { whatsapp } from './whatsapp'
+import { wikidata } from './wikidata'
 import { x } from './x'
 import { youtube } from './youtube'
 import { youtubeMusic } from './youtube-music'
@@ -59,6 +62,7 @@ export const SERVICES: readonly Service[] = [
   bluesky,
   cashApp,
   deezer,
+  discogs,
   discord,
   eventbrite,
   facebook,
@@ -66,6 +70,7 @@ export const SERVICES: readonly Service[] = [
   instagram,
   koFi,
   mixcloud,
+  musicbrainz,
   pandora,
   patreon,
   paypal,
@@ -85,6 +90,7 @@ export const SERVICES: readonly Service[] = [
   venmo,
   vimeo,
   whatsapp,
+  wikidata,
   x,
   youtube,
   youtubeMusic,

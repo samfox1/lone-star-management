@@ -350,6 +350,11 @@ export type PublicSitePayload = {
   tour_dates: SiteTourDate[]
   merch: SiteMerch[]
   links: SiteLink[]
+  /** The artist's published connected profiles that IDENTIFY them (`seo.isIdentityProfileUrl`:
+   *  streaming, social, MusicBrainz, Discogs, Wikidata…), whether or not each is a button on
+   *  the site. Feeds the fact sheet's `sameAs` beside `links` (0.42.0, AI visibility audit #2);
+   *  never rendered. Absent on a door older than that — read with `?? []`. */
+  identity_links?: { url: string; label: string | null }[]
   videos: SiteVideo[]
   media: WireMedia[]
   site_content: SiteContent

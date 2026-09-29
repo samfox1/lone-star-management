@@ -101,7 +101,23 @@ export async function getPublishedSite(
     fonts: site.fonts ?? [],
     font_slots: site.font_slots ?? {},
     brand: site.brand ?? { colors: [], theme_color: null },
+    // Newer again (20260928170000): absent on a door older than it.
+    identity_links: site.identity_links ?? [],
   }
+}
+
+/**
+ * The door's `identity_links` (20260928170000), from WORKING link rows: the artist's
+ * connected profiles that identify them, button or not, as `{ url, label }`. A row rides
+ * only while its url EQUALS the verdict TypeScript stored (`identity_url`, written by
+ * lib/content.ts from lib/connections `identityUrlOf`) — the door's rule, so a url changed
+ * without being judged, or a row with no verdict, rides nothing. `rows` arrive in the links
+ * order (sort_order, created_at), the door's order keys.
+ */
+export function identityLinksPayload(rows: readonly Record<string, unknown>[]): { url: string; label: string | null }[] {
+  return rows
+    .filter((r) => typeof r.identity_url === 'string' && r.identity_url !== '' && r.identity_url === r.url)
+    .map((r) => ({ url: r.url as string, label: typeof r.label === 'string' ? r.label : null }))
 }
 
 /* ── Brand + fonts: the preview's copy of the door's rules (20260925120000) ─────── */
@@ -189,7 +205,7 @@ export async function getWorkingSitePayload(
   // The artist row and every section are independent, so fetch them in ONE wave — the
   // artist row used to serially gate the other eight for no reason (a full round-trip
   // before any section query started). A missing artist just discards the rest below.
-  const [{ data: artist }, tracks, tour_dates, merch, links, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows, colorRows, themeColor] =
+  const [{ data: artist }, tracks, tour_dates, merch, linkRows, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows, colorRows, themeColor] =
     await Promise.all([
       supabase
         .from('artists')
@@ -240,7 +256,9 @@ export async function getWorkingSitePayload(
     ),
     workingSection<SiteTourDate>(supabase, 'tour_date', artistId, { onSiteOnly: true }),
     workingSection<SiteMerch>(supabase, 'merch', artistId, { onSiteOnly: true }),
-    workingSection<SiteLink>(supabase, 'link', artistId),
+    // The raw rows, not `workingSection`: `identity_links` below reads `identity_url`, which
+    // the public projection (rightly) drops. `links` is that same projection.
+    listContent(supabase, 'link', artistId),
     workingSection<SiteVideo>(supabase, 'video', artistId, { onSiteOnly: true }),
     supabase
       .from('media')
@@ -293,6 +311,10 @@ export async function getWorkingSitePayload(
       .then(({ data }) => ((data as { theme_color?: string | null } | null)?.theme_color ?? null) as string | null),
   ])
   if (!artist) return null
+
+  // What `workingSection('link')` returned before: every working link through the public
+  // projection (links are not DRAFT_PRESENCE, so `on_site` never rode their snapshot).
+  const links = linkRows.map((r) => publicSnapshot('link', r)) as SiteLink[]
 
   // Mirror get_public_site's media gate EXACTLY: the on-site flag applies to
   // gallery_image only — hero_video / profile_photo are not per-item curated and
@@ -375,6 +397,8 @@ export async function getWorkingSitePayload(
     tour_dates,
     merch,
     links,
+    // The door's identity_links (20260928170000), by the door's rule, from working rows.
+    identity_links: identityLinksPayload(linkRows),
     videos,
     media,
     site_content,

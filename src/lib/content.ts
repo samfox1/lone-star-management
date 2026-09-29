@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { frontSortOrder, slotByDate } from './insert-position'
 import { isContactLink, looksLikeEmail, safeHref } from '@/lib/url'
 import { BRAND_MEDIA_SLICE, SITE_MEDIA_SLICE } from '@/lib/brand-media'
+import { identityUrlOf } from '@/lib/connections'
 
 /** Types a manager edits through the generic dashboard CRUD forms. */
 export type CrudEntity = 'track' | 'tour_date' | 'merch' | 'link' | 'video' | 'release'
@@ -613,7 +614,7 @@ export async function createContent(
       if (re) throw new Error(re.message)
     }
   }
-  return row
+  return type === 'link' ? storeIdentityVerdict(supabase, row) : row
 }
 
 export async function updateContent(
@@ -629,7 +630,33 @@ export async function updateContent(
     .select('*')
     .single()
   if (error) throw new Error(error.message)
-  return data as ContentRow
+  return type === 'link' ? storeIdentityVerdict(supabase, data as ContentRow) : (data as ContentRow)
+}
+
+/**
+ * Judge a link row as it now stands and store the verdict (lib/connections `identityUrlOf`:
+ * the url when it is a connection's identity profile, else null). `get_public_site` sends a
+ * link that is not a site button as an `identity_link` only while its published url equals
+ * this, so every write of a link's url or label ends here — and nothing a form posts can
+ * set it: `identity_url` is not in CRUD.link.fields, so `pickFields` drops it.
+ *
+ * Judged on the row the write RETURNED, so a label or role changed by the same write counts.
+ * Written only when it changed (a reorder writes nothing more). A row read before
+ * 20260928170000 has no `identity_url` key: nothing to store, and the door that reads it
+ * does not exist yet either, so links keep saving until the migration is pushed.
+ */
+async function storeIdentityVerdict(supabase: SupabaseClient, row: ContentRow): Promise<ContentRow> {
+  if (!('identity_url' in row)) return row
+  const verdict = identityUrlOf({
+    id: row.id,
+    label: (row.label as string | null) ?? null,
+    url: (row.url as string | null) ?? null,
+    role: (row.role as string | null) ?? null,
+  })
+  if ((row.identity_url ?? null) === verdict) return row
+  const { error } = await supabase.from('links').update({ identity_url: verdict }).eq('id', row.id)
+  if (error) throw new Error(error.message)
+  return { ...row, identity_url: verdict }
 }
 
 export async function deleteContent(

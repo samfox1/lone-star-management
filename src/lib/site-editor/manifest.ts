@@ -150,6 +150,17 @@ export function bridgeSupportsBrandColors(siteVersion: string | undefined): bool
   return !bridgeOutdated(siteVersion, BRAND_COLORS_SINCE)
 }
 
+/** The INDEXNOW key file (0.42.0): `indexNowKeyFile` answers `/indexnow.txt` and reports
+ *  its bridge version in a header. Not an editor gate: the server reads that header after a
+ *  Publish (src/lib/indexnow.ts), because a server has no manifest. Unknown reads as NO: a
+ *  ping for a site that cannot answer the key check is a failed ping IndexNow remembers. */
+const INDEXNOW_SINCE = '0.42.0'
+
+export function bridgeSupportsIndexNow(siteVersion: string | null | undefined): boolean {
+  if (!siteVersion || !/^\d+(\.\d+)*$/.test(siteVersion)) return false
+  return !bridgeOutdated(siteVersion, INDEXNOW_SINCE)
+}
+
 /** PER-ITEM deltas: the window/inner splitter re-wears the sentinel on both halves
  *  from 0.25.4; an older applier would render a delta item row's window half with
  *  replace semantics and blow away the card frame. */

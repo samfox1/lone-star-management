@@ -97,3 +97,34 @@ describe('siteMetadata — favicon', () => {
     expect(meta.icons).toBeUndefined()
   })
 })
+
+/**
+ * AI visibility audit #1 / F18 (2026-09-28): the built-in site's metadata is the bridge's
+ * `resolveSeo`, not a second copy of it, so a template site and a connected site agree on
+ * the title, the description and the image.
+ */
+describe('siteMetadata — one precedence with the bridge', () => {
+  it('CRITICAL: a blank seo_title → the title composed from the facts; an override wins', () => {
+    const facts = site({ genre: 'Alt-Country, Americana', location: 'Marfa, TX', schema_type: 'MusicGroup' })
+    expect(siteMetadata(facts).title).toBe('Lone Pine · Marfa alt-country musician')
+    expect(siteMetadata(facts).openGraph?.title).toBe('Lone Pine · Marfa alt-country musician')
+    expect(siteMetadata({ ...facts, site_content: { seo_title: 'LONE PINE' } }).title).toBe('LONE PINE')
+  })
+  it('the SEO page card carries its size; the hero does not', () => {
+    const card = 'https://x.supabase.co/storage/v1/object/public/media/a/og/social-card.png?v=2'
+    const m = siteMetadata({ ...site(), site_content: { og_image: card } })
+    expect(m.openGraph?.images).toEqual([{ url: card, width: 1200, height: 630 }])
+    expect(siteMetadata(site()).openGraph?.images).toEqual(['https://img.example/hero.jpg'])
+  })
+})
+
+/** The bridge's numbers are lone-star's numbers: one cap, one card size. */
+describe('bridge ↔ dashboard constants', () => {
+  it('MAX_TITLE is the seo_title save cap; OG_CARD_SIZE is the card the picker draws', async () => {
+    const { MAX_TITLE, OG_CARD_SIZE } = await import('@samfox1/site-bridge/seo')
+    const { SEO_LIMITS } = await import('@/lib/site-editor/save')
+    const { OG_CARD_WIDTH, OG_CARD_HEIGHT } = await import('@/lib/manager-tools/seo/og-card')
+    expect(SEO_LIMITS.seo_title).toBe(MAX_TITLE)
+    expect(OG_CARD_SIZE).toEqual({ width: OG_CARD_WIDTH, height: OG_CARD_HEIGHT })
+  })
+})

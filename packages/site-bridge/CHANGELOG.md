@@ -147,6 +147,17 @@ site that renders every bridge platform (by `slug`, or through `socialIcon`) get
 automatically after upgrading; one with its own glyph map draws the new slugs as plain
 labelled links until it adds glyphs.** Nothing is removed or renamed.
 
+**Three identity platforms, and `identityOnly`** (AI_VISIBILITY_AUDIT.md 1.3, Sam
+2026-09-28). `SOCIAL_PLATFORMS` gains MusicBrainz (`musicbrainz.org/artist/<mbid>`), Discogs
+(`discogs.com/artist/<id>`) and Wikidata (`wikidata.org/wiki/Q<n>`), appended after Eventbrite,
+each with a simple-icons mark in `social-icons.ts`. They are the music fact databases AI
+answers lean on, so they feed the fact card's `sameAs` (matched by host in `seo.ts`; see the
+AI visibility section below) and are never a button. New optional field `identityOnly?: true` on `SocialPlatform` says so:
+lone-star's editor never offers such a platform as a site button. **Site action: none
+required.** A site that draws every link it is sent as a button gets none of these (the editor
+never turns one on); one that draws buttons from `SOCIAL_PLATFORMS` itself should skip an
+`identityOnly` entry.
+
 **`platformFromUrl` host matching: two real bugs fixed.**
 - A platform on ONE subdomain of a bigger site: `music.youtube.com` collapsed to
   `youtube.com` and read as YouTube. New optional `subdomainOnly` field: such a platform claims
@@ -202,6 +213,88 @@ in a server log instead of nowhere. Before this, an unconfigured site and a site
 nothing published rendered identically with nothing said anywhere; that is how juniper and
 operator sat empty in production, unnoticed, for weeks (2026-08-15). **Site action:
 none** — the log is server-side only and changes no return value.
+
+### Also in 0.42.0 — AI visibility, the code quick wins (AI_VISIBILITY_AUDIT.md §1)
+
+**Site action: pass `mediaUrl` to `jsonLdGraph` to keep a `logo`** (see "logo" below), and
+clear a stored `seo_title` that is just the name (skeen's live `<title>` is `SKEEN`) if the
+composed title should show. Nothing else to write: every other change reaches a site through
+the same builders it already calls.
+
+- **A descriptive default title** (audit #1). `resolveSeo`'s `title` with `seo_title`
+  blank is no longer the bare name: new export `defaultSeoTitle(artist)` composes
+  `name · city genre role` from the facts, e.g. `Skeen · Chicago house musician` for skeen's
+  published facts. Only facts that exist: the role is the artist type (MusicGroup →
+  "musician", Person → "artist"; none → no role word, never a guessed "DJ"), the city is the
+  first part of `location`, the genre the first one listed, lowercased except acronyms
+  (`UK garage`, `R&B`). Never over the new `MAX_TITLE` (70, lone-star's `seo_title` save
+  cap): parts drop before the title overflows. A manager's `seo_title` still always wins.
+  lone-star's `src/lib/seo.ts` now calls `resolveSeo` instead of carrying its own copy (F18).
+- **`sameAs` from every connected profile** (audit #2). New optional payload field
+  `identity_links?: { url, label }[]`: published connected profiles that identify the
+  artist, button or not (filled server-side). `sameAsFrom` = on-site `links` ∪
+  `identity_links` ∪ the Spotify artist id, de-duplicated (`www.`, trailing slash and
+  share-tracking queries don't make a second entry). The "at most one path segment" rule is
+  gone: `isProfileUrl` now checks a per-platform profile shape (`musicbrainz.org/artist/<mbid>`,
+  `discogs.com/artist/<id>`, `wikidata.org/wiki/Q<n>`, `ra.co/dj/<name>`,
+  `deezer.com/<cc>/artist/<id>`, `tidal.com/browse/artist/<id>`, `bsky.app/profile/<h>`,
+  Snapchat `/add/`, Venmo `/u/`…) and an unknown host is nobody's profile. New export
+  `isIdentityProfileUrl(url)`: true for an artist profile on an identity platform
+  (streaming, social, music databases, listings) and for creator and organiser pages that
+  name the artist (Patreon, Ko-fi, Eventbrite `/o/…` and `<name>.eventbrite.*`, a public
+  Telegram channel `t.me/<name>`); false for payment handles (PayPal, Cash App, Venmo: they
+  can carry a personal legal name), join and invite links (Discord, WhatsApp, `t.me/+…`,
+  `joinchat`), playlists, videos, posts, unknown and look-alike hosts, and Spotify `/user/`
+  (a listener account, which used to be accepted). MusicBrainz, Discogs and Wikidata are
+  matched by host in `seo.ts`, so they work before they are in `SOCIAL_PLATFORMS`.
+- **No invented facts.** A show's `Offer` no longer claims `availability: InStock` (audit
+  #6): nothing on the wire says so. `logo` is no longer the `imageUrl` photo (audit #9,
+  skeen's was the 1600×800 hero): new `JsonLdOptions.mediaUrl(path)` resolves the Brand
+  page's `logo_primary` row from the payload, and without it (or without a Brand logo) there
+  is no `logo`. `imageUrl` still feeds `image`. This is also the `mediaUrl` option
+  `CONNECTING.md` §10 already named (audit #12).
+- **"When is X playing next?" is always answered** (audit #7). With no upcoming show,
+  `autoFaqAnswer(3)` says `No shows are scheduled right now.` plus up to the 3 most recent
+  past shows (`Recent shows: Smartbar, Chicago (August 1, 2026); …`). A future show marked
+  past (cancelled) is not a recent show. No tour list at all is unknown and still says nothing.
+- **The next show and the latest releases are automatic only** (audit #10). New export
+  `FAQ_AUTO_ONLY` (`{ 3: 'tour', 4: 'music' }`): `faqEntries` ignores a stored
+  `faq_answer_3` / `faq_answer_4`, and the SEO page shows those rows read-only ("comes from
+  Tour" / "comes from Music").
+- **Small ones** (audit #11). `SiteSeo.ogImageSize` (optional): `{ width: 1200, height: 630 }`
+  when the image is the SEO page's card (the only image whose size is known; exported as
+  `OG_CARD_SIZE`), else null. A site can emit `og:image:width/height` from it; lone-star's
+  built-in sites do. The FAQ page's `about` is now `{ @type, @id, name }`, so it resolves on
+  `/faqsheet` where the full artist node is absent.
+
+Pinned by `tests/unit/site-editor/site-bridge-seo.test.ts` (each new test red first),
+`tests/unit/site/seo.test.ts` and `tests/components/manager-tools/seo/seo-sections.test.tsx`.
+
+**`identity_links` on the wire** (lone-star migration `20260928170000_identity_links.sql`):
+`get_public_site` and the editor's preview payload always send it (`[]` when none), as
+`{ url, label }` only, in the links order. A link rides it only while its published url equals
+the verdict lone-star stored when the link was saved (`links.identity_url`, from
+`isIdentityProfileUrl`), so an off-site payment handle or invite never does. **Site action:
+none** — `sameAsFrom` already reads it; a door older than the migration simply omits it.
+
+### Also in 0.42.0 — IndexNow: a Publish tells Bing which pages changed (audit #4)
+
+**Site action: add the IndexNow key route** — one file, `app/indexnow.txt/route.ts`, returning
+`indexNowKeyFile(await getSite())` (`CONNECTING.md` §10). Until a site has it, nothing is
+pinged for it.
+
+New module `./indexnow`: `indexNowKeyFile(payload)` answers `/indexnow.txt` with exactly the
+key (`text/plain; charset=utf-8`, `x-robots-tag: noindex`, and `x-site-bridge-version`), or
+`404` with an empty body when the payload holds no valid key (8–128 of `a-zA-Z0-9-`; anything
+else is never served). Also `indexNowKey(payload)`, `isIndexNowKey`, `INDEXNOW_CONTENT_KEY`
+(`indexnow_key`), `INDEXNOW_KEY_PATH`, `INDEXNOW_VERSION_HEADER`. The key is one random value
+per artist in a reserved `site_content` key that only lone-star writes; it rides the payload's
+open `site_content` map, so the published door did not change. After a successful Publish
+(not Brand's), lone-star pings api.indexnow.org once, only for a custom site on a public https
+domain (never localhost or `*.vercel.app`) that serves the key and reports 0.42.0 or later in
+that header (`bridgeSupportsIndexNow`: a server-side check, not an editor gate). Pinned by
+`tests/unit/site-editor/site-bridge-indexnow.test.ts`, `tests/unit/publish/indexnow-ping.test.ts`
+and `tests/unit/publish/indexnow-publish.test.ts`.
 
 ---
 

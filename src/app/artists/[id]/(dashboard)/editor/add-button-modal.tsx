@@ -11,8 +11,9 @@ import { ConnectModal } from '../(manager-tools)/connections/connect-modal'
 import { ConnectionMark } from '../(manager-tools)/connections/connection-mark'
 import type { EditorLink } from './inspector-types'
 
-/** What Connect offers from here: the socials. A service is never a site button. */
-const SOCIALS = CONNECTIONS.filter((d) => d.social)
+/** What Connect offers from here: the socials that can be a button. A service is never a
+ *  site button, and neither is an identity connection (MusicBrainz, Discogs, Wikidata). */
+const SOCIALS = CONNECTIONS.filter((d) => d.social && !d.identityOnly)
 
 /**
  * ADD A BUTTON (Sam, 2026-09-28): "when the connection is added, and I travel to the socials

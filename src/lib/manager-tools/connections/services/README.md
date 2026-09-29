@@ -6,13 +6,14 @@ documentation on how it is implemented and integrated"). Every README uses the s
 headings: connection type, what the manager enters, how it is stored, sync, on the site,
 code map, tests, known gaps.
 
-## The three kinds
+## The four kinds
 
 | Kind | What the manager enters | What happens |
 | --- | --- | --- |
 | **Link only** | The handle alone (`x.com/` [skeenmusic]), or a pasted profile link; for a platform with no handle (Tidal, WhatsApp, Eventbrite), its link | A `links` row the site can show as a button. Nothing is pulled. |
 | **Link + sync** | The artist link (or handle, for YouTube), with **Sync** on | The same `links` row, plus the id inside it pulls the catalog into the dashboard. Sync off = link only. |
 | **Service** | The service's own fields (an id, a name, a folder link, a store domain + token) | Feeds the dashboard (tour dates, files, merch). Never a social button on a site. |
+| **Identity** | The artist's page on a music fact database (MusicBrainz, Discogs), or its id (Wikidata `Q1299`) | A `links` row that feeds the site's fact card (`sameAs`) and is never a site button: the bridge marks the platform `identityOnly`, and the editor's Add button refuses it. MusicBrainz's Connect row can also create the page, pre-filled. |
 
 A pasted link must be one the site reads as THAT platform (the bridge's `platformFromUrl`,
 2026-09-28): a handle platform reads it back to its handle, and a link platform (Tidal,
@@ -35,6 +36,7 @@ A new connection starts **off the site**. A site button is added in the site edi
 | Bluesky | Link only | — | [bluesky](bluesky/README.md) |
 | Cash App | Link only (tip page) | — | [cash-app](cash-app/README.md) |
 | Deezer | Link + sync | Music | [deezer](deezer/README.md) |
+| Discogs | Identity (artist link) | Fact card | [discogs](discogs/README.md) |
 | Discord | Link only (invite) | — | [discord](discord/README.md) |
 | Eventbrite | Link only (organizer link) | — | [eventbrite](eventbrite/README.md) |
 | Facebook | Link only | — | [facebook](facebook/README.md) |
@@ -42,6 +44,7 @@ A new connection starts **off the site**. A site button is added in the site edi
 | Instagram | Link only | — | [instagram](instagram/README.md) |
 | Ko-fi | Link only (tip page) | — | [ko-fi](ko-fi/README.md) |
 | Mixcloud | Link only | — | [mixcloud](mixcloud/README.md) |
+| MusicBrainz | Identity (artist link) | Fact card | [musicbrainz](musicbrainz/README.md) |
 | Pandora | Link only (artist link) | — | [pandora](pandora/README.md) |
 | Patreon | Link only | — | [patreon](patreon/README.md) |
 | PayPal | Link only (tip page) | — | [paypal](paypal/README.md) |
@@ -61,6 +64,7 @@ A new connection starts **off the site**. A site button is added in the site edi
 | Venmo | Link only (tip page) | — | [venmo](venmo/README.md) |
 | Vimeo | Link only | — | [vimeo](vimeo/README.md) |
 | WhatsApp | Link only (channel link) | — | [whatsapp](whatsapp/README.md) |
+| Wikidata | Identity (item id) | Fact card | [wikidata](wikidata/README.md) |
 | X | Link only | — | [x](x/README.md) |
 | YouTube | Link + sync | Videos | [youtube](youtube/README.md) |
 | YouTube Music | Link only (artist link) | — | [youtube-music](youtube-music/README.md) |
@@ -94,7 +98,8 @@ Each folder holds a README and an `index.ts`: that service's own code, and only 
    domain under a new multi-part suffix needs that suffix in the bridge's
    `MULTI_PART_SUFFIXES` (`tests/unit/site-editor/social-hosts.test.ts` says so). No
    simple-icons mark: a `PLACEHOLDER_MARKS` entry in `scripts/generate-social-icons.ts`
-   until the brand's own logo is chosen.
+   until the brand's own logo is chosen. A platform that must never be a site button (a
+   fact database) is `identityOnly` there; `identity-only.test.ts` lists which ones are.
 3. A syncable source: add its key to `INTEGRATION_KEYS` (the order the registry takes) and
    its pull action in the dashboard's `integrations.ts`.
 4. A service: its connect path in `connections/actions.ts` and its mark via

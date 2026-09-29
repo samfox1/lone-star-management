@@ -7,9 +7,13 @@
  * The five probe questions are fixed (their wording is the measurement); their answers
  * are automatic until written, and "remove" on one of them clears the written answer so
  * the automatic one returns. The manager's own questions are added at the bottom.
+ *
+ * The next show and the latest releases are AUTOMATIC ONLY (audit #10, the bridge's
+ * FAQ_AUTO_ONLY): read-only rows that say where the answer comes from, because a written
+ * one went stale the day after the show and the builder now ignores it.
  */
 import { useState } from 'react'
-import { probePrompts } from '@samfox1/site-bridge/seo'
+import { FAQ_AUTO_ONLY, probePrompts } from '@samfox1/site-bridge/seo'
 import { FAQ_EXTRA, FAQ_KEYS } from '@/lib/site-content-schema'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
@@ -18,7 +22,9 @@ import { saveSeoFieldAction } from '../../../../actions'
 
 export { probePrompts }
 
-type Row = { key: string; qKey?: string; question: string; answer: string; auto: string; fixed: boolean }
+type Row = { key: string; qKey?: string; question: string; answer: string; auto: string; fixed: boolean; from?: 'tour' | 'music' }
+
+const FROM_LABEL = { tour: 'Tour', music: 'Music' } as const
 
 const INPUT = 'w-full rounded-lg border border-hairline bg-paper px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
 const ICON_BTN = 'inline-flex flex-none items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink'
@@ -26,7 +32,11 @@ const ICON_BTN = 'inline-flex flex-none items-center rounded-lg border border-ha
 export function AiSection({ artistId, name, schemaType, initial, auto }: { artistId: string; name: string; schemaType: string; initial: Record<string, string>; auto: string[] }) {
   const prompts = probePrompts(name, schemaType)
   const build = (v: Record<string, string>): Row[] => [
-    ...prompts.map((question, i) => ({ key: FAQ_KEYS[i], question, answer: (v[FAQ_KEYS[i]] ?? '').trim(), auto: auto[i] ?? '', fixed: true })),
+    ...prompts.map((question, i) => {
+      const from = FAQ_AUTO_ONLY[i + 1]
+      // An automatic-only row never shows a stored written answer: the site ignores it.
+      return { key: FAQ_KEYS[i], question, answer: from ? '' : (v[FAQ_KEYS[i]] ?? '').trim(), auto: auto[i] ?? '', fixed: true, from }
+    }),
     ...FAQ_EXTRA.filter((e) => (v[e.q] ?? '').trim()).map((e) => ({ key: e.a, qKey: e.q, question: (v[e.q] ?? '').trim(), answer: (v[e.a] ?? '').trim(), auto: '', fixed: false })),
   ]
   const [values, setValues] = useState(initial)
@@ -105,20 +115,24 @@ export function AiSection({ artistId, name, schemaType, initial, auto }: { artis
               <div className={cx('min-w-0 flex-1 text-[15px] leading-relaxed', row.answer || row.auto ? 'text-ink-muted' : 'italic text-ink-faint')}>
                 {row.answer || row.auto || 'No answer yet'}
               </div>
-              <div className="flex flex-none items-center gap-2">
-                <button type="button" onClick={() => startEdit(row)} aria-label={`Edit: ${row.question}`} className={ICON_BTN}>
-                  <Icon name="edit" size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(row)}
-                  aria-label={row.fixed ? `Reset: ${row.question}` : `Remove: ${row.question}`}
-                  disabled={row.fixed && !row.answer}
-                  className={cx(ICON_BTN, 'hover:border-danger-border hover:text-accent-red disabled:opacity-30')}
-                >
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
+              {row.from ? (
+                <div className="w-[76px] flex-none text-right font-space text-[10px] leading-snug text-ink-faint">comes from {FROM_LABEL[row.from]}</div>
+              ) : (
+                <div className="flex flex-none items-center gap-2">
+                  <button type="button" onClick={() => startEdit(row)} aria-label={`Edit: ${row.question}`} className={ICON_BTN}>
+                    <Icon name="edit" size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(row)}
+                    aria-label={row.fixed ? `Reset: ${row.question}` : `Remove: ${row.question}`}
+                    disabled={row.fixed && !row.answer}
+                    className={cx(ICON_BTN, 'hover:border-danger-border hover:text-accent-red disabled:opacity-30')}
+                  >
+                    <Icon name="trash" size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           ),
         )}

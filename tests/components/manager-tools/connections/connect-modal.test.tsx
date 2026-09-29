@@ -143,6 +143,18 @@ describe('details', () => {
     expect(within(dialog).getByLabelText('Shopify storefront token')).toHaveAttribute('type', 'password')
     expect(within(dialog).getByRole('button', { name: 'Connect 3' })).toBeInTheDocument()
   })
+
+  it('MusicBrainz with no page yet: its row also links to MusicBrainz’s own editor, pre-filled, in a new tab', () => {
+    const seed = 'https://musicbrainz.org/artist/create?edit-artist.name=Skeen'
+    const { dialog } = open({ createPages: { musicbrainz: seed } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'MusicBrainz' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    expect(within(dialog).getByRole('textbox', { name: 'MusicBrainz link' })).toBeInTheDocument()
+    const create = within(dialog).getByRole('link', { name: 'Create the MusicBrainz page' })
+    expect(create).toHaveAttribute('href', seed)
+    expect(create).toHaveAttribute('target', '_blank')
+    expect(create.getAttribute('rel')).toMatch(/noopener/)
+  })
 })
 
 describe('run', () => {

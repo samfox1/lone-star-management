@@ -103,7 +103,7 @@ describe('the picker', () => {
 
   it('search is a case-insensitive substring; blank is everything', () => {
     expect(searchConnections('tik').map((d) => d.label)).toEqual(['TikTok'])
-    expect(searchConnections('MUSIC').map((d) => d.label)).toEqual(['Apple Music', 'YouTube Music', 'Amazon Music'])
+    expect(searchConnections('MUSIC').map((d) => d.label)).toEqual(['Apple Music', 'YouTube Music', 'Amazon Music', 'MusicBrainz'])
     expect(searchConnections('   ')).toHaveLength(CONNECTIONS.length)
     expect(searchConnections('zzz')).toEqual([])
   })
@@ -203,12 +203,20 @@ describe('a link-kind connection takes only ITS platform’s link (2026-09-28)',
   // chat link carrying a phone number. Sam: "if its behavior before was not correct, it
   // should be changed". Derived from the registry, so a new link-kind platform joins by existing.
   const linkKinds = CONNECTIONS.filter((d) => methodOf(d)?.kind === 'link')
-  const ownLink = (key: string, hint: string) => (key === 'whatsapp' ? 'https://whatsapp.com/channel/0029VaSkeenMusic' : `${hint}skeen-123`)
+  // A platform whose profile is one path shape gets a link of that shape (identity-only.test.ts pins those shapes).
+  const OWN: Record<string, string> = {
+    whatsapp: 'https://whatsapp.com/channel/0029VaSkeenMusic',
+    musicbrainz: 'https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d',
+    discogs: 'https://www.discogs.com/artist/123-Skeen',
+  }
+  const ownLink = (key: string, hint: string) => OWN[key] ?? `${hint}skeen-123`
 
   it('CRITICAL: every one refuses a link no platform owns, and one that is another platform’s, by name', () => {
     expect(linkKinds.length).toBeGreaterThanOrEqual(10)
     for (const d of linkKinds) {
-      expect(connectInputError(d, { url: 'https://juniperhale.com/music' }), d.key).toBe(`That isn’t ${withArticle(d.label)}${d.key === 'whatsapp' ? ' channel' : ''} link.`)
+      const m = methodOf(d)
+      const noun = m?.kind === 'link' ? m.pathNoun : undefined
+      expect(connectInputError(d, { url: 'https://juniperhale.com/music' }), d.key).toBe(`That isn’t ${withArticle(d.label)}${noun ? ` ${noun}` : ''} link.`)
       expect(connectInputError(d, { url: 'https://instagram.com/skeen' }), d.key).toBe(`That’s an Instagram link, not ${d.label}.`)
     }
   })

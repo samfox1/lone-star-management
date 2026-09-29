@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { CONNECTIONS, buildConnectionRows, type ConnectionSection, type SourceCounts } from '@/lib/connections'
+import { CONNECTIONS, buildConnectionRows, isProfileLink, type ConnectionSection, type SourceCounts } from '@/lib/connections'
 import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/integrations-registry'
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
 import { shopifyAppConfigured, shopifyReturnNotice } from '@/lib/merch/shopify-oauth'
+import { publicSiteOrigin } from '@/lib/custom-site'
+import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
 import { ConnectionList } from './connection-list'
 import { ShopifyReturnNotice } from './shopify-return'
@@ -60,26 +62,39 @@ export default async function ConnectionsPage({
   // Back from Shopify's approve screen: the callback sends a CODE, the words are chosen here.
   const shopifyReturn = shopifyReturnNotice(await searchParams)
   const supabase = await createClient()
-  const [artist, shopifyDomain, links, counts, diff] = await Promise.all([
+  const [artist, shopifyDomain, links, counts, diff, { data: facts }] = await Promise.all([
     requireArtist(id),
     getShopifyDomain(id),
     listContent(supabase, 'link', id),
     sourceCounts(supabase, id),
     dashboardDiff(id),
+    // The SEO facts, for the MusicBrainz seed below (RLS-scoped like the rest).
+    supabase.from('artists').select('location, schema_type').eq('id', id).single(),
   ])
-  const rows = buildConnectionRows({
-    // ContentRow is a bag of unknowns; name the four columns the model reads.
-    links: links.map((l) => ({
-      id: l.id,
-      label: (l.label as string | null) ?? null,
-      url: (l.url as string | null) ?? null,
-      on_site: (l.on_site as boolean | null) ?? null,
-      role: (l.role as string | null) ?? null,
-    })),
-    artist,
-    shopifyConnected: !!shopifyDomain,
-    counts,
-  })
+  // ContentRow is a bag of unknowns; name the four columns the model reads.
+  const linkRows = links.map((l) => ({
+    id: l.id,
+    label: (l.label as string | null) ?? null,
+    url: (l.url as string | null) ?? null,
+    on_site: (l.on_site as boolean | null) ?? null,
+    role: (l.role as string | null) ?? null,
+  }))
+  const rows = buildConnectionRows({ links: linkRows, artist, shopifyConnected: !!shopifyDomain, counts })
+
+  // No MusicBrainz page yet (AI_VISIBILITY_AUDIT.md 4.1): its Connect row offers MusicBrainz's
+  // own artist editor, filled from what we know. Only "Visual artist" says person; the
+  // default "Musician" says nothing about person vs group, so the artist picks it there.
+  const createPages: Partial<Record<string, string>> = rows.some((r) => r.key === 'musicbrainz')
+    ? {}
+    : {
+        musicbrainz: musicBrainzCreateUrl({
+          name: artist.name,
+          type: facts?.schema_type === 'Person' ? 'person' : null,
+          area: (facts?.location as string | null) ?? null,
+          homepage: publicSiteOrigin(artist),
+          links: linkRows.filter(isProfileLink),
+        }),
+      }
 
   // The floating Publish lights up on unpublished link EDITS — the same flag behind the
   // nav's pending dot, so the two always agree (the tour page's rule).
@@ -88,7 +103,7 @@ export default async function ConnectionsPage({
   return (
     <>
       {shopifyReturn && <ShopifyReturnNotice {...shopifyReturn} />}
-      <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} shopifyApp={shopifyAppConfigured()} />
+      <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} shopifyApp={shopifyAppConfigured()} createPages={createPages} />
     </>
   )
 }

@@ -6,6 +6,7 @@ import { renameMedia } from '@/lib/media-rename'
 import { artistFactUpdate } from '@/lib/artist-facts'
 import { auditLiveSite, type LiveAudit } from '@/lib/seo-audit'
 import { publicSiteOrigin } from '@/lib/custom-site'
+import { ensureIndexNowKey, scheduleIndexNowPing } from '@/lib/indexnow'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -233,6 +234,7 @@ export async function publishAction(artistId: string, password: string): Promise
     artistId,
     password,
     async (supabase, userId) => {
+      await ensureIndexNowKey(supabase, artistId) // ships in this snapshot (site_content)
       await publishAll(supabase, artistId, userId)
     },
     async (supabase) => {
@@ -264,6 +266,7 @@ export async function publishAllGatedAction(
     artistId,
     password,
     async (supabase, userId) => {
+      await ensureIndexNowKey(supabase, artistId) // ships in this snapshot (site_content)
       await publishAll(supabase, artistId, userId)
     },
     async (supabase) => {
@@ -598,6 +601,7 @@ export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
  *  the same password gate as every other publish. */
 export async function publishSiteWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
   return publishGated(artistId, password, async (supabase, userId) => {
+    await ensureIndexNowKey(supabase, artistId) // ships in this snapshot (site_content)
     await publishSite(supabase, artistId, userId)
   })
 }
@@ -612,9 +616,16 @@ export async function publishSiteWithPasswordAction(artistId: string, password: 
  * argument, on purpose — see `publishBrand` for why a sliced publish must not sweep.
  */
 export async function publishBrandWithPasswordAction(artistId: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  return publishGated(artistId, password, async (supabase, userId) => {
-    await publishBrand(supabase, artistId, userId)
-  })
+  // No IndexNow ping: colours, fonts and logos change no page's words.
+  return publishGated(
+    artistId,
+    password,
+    async (supabase, userId) => {
+      await publishBrand(supabase, artistId, userId)
+    },
+    undefined,
+    { indexNow: false },
+  )
 }
 
 /** ONE SEO / GEO setting (SEO_GEO_PLAN B6) — gate in lib/site-editor/save.ts. */
@@ -1231,12 +1242,17 @@ async function verifyPasswordGate(
  * blowing up the request. `publish` gets the throwaway client and the verified user id;
  * `gc` (optional) runs only after `publish` succeeds, same as before this was factored
  * out — a storage sweep must never run against content that never actually published.
+ *
+ * A successful publish then schedules ONE IndexNow ping (src/lib/indexnow.ts) for after the
+ * response: it cannot slow or fail the publish, and it checks for itself whether the site
+ * can be pinged at all. `indexNow: false` skips it (Brand: nothing a search engine reads).
  */
 async function publishGated(
   artistId: string,
   password: string,
   publish: (supabase: Awaited<ReturnType<typeof createClient>>, userId: string) => Promise<void>,
   gc?: (supabase: Awaited<ReturnType<typeof createClient>>) => Promise<void>,
+  { indexNow = true }: { indexNow?: boolean } = {},
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const gate = await verifyPasswordGate(supabase, password)
@@ -1248,6 +1264,7 @@ async function publishGated(
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
+  if (indexNow) scheduleIndexNowPing(supabase, artistId)
   return { ok: true }
 }
 

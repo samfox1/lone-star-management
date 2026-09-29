@@ -484,6 +484,39 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
 
 Then rule 7 of §7 proves all of it on the built html, every build.
 
+### Tell search engines when you change (IndexNow, 0.42.0)
+
+When a manager publishes, lone-star tells Bing (and Yandex, Naver, Seznam) which pages
+changed, through IndexNow. Bing's index is what Copilot and ChatGPT search read. The engines
+only believe a ping if the site itself serves the artist's key, so a site adds **one route
+file**:
+
+```ts
+// app/indexnow.txt/route.ts
+import { indexNowKeyFile } from '@samfox1/site-bridge/indexnow'
+
+export const revalidate = 60
+
+export async function GET() {
+  return indexNowKeyFile(await getSite()) // the same payload your pages read
+}
+```
+
+- **Serve the answer as it is.** It is `200` with exactly the key as UTF-8 plain text, or
+  `404` with an empty body when there is no valid key. It also carries
+  `x-site-bridge-version`, which lone-star reads before it pings: a site that does not report
+  0.42.0 or later is never pinged. Do not build the file yourself.
+- **Keep it at `/indexnow.txt`, at the root.** A key file only vouches for its own directory,
+  so anywhere deeper would cover part of the site. Do not redirect it elsewhere.
+- **Keep your sitemap.** The ping names the pages your `sitemap.xml` lists (same host only),
+  else the homepage.
+- **Nothing else to do.** lone-star creates the key and publishes it with the site text (the
+  editor's Publish, Publish all, or the SEO page's). A ping needs your site to be serving it
+  already, so the first ping comes on a later publish.
+
+lone-star pings only a custom site on a public https domain (never `localhost` or a
+`*.vercel.app` preview), at most once per publish, after the publish has finished.
+
 ## 11. More than one page (0.35.0)
 
 A site with a second editable page — an about page, a shop — declares them, and the

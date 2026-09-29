@@ -58,6 +58,10 @@ const SI_EXPORT: Record<string, string> = {
   'cash app': 'siCashapp',
   venmo: 'siVenmo',
   paypal: 'siPaypal',
+  // 2026-09-28: the identity connections (never a site button; the dashboard draws them)
+  musicbrainz: 'siMusicbrainz',
+  discogs: 'siDiscogs',
+  wikidata: 'siWikidata',
 }
 
 type Icon = { title: string; hex: string; path: string }

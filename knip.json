@@ -3,6 +3,7 @@
   "workspaces": {
     ".": {
       "entry": [
+        "scripts/backfill-identity-links.ts",
         "scripts/build-google-fonts.ts",
         "scripts/build-major-cities.ts",
         "scripts/build-map-data.ts",

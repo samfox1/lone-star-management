@@ -11,7 +11,8 @@
  *   - the list is the ON-SITE social links only, each as mark · name · handle, with no URL
  *     box: the link is edited in Connections, and the button IS that link;
  *   - "Add button" opens a picker of the connections with a profile link that are not
- *     buttons yet — never a service, never a contact or role-bound row;
+ *     buttons yet — never a service, never a contact or role-bound row, never an identity
+ *     connection (MusicBrainz, Discogs, Wikidata: they feed the fact card, not the page);
  *   - picking turns THAT row on (the live toggle, for its id) — no new row, nothing typed;
  *   - taking a button off sets on_site false and deletes nothing: the connection stays;
  *   - with nothing left to pick, one line and a way to connect an account WITHOUT leaving
@@ -44,7 +45,9 @@ afterEach(() => {
 
 /** Every service, derived: none may ever be offered as a button (AGENTS.md rule 4). */
 const SERVICES = CONNECTIONS.filter((d) => d.kind === 'service')
-const SOCIALS = CONNECTIONS.filter((d) => d.social)
+/** The fact databases (MusicBrainz, Discogs, Wikidata): connections, never a button. */
+const IDENTITY = CONNECTIONS.filter((d) => d.identityOnly)
+const SOCIALS = CONNECTIONS.filter((d) => d.social && !d.identityOnly)
 
 const LINKS: EditorLink[] = [
   { id: 'l-sp', label: 'Spotify', url: 'https://open.spotify.com/artist/26K', onSite: true },
@@ -55,6 +58,8 @@ const LINKS: EditorLink[] = [
   // picker must refuse it on the rule, not on the rows it happens to be shown.
   ...SERVICES.map((d): EditorLink => ({ id: `l-${d.key}`, label: d.label, url: `https://example.com/${d.key}`, onSite: false })),
   { id: 'l-bk', label: 'Bookings', url: 'mailto:book@example.com', onSite: false },
+  // A real, connected MusicBrainz profile: the identity rule, not the row, keeps it out.
+  { id: 'l-mb', label: 'MusicBrainz', url: 'https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d', onSite: false },
 ]
 const ALL_ON: EditorLink[] = LINKS.filter((l) => l.id === 'l-sp' || l.id === 'l-x')
 
@@ -171,6 +176,13 @@ describe('Add button — a picker of the artist’s connections', () => {
     for (const n of ['Spotify', 'X', 'Bookings']) expect(names).not.toContain(n)
   })
 
+  it('CRITICAL: never offers an identity connection (MusicBrainz, Discogs, Wikidata), even one the artist has', () => {
+    expect(IDENTITY.map((d) => d.key).sort()).toEqual(['discogs', 'musicbrainz', 'wikidata'])
+    openLinks()
+    const names = cardNames(openPicker())
+    for (const d of IDENTITY) expect(names, d.label).not.toContain(d.label)
+  })
+
   it('CRITICAL: picking one turns THAT row on — no new row, nothing typed — and it joins the list', async () => {
     openLinks()
     const dialog = openPicker()
@@ -196,6 +208,8 @@ describe('Add button — nothing left to pick', () => {
     // whole name (or it + " (connected)"): a prefix would find "YouTube Music" for YouTube.
     const card = (label: string) => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\(connected\\))?$`)
     for (const d of SERVICES) expect(within(connect).queryByRole('button', { name: card(d.label) }), d.label).toBeNull()
+    // Nor an identity connection: what is connected here comes back as a button to pick.
+    for (const d of IDENTITY) expect(within(connect).queryByRole('button', { name: card(d.label) }), d.label).toBeNull()
     for (const d of SOCIALS) expect(within(connect).getByRole('button', { name: card(d.label) })).toBeInTheDocument()
     expect(within(connect).getByRole('button', { name: 'X (connected)' })).toBeDisabled()
     expect(within(connect).getByRole('button', { name: 'Instagram' })).toBeEnabled()

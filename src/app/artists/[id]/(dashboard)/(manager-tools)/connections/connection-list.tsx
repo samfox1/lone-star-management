@@ -35,12 +35,15 @@ export function ConnectionList({
   rows: initial,
   dirty = false,
   shopifyApp = false,
+  createPages,
 }: {
   artistId: string
   rows: ConnectionRow[]
   dirty?: boolean
   /** The Shopify app is set up: Shopify connects by going to Shopify (a server-made boolean). */
   shopifyApp?: boolean
+  /** Links that make a page on a platform the artist has none of yet (MusicBrainz), by key. */
+  createPages?: Partial<Record<string, string>>
 }) {
   const router = useRouter()
   // Seeded from the server's rows and RE-SEEDED when they change (a refresh after a
@@ -79,7 +82,14 @@ export function ConnectionList({
       </div>
 
       {connect && (
-        <ConnectModal artistId={artistId} taken={rows.map((r) => r.key)} shopifyApp={shopifyApp} onClose={() => setConnect(false)} onDone={() => router.refresh()} />
+        <ConnectModal
+          artistId={artistId}
+          taken={rows.map((r) => r.key)}
+          shopifyApp={shopifyApp}
+          createPages={createPages}
+          onClose={() => setConnect(false)}
+          onDone={() => router.refresh()}
+        />
       )}
 
       <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="connections" />

@@ -9,7 +9,7 @@
  * and songs); an unset field is left out of the graph, never filled with a guess.
  */
 import type { PublicSitePayload, SiteRelease, SiteTourDate, SiteTrack, SiteVideo, WireMedia } from './payload'
-import { platformFromUrl } from './social'
+import { linkHost } from './social'
 import { recommendAlt } from './alt'
 
 /**
@@ -37,9 +37,66 @@ export type SiteSeo = {
   description: string
   /** Absolute https URL for the social preview card, or null when none is publishable. */
   ogImage: string | null
+  /** `og:image:width` / `og:image:height`, when the size is KNOWN: the SEO page's card is
+   *  always drawn at 1200×630. Null for any other image (a hero photo's size is not on the
+   *  wire), and absent on a SiteSeo built before 0.42.0 — read with `?? null`. */
+  ogImageSize?: { width: number; height: number } | null
 }
 
 export const MAX_DESCRIPTION = 160
+
+/** The most a `<title>` may be: lone-star's save cap on `seo_title` (SEO_LIMITS), and so
+ *  the most a composed default may be too. */
+export const MAX_TITLE = 70
+
+/** The SEO page's social card: drawn at exactly this size, stored at one fixed path per
+ *  artist (`<artist>/og/social-card.png` in the public `media` bucket). */
+export const OG_CARD_SIZE = { width: 1200, height: 630 } as const
+const OG_CARD_PATH = /^\/storage\/v1\/object\/public\/media\/[^/]+\/og\/social-card\.png$/
+
+function ogCardSize(url: string | null): { width: number; height: number } | null {
+  if (!url) return null
+  try {
+    return OG_CARD_PATH.test(new URL(url).pathname) ? { ...OG_CARD_SIZE } : null
+  } catch {
+    return null
+  }
+}
+
+/** A genre mid-sentence: lowercased word by word, except an all-caps word (UK, R&B, EDM),
+ *  which is an acronym and keeps its spelling. */
+function genreWords(g: string): string {
+  return g
+    .split(' ')
+    .map((w) => (/[A-Z]/.test(w) && w === w.toUpperCase() ? w : w.toLowerCase()))
+    .join(' ')
+}
+
+/**
+ * The title when the manager has not written one (audit #1, Sam 2026-09-28: "Skeen ·
+ * Chicago house DJ and producer"): the name, then city + genre + role from the facts.
+ *
+ * ONLY facts that exist. The role is the artist type the facts page sets (Musician →
+ * "musician", Visual artist → "artist"); with no type there is no role word, never a
+ * guessed "DJ". The city is the first part of the place ("Chicago, IL" → "Chicago"), the
+ * genre the first one listed. Over MAX_TITLE, parts drop (role, then city, then genre)
+ * rather than the title being cut mid-word. No facts → the bare name; no name → ''.
+ */
+export function defaultSeoTitle(a: { name?: string | null; genre?: string | null; location?: string | null; schema_type?: 'MusicGroup' | 'Person' | null } | null | undefined): string {
+  const name = artistName(a)
+  if (!name) return ''
+  const flat = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const city = flat((a?.location ?? '').split(',')[0] ?? '')
+  const firstGenre = (a?.genre ?? '').split(',').map(flat).find(Boolean) ?? ''
+  const genre = firstGenre ? genreWords(firstGenre) : ''
+  const role = a?.schema_type === 'Person' ? 'artist' : a?.schema_type === 'MusicGroup' ? 'musician' : ''
+  const tries = [[city, genre, role], [city, genre], [genre, role], [genre], [city, role], [city], [role]]
+  for (const parts of tries) {
+    const said = parts.filter(Boolean).join(' ')
+    if (said && name.length + 3 + said.length <= MAX_TITLE) return `${name} · ${said}`
+  }
+  return name
+}
 
 /** http(s) URLs only: a `javascript:` or `data:` value in a meta tag is a sink. */
 export function safeHttpUrl(raw: unknown): string | null {
@@ -66,7 +123,8 @@ type SeoSource = Pick<PublicSitePayload, 'artist' | 'site_content'>
 export function resolveSeo(payload: SeoSource): SiteSeo {
   const c = payload.site_content ?? {}
   const name = (payload.artist?.name ?? '').trim()
-  const title = (c.seo_title ?? '').trim() || name
+  // The manager's own title always wins; blank = composed from the facts (audit #1).
+  const title = (c.seo_title ?? '').trim() || defaultSeoTitle(payload.artist)
   const override = (c.seo_description ?? '').trim()
   const bio = (payload.artist?.bio ?? '').trim()
   // The last fallback needs a NAME, not just a trimmed one. Without it the description
@@ -75,8 +133,9 @@ export function resolveSeo(payload: SeoSource): SiteSeo {
   // nothing in front of it is not.
   const fallback = name ? `${name} — official site` : ''
   const description = override ? toDescription(override) : bio ? toDescription(bio) : fallback
-  const ogImage = safeHttpUrl(c.og_image) ?? safeHttpUrl(payload.artist?.hero_image_url) ?? null
-  return { title, description, ogImage }
+  const card = safeHttpUrl(c.og_image)
+  const ogImage = card ?? safeHttpUrl(payload.artist?.hero_image_url) ?? null
+  return { title, description, ogImage, ogImageSize: ogCardSize(card) }
 }
 
 /* ----------------------------------------------------------------------------------
@@ -90,8 +149,15 @@ export type JsonLdOptions = {
   origin: string
   /** Releases for MusicAlbum entries; omit and no albums are emitted. */
   releases?: readonly SiteRelease[] | null
-  /** The artist's logo/photo URL for `image`/`logo`. */
+  /** The artist's photo (or wordmark) URL for `image`. Never the `logo`: see `mediaUrl`. */
   imageUrl?: string | null
+  /**
+   * Turns a media row's storage `path` into its public URL (the `media` bucket). With it,
+   * a MusicGroup's `logo` is the Brand page's primary logo (`logo_primary`) when the
+   * payload carries one. Without it, or with no Brand logo, there is no `logo` at all:
+   * never the `imageUrl` photo, which is what a 1600×800 hero became (audit #9).
+   */
+  mediaUrl?: (path: string) => string
   /**
    * The images the page actually SHOWS, and how: return the rendered `<img src>` (the
    * same URL, so Google can pair the node with the picture) and the alt it carries, or
@@ -127,38 +193,173 @@ function isUpcoming(show: SiteTourDate, today?: string): boolean {
   return true
 }
 
-/** Is this a PROFILE page on its platform, not a playlist, a track, a video or a set?
- *  `sameAs` asserts identity; a playlist link asserts nothing about who the artist is. */
-export function isProfileUrl(url: string): boolean {
-  let u: URL
-  try {
-    u = new URL(url)
-  } catch {
-    return false
-  }
-  const host = u.hostname.replace(/^www\./, '')
-  const segs = u.pathname.split('/').filter(Boolean)
-  if (host.endsWith('spotify.com')) return segs[0] === 'artist' || segs[0] === 'user'
-  if (host.endsWith('soundcloud.com')) return segs.length === 1
-  if (host.endsWith('youtube.com')) return segs.length === 1 ? segs[0].startsWith('@') : ['channel', 'c', 'user'].includes(segs[0] ?? '')
-  // YouTube's short links are videos, never a channel.
-  if (host === 'youtu.be') return false
-  if (host.endsWith('music.apple.com')) return segs.includes('artist')
-  if (host.endsWith('bandcamp.com')) return segs.length === 0
-  return segs.length <= 1
+/* ----------------------------------------------------------------------------------
+ * Profile URLs, per platform (audit #2)
+ * -------------------------------------------------------------------------------- */
+
+/**
+ * One platform's profile rule: which hosts are it, what a PROFILE path looks like there,
+ * and whether that profile is an IDENTITY (who the artist is) or only a page they own (a
+ * tip jar, a ticket organiser).
+ *
+ * Matched by HOST here, not through `platformFromUrl`, so the music databases (MusicBrainz,
+ * Discogs, Wikidata) work whether or not they are in SOCIAL_PLATFORMS, and a new platform
+ * in that list reaches `sameAs` only once someone writes its profile shape below. Hosts
+ * come from `linkHost` (lowercased, no `www.`). An unknown host is nobody's profile.
+ */
+type ProfileRule = { match: (host: string) => boolean; profile: (segs: string[], u: URL, host: string) => boolean; identity: boolean }
+
+const exactly = (...hosts: string[]) => (host: string) => hosts.includes(host)
+const HANDLE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+/** One path segment, handle-shaped, and not one of the platform's own pages. */
+const oneSeg = (reserved: readonly string[], shape: RegExp = HANDLE) => (s: string[]) => s.length === 1 && shape.test(s[0]) && !reserved.includes(s[0].toLowerCase())
+/** Drop a leading locale segment (`/us/artist/…`, `/de/artist/…`). */
+const unlocale = (s: string[]) => (/^[a-z]{2}$/.test(s[0] ?? '') ? s.slice(1) : s)
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const YT_TABS = ['featured', 'videos', 'shorts', 'streams', 'releases', 'playlists', 'community', 'about', 'podcasts']
+const AMAZON_MUSIC = /^music\.amazon\.(com|co\.uk|de|fr|it|es|co\.jp|ca|com\.au|in|com\.br|com\.mx)$/
+/** Eventbrite's own domains, listed (never "any TLD": `eventbrite.co.uk.evil.net` is not it). */
+const EVENTBRITE_TLDS = ['com', 'co.uk', 'ca', 'com.au', 'co.nz', 'ie', 'de', 'fr', 'es', 'it', 'nl', 'be', 'at', 'ch', 'pt', 'se', 'dk', 'fi', 'com.br', 'com.mx', 'com.ar', 'cl', 'com.pe', 'hk', 'sg']
+const EVENTBRITE = new RegExp(`^(?:([a-z0-9-]+)\\.)?eventbrite\\.(?:${EVENTBRITE_TLDS.map((t) => t.replace('.', '\\.')).join('|')})$`)
+/** Eventbrite's own subdomains, which are not an organiser's page. */
+const EVENTBRITE_RESERVED = ['help', 'api', 'developer', 'blog', 'status', 'community', 'm']
+
+function youtubeChannel(s: string[]): boolean {
+  const base = s.length && YT_TABS.includes(s[s.length - 1].toLowerCase()) ? s.slice(0, -1) : s
+  if (base.length === 1) return /^@[\w.-]+$/.test(base[0])
+  return base.length === 2 && ['channel', 'c', 'user'].includes(base[0])
 }
 
-/** Social PROFILE URLs only (a platform the bridge knows, profile-shaped), https,
- *  de-duplicated. */
-export function sameAsFrom(payload: Pick<PublicSitePayload, 'links' | 'artist'>): string[] {
-  const out = new Set<string>()
-  for (const l of payload.links ?? []) {
-    const url = safeHttpUrl(l.url)
-    if (url && platformFromUrl(url) && isProfileUrl(url)) out.add(url)
+const FB_RESERVED = ['events', 'groups', 'watch', 'marketplace', 'gaming', 'share', 'sharer', 'hashtag', 'reel', 'reels', 'stories', 'login', 'help', 'photo', 'photos', 'video', 'videos', 'search', 'settings', 'notifications', 'messages']
+function facebookProfile(s: string[], u: URL): boolean {
+  if (s.length === 1 && s[0] === 'profile.php') return /^\d+$/.test(u.searchParams.get('id') ?? '')
+  if (s.length === 1) return HANDLE.test(s[0]) && !s[0].endsWith('.php') && !FB_RESERVED.includes(s[0].toLowerCase())
+  return s.length === 3 && (s[0] === 'people' || s[0] === 'pages') && /^\d+$/.test(s[2])
+}
+
+const PROFILE_RULES: readonly ProfileRule[] = [
+  // Music platforms. The narrow hosts first: music.youtube.com is not youtube.com.
+  { match: exactly('music.youtube.com'), profile: (s) => s.length === 2 && s[0] === 'channel', identity: true },
+  { match: exactly('youtube.com', 'm.youtube.com'), profile: youtubeChannel, identity: true },
+  // Spotify `/user/` is a LISTENER account, not the artist (audit #2): artist pages only.
+  { match: exactly('open.spotify.com'), profile: (s) => { const t = /^intl-[a-z-]+$/i.test(s[0] ?? '') ? s.slice(1) : s; return t.length === 2 && t[0] === 'artist' && /^[A-Za-z0-9]+$/.test(t[1]) }, identity: true },
+  { match: exactly('music.apple.com'), profile: (s) => { const t = unlocale(s); return t[0] === 'artist' && (t.length === 2 || t.length === 3) && /^(id)?\d+$/.test(t[t.length - 1]) }, identity: true },
+  { match: (h) => AMAZON_MUSIC.test(h), profile: (s) => (s.length === 2 || s.length === 3) && s[0] === 'artists' && /^[A-Z0-9]{10}$/i.test(s[1]), identity: true },
+  { match: exactly('soundcloud.com', 'm.soundcloud.com'), profile: oneSeg(['discover', 'search', 'charts', 'stream', 'upload', 'you', 'feed', 'pages', 'settings', 'messages', 'notifications', 'tags', 'stations', 'jobs', 'mobile', 'imprint', 'popular', 'people', 'pro', 'artists', 'signin', 'terms-of-use']), identity: true },
+  // An artist's own subdomain; `bandcamp.com/<name>` is a FAN account.
+  { match: (h) => /^[a-z0-9-]+\.bandcamp\.com$/.test(h) && h !== 'daily.bandcamp.com', profile: (s) => s.length === 0 || (s.length === 1 && s[0] === 'music'), identity: true },
+  { match: exactly('deezer.com'), profile: (s) => { const t = unlocale(s); return t.length === 2 && t[0] === 'artist' && /^\d+$/.test(t[1]) }, identity: true },
+  { match: exactly('tidal.com', 'listen.tidal.com'), profile: (s) => { const t = s[0] === 'browse' ? s.slice(1) : s; return t.length === 2 && t[0] === 'artist' && /^\d+$/.test(t[1]) }, identity: true },
+  { match: exactly('audiomack.com'), profile: oneSeg(['search', 'trending-now', 'songs', 'albums', 'playlists', 'discover', 'world', 'upload', 'dashboard', 'premium', 'about', 'login', 'join', 'charts', 'recent']), identity: true },
+  { match: exactly('mixcloud.com', 'm.mixcloud.com'), profile: oneSeg(['discover', 'upload', 'live', 'select', 'search', 'categories', 'dashboard', 'settings', 'about', 'pro', 'careers', 'tag', 'player']), identity: true },
+  { match: exactly('beatport.com'), profile: (s) => s.length === 3 && s[0] === 'artist' && /^\d+$/.test(s[2]), identity: true },
+  { match: exactly('pandora.com'), profile: (s) => s.length === 3 && s[0] === 'artist' && /^AR/i.test(s[2]), identity: true },
+  // Music databases and listings.
+  { match: exactly('musicbrainz.org', 'beta.musicbrainz.org'), profile: (s) => s.length === 2 && s[0] === 'artist' && UUID.test(s[1]), identity: true },
+  { match: exactly('discogs.com'), profile: (s) => { const t = unlocale(s); return t.length === 2 && t[0] === 'artist' && /^\d+(-[^/]+)?$/.test(t[1]) }, identity: true },
+  { match: exactly('wikidata.org', 'm.wikidata.org'), profile: (s) => s.length === 2 && (s[0] === 'wiki' || s[0] === 'entity') && /^Q\d+$/.test(s[1]), identity: true },
+  { match: exactly('ra.co', 'residentadvisor.net'), profile: (s) => s.length === 2 && s[0] === 'dj' && HANDLE.test(s[1]), identity: true },
+  { match: exactly('songkick.com'), profile: (s) => s.length === 2 && s[0] === 'artists' && /^\d+/.test(s[1]), identity: true },
+  // Social.
+  { match: exactly('instagram.com'), profile: oneSeg(['p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'tv', 'direct', 'about', 'developer', 'legal', 'web', 'challenge', 'emails', 'lite']), identity: true },
+  { match: exactly('tiktok.com', 'm.tiktok.com'), profile: (s) => s.length === 1 && /^@[A-Za-z0-9._]+$/.test(s[0]), identity: true },
+  { match: exactly('facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.com'), profile: facebookProfile, identity: true },
+  { match: exactly('x.com', 'twitter.com', 'mobile.twitter.com', 'mobile.x.com'), profile: oneSeg(['home', 'explore', 'search', 'i', 'intent', 'share', 'hashtag', 'settings', 'messages', 'notifications', 'login', 'signup', 'tos', 'privacy', 'compose'], /^[A-Za-z0-9_]{1,15}$/), identity: true },
+  { match: exactly('threads.com', 'threads.net'), profile: (s) => s.length === 1 && /^@[A-Za-z0-9._]+$/.test(s[0]), identity: true },
+  { match: exactly('bsky.app'), profile: (s) => s.length === 2 && s[0] === 'profile', identity: true },
+  { match: exactly('snapchat.com'), profile: (s) => (s.length === 2 && s[0] === 'add' && HANDLE.test(s[1])) || (s.length === 1 && /^@[A-Za-z0-9._-]+$/.test(s[0])), identity: true },
+  { match: exactly('twitch.tv', 'm.twitch.tv'), profile: oneSeg(['videos', 'directory', 'p', 'downloads', 'jobs', 'settings', 'subscriptions', 'turbo', 'search', 'wallet', 'inventory', 'drops', 'prime', 'store']), identity: true },
+  // A numeric path on Vimeo is a VIDEO.
+  { match: exactly('vimeo.com'), profile: (s) => oneSeg(['channels', 'groups', 'ondemand', 'showcase', 'watch', 'search', 'upload', 'features', 'join', 'log_in', 'categories', 'blog', 'help', 'pricing'])(s) && !/^\d+$/.test(s[0]), identity: true },
+  { match: (h) => h === 'substack.com' || /^[a-z0-9-]+\.substack\.com$/.test(h), profile: (s, _u, h) => (h === 'substack.com' ? s.length === 1 && /^@[A-Za-z0-9._-]+$/.test(s[0]) : s.length === 0), identity: true },
+  // Creator and organiser pages that name the artist (Sam, 2026-09-28: "all the
+  // connections and links"): a membership, a tip page, a ticket organiser, a public
+  // Telegram channel. Never an invite (`t.me/+…`, `joinchat`): the name must be a handle.
+  { match: exactly('patreon.com'), profile: (s) => oneSeg(['posts', 'join', 'checkout', 'login', 'home', 'search', 'explore', 'messages', 'settings', 'notifications', 'signup'])(s) || (s.length === 2 && s[0] === 'c' && HANDLE.test(s[1])), identity: true },
+  { match: exactly('ko-fi.com'), profile: oneSeg(['explore', 'manage', 'account', 'login', 'signup', 'shop', 'about']), identity: true },
+  {
+    match: (h) => EVENTBRITE.test(h),
+    // `/o/<organiser>` on the main site, or an organiser's own `<name>.eventbrite.*` root.
+    profile: (s, _u, h) => {
+      const sub = EVENTBRITE.exec(h)?.[1]
+      return sub ? !EVENTBRITE_RESERVED.includes(sub) && s.length === 0 : s.length === 2 && s[0] === 'o' && HANDLE.test(s[1])
+    },
+    identity: true,
+  },
+  { match: exactly('t.me', 'telegram.me'), profile: oneSeg(['joinchat', 'addstickers', 'addemoji', 'addtheme', 'share', 'proxy', 'socks', 'iv', 'login', 'setlanguage', 'confirmphone', 'contact', 'boost', 'invoice'], /^[A-Za-z][A-Za-z0-9_]{3,31}$/), identity: true },
+  // Payment handles: profile-shaped, never `sameAs` (they can carry a personal legal
+  // name). Discord and WhatsApp have no rule at all: an invite or chat link is not a profile.
+  { match: exactly('cash.app'), profile: (s) => s.length === 1 && /^\$[A-Za-z0-9_-]+$/.test(s[0]), identity: false },
+  { match: exactly('venmo.com', 'account.venmo.com'), profile: (s) => s.length === 2 && s[0] === 'u' && HANDLE.test(s[1]), identity: false },
+  { match: exactly('paypal.me'), profile: oneSeg([]), identity: false },
+  { match: exactly('paypal.com'), profile: (s) => s.length === 2 && s[0] === 'paypalme' && HANDLE.test(s[1]), identity: false },
+]
+
+function profileRule(url: string): ProfileRule | null {
+  if (typeof url !== 'string') return null
+  const host = linkHost(url)
+  if (!host) return null
+  let u: URL
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return null
   }
+  const segs = u.pathname.split('/').filter(Boolean)
+  const rule = PROFILE_RULES.find((r) => r.match(host))
+  return rule && rule.profile(segs, u, host) ? rule : null
+}
+
+/** Is this a PROFILE page on a platform we know, shaped the way that platform shapes one
+ *  (not a playlist, a track, a video, a set or a post)? Unknown host = no. */
+export function isProfileUrl(url: string): boolean {
+  return profileRule(url) !== null
+}
+
+/**
+ * Is this the artist's own profile on an IDENTITY platform, so `sameAs` may assert it IS
+ * the artist? True for streaming, social, music-database and listing profiles, and for
+ * creator and organiser pages that name the artist (Patreon, Ko-fi, an Eventbrite
+ * organiser, a public Telegram channel). FALSE for a payment handle (PayPal, Cash App,
+ * Venmo: it can carry a personal legal name), a join or invite link (Discord, WhatsApp,
+ * `t.me/+…`), a playlist, a video, a post, a listener account (Spotify `/user/`), and any
+ * host not listed above.
+ *
+ * lone-star uses this same function to decide which connected profiles ride the wire as
+ * `identity_links`, so the two sides cannot disagree.
+ */
+export function isIdentityProfileUrl(url: string): boolean {
+  return profileRule(url)?.identity === true
+}
+
+/** The same profile spelled two ways (`www.`, a trailing slash, a share-tracking query)
+ *  is one `sameAs` entry. The FIRST spelling seen is the one kept. */
+function profileKey(url: string): string {
+  const u = new URL(url)
+  for (const k of [...u.searchParams.keys()]) if (/^(utm_.*|si|igsh|igshid|fbclid|ref|feature)$/i.test(k)) u.searchParams.delete(k)
+  u.searchParams.sort()
+  return `${u.hostname.toLowerCase().replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}${u.search}`
+}
+
+/**
+ * Every identity profile the artist has published, de-duplicated: the on-site `links`
+ * (buttons), then `identity_links` (connected profiles that are not buttons, audit #2),
+ * then the Spotify artist id's own page. Only `isIdentityProfileUrl` URLs, http(s) only.
+ */
+export function sameAsFrom(payload: Pick<PublicSitePayload, 'links' | 'artist' | 'identity_links'>): string[] {
+  const out = new Map<string, string>()
+  const add = (raw: unknown) => {
+    const url = safeHttpUrl(raw)
+    if (!url || !isIdentityProfileUrl(url)) return
+    const key = profileKey(url)
+    if (!out.has(key)) out.set(key, url)
+  }
+  for (const l of payload.links ?? []) add(l?.url)
+  const identity = payload.identity_links
+  for (const l of Array.isArray(identity) ? identity : []) add(l?.url)
   const spotify = payload.artist?.spotify_artist_id
-  if (spotify && /^[A-Za-z0-9]+$/.test(spotify)) out.add(`https://open.spotify.com/artist/${spotify}`)
-  return [...out]
+  if (spotify && /^[A-Za-z0-9]+$/.test(spotify)) add(`https://open.spotify.com/artist/${spotify}`)
+  return [...out.values()]
 }
 
 function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSeo): Node {
@@ -178,13 +379,17 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
   // Person has `homeLocation` and `image`, and no genre. Same facts, the properties
   // schema.org defines for that type — anything else fails the validator.
   const place = location ? { '@type': 'Place', name: location } : null
+  // `logo` from the Brand page's primary logo only (audit #9): a hero photo is not a logo.
+  const logoRow = person || !opts.mediaUrl ? null : (payload.media ?? []).find((m) => m.purpose === 'logo_primary' && m.path)
+  const logo = logoRow && opts.mediaUrl ? safeHttpUrl(opts.mediaUrl(logoRow.path)) : null
   return {
     '@type': person ? 'Person' : 'MusicGroup',
     '@id': `${opts.origin}/#artist`,
     name: artistName(a),
     url: `${opts.origin}/`,
     ...(description ? { description } : {}),
-    ...(opts.imageUrl ? (person ? { image: opts.imageUrl } : { image: opts.imageUrl, logo: opts.imageUrl }) : {}),
+    ...(opts.imageUrl ? { image: opts.imageUrl } : {}),
+    ...(logo ? { logo } : {}),
     ...(genre.length && !person ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
     ...(place ? (person ? { homeLocation: place } : { foundingLocation: place }) : {}),
     ...(sameAs.length ? { sameAs } : {}),
@@ -225,7 +430,9 @@ function eventNode(show: SiteTourDate, payload: PublicSitePayload, opts: JsonLdO
         }
       : {}),
     performer: [artist, ...(show.support ?? []).filter(Boolean).map((name) => ({ '@type': 'MusicGroup', name }))],
-    ...(ticket ? { offers: { '@type': 'Offer', url: ticket, availability: 'https://schema.org/InStock' } } : {}),
+    // No `availability`: nothing on the wire says tickets are in stock, and an Offer
+    // without it is valid (audit #6). The ticket link is the whole fact.
+    ...(ticket ? { offers: { '@type': 'Offer', url: ticket } } : {}),
   }
 }
 
@@ -625,6 +832,15 @@ export function probePrompts(rawName: string, schemaType?: string | null): strin
 
 export type FaqEntry = { question: string; answer: string }
 
+/**
+ * The prompts whose answer is a MOVING fact (audit #10), by prompt number, and where the
+ * answer comes from. They are automatic only: the next show always from Tour, the latest
+ * releases always from Music. A written answer there was stale the day after the show,
+ * and it won forever, so `faqEntries` ignores a stored one and the SEO page shows these
+ * two read-only.
+ */
+export const FAQ_AUTO_ONLY: Readonly<Record<number, 'tour' | 'music'>> = { 3: 'tour', 4: 'music' }
+
 function fmtDate(iso: string): string {
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso)
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -674,12 +890,30 @@ export function autoFaqAnswer(n: number, src: FaqSource): string {
     return [genre ? `${name} makes ${genre}.` : '', where ? `${name} is based in ${where}.` : ''].filter(Boolean).join(' ')
   }
   if (n === 3) {
-    const next = (src.tour_dates ?? [])
-      .filter((s) => s.date && s.is_past !== true && (!src.today || s.date.slice(0, 10) >= src.today))
+    // No tour list at all is UNKNOWN, not "no shows": say nothing rather than guess.
+    if (!Array.isArray(src.tour_dates)) return ''
+    const day = (s: SiteTourDate) => s.date!.slice(0, 10)
+    const next = src.tour_dates
+      .filter((s) => s.date && s.is_past !== true && (!src.today || day(s) >= src.today))
       .sort((x, y) => (x.date! < y.date! ? -1 : 1))[0]
-    if (!next) return ''
-    const place = [next.venue, next.city].filter(Boolean).join(', ')
-    return `${name} plays ${place ? `${place} on ` : ''}${fmtDate(next.date!)}.`
+    if (next) {
+      const place = [next.venue, next.city].filter(Boolean).join(', ')
+      return `${name} plays ${place ? `${place} on ` : ''}${fmtDate(next.date!)}.`
+    }
+    // Nothing upcoming still answers the question (audit #7), plainly, with the most recent
+    // shows that did happen. Past by the calendar when `today` is known — so a future show
+    // the manager marked past (cancelled) is not a "recent show" — else by the flag.
+    const none = 'No shows are scheduled right now.'
+    const recent = src.tour_dates
+      .filter((s) => s.date && (src.today ? day(s) < src.today : s.is_past === true))
+      .sort((x, y) => (x.date! > y.date! ? -1 : 1))
+      .slice(0, 3)
+    if (!recent.length) return none
+    const said = recent.map((s) => {
+      const place = [s.venue, s.city].filter(Boolean).join(', ')
+      return place ? `${place} (${fmtDate(s.date!)})` : fmtDate(s.date!)
+    })
+    return `${none} Recent shows: ${said.join('; ')}.`
   }
   if (n === 4) {
     const recent = [...(src.releases ?? [])].filter((r) => r.release_date).sort((x, y) => (x.release_date! > y.release_date! ? -1 : 1)).slice(0, 3)
@@ -726,7 +960,9 @@ export function faqEntries(src: FaqSource): FaqEntry[] {
   const c = src.site_content ?? {}
   const out: FaqEntry[] = []
   prompts.forEach((question, i) => {
-    const answer = faqProse(c[`faq_answer_${i + 1}`] ?? '') || autoFaqAnswer(i + 1, src)
+    // A written answer to a moving fact is ignored: see FAQ_AUTO_ONLY.
+    const written = FAQ_AUTO_ONLY[i + 1] ? '' : faqProse(c[`faq_answer_${i + 1}`] ?? '')
+    const answer = written || autoFaqAnswer(i + 1, src)
     if (answer) out.push({ question, answer })
   })
   for (let n = 1; n <= 5; n++) {
@@ -756,7 +992,14 @@ export function faqPageJsonLd(payload: FaqSource, opts: { origin: string; path?:
         '@id': `${opts.origin}${path}#faq`,
         url: `${opts.origin}${path}`,
         name: `${artistName(payload.artist)} — questions and answers`,
-        about: { '@id': `${opts.origin}/#artist` },
+        // The artist node itself is not on this page, so a bare @id pointed at nothing
+        // here (audit #11). Type + @id + name resolve on their own and still join the
+        // full node on the home page by @id.
+        about: {
+          '@type': payload.artist.schema_type === 'Person' ? 'Person' : 'MusicGroup',
+          '@id': `${opts.origin}/#artist`,
+          name: artistName(payload.artist),
+        },
         mainEntity: entries.map((e) => ({
           '@type': 'Question',
           name: e.question,

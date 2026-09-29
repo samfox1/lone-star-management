@@ -24,6 +24,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => {
     const query: Record<string, unknown> = {}
     for (const m of ['select', 'eq', 'not']) query[m] = () => query
+    query.single = async () => ({ data: null, error: null })
     query.then = (resolve: (v: unknown) => unknown) => resolve({ count: 0, error: null })
     return { from: () => query }
   },

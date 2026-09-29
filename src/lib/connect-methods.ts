@@ -33,7 +33,7 @@ export type HandleMethod = {
   /** The platform's name, for the one-line messages. */
   label: string
   /** What the field asks for. */
-  noun: 'handle' | 'username' | 'invite code' | 'page name' | 'name'
+  noun: 'handle' | 'username' | 'invite code' | 'page name' | 'name' | 'ID'
   /** The address around the handle, grey and fixed: `x.com/` before, `.bandcamp.com` after. */
   before: string
   after: string

@@ -21,6 +21,7 @@ import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { ABOUT_PLACEMENTS, safeHttpUrl } from '@samfox1/site-bridge/seo'
+import { INDEXNOW_CONTENT_KEY } from '@samfox1/site-bridge/indexnow'
 import { safeHref } from '@/lib/url'
 import { isTooLong, textLimit, tooLongError, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 
@@ -55,6 +56,9 @@ const RESERVED_CONTENT_KEYS = new Set<string>([
   // Cursor keys carry URLs into a CSS `url()` sink on the site, so they only write
   // through saveCursorField's validator — never as a runtime-manifest text field.
   ...CURSOR_KEYS,
+  // The IndexNow key: only the system writes it (lib/indexnow.ts ensureIndexNowKey). A
+  // field of that name would let a text box change what the site proves it owns.
+  INDEXNOW_CONTENT_KEY,
 ])
 
 /** The shape a CUSTOM site's field key must have to become a site_content key. Mirrors

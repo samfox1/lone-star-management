@@ -39,6 +39,11 @@ export type SocialPlatform = {
    *  platform that owns the rest of the domain: `youtube.com` stays YouTube, and an
    *  `amazon.com` product page stays nobody's. */
   subdomainOnly?: boolean
+  /** A music fact database (MusicBrainz, Discogs, Wikidata; AI_VISIBILITY_AUDIT.md 1.3):
+   *  the profile says WHO the artist is, for the fact card's `sameAs`, and is NEVER a site
+   *  button. The editor never offers one as a button; a site that meets one among its links
+   *  should leave it out of its buttons too. */
+  identityOnly?: true
 }
 
 /** Amazon Music's country storefronts: the Amazon Music Unlimited markets. */
@@ -94,6 +99,11 @@ export const SOCIAL_PLATFORMS: readonly SocialPlatform[] = [
   { slug: 'paypal', label: 'PayPal', urlHint: 'https://paypal.me/', aliasHosts: ['paypal.com'] },
   { slug: 'resident advisor', label: 'Resident Advisor', urlHint: 'https://ra.co/dj/', aliasHosts: ['residentadvisor.net'] },
   { slug: 'eventbrite', label: 'Eventbrite', urlHint: 'https://eventbrite.com/o/', aliasHosts: EVENTBRITE_COUNTRIES },
+  // 2026-09-28: the music fact databases AI answers lean on. Identity only: they feed the
+  // fact card's `sameAs`, never a button.
+  { slug: 'musicbrainz', label: 'MusicBrainz', urlHint: 'https://musicbrainz.org/artist/', identityOnly: true },
+  { slug: 'discogs', label: 'Discogs', urlHint: 'https://www.discogs.com/artist/', identityOnly: true },
+  { slug: 'wikidata', label: 'Wikidata', urlHint: 'https://www.wikidata.org/wiki/', identityOnly: true },
 ] as const
 
 /** The slug a link row's label joins on. The ONE normalization, so the editor, the

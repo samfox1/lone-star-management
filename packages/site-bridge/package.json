@@ -106,6 +106,10 @@
     "./brand": {
       "types": "./src/brand.ts",
       "default": "./src/brand.ts"
+    },
+    "./indexnow": {
+      "types": "./src/indexnow.ts",
+      "default": "./src/indexnow.ts"
     }
   },
   "files": [

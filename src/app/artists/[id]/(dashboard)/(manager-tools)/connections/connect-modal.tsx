@@ -59,6 +59,7 @@ export function ConnectModal({
   onClose,
   onDone,
   shopifyApp = false,
+  createPages,
 }: {
   artistId: string
   /** Keys already on the page — dimmed in the grid, not addable twice. */
@@ -72,6 +73,9 @@ export function ConnectModal({
   /** The Shopify app's credentials are set (a server-made boolean — never the secret):
    *  Shopify connects by going to Shopify, not by a pasted token. */
   shopifyApp?: boolean
+  /** By connection key, a link that MAKES the page on that platform, for one the artist has
+   *  none of yet (MusicBrainz: its own artist editor, pre-filled; built on the server). */
+  createPages?: Partial<Record<string, string>>
 }) {
   useLockBodyScroll(true)
   const [step, setStep] = useState<'pick' | 'details' | 'run'>('pick')
@@ -229,7 +233,14 @@ export function ConnectModal({
           <>
             <div className="mt-1">
               {picks.map((p) => (
-                <DetailRow key={p.def.key} pick={p} app={viaApp(p)} error={viaApp(p) ? shopError : null} onChange={(patch) => setInput(p.def.key, patch)} />
+                <DetailRow
+                  key={p.def.key}
+                  pick={p}
+                  app={viaApp(p)}
+                  error={viaApp(p) ? shopError : null}
+                  createPage={createPages?.[p.def.key]}
+                  onChange={(patch) => setInput(p.def.key, patch)}
+                />
               ))}
             </div>
             <div className="mt-6 flex items-center justify-between">
@@ -424,6 +435,23 @@ function SyncSwitch({ def, input, onChange }: { def: ConnectionDef; input: Conne
   )
 }
 
+/**
+ * "Create the MusicBrainz page" (AI_VISIBILITY_AUDIT.md 4.1): the platform's own form, opened
+ * in a new tab already filled in. Nothing is sent from here: the artist signs in there and
+ * submits it, then pastes the new page's link into the field above. https only.
+ */
+function CreatePage({ def, href }: { def: ConnectionDef; href?: string }) {
+  if (!href?.startsWith('https://')) return null
+  return (
+    <div className="flex flex-col gap-0.5 text-[12px] leading-snug text-ink-muted">
+      <a href={href} target="_blank" rel="noopener noreferrer" className="w-fit font-semibold text-ink underline underline-offset-2">
+        Create the {def.label} page
+      </a>
+      <span>It opens filled in. Sign in there and submit it yourself.</span>
+    </div>
+  )
+}
+
 /** The reason a store address can't be used, under its field. */
 function ShopError({ error }: { error: string | null }) {
   if (!error) return null
@@ -434,7 +462,19 @@ function ShopError({ error }: { error: string | null }) {
   )
 }
 
-function DetailRow({ pick, app, error, onChange }: { pick: Pick; app?: boolean; error?: string | null; onChange: (patch: ConnectInput) => void }) {
+function DetailRow({
+  pick,
+  app,
+  error,
+  createPage,
+  onChange,
+}: {
+  pick: Pick
+  app?: boolean
+  error?: string | null
+  createPage?: string
+  onChange: (patch: ConnectInput) => void
+}) {
   const { def, input } = pick
   return (
     <div className="flex items-center gap-3.5 py-3">
@@ -443,6 +483,7 @@ function DetailRow({ pick, app, error, onChange }: { pick: Pick; app?: boolean; 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <ConnectField def={def} input={input} app={app} failed={!!error} onChange={onChange} />
         <SyncSwitch def={def} input={input} onChange={onChange} />
+        <CreatePage def={def} href={createPage} />
         <ShopError error={error ?? null} />
       </div>
     </div>

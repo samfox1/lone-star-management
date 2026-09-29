@@ -1,42 +1,28 @@
 /**
  * Public-site SEO/OG metadata, derived from the PUBLISHED artist data so a fan
  * sharing /[slug] gets a proper title + preview card. Pure over SiteData (no DB);
- * generateMetadata on the public page wraps it. A manager's SEO overrides
- * (`seo_title` / `seo_description` / `og_image`, set on the Manager-tools → SEO
- * page and published with the site) take precedence; each unset field falls back
- * to an artist-derived default (name, bio, hero image).
+ * generateMetadata on the public page wraps it.
+ *
+ * The title, description and image are the bridge's `resolveSeo` (AI visibility audit
+ * F18, 2026-09-28): this file used to carry a second copy of that precedence, and a
+ * built-in template site and a connected site must not disagree about either. So: the
+ * manager's SEO overrides (`seo_title` / `seo_description` / `og_image`, set on the
+ * Manager-tools → SEO page and published with the site) win; a blank title is composed
+ * from the facts ("Skeen · Chicago house musician"); the bio, then "<name> — official
+ * site", is the description; the card, then the hero, is the image.
  */
 import type { Metadata } from 'next'
+import { resolveSeo } from '@samfox1/site-bridge/seo'
 import type { SiteData } from '@/lib/site'
 import { safeHref } from '@/lib/url'
-
-function truncate(s: string, max = 160): string {
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
-}
-
-/** Collapse whitespace + truncate, for a description drawn from free text. */
-function toDescription(s: string): string {
-  return truncate(s.replace(/\s+/g, ' ').trim())
-}
-
-/** Manager override → bio → a generic default. */
-function resolveDescription(override: string, bio: string | null, name: string): string {
-  if (override) return toDescription(override)
-  if (bio) return toDescription(bio)
-  return `${name} — official site`
-}
 
 export function siteMetadata(site: SiteData | null): Metadata {
   if (!site) return { title: 'Not found' }
 
-  const { name, bio, hero_image_url } = site.artist
-  const c = site.site_content
-
-  const title = (c.seo_title || '').trim() || name
-  const description = resolveDescription((c.seo_description || '').trim(), bio, name)
-  // Override image wins; never emit an unsafe (javascript:/data:) URL as og:image.
-  const ogImage = safeHref((c.og_image || '').trim() || hero_image_url)
-  const images = ogImage ? [ogImage] : []
+  const { title, description, ogImage, ogImageSize } = resolveSeo(site)
+  // http(s) only (resolveSeo's guard): never a javascript:/data: URL as og:image. The
+  // size only when it is KNOWN (the SEO page's 1200×630 card), never guessed for a hero.
+  const images = ogImage ? [ogImageSize ? { url: ogImage, ...ogImageSize } : ogImage] : []
 
   // The browser-tab icon, derived from the primary logo by the Brand page and published
   // as a media row. Deliberately NO fallback to the hero image or the raw logo: an

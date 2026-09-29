@@ -23,6 +23,7 @@
  * Pure. No DB, no React. The page reads rows and passes them in; the modal reads defs.
  */
 import { SOCIAL_PLATFORMS, platformFromUrl, socialSlug } from '@samfox1/site-bridge/social'
+import { isIdentityProfileUrl } from '@samfox1/site-bridge/seo'
 import {
   INTEGRATION_REGISTRY,
   isConnected,
@@ -60,6 +61,10 @@ export type ConnectionDef = {
   urlHint?: string
   /** Set when the connection pulls content into the dashboard. */
   source?: ConnectionSource
+  /** A music fact database (MusicBrainz, Discogs, Wikidata): its profile feeds the fact
+   *  card's `sameAs` and is never a site button (the bridge's `identityOnly`). The
+   *  Connections page shows it like any other; `buttonChoices` never offers it. */
+  identityOnly?: true
 }
 
 function socialFor(label: string) {
@@ -75,6 +80,7 @@ export const CONNECTIONS: readonly ConnectionDef[] = (() => {
     kind: 'social',
     social: p.slug,
     urlHint: p.urlHint,
+    ...(p.identityOnly ? { identityOnly: true as const } : {}),
   }))
   for (const intg of INTEGRATION_REGISTRY) {
     const source: ConnectionSource = { key: intg.key, section: intg.section, idField: intg.idField, placeholder: intg.placeholder }
@@ -216,6 +222,55 @@ export function isProfileLink(link: LinkRowLike): boolean {
 }
 
 /**
+ * IDENTITY (AI_VISIBILITY_AUDIT.md 1.2; Sam, 2026-09-28: "add all the connections and
+ * links"). The fact card's `sameAs` names the artist's profiles elsewhere so Google and AI
+ * engines know which Skeen this is. It used to see only site BUTTONS, and a new connection
+ * starts off the site, so most connections never reached it. The public door now also sends
+ * `identity_links`: every connected profile that says who the artist is, button or not.
+ *
+ * PRIVACY. A link that is not a button was never chosen to be shown, so the door publishes
+ * one only when TypeScript judged it an identity profile: a connection's own profile row
+ * (not a role-bound button, not a booking address) whose url the bridge reads as a real
+ * artist profile (`isIdentityProfileUrl`: never a payment handle, an invite or a playlist). SQL
+ * cannot run that rule, so the verdict is STORED in `links.identity_url` by every door that
+ * writes a link's url (createContent / updateContent, lib/content.ts) and the door reads it.
+ *
+ * The verdict is the URL judged, not a yes/no: `get_public_site` publishes a link only while
+ * its PUBLISHED url equals it. So a verdict vouches for one exact string, and a url changed
+ * by any path that skipped this (a script, a restore, a draft not yet published) is never
+ * published by an older verdict.
+ */
+export function identityUrlOf(link: LinkRowLike): string | null {
+  if (!link.url || !isProfileLink(link)) return null
+  return isIdentityProfileUrl(link.url) ? link.url : null
+}
+
+/** One `links` row as the identity backfill reads it (scripts/backfill-identity-links.ts). A
+ *  row read before the column exists has no `identity_url`: unjudged. */
+export type IdentityRow = LinkRowLike & { artist_id: string; identity_url?: string | null }
+
+/** One verdict the backfill would store: `from` what the row holds, `to` what it should. */
+export type IdentityChange = {
+  id: string
+  artist_id: string
+  label: string | null
+  url: string | null
+  on_site: boolean | null
+  from: string | null
+  to: string | null
+}
+
+/** Every row whose stored verdict is not what `identityUrlOf` says today, flagged or cleared.
+ *  A row that is already right is left out, so a second run plans nothing. */
+export function planIdentityBackfill(rows: readonly IdentityRow[]): IdentityChange[] {
+  return rows.flatMap((r) => {
+    const from = r.identity_url ?? null
+    const to = identityUrlOf(r)
+    return from === to ? [] : [{ id: r.id, artist_id: r.artist_id, label: r.label, url: r.url, on_site: r.on_site ?? null, from, to }]
+  })
+}
+
+/**
  * What a connection's right-hand chip says.
  *   synced  — the source is connected and content from it exists
  *   failed  — the source is connected and NOTHING came in: a pull that proved nothing
@@ -328,7 +383,8 @@ export function buttonChoices<L extends LinkRowLike & { onSite: boolean }>(links
     .filter((l) => !l.onSite)
     .flatMap((link) => {
       const def = connectionOfLink(link)
-      return def ? [{ def, link }] : []
+      // An identity connection (MusicBrainz…) feeds the fact card, never a button.
+      return def && !def.identityOnly ? [{ def, link }] : []
     })
     .sort((a, b) => a.def.label.localeCompare(b.def.label, 'en', { sensitivity: 'base' }))
 }

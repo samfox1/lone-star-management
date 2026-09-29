@@ -5,7 +5,7 @@ import { mediaUrl } from '@/lib/storage-url'
 import { isCustom, publicSiteOrigin } from '@/lib/custom-site'
 import { requireArtist } from '../../../../_data'
 import { isSeoSection } from '../sections'
-import { autoFaqAnswer } from '@samfox1/site-bridge/seo'
+import { autoFaqAnswer, defaultSeoTitle } from '@samfox1/site-bridge/seo'
 import { listContent } from '@/lib/content'
 import { ListingSection } from '../sections/listing'
 import { LogoSection } from '../sections/logo'
@@ -40,7 +40,16 @@ export default async function SeoSectionPage({ params }: { params: Promise<{ id:
   const siteUrl = publicSiteOrigin(artist)
   const schemaType = (facts?.schema_type as string | null) ?? 'MusicGroup'
 
-  if (section === 'listing') return <ListingSection artistId={id} name={artist.name} bio={bio} siteUrl={siteUrl} initial={seo} />
+  if (section === 'listing') {
+    // The title the site composes when this one is blank (audit #1), from the same facts.
+    const defaultTitle = defaultSeoTitle({
+      name: artist.name,
+      genre: (facts?.genre as string | null) ?? null,
+      location: (facts?.location as string | null) ?? null,
+      schema_type: schemaType as 'MusicGroup' | 'Person',
+    })
+    return <ListingSection artistId={id} name={artist.name} defaultTitle={defaultTitle} bio={bio} siteUrl={siteUrl} initial={seo} />
+  }
   if (section === 'facts') {
     return <FactsSection artistId={id} initial={{ genre: (facts?.genre as string | null) ?? '', location: (facts?.location as string | null) ?? '', schema_type: schemaType }} />
   }

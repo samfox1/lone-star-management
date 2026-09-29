@@ -25,6 +25,9 @@
  * lines below were printed from their service files on the day they were wired and checked
  * by hand against each file. PayPal's `fromPath` answers `{ handle: '' }` to every probe
  * because none is a paypal.me link (it reads only /paypalme/<name> on paypal.com).
+ *
+ * THE 3 IDENTITY CONNECTIONS (musicbrainz, discogs, wikidata, 2026-09-28) are new too, pinned
+ * the same way; identity-only.test.ts pins what each accepts and refuses.
  */
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -94,6 +97,8 @@ const BEFORE_METHOD_KEYS = [
   'instagram', 'tiktok', 'youtube', 'spotify', 'apple music', 'soundcloud', 'bandcamp', 'facebook', 'x', 'threads', 'substack', 'patreon', 'discord', 'twitch', 'deezer', 'tidal',
   // 2026-09-28
   'youtube music', 'amazon music', 'audiomack', 'mixcloud', 'beatport', 'pandora', 'bluesky', 'snapchat', 'whatsapp', 'telegram', 'vimeo', 'songkick', 'ko-fi', 'cash app', 'venmo', 'paypal', 'resident advisor', 'eventbrite',
+  // 2026-09-28, identity only
+  'musicbrainz', 'discogs', 'wikidata',
 ]
 const NONE18 = Array(18).fill(null)
 const BEFORE_METHODS = {
@@ -145,6 +150,12 @@ const BEFORE_METHODS = {
   },
   'resident advisor': { kind: 'handle', label: 'Resident Advisor', noun: 'name', hosts: ['ra.co', 'residentadvisor.net'], rule: '/^[A-Za-z0-9-]{1,50}$/', example: 'skeenmusic', before: 'ra.co/dj/', after: '', url: 'https://ra.co/dj/h4ndle', fromPath: NONE18 },
   eventbrite: { kind: 'link', label: 'Eventbrite' },
+  // 2026-09-28, identity only
+  musicbrainz: { kind: 'link', label: 'MusicBrainz', path: '/^\\/artist\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\/?$/i', pathNoun: 'artist' },
+  discogs: { kind: 'link', label: 'Discogs', path: '/^(?:\\/[a-z]{2}(?:_[A-Z]{2})?)?\\/artist\\/(\\d+)(?:-[^/?#]*)?\\/?$/', pathNoun: 'artist' },
+  wikidata: {
+    kind: 'handle', label: 'Wikidata', noun: 'ID', hosts: ['wikidata.org'], rule: '/^Q[1-9]\\d*$/', example: 'Q1299', before: 'wikidata.org/wiki/', after: '', url: 'https://www.wikidata.org/wiki/h4ndle', fromPath: NONE18,
+  },
 }
 
 const BEFORE_CONNECTIONS = [
@@ -183,6 +194,10 @@ const BEFORE_CONNECTIONS = [
   { key: 'paypal', label: 'PayPal', kind: 'social', social: 'paypal', urlHint: 'https://paypal.me/' },
   { key: 'resident advisor', label: 'Resident Advisor', kind: 'social', social: 'resident advisor', urlHint: 'https://ra.co/dj/' },
   { key: 'eventbrite', label: 'Eventbrite', kind: 'social', social: 'eventbrite', urlHint: 'https://eventbrite.com/o/' },
+  // 2026-09-28, identity only: a connection, never a site button
+  { key: 'musicbrainz', label: 'MusicBrainz', kind: 'social', social: 'musicbrainz', urlHint: 'https://musicbrainz.org/artist/', identityOnly: true },
+  { key: 'discogs', label: 'Discogs', kind: 'social', social: 'discogs', urlHint: 'https://www.discogs.com/artist/', identityOnly: true },
+  { key: 'wikidata', label: 'Wikidata', kind: 'social', social: 'wikidata', urlHint: 'https://www.wikidata.org/wiki/', identityOnly: true },
   { key: 'bandsintown', label: 'Bandsintown', kind: 'service', source: { key: 'bandsintown', section: 'tour', idField: 'bandsintown_name', placeholder: 'Bandsintown artist name' } },
   { key: 'ticketmaster', label: 'Ticketmaster', kind: 'service', source: { key: 'ticketmaster', section: 'tour', idField: 'ticketmaster_attraction_id', placeholder: 'Ticketmaster attraction ID or artist link' } },
   { key: 'drive', label: 'Google Drive', kind: 'service', source: { key: 'drive', section: 'files', idField: 'drive_folder_id', placeholder: 'Google Drive folder link' } },

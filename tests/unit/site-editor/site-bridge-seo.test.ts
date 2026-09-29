@@ -9,8 +9,12 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import {
+  FAQ_AUTO_ONLY,
+  MAX_TITLE,
   SEO_RULES,
   autoFaqAnswer,
+  defaultSeoTitle,
+  isIdentityProfileUrl,
   faqEntries,
   faqPageJsonLd,
   probePrompts,
@@ -98,10 +102,11 @@ describe('resolveSeo', () => {
     expect(long.length).toBe(160)
     expect(long.endsWith('…')).toBe(true)
   })
-  it('title: override else the name; whitespace-only override = unset', () => {
-    expect(resolveSeo(payload()).title).toBe('Skeen')
+  it('title: override else the composed default (audit #1); whitespace-only override = unset', () => {
+    // The fixture has genre + location and no artist type, so no role word.
+    expect(resolveSeo(payload()).title).toBe('Skeen · Chicago house')
     expect(resolveSeo(payload({ site_content: { seo_title: 'SKEEN' } })).title).toBe('SKEEN')
-    expect(resolveSeo(payload({ site_content: { seo_title: '   ' } })).title).toBe('Skeen')
+    expect(resolveSeo(payload({ site_content: { seo_title: '   ' } })).title).toBe('Skeen · Chicago house')
   })
   it('CRITICAL: og image is og_image > hero, http(s) only', () => {
     expect(resolveSeo(payload()).ogImage).toBe('https://cdn.example.com/hero.jpg')
@@ -186,7 +191,8 @@ describe('jsonLdGraph', () => {
     expect(e.name).toBe('Skeen at Smartbar, Chicago')
     expect(e.startDate).toBe('2026-09-10')
     expect(e.location).toEqual({ '@type': 'Place', name: 'Smartbar', address: { '@type': 'PostalAddress', addressLocality: 'Chicago', addressRegion: 'IL', addressCountry: 'US' } })
-    expect(e.offers).toEqual({ '@type': 'Offer', url: 'https://tix.example.com/1', availability: 'https://schema.org/InStock' })
+    // No availability: nothing real says the tickets are in stock (audit #6).
+    expect(e.offers).toEqual({ '@type': 'Offer', url: 'https://tix.example.com/1' })
     expect(e.performer).toEqual([{ '@id': `${ORIGIN}/#artist` }, { '@type': 'MusicGroup', name: 'Jigitz' }])
   })
   it('without `today`, is_past decides', () => {
@@ -257,7 +263,7 @@ describe('sitemap + robots', () => {
     for (const ok of ['https://open.spotify.com/artist/abc', 'https://soundcloud.com/skeen', 'https://www.youtube.com/@skeen', 'https://youtube.com/channel/UCx', 'https://instagram.com/skeen', 'https://music.apple.com/us/artist/skeen/1'])
       expect(isProfileUrl(ok), ok).toBe(true)
     // youtu.be is YouTube's (platformFromUrl, 2026-09-28), and every youtu.be link is a VIDEO.
-    for (const no of ['https://open.spotify.com/playlist/x', 'https://open.spotify.com/track/x', 'https://soundcloud.com/skeen/sets/mix', 'https://www.youtube.com/watch?v=x', 'https://instagram.com/p/abc', 'https://youtu.be/dQw4w9WgXcQ', 'https://music.youtube.com/watch?v=x'])
+    for (const no of ['https://open.spotify.com/user/skeen', 'https://open.spotify.com/playlist/x', 'https://open.spotify.com/track/x', 'https://soundcloud.com/skeen/sets/mix', 'https://www.youtube.com/watch?v=x', 'https://instagram.com/p/abc', 'https://youtu.be/dQw4w9WgXcQ', 'https://music.youtube.com/watch?v=x'])
       expect(isProfileUrl(no), no).toBe(false)
   })
   it('auditGeoFacts: a MusicGroup without genre or location is a finding; a Person needs only a location', () => {
@@ -295,19 +301,21 @@ describe('the FAQ sheet (AI visibility)', () => {
     for (const q of p) expect(q).not.toMatch(/Chicago|house|techno/i)
   })
   it('answers pair with their prompt by number; the manager\'s words beat the automatic ones; no data at all = no sheet', () => {
-    const p = payload({ site_content: { faq_answer_1: ' Skeen is a Chicago DJ. ', faq_answer_3: 'Smartbar, Sept 10.' } })
+    const p = payload({ site_content: { faq_answer_1: ' Skeen is a Chicago DJ. ', faq_answer_2: 'House, from Chicago.' } })
     const entries = faqEntries(p)
     expect(entries[0]).toEqual({ question: 'Who is Skeen, the musician?', answer: 'Skeen is a Chicago DJ.' })
-    expect(entries.find((e) => e.question.startsWith('When'))).toEqual({ question: 'When is Skeen playing next?', answer: 'Smartbar, Sept 10.' })
-    // Q2 is automatic here (genre + location are in the fixture); Q4/Q5 have no data (no releases, no origin).
+    expect(entries[1]).toEqual({ question: 'What kind of music does Skeen make, and where are they based?', answer: 'House, from Chicago.' })
+    // Q3 is automatic ONLY (audit #10): no `today`, so the unflagged shows count as upcoming.
+    // Q4/Q5 have no data (no releases, no origin).
     expect(entries.map((e) => e.question.slice(0, 4))).toEqual(['Who ', 'What', 'When'])
-    const bare = payload({ artist: { ...payload().artist, bio: null, genre: null, location: null }, tour_dates: [], site_content: {} })
-    expect(faqPageJsonLd({ ...bare, origin: undefined }, { origin: '' })).toBeNull()
+    // No tour list at all is unknown, not "no shows": with nothing else, no sheet.
+    const bare = payload({ artist: { ...payload().artist, bio: null, genre: null, location: null }, site_content: {} })
+    expect(faqPageJsonLd({ ...bare, tour_dates: undefined, origin: undefined }, { origin: '' })).toBeNull()
     const sheet = faqPageJsonLd(p, { origin: ORIGIN })!
     const page = (sheet['@graph'] as Record<string, unknown>[])[0]
     expect(page['@type']).toBe('FAQPage')
     expect(page.url).toBe(`${ORIGIN}/faqsheet`)
-    expect(page.about).toEqual({ '@id': `${ORIGIN}/#artist` })
+    expect(page.about).toEqual({ '@type': 'MusicGroup', '@id': `${ORIGIN}/#artist`, name: 'Skeen' })
     expect((page.mainEntity as Record<string, unknown>[]).every((q) => q['@type'] === 'Question')).toBe(true)
   })
   it('CRITICAL: automatic answers come from published data only — and the manager\'s own answer wins', () => {
@@ -320,8 +328,8 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(autoFaqAnswer(3, src)).toBe('Skeen plays Smartbar, Chicago on September 10, 2026.') // the next dated, not-past show
     expect(autoFaqAnswer(4, src)).toBe("Skeen's latest releases: Night Drive EP (June 1, 2026), Loose (March 15, 2026).")
     expect(autoFaqAnswer(5, src)).toBe("Skeen's official website is www.example.com.")
-    // No data → no answer → the question is left out, never a made-up line.
-    expect(autoFaqAnswer(3, { ...src, tour_dates: [] })).toBe('')
+    // No upcoming show still answers, plainly (audit #7); other missing data → no answer.
+    expect(autoFaqAnswer(3, { ...src, tour_dates: [] })).toBe('No shows are scheduled right now.')
     expect(autoFaqAnswer(2, { ...src, artist: { ...src.artist, genre: null, location: null } })).toBe('')
     // The manager's words replace the automatic ones; extra questions follow.
     const mine = faqEntries({ ...src, site_content: { faq_answer_1: 'My own words.', faq_extra_1_q: 'Can I book Skeen?', faq_extra_1_a: 'Yes, through the contact form.' } })
@@ -515,5 +523,237 @@ describe('the FAQ sheet (AI visibility)', () => {
     expect(wrapped[0]!.answer).toBe('First paragraph.\n\nSecond paragraph.')
     expect(wrapped.at(-1)!.question).toBe('Can I book Skeen?')
     expect(wrapped.at(-1)!.answer).toBe('Yes.\n\nThrough the contact form.')
+  })
+})
+
+/* ----------------------------------------------------------------------------------
+ * AI visibility audit, section 1 (2026-09-28): AI_VISIBILITY_AUDIT.md
+ * -------------------------------------------------------------------------------- */
+
+describe('the default title (audit #1)', () => {
+  const artist = (over: Partial<PublicSitePayload['artist']> = {}) => ({ ...payload().artist, ...over })
+  it("CRITICAL: blank seo_title → name · city + genre + role from the facts (Skeen's real facts)", () => {
+    // Skeen as published on 2026-09-28: genre "House, Tech House", Chicago, MusicGroup.
+    const skeen = artist({ genre: 'House, Tech House', location: 'Chicago', schema_type: 'MusicGroup' })
+    expect(defaultSeoTitle(skeen)).toBe('Skeen · Chicago house musician')
+    expect(resolveSeo({ artist: skeen, site_content: {} }).title).toBe('Skeen · Chicago house musician')
+  })
+  it("CRITICAL: a manager's seo_title always wins", () => {
+    const skeen = artist({ genre: 'House', location: 'Chicago', schema_type: 'MusicGroup' })
+    expect(resolveSeo({ artist: skeen, site_content: { seo_title: ' SKEEN ' } }).title).toBe('SKEEN')
+    expect(resolveSeo({ artist: skeen, site_content: { seo_title: '   ' } }).title).toBe('Skeen · Chicago house musician')
+  })
+  it('only facts that exist: no type → no role; nothing → the bare name; nameless → empty', () => {
+    expect(defaultSeoTitle(artist({ genre: 'House', location: 'Chicago', schema_type: null }))).toBe('Skeen · Chicago house')
+    expect(defaultSeoTitle(artist({ genre: null, location: 'Chicago', schema_type: 'MusicGroup' }))).toBe('Skeen · Chicago musician')
+    expect(defaultSeoTitle(artist({ genre: 'Techno', location: null, schema_type: undefined }))).toBe('Skeen · techno')
+    expect(defaultSeoTitle(artist({ genre: ' ', location: '', schema_type: null }))).toBe('Skeen')
+    expect(defaultSeoTitle(artist({ name: '  ', genre: 'House', location: 'Chicago' }))).toBe('')
+    // Person is the facts page's "Visual artist".
+    expect(defaultSeoTitle(artist({ genre: null, location: 'Oslo', schema_type: 'Person' }))).toBe('Skeen · Oslo artist')
+  })
+  it('genre lowercased mid-sentence, acronyms kept; the city is the first part of the place', () => {
+    expect(defaultSeoTitle(artist({ genre: 'UK Garage', location: 'London, UK', schema_type: 'MusicGroup' }))).toBe('Skeen · London UK garage musician')
+    expect(defaultSeoTitle(artist({ genre: 'R&B, Soul', location: 'Chicago, IL', schema_type: null }))).toBe('Skeen · Chicago R&B')
+  })
+  it(`CRITICAL: never over the ${70}-char save cap — parts drop before the title overflows`, () => {
+    expect(MAX_TITLE).toBe(70)
+    const long = artist({ genre: 'Progressive Melodic Organic Deep House', location: 'Rancho Santa Margarita Valley', schema_type: 'MusicGroup' })
+    const t = defaultSeoTitle(long)
+    expect(t.length).toBeLessThanOrEqual(MAX_TITLE)
+    expect(t.startsWith('Skeen · ')).toBe(true)
+    // A name that is itself over the cap is still the name: it is never cut.
+    const huge = 'N'.repeat(80)
+    expect(defaultSeoTitle(artist({ name: huge, genre: 'House' }))).toBe(huge)
+  })
+})
+
+describe('sameAs from every connected profile (audit #2)', () => {
+  const IDENTITY = [
+    'https://open.spotify.com/artist/26KxuQlgIw8VP8YX2IkMWR',
+    'https://open.spotify.com/intl-de/artist/26KxuQlgIw8VP8YX2IkMWR',
+    'https://music.apple.com/no/artist/skeen/1754431714',
+    'https://www.youtube.com/@Sskeen',
+    'https://youtube.com/channel/UCabc',
+    'https://music.youtube.com/channel/UCabc',
+    'https://soundcloud.com/user-818426052',
+    'https://skeen.bandcamp.com/',
+    'https://www.deezer.com/us/artist/12345',
+    'https://deezer.com/artist/12345',
+    'https://tidal.com/browse/artist/12345',
+    'https://music.amazon.com/artists/B0ABCDEFGH/skeen',
+    'https://audiomack.com/skeen',
+    'https://www.mixcloud.com/skeen/',
+    'https://www.beatport.com/artist/skeen/123456',
+    'https://www.pandora.com/artist/skeen/ARabc123',
+    'https://bsky.app/profile/skeen.bsky.social',
+    'https://www.snapchat.com/add/skeen',
+    'https://vimeo.com/skeen',
+    'https://www.songkick.com/artists/123456-skeen',
+    'https://ra.co/dj/skeen',
+    'https://musicbrainz.org/artist/5b11f4ce-a62d-471e-81fc-a69a8278c7da',
+    'https://www.discogs.com/artist/123456-Skeen',
+    'https://www.wikidata.org/wiki/Q42',
+    'https://www.instagram.com/skeeeeeeen/',
+    'https://tiktok.com/@skeen200',
+    'https://x.com/Skeenmusic',
+    'https://twitter.com/Skeenmusic',
+    'https://www.facebook.com/skeenmusic',
+    'https://www.threads.com/@skeen',
+    'https://www.twitch.tv/skeen',
+    // Creator and organiser pages that name the artist (Sam, 2026-09-28: "all the
+    // connections and links").
+    'https://www.patreon.com/skeen',
+    'https://patreon.com/c/skeen',
+    'https://ko-fi.com/skeen',
+    'https://www.eventbrite.com/o/skeen-12345678',
+    'https://www.eventbrite.co.uk/o/skeen-12345678',
+    'https://skeen.eventbrite.com/',
+    'https://t.me/skeenmusic',
+  ]
+  const NOT_IDENTITY = [
+    // a listener account, not the artist (the audit's Spotify /user/ finding)
+    'https://open.spotify.com/user/skeen',
+    // payment handles (they can carry a personal legal name)
+    'https://paypal.me/skeen', 'https://cash.app/$skeen', 'https://venmo.com/u/skeen',
+    // join / invite links
+    'https://discord.gg/abc', 'https://whatsapp.com/channel/0029Va', 'https://t.me/+AbCdEf123', 'https://t.me/joinchat/AbCdEf123', 'https://t.me/joinchat',
+    // a creator or organiser platform's OTHER pages
+    'https://www.patreon.com/posts/123', 'https://www.eventbrite.com/e/some-show-123', 'https://help.eventbrite.com/',
+    'https://eventbrite.co.uk.evil.net/o/skeen-1', 'https://skeen.eventbrite.co.uk.evil.net/',
+    // playlists, songs, sets, videos, posts
+    'https://open.spotify.com/playlist/0MLdp3LsWM', 'https://open.spotify.com/track/1', 'https://soundcloud.com/skeen/sets/mix',
+    'https://www.youtube.com/watch?v=x', 'https://youtu.be/dQw4w9WgXcQ', 'https://music.youtube.com/watch?v=x', 'https://vimeo.com/123456',
+    'https://www.instagram.com/p/abc', 'https://tiktok.com/@skeen/video/1', 'https://x.com/Skeenmusic/status/1', 'https://bsky.app/profile/skeen.bsky.social/post/1',
+    'https://www.mixcloud.com/skeen/some-mix/', 'https://music.apple.com/us/album/x/1', 'https://www.deezer.com/us/album/1',
+    // look-alikes and unknown hosts
+    'https://musicbrainz.org/release/5b11f4ce-a62d-471e-81fc-a69a8278c7da', 'https://www.wikidata.org/wiki/Special:Search',
+    'https://bandcamp.com/skeenfan', 'https://skeenmusic.com', 'https://evilmusicbrainz.org/artist/5b11f4ce-a62d-471e-81fc-a69a8278c7da',
+    'javascript:alert(1)', 'not a url',
+  ]
+  it('CRITICAL: isIdentityProfileUrl — true only for an artist profile on an identity platform', () => {
+    for (const u of IDENTITY) expect(isIdentityProfileUrl(u), u).toBe(true)
+    for (const u of NOT_IDENTITY) expect(isIdentityProfileUrl(u), u).toBe(false)
+  })
+  it('isProfileUrl answers the SHAPE per platform: a Venmo /u/ page is a profile, just not an identity', () => {
+    expect(isProfileUrl('https://venmo.com/u/skeen')).toBe(true)
+    expect(isIdentityProfileUrl('https://venmo.com/u/skeen')).toBe(false)
+    expect(isProfileUrl('https://ra.co/dj/skeen')).toBe(true) // a type segment, rejected by the old ≤1-segment rule
+    expect(isProfileUrl('https://skeenmusic.com')).toBe(false) // unknown host: not a profile anywhere
+  })
+  it('CRITICAL: sameAs = on-site links ∪ identity_links, de-duplicated, identity profiles only', () => {
+    const p = payload({
+      artist: { ...payload().artist, spotify_artist_id: 'abc123' },
+      links: [
+        { id: 'l1', label: 'Instagram', url: 'https://instagram.com/skeen', sort_order: 1 },
+        { id: 'l2', label: 'Venmo', url: 'https://venmo.com/u/skeen', sort_order: 2 },
+      ],
+      identity_links: [
+        // the same profile as the button, spelled differently → one entry
+        { url: 'https://www.instagram.com/skeen/', label: 'Instagram' },
+        { url: 'https://musicbrainz.org/artist/5b11f4ce-a62d-471e-81fc-a69a8278c7da', label: 'MusicBrainz' },
+        { url: 'https://www.discogs.com/artist/123456-Skeen', label: null },
+        { url: 'https://www.wikidata.org/wiki/Q42', label: 'Wikidata' },
+        { url: 'https://ra.co/dj/skeen', label: 'Resident Advisor' },
+        // a payment handle that slipped onto the wire still never reaches sameAs
+        { url: 'https://venmo.com/u/skeen', label: 'Venmo' },
+        // the Spotify artist id's own URL, from a connection → one entry
+        { url: 'https://open.spotify.com/artist/abc123', label: 'Spotify' },
+      ],
+    })
+    expect(sameAsFrom(p)).toEqual([
+      'https://instagram.com/skeen',
+      'https://musicbrainz.org/artist/5b11f4ce-a62d-471e-81fc-a69a8278c7da',
+      'https://www.discogs.com/artist/123456-Skeen',
+      'https://www.wikidata.org/wiki/Q42',
+      'https://ra.co/dj/skeen',
+      'https://open.spotify.com/artist/abc123',
+    ])
+    // Absent on an older door: the links alone, as before.
+    expect(sameAsFrom(payload({ identity_links: undefined }))).toEqual(['https://instagram.com/skeen', 'https://open.spotify.com/artist/abc123'])
+    // And it is the artist node's sameAs.
+    const node = jsonLdGraph(p, { origin: ORIGIN })['@graph'][0] as Record<string, unknown>
+    expect(node.sameAs).toEqual(sameAsFrom(p))
+  })
+})
+
+describe('no invented facts (audit #6, #9)', () => {
+  it('CRITICAL: a show offer states the ticket URL and no availability (nothing real to say it with)', () => {
+    const g = jsonLdGraph(payload(), { origin: ORIGIN, today: '2026-08-26' })
+    const e = (g['@graph'] as Record<string, unknown>[]).find((n) => n['@type'] === 'MusicEvent')!
+    expect(e.offers).toEqual({ '@type': 'Offer', url: 'https://tix.example.com/1' })
+    expect(JSON.stringify(g)).not.toContain('InStock')
+  })
+  it('CRITICAL: logo is the Brand page logo from the payload, never the image passed for `image`', () => {
+    const hero = 'https://cdn.example.com/hero.jpg'
+    // No resolver → the logo row cannot become a URL → no logo. The hero is `image` only.
+    const plain = jsonLdGraph(payload(), { origin: ORIGIN, imageUrl: hero })['@graph'][0] as Record<string, unknown>
+    expect(plain.image).toBe(hero)
+    expect(plain.logo).toBeUndefined()
+    // With a resolver and a logo_primary row (m4 in the fixture) → that logo.
+    const mediaUrl = (path: string) => `https://cdn.example.com/media/${path}`
+    const withLogo = jsonLdGraph(payload(), { origin: ORIGIN, imageUrl: hero, mediaUrl })['@graph'][0] as Record<string, unknown>
+    expect(withLogo.logo).toBe('https://cdn.example.com/media/a1/brand/logo.png')
+    expect(withLogo.image).toBe(hero)
+    // A resolver but no Brand logo → still none.
+    const noLogo = jsonLdGraph(payload({ media: [] }), { origin: ORIGIN, imageUrl: hero, mediaUrl })['@graph'][0] as Record<string, unknown>
+    expect(noLogo.logo).toBeUndefined()
+    // A Person has no logo property at all.
+    const person = jsonLdGraph(payload({ artist: { ...payload().artist, schema_type: 'Person' } }), { origin: ORIGIN, mediaUrl })['@graph'][0] as Record<string, unknown>
+    expect(person.logo).toBeUndefined()
+  })
+})
+
+describe('the FAQ answers (audit #7, #10, #11)', () => {
+  const shows = (today = '2026-08-26') => ({ ...payload(), origin: ORIGIN, today })
+  it('CRITICAL: no upcoming shows → a plain answer, with up to 3 most recent past shows', () => {
+    const past = [
+      { id: 'p1', date: '2026-08-01', venue: 'Smartbar', city: 'Chicago', country: 'US', ticket_url: null },
+      { id: 'p2', date: '2026-07-01', venue: null, city: 'Detroit', country: 'US', ticket_url: null },
+      { id: 'p3', date: '2026-06-01', venue: 'Output', city: 'Brooklyn', country: 'US', ticket_url: null },
+      { id: 'p4', date: '2026-05-01', venue: 'Oldest', city: 'Nowhere', country: 'US', ticket_url: null },
+      { id: 'p5', date: null, venue: 'TBA', city: null, country: null, ticket_url: null },
+    ]
+    expect(autoFaqAnswer(3, { ...shows(), tour_dates: past })).toBe(
+      'No shows are scheduled right now. Recent shows: Smartbar, Chicago (August 1, 2026); Detroit (July 1, 2026); Output, Brooklyn (June 1, 2026).',
+    )
+    expect(autoFaqAnswer(3, { ...shows(), tour_dates: [] })).toBe('No shows are scheduled right now.')
+    // The question stays on the sheet.
+    expect(faqEntries({ ...shows(), tour_dates: [] }).map((e) => e.question)).toContain('When is Skeen playing next?')
+    // Unknown (no tour list given at all) is not "none": nothing is said.
+    expect(autoFaqAnswer(3, { ...shows(), tour_dates: undefined })).toBe('')
+    // Upcoming still wins.
+    expect(autoFaqAnswer(3, shows())).toBe('Skeen plays Smartbar, Chicago on September 10, 2026.')
+  })
+  it('a show the manager marked past but dated in the future (cancelled) is not a "recent show"', () => {
+    const cancelled = [{ id: 'c', date: '2026-12-01', venue: 'V', city: 'C', country: 'US', ticket_url: null, is_past: true }]
+    expect(autoFaqAnswer(3, { ...shows(), tour_dates: cancelled })).toBe('No shows are scheduled right now.')
+  })
+  it('CRITICAL: next show + latest release are AUTOMATIC ONLY — a stored written answer is ignored', () => {
+    expect(FAQ_AUTO_ONLY).toEqual({ 3: 'tour', 4: 'music' })
+    const src = {
+      ...shows(),
+      releases: [{ id: 'r1', title: 'Night Drive EP', cover_url: null, release_date: '2026-06-01' }],
+      site_content: { faq_answer_1: 'My words.', faq_answer_3: 'Smartbar, Sept 10.', faq_answer_4: 'Stale release.' },
+    }
+    const byQ = Object.fromEntries(faqEntries(src).map((e) => [e.question, e.answer]))
+    expect(byQ['Who is Skeen, the musician?']).toBe('My words.') // a written answer still wins elsewhere
+    expect(byQ['When is Skeen playing next?']).toBe('Skeen plays Smartbar, Chicago on September 10, 2026.')
+    expect(byQ['What has Skeen released recently?']).toBe("Skeen's latest releases: Night Drive EP (June 1, 2026).")
+  })
+  it('the FAQ page names the artist it is about, so the @id resolves on its own page', () => {
+    const page = (faqPageJsonLd(payload(), { origin: ORIGIN })!['@graph'] as Record<string, unknown>[])[0]
+    expect(page.about).toEqual({ '@type': 'MusicGroup', '@id': `${ORIGIN}/#artist`, name: 'Skeen' })
+    const person = (faqPageJsonLd(payload({ artist: { ...payload().artist, schema_type: 'Person' } }), { origin: ORIGIN })!['@graph'] as Record<string, unknown>[])[0]
+    expect(person.about).toEqual({ '@type': 'Person', '@id': `${ORIGIN}/#artist`, name: 'Skeen' })
+  })
+})
+
+describe('og:image size (audit #11)', () => {
+  it('the SEO page card states its size; any other image states none', () => {
+    const card = 'https://x.supabase.co/storage/v1/object/public/media/c6c2ea6e-4135-4ebb-afbe-8c9e21785f57/og/social-card.png?v=1'
+    expect(resolveSeo(payload({ site_content: { og_image: card } })).ogImageSize).toEqual({ width: 1200, height: 630 })
+    expect(resolveSeo(payload()).ogImageSize ?? null).toBeNull() // the hero: size unknown
+    expect(resolveSeo(payload({ site_content: { og_image: 'https://evil.example/og/social-card.png' } })).ogImageSize ?? null).toBeNull()
   })
 })

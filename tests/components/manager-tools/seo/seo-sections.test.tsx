@@ -45,8 +45,12 @@ describe('registry', () => {
 
 describe('sections save through the gates', () => {
   it('CRITICAL: listing → saveSeoFieldAction, and the Google preview follows the words', async () => {
-    render(<ListingSection artistId="a1" name="Skeen" bio="A Chicago DJ." siteUrl="https://www.skeenmusic.com" initial={{ seo_title: '', seo_description: '' }} />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name in search results' }), { target: { value: 'SKEEN' } })
+    render(<ListingSection artistId="a1" name="Skeen" defaultTitle="Skeen · Chicago house musician" bio="A Chicago DJ." siteUrl="https://www.skeenmusic.com" initial={{ seo_title: '', seo_description: '' }} />)
+    // Blank: the title the site builds from the facts is the placeholder AND the preview.
+    const box = screen.getByRole('textbox', { name: 'Page title' }) as HTMLInputElement
+    expect(box.placeholder).toBe('Skeen · Chicago house musician')
+    expect(screen.getByText('Skeen · Chicago house musician')).toBeTruthy()
+    fireEvent.change(box, { target: { value: 'SKEEN' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', 'seo_title', 'SKEEN'))
     expect(screen.getByText('SKEEN')).toBeTruthy()
   })
@@ -129,6 +133,20 @@ describe('sections save through the gates', () => {
     expect(seoMock).toHaveBeenCalledWith('a1', 'faq_extra_2_a', 'Chicago.')
     fireEvent.click(screen.getByRole('button', { name: 'Remove: Can I book Skeen?' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', 'faq_extra_1_q', ''))
+  })
+  it('CRITICAL: next show and latest release are read-only — they come from Tour and Music', () => {
+    render(<AiSection artistId="a1" name="Skeen" schemaType="MusicGroup" initial={{ faq_answer_3: 'Stale.' }} auto={['', '', 'No shows are scheduled right now.', 'Skeen\'s latest releases: Loose.', '']} />)
+    for (const q of ['When is Skeen playing next?', 'What has Skeen released recently?']) {
+      expect(screen.queryByRole('button', { name: `Edit: ${q}` })).toBeNull()
+      expect(screen.queryByRole('button', { name: `Reset: ${q}` })).toBeNull()
+    }
+    // The automatic answer shows, never a stored written one (the builder ignores it).
+    expect(screen.getByText('No shows are scheduled right now.')).toBeTruthy()
+    expect(screen.queryByText('Stale.')).toBeNull()
+    expect(screen.getByText('comes from Tour')).toBeTruthy()
+    expect(screen.getByText('comes from Music')).toBeTruthy()
+    // The other fixed questions stay editable.
+    expect(screen.getByRole('button', { name: 'Edit: Who is Skeen, the musician?' })).toBeTruthy()
   })
   it('a fixed question with no written answer cannot be removed (nothing to clear)', () => {
     render(<AiSection artistId="a1" name="Skeen" schemaType="MusicGroup" initial={{}} auto={['', '', '', '', '']} />)

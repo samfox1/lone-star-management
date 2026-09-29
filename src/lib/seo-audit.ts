@@ -26,8 +26,10 @@ export type LiveAudit = {
 export const AUDIT_RULES: readonly { rule: string; label: string }[] = SEO_RULES
 
 /** What a fetch found: the body when it was 2xx, and the http status (null = it threw,
- *  was refused before it left, or ran out of redirect hops). */
-type Fetched = { status: number | null; body: string | null }
+ *  was refused before it left, or ran out of redirect hops). `url` and `headers` belong to
+ *  the LAST hop, the one that answered: set whenever a response that is not a redirect came
+ *  back (the IndexNow ping reads where the key file really lives, and its version header). */
+type Fetched = { status: number | null; body: string | null; url?: string; headers?: Headers }
 
 const NOT_FETCHED: Fetched = { status: null, body: null }
 /** apex → www is one hop, http → https another. Three is generous; the fourth is a loop. */
@@ -39,7 +41,7 @@ const MAX_HOPS = 3
  * can 302 straight to `http://169.254.169.254/` and node's fetch would follow it happily.
  * Redirects are therefore taken by hand (`redirect: 'manual'`) rather than by the client.
  */
-async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<Fetched> {
+export async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<Fetched> {
   let target = url
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (!isPublicSiteUrl(target)) return NOT_FETCHED
@@ -62,7 +64,7 @@ async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<Fetched
       target = next
       continue
     }
-    return { status, body: r.ok ? await r.text() : null }
+    return { status, body: r.ok ? await r.text() : null, url: target, headers: r.headers }
   }
   return NOT_FETCHED
 }
