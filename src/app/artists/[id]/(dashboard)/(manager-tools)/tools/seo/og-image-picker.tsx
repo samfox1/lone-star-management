@@ -1,24 +1,19 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { cx } from '@/lib/cx'
-import { buttonClass, inputClass } from '@/components/ui/ui'
+import { buttonClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
-import {
-  OG_BACKGROUNDS,
-  OG_CARD_HEIGHT,
-  OG_CARD_WIDTH,
-  drawOgCard,
-  ogBackgroundHex,
-} from '@/lib/manager-tools/seo/og-card'
-import { toast } from '../../../toast'
+import { OG_BACKGROUNDS, OG_CARD_HEIGHT, OG_CARD_WIDTH, drawOgCard, ogBackgroundHex } from '@/lib/manager-tools/seo/og-card'
+import { CardModal } from '../../../card-modal'
+import { KvRow, MetaDot, ModalHeader, SelectMenu } from '../../../modal-kit'
 import { saveOgCardAction } from './actions'
 
 export type OgSource = { url: string; label: string }
 
 /**
- * The social preview image: pick one of the artist's own images, sit it on a solid
- * background, and store the 1200x630 card that comes out.
+ * THE SHARE PICTURE, in the modal-kit grammar (round 2's "Share image" card: the picture big,
+ * then Image and Background rows, Save). Pick one of the artist's own images, sit it on a
+ * solid background, and store the 1200x630 card that comes out.
  *
  * This replaces a URL text box. Two things that box could not do, and both fail where
  * nobody can see them — on someone else's server, in someone else's dark-mode client:
@@ -29,23 +24,26 @@ export type OgSource = { url: string; label: string }
  *
  * The canvas is the SAME `drawOgCard` the export calls, so the preview is the file. The
  * stored value stays a plain absolute https URL under `og_image` — no contract change
- * for a consuming site.
+ * for a consuming site. Save renders and stores the card, then closes; closing without Save
+ * changes nothing.
  */
-export function OgImagePicker({
+export function ShareImageModal({
   artistId,
   sources,
-  currentUrl,
+  onClose,
+  onSaved,
 }: {
   artistId: string
   /** The artist's own images — brand logos first, then the hero/profile photos. */
   sources: OgSource[]
-  currentUrl: string
+  onClose: () => void
+  /** The stored card's URL, once saved. */
+  onSaved: (url: string) => void
 }) {
   const [source, setSource] = useState<string>(sources[0]?.url ?? '')
   const [background, setBackground] = useState(OG_BACKGROUNDS[0].value)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(currentUrl)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const busyRef = useRef(false)
 
@@ -75,7 +73,8 @@ export function OgImagePicker({
   }, [source, background])
 
   async function save() {
-    if (busy || busyRef.current) return
+    // The latch is a ref (AGENTS.md rule 5): two fast clicks both read the pre-render state.
+    if (busyRef.current) return
     const canvas = canvasRef.current
     if (!canvas) return
     busyRef.current = true
@@ -87,11 +86,10 @@ export function OgImagePicker({
       const fd = new FormData()
       fd.set('file', blob, 'og-card.png')
       const result = await saveOgCardAction(artistId, fd)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setSaved(result.url ?? '')
-        toast('Social preview saved')
+      if (result.error) setError(result.error)
+      else {
+        onSaved(result.url ?? '')
+        onClose()
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the card.')
@@ -101,89 +99,67 @@ export function OgImagePicker({
     }
   }
 
-  // Leads with the absence, not the errand: this is the empty state, and a reader who has
-  // no image needs to know that first. The pointer rides along after it.
-  if (sources.length === 0) {
-    return (
-      <p className="font-space text-[11px] leading-relaxed text-ink-faint">
-        No logo or hero image yet — add one on the{' '}
-        <span className="font-bold text-ink">Brand</span> or Site page.
-      </p>
-    )
-  }
+  const footer = (
+    <div className="flex items-center justify-between gap-5">
+      <div className="min-w-0">
+        {error ? (
+          <p role="alert" className="font-space text-[11px] text-accent-red">
+            {error}
+          </p>
+        ) : null}
+      </div>
+      {sources.length ? (
+        <button type="button" onClick={() => void save()} disabled={busy} className={buttonClass('confirm', 'min-w-[88px] justify-center')}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      ) : null}
+    </div>
+  )
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
-            Image
-          </span>
-          <select
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            aria-label="Social preview image"
-            className={cx('mt-1.5 w-full', inputClass)}
-          >
-            {sources.map((s) => (
-              <option key={s.url} value={s.url}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="font-space text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">
-            Background
-          </span>
-          <select
-            value={background}
-            onChange={(e) => setBackground(e.target.value)}
-            aria-label="Social preview background"
-            className={cx('mt-1.5 w-full', inputClass)}
-          >
-            {OG_BACKGROUNDS.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {/* Shown at the shape it will be shared at, on a checkerboard-free surface: the
-          background IS the point, so the preview must not borrow the page's. */}
-      <div className="overflow-hidden rounded-lg border border-hairline">
-        <canvas
-          ref={canvasRef}
-          width={OG_CARD_WIDTH}
-          height={OG_CARD_HEIGHT}
-          aria-label="Social preview"
-          className="block w-full"
-          style={{ backgroundColor: ogBackgroundHex(background) }}
-        />
-      </div>
-      <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">
-        {OG_CARD_WIDTH}&times;{OG_CARD_HEIGHT}
-      </span>
-
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={save} disabled={busy} className={buttonClass('accent')}>
-          {busy ? 'Saving…' : 'Save social preview'}
-        </button>
-        {saved && !busy && (
-          <span className="inline-flex items-center gap-1 font-space text-[11px] text-ink-muted">
-            <Icon name="check" size={14} /> Saved
-          </span>
-        )}
-      </div>
-
-      {error && (
-        <p role="alert" className="font-space text-[11px] text-accent-red">
-          {error}
-        </p>
+    <CardModal open onClose={onClose} label="Share image" footer={footer}>
+      <ModalHeader
+        square={
+          <div className="flex h-full w-full items-center justify-center rounded-xl border border-hairline text-ink">
+            <Icon name="photo" size={26} />
+          </div>
+        }
+        title="Share image"
+        meta={
+          <>
+            {`${OG_CARD_WIDTH} × ${OG_CARD_HEIGHT}`}
+            <MetaDot />
+            iMessage
+            <MetaDot />X<MetaDot />
+            Instagram
+          </>
+        }
+      />
+      {sources.length === 0 ? (
+        // Leads with the absence: a reader with no image needs to know that first.
+        <p className="mt-5 text-[14px] text-ink-muted">No logo or hero image yet. Add one on the Brand page.</p>
+      ) : (
+        <div className="mt-5">
+          {/* Shown at the shape it will be shared at: the background IS the point, so the
+              preview must not borrow the page's. */}
+          <canvas
+            ref={canvasRef}
+            width={OG_CARD_WIDTH}
+            height={OG_CARD_HEIGHT}
+            aria-label="Share picture preview"
+            className="block w-full rounded-[10px] border border-hairline"
+            style={{ backgroundColor: ogBackgroundHex(background) }}
+          />
+          <div className="mt-3">
+            <KvRow label="Image">
+              <SelectMenu label="Image" value={source} options={sources.map((s) => ({ value: s.url, label: s.label }))} required onChange={setSource} />
+            </KvRow>
+            <KvRow label="Background">
+              <SelectMenu label="Background" value={background} options={OG_BACKGROUNDS.map((b) => ({ value: b.value, label: b.label }))} required onChange={setBackground} />
+            </KvRow>
+          </div>
+        </div>
       )}
-    </div>
+    </CardModal>
   )
 }

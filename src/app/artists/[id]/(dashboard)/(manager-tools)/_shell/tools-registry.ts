@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/ui/icons'
+import { SEO_TABS } from '../tools/seo/sections'
 
 /**
  * The manager-tools registry. A PLAIN module on purpose: tools-rail.tsx is 'use client',
@@ -51,7 +52,9 @@ export const TOOLS: readonly Tool[] = [
     ],
   },
   { seg: 'connections', icon: 'plug', label: 'Connections', desc: 'Profiles & connected services' },
-  { seg: 'tools/seo', icon: 'compass', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers' },
+  // Sub-tabs like Brand and Settings (Sam, 2026-09-28: round 2 of the SEO/GEO redesign).
+  // The list lives in tools/seo/sections.ts, the registry the SEO routes derive from.
+  { seg: 'tools/seo', icon: 'compass', label: 'SEO / GEO', short: 'SEO/GEO', desc: 'Search, social & AI answers', tabs: SEO_TABS },
   { seg: 'epk', icon: 'package', label: 'Press kit', desc: 'Shareable EPK one-pager' },
   { seg: 'subscribers', icon: 'userGroup', label: 'Subscribers', desc: 'Emails from the site popup' },
   { seg: 'enquiries', icon: 'mailbox', label: 'Enquiries', desc: 'Booking & contact messages' },
