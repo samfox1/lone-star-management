@@ -29,6 +29,47 @@ Errors seen, from `parseHandle` (`src/lib/connect-methods.ts`):
 `connectInputError` (`src/lib/connections.ts`) runs the same check before a request is made
 and again in the server action, so the modal and the door agree.
 
+## Connect with YouTube (Google login)
+
+The easy way in (Sam, 2026-09-28): instead of pasting, the manager presses **Connect with
+YouTube** in the YouTube row of the Connect window, picks their Google account, presses
+Allow, and we find the channel ourselves. The paste field stays underneath as the fallback.
+
+How it works (`src/lib/youtube-oauth.ts`, routes `src/app/api/youtube/{start,callback}`):
+
+1. **Start** (`/api/youtube/start?artist=<id>`, `&sync=0` when Sync is off) checks the
+   signed-in manager owns the artist, sets a short-lived (10 min) HttpOnly state cookie,
+   signed with the client secret, that names the artist, the manager, the Sync choice, a
+   nonce and a PKCE verifier, and sends the browser to Google asking for
+   `youtube.readonly` only (online access, no refresh token, account picker, PKCE S256).
+2. **Callback** (`/api/youtube/callback`) checks the cookie, the nonce, the manager and
+   ownership before anything else, trades the code for an access token, reads
+   `channels?part=snippet&mine=true` once, **revokes the token**, then saves the channel
+   through the same door a paste uses (`connectOneAction`: the `links` row + the real
+   `UC…` id in `youtube_channel_id` + the first import). Sync, sameAs and the identity
+   flag all behave exactly as for a pasted link.
+3. The manager lands back on Connections with one line: "YouTube connected.", "No YouTube
+   channel on that Google account…", cancelled, or what went wrong (only a CODE travels in
+   the URL; the words are chosen on the server).
+
+**What is stored:** only what a paste stores (the profile link, the channel id). The Google
+access token is used for one read and then revoked. It is never written to the database, a
+cookie or a log. The video sync keeps using the public API key, so nothing needs it later.
+
+**Env vars** (server-only, `.env.local` / Vercel): `GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET` (Google Cloud → Google Auth Platform → Clients, a Web
+application client). Without both, the button is hidden.
+
+**Redirect URI:** `<origin>/api/youtube/callback`, built from the request's own origin, so
+each address just needs registering on the client: `http://localhost:3000/api/youtube/callback`
+today, the production one at launch. Only https, or http on `localhost`, is accepted.
+
+**Testing mode:** until Google reviews the app, only test users can sign in (up to 100,
+added in Google Auth Platform → Audience → Test users), and Google shows an "unverified
+app" warning first. The button's one line under it says that is expected. Google's review
+(homepage, privacy policy, then Publish app) comes at launch: see `LAUNCH_CHECKLIST.md`,
+section 2.
+
 ## How it is stored
 
 - A `links` row: `label: 'YouTube'`, `url` (the handle's profile link, or the channel link as
@@ -75,7 +116,8 @@ in the dashboard for when that changes.
 "connected."
 
 Limits/quirks: 429s back off using `Retry-After` (shared `httpGetJson`,
-`src/lib/http.ts`), up to 3 retries by default. No OAuth — public channel data only.
+`src/lib/http.ts`), up to 3 retries by default. Public channel data only: the Google login
+above finds the channel, it is not used to sync.
 `pullYouTube` (`actions.ts`) also discards the `SyncResult`'s `failed`/`errors` and always
 returns bare `{ ok: true }` — see Known gaps.
 
@@ -106,6 +148,10 @@ placed — YouTube has no hosted audio/video of its own on this platform.
   and `resolveYouTubeChannelId` (the pure-ish resolver `saveSourceIdAction` calls: a UC id
   or `/channel/UC…` link resolves with no network call by reusing `channelSelector`'s own
   parsing; an `@handle` or legacy `/c/`, `/user/` link resolves through the API).
+- `src/lib/youtube-oauth.ts` — Connect with YouTube: state cookie, PKCE, Google's link,
+  code exchange, the channel read, revoke, the return words.
+- `src/app/api/youtube/start/route.ts`, `src/app/api/youtube/callback/route.ts` — the two
+  routes of that flow.
 - `src/lib/http.ts` — shared GET-with-429-retry used by the client.
 - `src/lib/sync.ts` — `syncYouTubeVideos`: writes the `videos` table, filters out Shorts,
   `on_site: false` on insert.
@@ -136,6 +182,16 @@ placed — YouTube has no hosted audio/video of its own on this platform.
   `/channel/` link resolve with a fetch mock that fails if called; `@handle`, the
   `@handle` link, and legacy `/c/`, `/user/` links resolve via a mocked API; not-found
   and a non-YouTube link each give a plain error.
+- `tests/unit/manager-tools/connections/youtube-oauth.test.ts` — state signing, expiry,
+  tampering, PKCE, the Google link, code exchange, the channel read, revoke, the input the
+  found channel becomes, the return words.
+- `tests/unit/manager-tools/connections/youtube-oauth-routes.test.ts` — start and callback:
+  every refusal saves nothing and calls Google for nothing; the token is revoked and kept
+  nowhere; success saves through `connectOneAction`.
+- `tests/components/manager-tools/connections/youtube-connect.test.tsx` — the button, its
+  address, hidden without the env, no stranded picks.
+- `tests/unit/manager-tools/connections/connections-page-youtube.test.ts` — the page's
+  `youtubeApp` flag and return notice.
 - `tests/unit/sync/youtube-views.test.ts` — `viewCounts` batching and parsing, skips
   missing/non-numeric counts.
 - `tests/integration/sync/sync.youtube.test.ts` — `syncYouTubeVideos` against the real
@@ -158,8 +214,8 @@ placed — YouTube has no hosted audio/video of its own on this platform.
 - Shorts are imported and classified but always filtered out of what gets synced to
   `videos` — there is no manager-facing toggle to bring them in (code comment only, no
   TODO filed).
-- No OAuth: only a channel's public uploads can be read. A private or unlisted upload
-  never appears.
+- The sync reads public data only (the Google login is used once, to find the channel):
+  a private or unlisted upload never appears.
 - Rows saved before 2026-09-28 may still hold a URL or handle in `youtube_channel_id`
   instead of the real id — not migrated; a re-save (editing the field, or reconnecting)
   resolves it through `resolveYouTubeChannelId` and fixes it going forward.

@@ -35,6 +35,7 @@ export function ConnectionList({
   rows: initial,
   dirty = false,
   shopifyApp = false,
+  youtubeApp = false,
   createPages,
 }: {
   artistId: string
@@ -42,6 +43,8 @@ export function ConnectionList({
   dirty?: boolean
   /** The Shopify app is set up: Shopify connects by going to Shopify (a server-made boolean). */
   shopifyApp?: boolean
+  /** The Google app is set up: YouTube can connect by signing in to Google (a server-made boolean). */
+  youtubeApp?: boolean
   /** Links that make a page on a platform the artist has none of yet (MusicBrainz), by key. */
   createPages?: Partial<Record<string, string>>
 }) {
@@ -86,6 +89,7 @@ export function ConnectionList({
           artistId={artistId}
           taken={rows.map((r) => r.key)}
           shopifyApp={shopifyApp}
+          youtubeApp={youtubeApp}
           createPages={createPages}
           onClose={() => setConnect(false)}
           onDone={() => router.refresh()}

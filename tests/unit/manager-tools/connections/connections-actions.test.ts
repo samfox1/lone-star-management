@@ -85,6 +85,27 @@ describe('connectOneAction — one paste, two jobs', () => {
     const res = await connectOneAction('a1', 'apple music', { url: 'https://music.apple.com/us/artist/skeen/1' })
     expect(res.ok).toBe(false)
     expect(res.error).toMatch(/didn’t answer/)
+    // The link saved; only the pull failed. An OAuth callback (Connect with YouTube) reads
+    // this CODE to say "connected, but the import failed" instead of "nothing saved".
+    expect(res.reason).toBe('sync')
+  })
+
+  it('CRITICAL: Connect with YouTube saves through the SAME door as a pasted handle — the same link row, then the real UC id', async () => {
+    const { channelConnectInput } = await import('@/lib/youtube-oauth')
+    const { connectOneAction } = await actions()
+    const channel = 'UC' + 'c'.repeat(22)
+
+    await connectOneAction('a1', 'youtube', { handle: 'skeenmusic' })
+    const pasted = vi.mocked(addContentAction).mock.calls[0][2] as FormData
+    expect(saveSourceIdAction).toHaveBeenLastCalledWith('a1', 'youtube_channel_id', 'https://youtube.com/@skeenmusic')
+    vi.clearAllMocks()
+
+    await connectOneAction('a1', 'youtube', channelConnectInput({ id: channel, handle: '@skeenmusic' }, true))
+    const viaGoogle = vi.mocked(addContentAction).mock.calls[0][2] as FormData
+    expect([viaGoogle.get('label'), viaGoogle.get('url')]).toEqual([pasted.get('label'), pasted.get('url')])
+    expect(vi.mocked(addContentAction).mock.calls[0][3]).toEqual({ offSite: true })
+    // Already the id: the save door keeps it as it is (no handle lookup).
+    expect(saveSourceIdAction).toHaveBeenCalledWith('a1', 'youtube_channel_id', channel)
   })
 
   it('CRITICAL: an X HANDLE is all it takes — the action builds the link the site shows', async () => {

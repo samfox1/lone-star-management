@@ -6,24 +6,25 @@ import { Icon } from '@/components/ui/icons'
 import type { ShopifyReturn } from '@/lib/merch/shopify-oauth'
 
 /**
- * BACK FROM SHOPIFY: one line above the list — "Shopify connected.", or what went wrong in
- * plain words — until the manager dismisses it or leaves. The words are chosen on the server
- * from a CODE in the URL (`shopifyReturnNotice`), never read from the URL itself.
+ * BACK FROM SHOPIFY (or Google, for Connect with YouTube): one line above the list —
+ * "Shopify connected.", or what went wrong in plain words — until the manager dismisses it
+ * or leaves. The words are chosen on the server from a CODE in the URL
+ * (`shopifyReturnNotice`, `youtubeReturnNotice`), never read from the URL itself.
  *
  * A line, not a toast: a failure is something to read, and a toast raised on first paint can
- * fire before the dashboard's Toaster is listening. The `shopify`/`reason` params come out of
+ * fire before the dashboard's Toaster is listening. The `<param>`/`reason` params come out of
  * the address bar once shown, so a reload does not say it again.
  */
-export function ShopifyReturnNotice({ kind, message }: ShopifyReturn) {
+export function ReturnNotice({ kind, message, param }: ShopifyReturn & { param: 'shopify' | 'youtube' }) {
   const [open, setOpen] = useState(true)
 
   useEffect(() => {
     const url = new URL(window.location.href)
-    if (!url.searchParams.has('shopify')) return
-    url.searchParams.delete('shopify')
+    if (!url.searchParams.has(param)) return
+    url.searchParams.delete(param)
     url.searchParams.delete('reason')
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
-  }, [])
+  }, [param])
 
   if (!open) return null
   const error = kind === 'error'
@@ -38,4 +39,12 @@ export function ShopifyReturnNotice({ kind, message }: ShopifyReturn) {
       </div>
     </div>
   )
+}
+
+export function ShopifyReturnNotice(props: ShopifyReturn) {
+  return <ReturnNotice {...props} param="shopify" />
+}
+
+export function YouTubeReturnNotice(props: ShopifyReturn) {
+  return <ReturnNotice {...props} param="youtube" />
 }

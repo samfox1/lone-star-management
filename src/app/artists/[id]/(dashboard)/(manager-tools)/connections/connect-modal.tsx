@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/connections'
 import { parseHandle } from '@/lib/connect-methods'
 import { isShopDomain, normalizeShopDomain, shopifyInstallPath } from '@/lib/merch/shop-domain'
+import { youtubeStartPath } from '@/lib/manager-tools/connections/services/youtube'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { ConnectionMark } from './connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
@@ -44,10 +45,18 @@ import { connectOneAction, type ConnectResult } from './actions'
  * after, so leaving for Shopify never strands a pick nobody ran. Without the app, Shopify is
  * the typed domain + token it always was.
  *
+ * YOUTUBE, WHEN THE GOOGLE APP IS SET UP (`youtubeApp`, Sam 2026-09-28): the YouTube row
+ * offers "Connect with YouTube" above its paste field — sign in to Google, we find the
+ * channel (`src/lib/youtube-oauth.ts`). Pasting stays as the fallback. The same rule as
+ * Shopify: the button shows only once nothing else is waiting to run, and a YouTube row left
+ * blank waits for its trip instead of being run and refused.
+ *
  * THE LATCH IS A REF (AGENTS.md rule 5). Two fast presses of Connect both read stale
  * state; the ref is what makes the second one a no-op.
  */
 type Status = 'wait' | 'busy' | 'ok' | 'fail'
+/** YouTube's connection key: the one pick with a Google sign-in. */
+const YOUTUBE_KEY = 'youtube'
 type Pick = { def: ConnectionDef; input: ConnectInput; status: Status; result?: ConnectResult }
 
 const PAIR = 'min-w-[88px] justify-center'
@@ -59,6 +68,7 @@ export function ConnectModal({
   onClose,
   onDone,
   shopifyApp = false,
+  youtubeApp = false,
   createPages,
 }: {
   artistId: string
@@ -73,6 +83,9 @@ export function ConnectModal({
   /** The Shopify app's credentials are set (a server-made boolean — never the secret):
    *  Shopify connects by going to Shopify, not by a pasted token. */
   shopifyApp?: boolean
+  /** The Google app's credentials are set (a server-made boolean): the YouTube row offers
+   *  Connect with YouTube above its paste field. */
+  youtubeApp?: boolean
   /** By connection key, a link that MAKES the page on that platform, for one the artist has
    *  none of yet (MusicBrainz: its own artist editor, pre-filled; built on the server). */
   createPages?: Partial<Record<string, string>>
@@ -88,6 +101,8 @@ export function ConnectModal({
   const [shopError, setShopError] = useState<string | null>(null)
   /** A pick that connects by the trip to Shopify, not by `connectOneAction`. */
   const viaApp = (p: Pick) => shopifyApp && p.def.key === SHOPIFY_KEY
+  /** A YouTube pick left blank: it connects by the trip to Google, not by `connectOneAction`. */
+  const viaGoogle = (p: Pick) => youtubeApp && p.def.key === YOUTUBE_KEY && !(p.input.handle ?? '').trim()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !running && onClose()
@@ -120,7 +135,7 @@ export function ConnectModal({
     setStep('run')
     // Reset the rows about to run; leave the ones that already worked alone. A Shopify pick
     // in app mode never runs here: its connect is the trip to Shopify.
-    const runs = (p: Pick) => !viaApp(p) && (!only || only.has(p.def.key))
+    const runs = (p: Pick) => !viaApp(p) && !viaGoogle(p) && (!only || only.has(p.def.key))
     setPicks((all) => all.map((p) => (runs(p) ? { ...p, status: 'wait', result: undefined } : p)))
     const queue = picks.filter(runs)
     for (const p of queue) {
@@ -147,7 +162,14 @@ export function ConnectModal({
   const failed = picks.filter((p) => p.status === 'fail')
   const done = picks.filter((p) => p.status === 'ok')
   const finished = step === 'run' && !running
-  const toRun = picks.filter((p) => !viaApp(p))
+  const toRun = picks.filter((p) => !viaApp(p) && !viaGoogle(p))
+  /** The Google button, on the YouTube row: in details only when nothing else is waiting to
+   *  run (leaving would strand it), and after a run on a row that has not connected. */
+  const nothingElseToRun = picks.every((p) => p.def.key === YOUTUBE_KEY || viaApp(p))
+  const googleTrip = (p: Pick, now: 'details' | 'run') =>
+    youtubeApp && p.def.key === YOUTUBE_KEY && (now === 'details' ? nothingElseToRun : finished && p.status !== 'ok') ? (
+      <YouTubeTrip artistId={artistId} sync={p.input.sync !== false} />
+    ) : null
   const appPick = picks.find(viaApp)
   const shopifyLink = appPick ? (
     <ShopifyLink artistId={artistId} domain={appPick.input.domain} onBad={setShopError} className={buttonClass('solid', cx(PAIR, 'whitespace-nowrap'))} />
@@ -238,6 +260,7 @@ export function ConnectModal({
                   pick={p}
                   app={viaApp(p)}
                   error={viaApp(p) ? shopError : null}
+                  trip={googleTrip(p, 'details')}
                   createPage={createPages?.[p.def.key]}
                   onChange={(patch) => setInput(p.def.key, patch)}
                 />
@@ -265,6 +288,7 @@ export function ConnectModal({
                   pick={p}
                   app={viaApp(p)}
                   error={viaApp(p) ? shopError : null}
+                  trip={googleTrip(p, 'run')}
                   editable={finished && (p.status === 'fail' || viaApp(p))}
                   onChange={(patch) => setInput(p.def.key, patch)}
                 />
@@ -466,12 +490,15 @@ function DetailRow({
   pick,
   app,
   error,
+  trip,
   createPage,
   onChange,
 }: {
   pick: Pick
   app?: boolean
   error?: string | null
+  /** A sign-in button that connects this pick instead of typing (YouTube), above the field. */
+  trip?: ReactNode
   createPage?: string
   onChange: (patch: ConnectInput) => void
 }) {
@@ -481,6 +508,7 @@ function DetailRow({
       <span className="flex w-5 flex-none justify-center text-ink"><ConnectionMark def={def} size={16} /></span>
       <span className="w-28 flex-none truncate text-sm font-semibold">{def.label}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {trip}
         <ConnectField def={def} input={input} app={app} failed={!!error} onChange={onChange} />
         <SyncSwitch def={def} input={input} onChange={onChange} />
         <CreatePage def={def} href={createPage} />
@@ -494,12 +522,14 @@ function RunRow({
   pick,
   app,
   error,
+  trip,
   editable,
   onChange,
 }: {
   pick: Pick
   app?: boolean
   error?: string | null
+  trip?: ReactNode
   editable: boolean
   onChange: (patch: ConnectInput) => void
 }) {
@@ -510,13 +540,17 @@ function RunRow({
       <span className={cx('mt-0.5 flex w-5 flex-none justify-center', status === 'ok' ? 'text-ink' : 'text-ink-faint')}><ConnectionMark def={def} size={16} /></span>
       <span className="w-28 flex-none truncate pt-0.5 text-sm font-semibold">{def.label}</span>
       <div className="min-w-0 flex-1">
+        {/* A blank YouTube row that waited for its trip is the button alone. */}
+        {trip && <div className={cx((editable || value) && 'mb-2')}>{trip}</div>}
         {editable ? (
           <div className="flex flex-col gap-2">
             <ConnectField def={def} input={input} app={app} failed={!app || !!error} onChange={onChange} />
             <ShopError error={error ?? null} />
           </div>
         ) : (
-          <span className={cx('block h-6 truncate font-space text-[13px] leading-6', status === 'ok' ? 'text-ink' : 'text-ink-muted')}>{value}</span>
+          (value || !trip) && (
+            <span className={cx('block h-6 truncate font-space text-[13px] leading-6', status === 'ok' ? 'text-ink' : 'text-ink-muted')}>{value}</span>
+          )
         )}
         {status === 'ok' && result?.message && (
           <div className="mt-1 text-[12.5px] leading-snug text-ink-muted">{result.message}</div>
@@ -568,5 +602,22 @@ export function ShopifyLink({ artistId, domain, onBad, className }: { artistId: 
     >
       Connect with Shopify
     </a>
+  )
+}
+
+/**
+ * "Connect with YouTube": a real link to the start route, which checks the manager and sends
+ * the browser on to Google's sign-in. The Sync choice rides along (`sync=0` when off). While
+ * the Google app is in testing, Google shows an "unverified app" screen first: one line says
+ * that is expected, so nobody turns back at it.
+ */
+function YouTubeTrip({ artistId, sync }: { artistId: string; sync: boolean }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <a href={youtubeStartPath(artistId, sync)} className={buttonClass('solid', 'w-fit whitespace-nowrap')}>
+        Connect with YouTube
+      </a>
+      <span className="text-[12px] leading-snug text-ink-muted">Google shows a warning while Tapir is in testing: that’s expected.</span>
+    </div>
   )
 }

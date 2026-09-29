@@ -56,8 +56,9 @@ export type ConnectResult = {
   error?: string
   /** What to do about it, when we know (the Shopify probe's advice). */
   detail?: string
-  /** Shopify only: where the save stopped, as a CODE (`connect`, `probe-bad-token`, `sync`)
-   *  — what the OAuth callback puts in its return URL instead of any text. */
+  /** Where the save stopped, as a CODE (`connect`, `probe-bad-token`, `sync`) — what an
+   *  OAuth callback (Shopify's, YouTube's) puts in its return URL instead of any text.
+   *  `sync`: the connection saved, but its first pull failed. */
   reason?: ReturnReason
 }
 
@@ -120,7 +121,7 @@ async function connectSource(artistId: string, idField: string, sourceKey: strin
   const intg = INTEGRATIONS.find((i) => i.key === sourceKey)
   if (!intg) return { ok: true }
   const res = await intg.pull(artistId)
-  if (!res.ok) return { ok: false, error: res.error ?? `${intg.label} didn’t answer.` }
+  if (!res.ok) return { ok: false, error: res.error ?? `${intg.label} didn’t answer.`, reason: 'sync' }
   return { ok: true, message: res.message }
 }
 

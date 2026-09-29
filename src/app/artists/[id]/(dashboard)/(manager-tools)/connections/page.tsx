@@ -4,11 +4,12 @@ import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/in
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
 import { shopifyAppConfigured, shopifyReturnNotice } from '@/lib/merch/shopify-oauth'
+import { youtubeOAuthConfigured, youtubeReturnNotice } from '@/lib/youtube-oauth'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
 import { ConnectionList } from './connection-list'
-import { ShopifyReturnNotice } from './shopify-return'
+import { ShopifyReturnNotice, YouTubeReturnNotice } from './shopify-return'
 
 export const metadata = { title: 'Connections — Lone Star Management' }
 
@@ -59,8 +60,11 @@ export default async function ConnectionsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { id } = await params
-  // Back from Shopify's approve screen: the callback sends a CODE, the words are chosen here.
-  const shopifyReturn = shopifyReturnNotice(await searchParams)
+  // Back from Shopify's approve screen or Google's sign-in: the callback sends a CODE, the
+  // words are chosen here.
+  const query = await searchParams
+  const shopifyReturn = shopifyReturnNotice(query)
+  const youtubeReturn = youtubeReturnNotice(query)
   const supabase = await createClient()
   const [artist, shopifyDomain, links, counts, diff, { data: facts }] = await Promise.all([
     requireArtist(id),
@@ -98,12 +102,20 @@ export default async function ConnectionsPage({
 
   // The floating Publish lights up on unpublished link EDITS — the same flag behind the
   // nav's pending dot, so the two always agree (the tour page's rule).
-  // `shopifyApp` is the one thing about the Shopify app the browser learns: whether it is set
-  // up. The key and the secret stay on the server.
+  // `shopifyApp` / `youtubeApp` are the one thing about each app the browser learns: whether
+  // it is set up. The ids and the secrets stay on the server.
   return (
     <>
       {shopifyReturn && <ShopifyReturnNotice {...shopifyReturn} />}
-      <ConnectionList artistId={id} rows={rows} dirty={diff.link.dirty} shopifyApp={shopifyAppConfigured()} createPages={createPages} />
+      {youtubeReturn && <YouTubeReturnNotice {...youtubeReturn} />}
+      <ConnectionList
+        artistId={id}
+        rows={rows}
+        dirty={diff.link.dirty}
+        shopifyApp={shopifyAppConfigured()}
+        youtubeApp={youtubeOAuthConfigured()}
+        createPages={createPages}
+      />
     </>
   )
 }
