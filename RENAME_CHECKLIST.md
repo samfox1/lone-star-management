@@ -1,5 +1,9 @@
 # Rename checklist
 
+> **2026-09-28:** Sam bought **digitaltapir.com** as the main URL (not set up yet). It
+> replaces tapirwebsites.com as the home address; the enquiry sender stays on
+> tapirwebsites.com until digitaltapir.com is verified in Resend (LAUNCH_CHECKLIST.md §4).
+
 Mechanical. Everything below is find-and-replace or a one-line edit. Nothing here is
 risky, and nothing here blocks the Resend work (see §0).
 

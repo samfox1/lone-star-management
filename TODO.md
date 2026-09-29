@@ -39,7 +39,7 @@ The login buttons themselves are NOT built yet: Sam makes the apps, then Claude 
 
 **Eventbrite, ~5 min, free.** Signed in to Eventbrite with a Tapir email:
 1. Account settings → Developer links → **API keys** → Create API key.
-2. Name `Tapir`, application URL (tapirwebsites.com), a one-line description, OAuth
+2. Name `Tapir`, application URL `https://digitaltapir.com` (fine before the site exists), a one-line description, OAuth
    redirect URI `http://localhost:3000/api/eventbrite/callback`. Submit.
 3. Copy the API key and Client secret into `.env.local`:
    `EVENTBRITE_CLIENT_ID=…` (the "API key") and `EVENTBRITE_CLIENT_SECRET=…`.
@@ -49,8 +49,8 @@ Then tell Claude "keys are in" (never paste the values into chat).
 - [ ] Optional, only saves typing a handle: Twitch, Patreon, Vimeo, Mixcloud, Bluesky.
       Sam hasn't picked 2 vs 7 yet (recommended: just the two above).
 - One app per service, owned by Tapir, serves every artist; artists only sign in with their
-  own account. Make the accounts with a tapirwebsites.com email, not a personal one.
-- [ ] **Privacy policy page on tapirwebsites.com — before Google's review, NOT now.** Sam
+  own account. Make the accounts with a Tapir business email (digitaltapir.com once its mail is set up), not a personal one.
+- [ ] **Privacy policy page on digitaltapir.com — before Google's review, NOT now.** Sam
       (2026-09-28): "I dont think im ready for my site to be reviewed yet." Google's OAuth
       review (needed before artists outside the 100 test users can connect YouTube) asks for
       a public homepage + privacy policy. Stay in testing mode (Skeen etc. added by email)

@@ -7,7 +7,7 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
 ## 1. Put the dashboard online
 
 - [ ] A Vercel project for the dashboard (today it runs only on localhost:3000) and its
-      address, e.g. `app.tapirwebsites.com`. Set `NEXT_PUBLIC_APP_URL` to it.
+      address, e.g. `app.digitaltapir.com` (Sam bought digitaltapir.com 2026-09-28 as the main URL). Set `NEXT_PUBLIC_APP_URL` to it.
 - [ ] Every secret in Vercel → Settings → Environment Variables, marked **Sensitive**
       (Production only unless a preview needs it). `.env.local` stays on the Mac for dev.
 - [ ] Supabase → Authentication → URL configuration: the new address as Site URL and in the
@@ -21,7 +21,7 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
       YouTube `https://<address>/api/youtube/callback`, Eventbrite
       `https://<address>/api/eventbrite/callback`, Shopify `https://<address>/api/shopify/callback`
       (+ its app URL and webhooks, see the Shopify service README).
-- [ ] Google: a public homepage, **privacy policy** and terms on tapirwebsites.com, then
+- [ ] Google: a public homepage, **privacy policy** and terms on digitaltapir.com, then
       Audience → Publish app → Google's review. Until then, Testing mode (≤100 test users).
 - [ ] Eventbrite: approval if they require it for accounts outside ours.
 - [ ] Shopify: switch to a public (unlisted is fine) app once a second artist has a store.
@@ -36,8 +36,11 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
 
 - [ ] The Tapir rename (RENAME_CHECKLIST.md), incl. crawler user-agent strings that still say
       lone-star.
-- [ ] Enquiry email sends from tapirwebsites.com (verified); stage 3 (bridge/site) of
-      enquiry forwarding.
+- [ ] Main URL is **digitaltapir.com** (Sam, 2026-09-28): point its DNS at the marketing site
+      and the dashboard (`app.`), verify it in Resend, then move the enquiry sender off
+      `noreply@tapirwebsites.com` (verified, working today; `mail_settings` is data, see
+      RENAME_CHECKLIST.md §0). Keep tapirwebsites.com redirecting.
+- [ ] Stage 3 (bridge/site) of enquiry forwarding.
 
 ## 5. Search and AI visibility (per artist site)
 
