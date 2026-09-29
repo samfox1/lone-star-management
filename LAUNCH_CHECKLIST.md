@@ -1,0 +1,51 @@
+# Launch checklist
+
+Sam (2026-09-28): "Maybe we should start building a final steps todo when I am ready to
+finalize and ship this project." The things to do once, at launch, gathered in one place.
+Add to it whenever something is "for later, when we ship". Day-to-day work stays in TODO.md.
+
+## 1. Put the dashboard online
+
+- [ ] A Vercel project for the dashboard (today it runs only on localhost:3000) and its
+      address, e.g. `app.tapirwebsites.com`. Set `NEXT_PUBLIC_APP_URL` to it.
+- [ ] Every secret in Vercel → Settings → Environment Variables, marked **Sensitive**
+      (Production only unless a preview needs it). `.env.local` stays on the Mac for dev.
+- [ ] Supabase → Authentication → URL configuration: the new address as Site URL and in the
+      redirect list.
+- [ ] Remove the dev-only sign-in bypass variables from anything that isn't local
+      (`.env.example`, "Dev-only auth bypass").
+
+## 2. The "Connect with…" logins
+
+- [ ] Add the real address's callback beside the localhost one (keep localhost for dev):
+      YouTube `https://<address>/api/youtube/callback`, Eventbrite
+      `https://<address>/api/eventbrite/callback`, Shopify `https://<address>/api/shopify/callback`
+      (+ its app URL and webhooks, see the Shopify service README).
+- [ ] Google: a public homepage, **privacy policy** and terms on tapirwebsites.com, then
+      Audience → Publish app → Google's review. Until then, Testing mode (≤100 test users).
+- [ ] Eventbrite: approval if they require it for accounts outside ours.
+- [ ] Shopify: switch to a public (unlisted is fine) app once a second artist has a store.
+
+## 3. Secrets hygiene
+
+- [ ] A master copy of every key in a password manager (not in notes, chat or email).
+- [ ] Rotate any key that was ever pasted somewhere shared.
+- [ ] `chmod 600 .env.local` on any machine that has one.
+
+## 4. Name and email
+
+- [ ] The Tapir rename (RENAME_CHECKLIST.md), incl. crawler user-agent strings that still say
+      lone-star.
+- [ ] Enquiry email sends from tapirwebsites.com (verified); stage 3 (bridge/site) of
+      enquiry forwarding.
+
+## 5. Search and AI visibility (per artist site)
+
+- [ ] Google Search Console + Bing Webmaster Tools for each artist domain (skeenmusic.com first).
+- [ ] MusicBrainz page per artist (Connections → MusicBrainz → Create the page).
+
+## 6. Before the switch
+
+- [ ] Full test suite + `npm run audit:grants`, green.
+- [ ] Bandsintown: live only after its terms are met (`BANDSINTOWN_TERMS_COMPLIANT`).
+- [ ] PostHog cross-check deleted (decision on/after 2026-10-15, TODO.md).

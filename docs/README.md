@@ -39,6 +39,8 @@ or standing references consulted regularly:
   auto-publish), cited from migrations and code as the spec.
 - **SEO_GEO_PLAN.md** — SEO/GEO plan; phases 1-3 live, phase 4 (ftbk/wren)
   waiting on Sam.
+- **LAUNCH_CHECKLIST.md** — the one-time steps for when Tapir ships (dashboard online,
+  production secrets, OAuth reviews, rename, per-artist Search Console).
 - **AI_VISIBILITY_AUDIT.md** — 2026-09-28 audit of SEO/GEO/AI visibility (live
   sites, code + the SEO/GEO page, off-site identity), ranked, with a suggested order.
 - **SITE_BRIDGE_PLAN.md** — the site-bridge standard (protocol, manifest,
