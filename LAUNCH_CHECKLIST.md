@@ -47,6 +47,18 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
 - [ ] Google Search Console + Bing Webmaster Tools for each artist domain (skeenmusic.com first).
 - [ ] MusicBrainz page per artist (Connections → MusicBrainz → Create the page).
 
+## SEO/GEO tests
+
+- [ ] The run after each Publish lives in the publish request's `after()` (lib/seo-tests/after-publish.ts):
+      it waits up to ~90 s for the site to show the publish, then runs with a 90 s budget. On Vercel that
+      must fit the publishing route's `maxDuration` (set ≥ 240 s on the dashboard routes that publish), or
+      move it to a queue/background job. Killed mid-run, the run stays "running" until the next claim marks
+      it failed after 5 minutes; nothing else is lost. "Test again" (a server action) also needs ~90 s.
+- [ ] The scheduled (weekly) run: nothing schedules one yet, and the Overview shows no weekly events
+      until something does. Add a cron (Vercel Cron or Supabase `pg_cron` + an Edge Function) that runs
+      `runSeoTests(service client, artistId, 'scheduled')` per custom-site artist; the table already
+      accepts `trigger = 'scheduled'` from the service role.
+
 ## 6. Before the switch
 
 - [ ] Full test suite + `npm run audit:grants`, green.

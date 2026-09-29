@@ -9,6 +9,7 @@
  */
 import type { SiteContent } from '@/lib/site'
 import { CURSOR_CONTENT_KEYS, CURSOR_TRAIL_STYLES } from '@samfox1/site-bridge/cursor'
+import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 
 export type FieldType = 'text' | 'email'
 
@@ -88,6 +89,15 @@ export const SEO_FIELDS: SiteContentField[] = [
     { key: `faq_extra_${n}_q`, label: `Extra question ${n}`, type: 'text' as const, default: '' },
     { key: `faq_extra_${n}_a`, label: `Extra answer ${n}`, type: 'text' as const, default: '' },
   ]),
+  // The facts that tell this artist from others with the same name (bridge 0.43.0,
+  // AI_VISIBILITY_AUDIT §2.7). Keys from the bridge's registry, so the site and the gate
+  // cannot disagree on a name. The CITY is not here: it stays `artists.location`. Rules and
+  // the page's reading: lib/seo-facts.ts. Being SEO keys, they are reserved out of the
+  // editor's custom-field path and write only through saveSeoField.
+  { key: FACT_CONTENT_KEYS.region, label: 'Region', type: 'text', default: '' },
+  { key: FACT_CONTENT_KEYS.country, label: 'Country', type: 'text', default: '' },
+  { key: FACT_CONTENT_KEYS.aliases, label: 'Also known as', type: 'text', default: '' },
+  { key: FACT_CONTENT_KEYS.activeSince, label: 'Active since', type: 'text', default: '' },
 ]
 
 /** The FAQ answer keys, in prompt order — derived from SEO_FIELDS. */

@@ -28,6 +28,9 @@ const h = vi.hoisted(() => ({
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: h.after }))
+// The SEO / GEO test run is scheduled beside the ping (its own `after`); this suite counts the
+// PING's `after` only. The run's scheduling is pinned in tests/unit/seo-tests/publish-hook.test.ts.
+vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: vi.fn() }))
 vi.mock('@supabase/supabase-js', async (orig) => ({
   ...(await orig<typeof import('@supabase/supabase-js')>()),
   createClient: () => ({ auth: { signInWithPassword: async () => ({ error: h.password.error }) } }),

@@ -484,6 +484,22 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
 
 Then rule 7 of §7 proves all of it on the built html, every build.
 
+### Tell the artist apart (0.43.0)
+
+The fact sheet also states the facts that separate this artist from others with the same
+name: their other names (`alternateName`), the year they started (`foundingDate`, on a
+MusicGroup only: schema.org has no start date for a Person), and where they are based as a
+full `Place` with a `PostalAddress` (city, region, country as its ISO code). The manager sets
+them on lone-star's SEO page; they ride `site_content` under `FACT_CONTENT_KEYS`, and the
+city stays `artist.location`.
+
+- **Nothing to write.** `jsonLdGraph` reads and states them. Do not read the `fact_*` keys
+  yourself: `siteFacts(payload)` is the one reading, and it re-applies every rule (a value
+  it cannot trust is dropped, never stated). `artistPlace(payload)` is the place it states.
+- **Want them visible too** (an /about "Quick facts", say)? Render `siteFacts(payload)` as
+  text, never as html. Say only what it returns.
+- Without a region or a country the place is exactly the 0.42 one, `{ name: <city> }`.
+
 ### Tell search engines when you change (IndexNow, 0.42.0)
 
 When a manager publishes, lone-star tells Bing (and Yandex, Naver, Seznam) which pages

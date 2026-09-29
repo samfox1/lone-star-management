@@ -7,6 +7,7 @@ import { artistFactUpdate } from '@/lib/artist-facts'
 import { auditLiveSite, type LiveAudit } from '@/lib/seo-audit'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { ensureIndexNowKey, scheduleIndexNowPing } from '@/lib/indexnow'
+import { scheduleSeoTestRun } from '@/lib/seo-tests/after-publish'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -1264,7 +1265,17 @@ async function publishGated(
     return { ok: false, error: e instanceof Error ? e.message : 'Publish failed.' }
   }
   revalidatePath(`/artists/${artistId}`, 'layout')
-  if (indexNow) scheduleIndexNowPing(supabase, artistId)
+  if (indexNow) {
+    scheduleIndexNowPing(supabase, artistId)
+    // The SEO / GEO tests, once the live site shows this publish (lib/seo-tests/after-publish).
+    // Same gate as the ping: a publish that changes no page's words (Brand) tests nothing new.
+    // The publish is already live: nothing here may turn it into a reported failure.
+    try {
+      scheduleSeoTestRun(supabase, artistId)
+    } catch (e) {
+      console.warn('[seo-tests] run not scheduled:', e instanceof Error ? e.message : e)
+    }
+  }
   return { ok: true }
 }
 

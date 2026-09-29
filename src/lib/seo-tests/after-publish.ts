@@ -1,0 +1,94 @@
+/**
+ * TEST AFTER PUBLISH: once a publish has gone out, run the SEO / GEO tests in the background, the
+ * way the IndexNow ping runs (lib/indexnow.ts): scheduled with `after`, so it never slows or
+ * fails the publish; every error ends here as a quiet log line.
+ *
+ * THE TRAP it handles: the artist's site caches each page for ~60 s, so a run straight after
+ * Publish would read the OLD page and store a stale verdict under today's date. So it first
+ * waits (fresh.ts, up to ~90 s) until the site's sitemap names this publish, poking "/" as it
+ * goes; then it runs. Whatever the wait found is RECORDED with the run (`site_fresh`, `note`),
+ * so the page can say "your site may not have updated yet" instead of pretending.
+ *
+ * ON SERVERLESS HOSTING (LAUNCH_CHECKLIST.md, "SEO/GEO tests"): `after` lives inside the
+ * publish request's function, so the wait + run (~90 s + up to 90 s) must fit the route's
+ * `maxDuration`. Past it the platform kills the function mid-run; the claim is then left
+ * running and the next claim marks it failed after 5 minutes. Nothing is lost but that run.
+ */
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { after } from 'next/server'
+import { waitForFreshSite, type FreshWait, type WaitOptions } from './fresh'
+import { readKnown as readKnownDefault } from './known'
+import { readPublishMoments, runSeoTests, type RunDeps, type SeoRunOutcome } from './run'
+
+export type AfterPublishDeps = RunDeps & {
+  wait?: (o: WaitOptions) => Promise<FreshWait>
+  sleep?: (ms: number) => Promise<void>
+  /** A publish's run is not refused by the cool-down, but it waits for a run already going. */
+  busyRetries?: number
+  busyRetryMs?: number
+}
+
+export type AfterPublishOutcome =
+  | { ran: true; outcome: SeoRunOutcome; wait: FreshWait }
+  | { ran: false; reason: 'no-site' | 'busy' | 'error'; error?: string }
+
+const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** Wait for the site, then run and store. Never throws. */
+export async function testAfterPublish(supabase: SupabaseClient, artistId: string, deps: AfterPublishDeps = {}): Promise<AfterPublishOutcome> {
+  try {
+    const now = deps.now ?? Date.now
+    const known = await (deps.readKnown ?? readKnownDefault)(supabase, artistId, { now: now() })
+    // Nothing to fetch, nothing to wait for: a publish with no site stores no run of unknowns.
+    if (!known.siteUrl) return { ran: false, reason: 'no-site' }
+    const readMoments = deps.readMoments ?? readPublishMoments
+    const all = await readMoments(supabase, artistId).catch(() => [] as string[])
+    const wait = await (deps.wait ?? waitForFreshSite)({
+      origin: known.siteUrl,
+      publishedAt: known.published?.publishedAt ?? null,
+      moments: all,
+      fetcher: deps.fetcher,
+      sleep: deps.sleep,
+      now: deps.now,
+    })
+    const secs = Math.round(wait.waitedMs / 1000)
+    const note =
+      wait.fresh === false
+        ? `Your site still showed the last publish after ${secs} seconds, so these results may be out of date.`
+        : wait.fresh === null && known.published?.publishedAt
+          ? `We couldn’t confirm your site had updated; we waited ${secs} seconds before testing.`
+          : null
+
+    const sleep = deps.sleep ?? realSleep
+    const retries = deps.busyRetries ?? 6
+    for (let attempt = 0; ; attempt++) {
+      const outcome = await runSeoTests(supabase, artistId, 'publish', { ...deps, readMoments, freshness: { fresh: wait.fresh }, note })
+      if (outcome.ok || outcome.reason !== 'busy') return { ran: true, outcome, wait }
+      if (attempt >= retries) return { ran: false, reason: 'busy' }
+      await sleep(deps.busyRetryMs ?? 10_000)
+    }
+  } catch (e) {
+    return { ran: false, reason: 'error', error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/**
+ * Schedule the run for after the publish's response has gone. Call it once per successful
+ * publish that ships page words. A failure anywhere, `after` itself included (outside a
+ * request), is logged quietly and goes no further.
+ */
+export function scheduleSeoTestRun(supabase: SupabaseClient, artistId: string): void {
+  try {
+    after(async () => {
+      try {
+        const out = await testAfterPublish(supabase, artistId)
+        if (!out.ran && out.reason !== 'no-site') console.warn(`[seo-tests] no run after publish (artist ${artistId}): ${out.reason}`)
+        else if (out.ran && !out.outcome.ok) console.warn(`[seo-tests] run after publish not stored (artist ${artistId}): ${out.outcome.reason}`)
+      } catch (e) {
+        console.warn('[seo-tests] run after publish failed:', e instanceof Error ? e.message : e)
+      }
+    })
+  } catch (e) {
+    console.warn('[seo-tests] run not scheduled:', e instanceof Error ? e.message : e)
+  }
+}

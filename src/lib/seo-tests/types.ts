@@ -91,6 +91,22 @@ export type SeoBot = {
   fetches: boolean
   /** Which test reads it. */
   test: Extract<SeoTestId, 'google' | 'bing' | 'chatgpt' | 'claude' | 'perplexity' | 'others'>
+  /** The vendor page the name, token and User-Agent come from. */
+  docUrl?: string
+  /** false = the vendor names the token but does not publish the full User-Agent string;
+   *  `userAgent` is then the widely observed form, built around the documented token. */
+  uaDocumented?: boolean
+  /** Tokens the bot falls back to when robots.txt has no group for its own token, in order
+   *  (Applebot follows Googlebot's group when there is no Applebot group: Apple's doc). */
+  robotsFallback?: readonly string[]
+  /** For a token-only entry (`fetches` false): the key of the bot that does the visiting. */
+  visitsAs?: string
+  /** true = the vendor says it can run a page's scripts (so an empty-until-scripts page is
+   *  not empty to it). Unset = no such statement, treated as NOT running them. */
+  runsScripts?: boolean
+  /** true = the vendor says it only gathers pages to TRAIN models (GPTBot, ClaudeBot,
+   *  Applebot-Extended, CCBot), so turning it away does not stop search or answers. */
+  trainingOnly?: boolean
 }
 
 export type SeoPageFetch = {
@@ -106,6 +122,8 @@ export type SeoPageFetch = {
   html: string | null
   /** Why there is no answer, when status is null. */
   error?: string
+  /** The body was longer than the cap and `html` is only its start. */
+  truncated?: boolean
 }
 
 /** What Tapir itself knows, read from the database for this artist. `published` is what the
@@ -142,12 +160,53 @@ export type SeoEvidence = {
   /** Each fetching bot's visit to each path, keyed by SeoBot.key. */
   byBot: Record<string, SeoPageFetch[]>
   robots: { status: number | null; body: string | null }
-  sitemap: { status: number | null; urls: string[]; lastmods: (string | null)[] } | null
+  sitemap: {
+    status: number | null
+    urls: string[]
+    lastmods: (string | null)[]
+    /** The list we read (a robots.txt `Sitemap:` line, else /sitemap.xml). */
+    url?: string
+    /** It was a real sitemap (urlset or sitemapindex), not an html page or junk. */
+    parsed?: boolean
+    /** robots.txt names a sitemap on this site. */
+    namedInRobots?: boolean
+    /** Every `<loc>` read, before `urls` was capped. */
+    total?: number
+    /** `<loc>`s on another site (or not a web address), with up to 3 examples. */
+    offSite?: { count: number; examples: string[] }
+    /** The file was longer than the cap and only its start was read. */
+    truncated?: boolean
+    /** A sitemap index: the child lists we opened (one level deep). */
+    children?: { url: string; status: number | null }[]
+    /** Why the list could not be read, when status is null. */
+    error?: string
+  } | null
+  /** Signs of Bing Webmaster Tools the site carries (/BingSiteAuth.xml). The meta tag is read
+   *  from the home page html. Optional: absent = not gathered. */
+  bing?: { siteAuth: { status: number | null; hasUser: boolean } }
   /** The share picture the home page names, fetched: null when the page names none. */
-  shareImage: { url: string; status: number | null; contentType: string | null; width: number | null; height: number | null; bytes: number | null } | null
+  shareImage: {
+    url: string; status: number | null; contentType: string | null; width: number | null; height: number | null; bytes: number | null
+    /** What the file's first bytes say it is (share-image.ts), whatever the header claims.
+     *  null = not a picture format we know. Optional: absent = not read. */
+    format?: 'png' | 'jpeg' | 'gif' | 'webp' | 'svg' | 'avif' | 'heic' | null
+    /** Why there is no answer when status is null: 'not-https', 'redirect-not-https',
+     *  'not-public', 'bad-url', or guardedFetch's own error. */
+    error?: string
+    /** The file was bigger than the cap we download, so `bytes` is at least that. */
+    tooBig?: boolean
+    /** The file ended before its own stated length (a cut-off download). */
+    broken?: boolean
+  } | null
   /** MusicBrainz's answer to "which artist links to this site / these profiles". `looked`
    *  false = we could not ask (so the test is `unknown`, not `fail`). */
-  musicbrainz: { looked: boolean; artistUrl: string | null; matchedOn: string | null; error?: string }
+  musicbrainz: {
+    looked: boolean; artistUrl: string | null; matchedOn: string | null; error?: string
+    /** The name MusicBrainz has for the artist it found. */
+    artistName?: string | null
+    /** The addresses we asked MusicBrainz about, in order. */
+    asked?: string[]
+  }
   known: SeoKnown
 }
 

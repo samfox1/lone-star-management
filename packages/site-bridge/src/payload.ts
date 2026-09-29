@@ -208,7 +208,14 @@ export type MediaPurpose =
   | 'icon_source'
 
 /** Editable site text as key → override value (published or working). Absent
- *  keys fall back to the template default. */
+ *  keys fall back to the template default.
+ *
+ *  Some keys are not text a site renders but facts the fact card states. From 0.43.0 the
+ *  artist's region, country, other names and start year ride here under
+ *  `seo.FACT_CONTENT_KEYS` (`fact_region`, `fact_country`, `fact_aliases`,
+ *  `fact_active_since`); the city stays `artist.location`. Absent on every revision
+ *  published before them. Read them through `seo.siteFacts`, never raw: it re-applies the
+ *  rules, so a value stored some other way than lone-star's save gate is not stated. */
 export type SiteContent = Record<string, string>
 
 /** Per-region class-name overrides as region_key → class string (published or
@@ -340,6 +347,8 @@ export type PublicSitePayload = {
     /** SEO_GEO_PLAN: artist facts for the JSON-LD fact sheet. Optional on the wire until
      *  the columns land (Phase 2 B6); a site reads them with `?? null`. */
     genre?: string | null
+    /** "Based in": the CITY. Its region, country, the artist's other names and start
+     *  year ride `site_content` (0.43.0, see `SiteContent`). */
     location?: string | null
     schema_type?: 'MusicGroup' | 'Person' | null
   }

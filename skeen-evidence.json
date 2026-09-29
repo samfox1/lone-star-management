@@ -1,0 +1,575 @@
+{
+  "origin": "https://www.skeenmusic.com",
+  "gatheredAt": "2026-09-29T05:42:01.748Z",
+  "paths": [
+    "/",
+    "/about",
+    "/faqsheet"
+  ],
+  "plain": [
+    {
+      "path": "/",
+      "finalUrl": "https://www.skeenmusic.com/",
+      "status": 200,
+      "headers": {
+        "age": "37",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "server": "Vercel",
+        "x-vercel-cache": "HIT"
+      },
+      "html": "<!DOCTYPE html><html lang=\"en\" class=\"archivo_951b1311-module__oBswJa__variable inter_f5bdfc26-module__0yGzRW__variable bebas_neue_4d1b6b20-module__PolqSW__variable space_grotesk_7b50e2c9-module__AncuRG__variable orbitron_e7571f5d-module__n1r58W__variable momo_trust_display_3275ba1d-module__gPydmG__variable h-full antialiased\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/><link rel=\"preload\" href=\"/_next/static/media/035850c"
+    },
+    {
+      "path": "/about",
+      "finalUrl": "https://www.skeenmusic.com/about",
+      "status": 200,
+      "headers": {
+        "age": "3893",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "server": "Vercel",
+        "x-vercel-cache": "STALE"
+      },
+      "html": "<!DOCTYPE html><html lang=\"en\" class=\"archivo_951b1311-module__oBswJa__variable inter_f5bdfc26-module__0yGzRW__variable bebas_neue_4d1b6b20-module__PolqSW__variable space_grotesk_7b50e2c9-module__AncuRG__variable orbitron_e7571f5d-module__n1r58W__variable momo_trust_display_3275ba1d-module__gPydmG__variable h-full antialiased\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/><link rel=\"preload\" href=\"/_next/static/media/035850c"
+    },
+    {
+      "path": "/faqsheet",
+      "finalUrl": "https://www.skeenmusic.com/faqsheet",
+      "status": 200,
+      "headers": {
+        "age": "8688",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "server": "Vercel",
+        "x-vercel-cache": "STALE"
+      },
+      "html": "<!DOCTYPE html><html lang=\"en\" class=\"archivo_951b1311-module__oBswJa__variable inter_f5bdfc26-module__0yGzRW__variable bebas_neue_4d1b6b20-module__PolqSW__variable space_grotesk_7b50e2c9-module__AncuRG__variable orbitron_e7571f5d-module__n1r58W__variable momo_trust_display_3275ba1d-module__gPydmG__variable h-full antialiased\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/><link rel=\"preload\" href=\"/_next/static/media/035850c"
+    }
+  ],
+  "byBot": {
+    "googlebot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "bingbot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "oai-searchbot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "chatgpt-user": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "gptbot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "claudebot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "claude-searchbot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "claude-user": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "perplexitybot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3893",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "perplexity-user": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3894",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "applebot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3894",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "24601 chars"
+      }
+    ],
+    "ccbot": [
+      {
+        "path": "/",
+        "finalUrl": "https://www.skeenmusic.com/",
+        "status": 200,
+        "headers": {
+          "age": "39",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "230817 chars"
+      },
+      {
+        "path": "/about",
+        "finalUrl": "https://www.skeenmusic.com/about",
+        "status": 200,
+        "headers": {
+          "age": "3894",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "HIT"
+        },
+        "html": "37510 chars"
+      },
+      {
+        "path": "/faqsheet",
+        "finalUrl": "https://www.skeenmusic.com/faqsheet",
+        "status": 200,
+        "headers": {
+          "age": "8688",
+          "cache-control": "public, max-age=0, must-revalidate",
+          "content-type": "text/html; charset=utf-8",
+          "server": "Vercel",
+          "x-vercel-cache": "STALE"
+        },
+        "html": "24601 chars"
+      }
+    ]
+  },
+  "robots": {
+    "status": 200,
+    "body": "User-Agent: *\nAllow: /\n\nHost: https://www.skeenmusic.com\nSitemap: https://www.skeenmusic.com/sitemap.xml\n"
+  },
+  "sitemap": {
+    "status": 200,
+    "urls": [
+      "https://www.skeenmusic.com/",
+      "https://www.skeenmusic.com/about",
+      "https://www.skeenmusic.com/faqsheet"
+    ],
+    "lastmods": [
+      "2026-09-29T02:38:24.152Z",
+      "2026-09-29T02:38:24.152Z",
+      "2026-09-29T02:38:24.152Z"
+    ],
+    "url": "https://www.skeenmusic.com/sitemap.xml",
+    "parsed": true,
+    "namedInRobots": true,
+    "total": 3,
+    "offSite": {
+      "count": 0,
+      "examples": []
+    }
+  },
+  "bing": {
+    "siteAuth": {
+      "status": 404,
+      "hasUser": false
+    }
+  }
+}

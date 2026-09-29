@@ -362,6 +362,325 @@ export function sameAsFrom(payload: Pick<PublicSitePayload, 'links' | 'artist' |
   return [...out.values()]
 }
 
+/* ----------------------------------------------------------------------------------
+ * The facts that tell this artist from others with the same name (0.43.0)
+ * AI_VISIBILITY_AUDIT.md §2 item 7 / code pass F13: "Portland" alone is ambiguous, and a
+ * crowded name needs its other spellings and a start year to be told apart.
+ * -------------------------------------------------------------------------------- */
+
+/**
+ * The `site_content` keys the facts ride in. Ordinary site text, so they publish with the
+ * site and reach a connected site on the payload it already reads, with no new column.
+ * ONE registry: lone-star's SEO_FIELDS and its save gate derive their keys from this.
+ *
+ * The CITY is not here. It is `artist.location` ("Based in"), where it has always been, so
+ * the title (`defaultSeoTitle`) and every older bridge keep reading it.
+ *
+ *  • region       plain text ("Illinois", "IL", "Bavaria")
+ *  • country      plain text; a known name or code also resolves to its ISO code (`countryOf`)
+ *  • aliases      other names the artist goes by, ONE PER LINE (`parseAliases`)
+ *  • activeSince  a four-digit year
+ *
+ * Read them through `siteFacts`, never raw: it re-applies every rule, so a value that
+ * reached the table some other way than the save gate is dropped rather than stated.
+ */
+export const FACT_CONTENT_KEYS = {
+  region: 'fact_region',
+  country: 'fact_country',
+  aliases: 'fact_aliases',
+  activeSince: 'fact_active_since',
+} as const
+
+export const MAX_ALIASES = 5
+/** Per alias, in characters (code points), not UTF-16 units. */
+export const MAX_ALIAS_LENGTH = 60
+/** Region and country, each, in characters. */
+export const MAX_PLACE_PART_LENGTH = 60
+export const EARLIEST_ACTIVE_YEAR = 1900
+
+/** Invisible formatting a manager cannot see and a crawler should not get: soft hyphen,
+ *  Arabic letter mark, Mongolian vowel separator, zero-width space, LRM/RLM, the bidi
+ *  embeddings, overrides and isolates, word joiner and invisible operators, and a BOM.
+ *  ZWNJ/ZWJ (U+200C/D) stay: Persian and Indic spelling and emoji sequences need them. */
+const INVISIBLE = /[\u00AD\u061C\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g
+/** C0 and C1 controls, DEL included. Tab and newline are controls too: all become spaces. */
+const CONTROL = /[\u0000-\u001F\u007F-\u009F]/g
+/** A lone surrogate half (the `u` flag makes a valid pair one code point, so only a lone
+ *  half matches). It cannot be stored as text, and it is not a character anyone typed. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/gu
+
+/**
+ * One line of plain text from whatever arrives: NFC, invisible formatting removed, control
+ * characters and every run of whitespace collapsed to one space, trimmed. Not a string = ''.
+ *
+ * A NORMALISER, not a sanitiser: markup is left as text (`jsonLdScript` escapes `<`, and a
+ * site renders facts as text), because deciding what a manager "meant" is not the reader's
+ * job. lone-star's save gate refuses markup and control characters before they are stored.
+ */
+export function factText(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  return raw.normalize('NFC').replace(LONE_SURROGATE, '').replace(INVISIBLE, '').replace(CONTROL, ' ').replace(/\s+/g, ' ').trim()
+}
+
+const chars = (s: string) => Array.from(s).length
+
+/** How two aliases (or an alias and the name) compare: as text, ignoring case. Accents
+ *  count ("Beyoncé" and "Beyonce" are two spellings people search). */
+function aliasKey(s: string): string {
+  return factText(s).toLowerCase()
+}
+
+/**
+ * The stored alias list (one per line) as the names to state: each through `factText`,
+ * blanks dropped, never the artist's own name, no repeats (ignoring case), an alias over
+ * MAX_ALIAS_LENGTH dropped (never cut), and at most MAX_ALIASES. First spelling wins.
+ */
+export function parseAliases(raw: unknown, name?: string | null): string[] {
+  if (typeof raw !== 'string') return []
+  const own = aliasKey(name ?? '')
+  const seen = new Set<string>(own ? [own] : [])
+  const out: string[] = []
+  for (const line of raw.split(/\r\n?|\n/)) {
+    const alias = factText(line)
+    const key = alias.toLowerCase()
+    if (!alias || chars(alias) > MAX_ALIAS_LENGTH || seen.has(key)) continue
+    seen.add(key)
+    out.push(alias)
+    if (out.length === MAX_ALIASES) break
+  }
+  return out
+}
+
+/**
+ * A SMALL country table (ISO 3166-1 alpha-2): the markets a manager is likely to type, and
+ * the spellings they are likely to type them in. Not the whole standard on purpose — an
+ * unknown country is still stated, as typed (schema.org's `addressCountry` takes text too),
+ * so a missing row costs only the code, never the fact.
+ *
+ * Deliberately NOT here: spellings that could mean two places ("Korea", "Congo", "America")
+ * and the UK's nations ("England", "Scotland"), which a manager may mean as written. A
+ * spelling here must resolve to exactly one country (the test checks every one).
+ */
+export const COUNTRIES: readonly { code: string; name: string; aliases?: readonly string[] }[] = [
+  // Americas
+  { code: 'US', name: 'United States', aliases: ['United States of America', 'USA'] },
+  { code: 'CA', name: 'Canada' },
+  { code: 'MX', name: 'Mexico', aliases: ['México'] },
+  { code: 'BR', name: 'Brazil', aliases: ['Brasil'] },
+  { code: 'AR', name: 'Argentina' },
+  { code: 'CL', name: 'Chile' },
+  { code: 'CO', name: 'Colombia' },
+  { code: 'PE', name: 'Peru', aliases: ['Perú'] },
+  { code: 'VE', name: 'Venezuela' },
+  { code: 'EC', name: 'Ecuador' },
+  { code: 'UY', name: 'Uruguay' },
+  { code: 'PY', name: 'Paraguay' },
+  { code: 'BO', name: 'Bolivia' },
+  { code: 'CR', name: 'Costa Rica' },
+  { code: 'PA', name: 'Panama', aliases: ['Panamá'] },
+  { code: 'GT', name: 'Guatemala' },
+  { code: 'PR', name: 'Puerto Rico' },
+  { code: 'CU', name: 'Cuba' },
+  { code: 'DO', name: 'Dominican Republic' },
+  { code: 'JM', name: 'Jamaica' },
+  { code: 'TT', name: 'Trinidad and Tobago', aliases: ['Trinidad & Tobago'] },
+  // Europe
+  { code: 'GB', name: 'United Kingdom', aliases: ['UK', 'Great Britain', 'Britain'] },
+  { code: 'IE', name: 'Ireland', aliases: ['Éire'] },
+  { code: 'FR', name: 'France' },
+  { code: 'DE', name: 'Germany', aliases: ['Deutschland'] },
+  { code: 'NL', name: 'Netherlands', aliases: ['Holland', 'Nederland'] },
+  { code: 'BE', name: 'Belgium', aliases: ['België', 'Belgique'] },
+  { code: 'LU', name: 'Luxembourg' },
+  { code: 'CH', name: 'Switzerland', aliases: ['Schweiz', 'Suisse'] },
+  { code: 'AT', name: 'Austria', aliases: ['Österreich'] },
+  { code: 'IT', name: 'Italy', aliases: ['Italia'] },
+  { code: 'ES', name: 'Spain', aliases: ['España'] },
+  { code: 'PT', name: 'Portugal' },
+  { code: 'DK', name: 'Denmark', aliases: ['Danmark'] },
+  { code: 'SE', name: 'Sweden', aliases: ['Sverige'] },
+  { code: 'NO', name: 'Norway', aliases: ['Norge'] },
+  { code: 'FI', name: 'Finland', aliases: ['Suomi'] },
+  { code: 'IS', name: 'Iceland' },
+  { code: 'PL', name: 'Poland', aliases: ['Polska'] },
+  { code: 'CZ', name: 'Czechia', aliases: ['Czech Republic'] },
+  { code: 'SK', name: 'Slovakia' },
+  { code: 'HU', name: 'Hungary' },
+  { code: 'RO', name: 'Romania' },
+  { code: 'BG', name: 'Bulgaria' },
+  { code: 'GR', name: 'Greece' },
+  { code: 'HR', name: 'Croatia' },
+  { code: 'SI', name: 'Slovenia' },
+  { code: 'RS', name: 'Serbia' },
+  { code: 'BA', name: 'Bosnia and Herzegovina' },
+  { code: 'ME', name: 'Montenegro' },
+  { code: 'MK', name: 'North Macedonia' },
+  { code: 'AL', name: 'Albania' },
+  { code: 'UA', name: 'Ukraine' },
+  { code: 'BY', name: 'Belarus' },
+  { code: 'MD', name: 'Moldova' },
+  { code: 'EE', name: 'Estonia' },
+  { code: 'LV', name: 'Latvia' },
+  { code: 'LT', name: 'Lithuania' },
+  { code: 'MT', name: 'Malta' },
+  { code: 'CY', name: 'Cyprus' },
+  { code: 'TR', name: 'Türkiye', aliases: ['Turkey'] },
+  { code: 'RU', name: 'Russia', aliases: ['Russian Federation'] },
+  { code: 'GE', name: 'Georgia' },
+  { code: 'AM', name: 'Armenia' },
+  // Asia, the Middle East
+  { code: 'JP', name: 'Japan' },
+  { code: 'KR', name: 'South Korea', aliases: ['Republic of Korea'] },
+  { code: 'CN', name: 'China' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'TW', name: 'Taiwan' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'VN', name: 'Vietnam', aliases: ['Viet Nam'] },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'IN', name: 'India' },
+  { code: 'PK', name: 'Pakistan' },
+  { code: 'BD', name: 'Bangladesh' },
+  { code: 'LK', name: 'Sri Lanka' },
+  { code: 'NP', name: 'Nepal' },
+  { code: 'KZ', name: 'Kazakhstan' },
+  { code: 'IL', name: 'Israel' },
+  { code: 'LB', name: 'Lebanon' },
+  { code: 'JO', name: 'Jordan' },
+  { code: 'AE', name: 'United Arab Emirates', aliases: ['UAE'] },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'QA', name: 'Qatar' },
+  { code: 'KW', name: 'Kuwait' },
+  { code: 'IR', name: 'Iran' },
+  { code: 'IQ', name: 'Iraq' },
+  // Oceania
+  { code: 'AU', name: 'Australia' },
+  { code: 'NZ', name: 'New Zealand', aliases: ['Aotearoa'] },
+  // Africa
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'GH', name: 'Ghana' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'MA', name: 'Morocco' },
+  { code: 'TN', name: 'Tunisia' },
+  { code: 'DZ', name: 'Algeria' },
+  { code: 'SN', name: 'Senegal' },
+  { code: 'ET', name: 'Ethiopia' },
+  { code: 'TZ', name: 'Tanzania' },
+  { code: 'UG', name: 'Uganda' },
+  { code: 'RW', name: 'Rwanda' },
+  { code: 'CM', name: 'Cameroon' },
+  { code: 'CI', name: "Côte d'Ivoire", aliases: ['Ivory Coast'] },
+  { code: 'AO', name: 'Angola' },
+  { code: 'ZW', name: 'Zimbabwe' },
+]
+
+/** How a typed country is looked up: accents, dots and a leading "the" do not matter
+ *  ("U.S.A.", "México", "the Netherlands"). */
+function countryKey(s: string): string {
+  return factText(s)
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\./g, '')
+    .toLowerCase()
+    .replace(/^the /, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const COUNTRY_INDEX: ReadonlyMap<string, { code: string; name: string }> = (() => {
+  const m = new Map<string, { code: string; name: string }>()
+  for (const c of COUNTRIES) for (const s of [c.code, c.name, ...(c.aliases ?? [])]) m.set(countryKey(s), { code: c.code, name: c.name })
+  return m
+})()
+
+/** The country a typed value names, as `{ code, name }` (ISO alpha-2 and this table's
+ *  spelling), or null when the table does not know it. */
+export function countryOf(raw: unknown): { code: string; name: string } | null {
+  const key = countryKey(typeof raw === 'string' ? raw : '')
+  const hit = key ? COUNTRY_INDEX.get(key) : undefined
+  return hit ? { ...hit } : null
+}
+
+/** What the facts are read from: a payload, or anything shaped like its two parts (the
+ *  SEO page reads the draft rows the same way). */
+export type FactSource = {
+  artist?: { name?: string | null; location?: string | null } | null
+  site_content?: Readonly<Record<string, string | null | undefined>> | null
+}
+
+export type SiteFacts = {
+  /** `artist.location` ("Based in"), one line. */
+  city: string
+  region: string
+  /** The table's spelling when the country is known, else as typed. */
+  country: string
+  /** ISO 3166-1 alpha-2, or null when the table does not know the country. */
+  countryCode: string | null
+  aliases: string[]
+  /** 'YYYY', or null. */
+  activeSince: string | null
+}
+
+/** A place part (region / country) as the site states it: over the cap is dropped, never cut. */
+function placePart(raw: unknown): string {
+  const s = factText(raw)
+  return chars(s) > MAX_PLACE_PART_LENGTH ? '' : s
+}
+
+/**
+ * The artist's facts as a site reads them from the payload, every rule re-applied. The one
+ * reading the fact card uses, and the one lone-star's SEO page shows, so the page can never
+ * describe a fact the site would not state.
+ *
+ * The year is checked by SHAPE only (four digits, from EARLIEST_ACTIVE_YEAR up to 2099):
+ * there is no clock here, and lone-star's gate refuses a future year before it is stored.
+ */
+export function siteFacts(src: FactSource): SiteFacts {
+  const c = src.site_content ?? {}
+  const typed = placePart(c[FACT_CONTENT_KEYS.country])
+  const known = typed ? countryOf(typed) : null
+  const year = factText(c[FACT_CONTENT_KEYS.activeSince])
+  return {
+    city: factText(src.artist?.location),
+    region: placePart(c[FACT_CONTENT_KEYS.region]),
+    country: known?.name ?? typed,
+    countryCode: known?.code ?? null,
+    aliases: parseAliases(c[FACT_CONTENT_KEYS.aliases], artistName(src.artist)),
+    activeSince: /^\d{4}$/.test(year) && Number(year) >= EARLIEST_ACTIVE_YEAR && Number(year) <= 2099 ? year : null,
+  }
+}
+
+/**
+ * Where the artist is based, as a schema.org `Place`, or null when nothing is set.
+ *
+ * With no region and no country this is EXACTLY the 0.42 place, `{ name: <location> }`:
+ * a site that upgrades without the new facts emits the same bytes. With either, the name is
+ * the parts that exist joined ("Chicago, Illinois, United States") and a `PostalAddress`
+ * carries each part in its own property, the country as its ISO code when known. Only the
+ * parts that exist: a region is never guessed from a city.
+ */
+export function artistPlace(src: FactSource): Record<string, unknown> | null {
+  const f = siteFacts(src)
+  if (!f.region && !f.country) {
+    const location = (src.artist?.location ?? '').trim()
+    return location ? { '@type': 'Place', name: location } : null
+  }
+  return {
+    '@type': 'Place',
+    name: [f.city, f.region, f.country].filter(Boolean).join(', '),
+    address: {
+      '@type': 'PostalAddress',
+      ...(f.city ? { addressLocality: f.city } : {}),
+      ...(f.region ? { addressRegion: f.region } : {}),
+      ...(f.country ? { addressCountry: f.countryCode ?? f.country } : {}),
+    },
+  }
+}
+
 function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSeo): Node {
   const a = payload.artist
   // The WHOLE bio, whitespace-collapsed — the fact sheet has no 160-char limit, and the
@@ -372,13 +691,17 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
     .split(',')
     .map((g) => g.trim())
     .filter(Boolean)
-  const location = (a.location ?? '').trim()
   const sameAs = sameAsFrom(payload)
   const person = a.schema_type === 'Person'
-  // `foundingLocation`, `logo` and `genre` are Organization/MusicGroup properties; a
-  // Person has `homeLocation` and `image`, and no genre. Same facts, the properties
-  // schema.org defines for that type — anything else fails the validator.
-  const place = location ? { '@type': 'Place', name: location } : null
+  // `foundingLocation`, `foundingDate`, `logo` and `genre` are Organization/MusicGroup
+  // properties; a Person has `homeLocation` and `image`, and no genre. Same facts, the
+  // properties schema.org defines for that type — anything else fails the validator.
+  //
+  // A Person has NO start year at all: `foundingDate` is Organization-only, and
+  // `birthDate` is a different fact. So "active since" is simply not stated for a Person
+  // (0.43.0); lone-star's SEO page says so rather than implying it is.
+  const place = artistPlace(payload)
+  const facts = siteFacts(payload)
   // `logo` from the Brand page's primary logo only (audit #9): a hero photo is not a logo.
   const logoRow = person || !opts.mediaUrl ? null : (payload.media ?? []).find((m) => m.purpose === 'logo_primary' && m.path)
   const logo = logoRow && opts.mediaUrl ? safeHttpUrl(opts.mediaUrl(logoRow.path)) : null
@@ -386,11 +709,14 @@ function artistNode(payload: PublicSitePayload, opts: JsonLdOptions, seo: SiteSe
     '@type': person ? 'Person' : 'MusicGroup',
     '@id': `${opts.origin}/#artist`,
     name: artistName(a),
+    // Other names the artist goes by (0.43.0). One is a plain string, like one genre.
+    ...(facts.aliases.length ? { alternateName: facts.aliases.length === 1 ? facts.aliases[0] : facts.aliases } : {}),
     url: `${opts.origin}/`,
     ...(description ? { description } : {}),
     ...(opts.imageUrl ? { image: opts.imageUrl } : {}),
     ...(logo ? { logo } : {}),
     ...(genre.length && !person ? { genre: genre.length === 1 ? genre[0] : genre } : {}),
+    ...(facts.activeSince && !person ? { foundingDate: facts.activeSince } : {}),
     ...(place ? (person ? { homeLocation: place } : { foundingLocation: place }) : {}),
     ...(sameAs.length ? { sameAs } : {}),
     ...(opts.aboutUrl ? { mainEntityOfPage: opts.aboutUrl } : {}),

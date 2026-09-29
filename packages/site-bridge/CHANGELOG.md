@@ -79,9 +79,71 @@ Nothing yet.
 
 ---
 
-## 0.42.0 — regions painted a brand colour follow the Brand page
+## 0.43.0 — the fact card tells this artist apart: other names, start year, a full place
 
 *Not published yet (built 2026-09-28). Each site redeploys WITHOUT build cache to pick it up.*
+
+**Site action: bump to 0.43.0 and redeploy. Nothing to write.** The new facts arrive in the
+`site_content` map a site already fetches, and `jsonLdGraph` states them. A site on 0.42 or
+older keeps emitting exactly what it did: it never reads the new keys.
+
+**Why** (AI_VISIBILITY_AUDIT.md §2 item 7, code pass F13; Sam 2026-09-28). "Based in" was one
+free-text field, so "Portland" could be Oregon or Maine, and a crowded name (skeen's surname
+has a Wikipedia disambiguation page) had nothing else to be told apart by.
+
+**Where the facts live.** Four reserved `site_content` keys, new export `FACT_CONTENT_KEYS`:
+`fact_region`, `fact_country`, `fact_aliases` (one name per line), `fact_active_since` (a
+year). No migration: they publish with the site text. The CITY is still `artist.location`
+("Based in"), so `defaultSeoTitle` and every older bridge read it as before. lone-star writes
+the keys only through its SEO save gate (`saveSeoField` → `src/lib/seo-facts.ts`), which
+refuses markup, control characters, a sixth name, a repeat, the artist's own name, a year
+outside 1900..this year; the editor's custom-field path cannot write them (reserved).
+
+**What the artist node gains** (only what is set; nothing guessed):
+
+- `alternateName`: the other names (a string for one, an array for several). Never the
+  artist's own name, no repeats ignoring case, at most 5, each at most 60 characters.
+- `foundingDate`: the year, on a **MusicGroup only**. schema.org defines `foundingDate` on
+  Organization alone and has no start date for a Person (`birthDate` is a different fact),
+  so a Person states no year at all.
+- The place (`foundingLocation`, or `homeLocation` for a Person) becomes, once a region or
+  a country is set:
+
+      { "@type": "Place", "name": "Chicago, Illinois, United States",
+        "address": { "@type": "PostalAddress", "addressLocality": "Chicago",
+                     "addressRegion": "Illinois", "addressCountry": "US" } }
+
+  Only the parts that exist (no region is ever derived from a city). `addressCountry` is the
+  ISO 3166-1 alpha-2 code when the new `COUNTRIES` table knows the country (`countryOf`:
+  "United States", "USA", "US", "U.S.A." → `US`), else the country as typed. With a city and
+  neither of the others, the place is the 0.42 `{ "@type": "Place", "name": "Chicago" }`, byte
+  for byte.
+
+**Backwards compatible, pinned.** `tests/fixtures/seo-jsonld-0.42.json` is the 0.42.0 output
+for seven payloads (MusicGroup, Person, no location, "Chicago, IL", no site_content, hostile
+values, no name), written once from the untouched 0.42 code; 0.43 reproduces every one byte
+for byte (`tests/unit/site-editor/site-bridge-seo-facts.test.ts`).
+
+**Read-side rules.** The site re-applies every rule when it reads (`siteFacts`), so a value
+that reached the table some other way than the gate is dropped, never stated or cut: a
+region or country over 60 characters, an alias over 60, a sixth alias, an alias equal to the
+current name (a rename after it was saved), a year that is not four digits from 1900 to 2099.
+Invisible direction marks, zero-width spaces and control characters are removed. Values go
+out through `jsonLdScript` as before, so a `</script>` in any fact stays data.
+
+**New exports from `./seo`:** `FACT_CONTENT_KEYS`, `siteFacts`, `artistPlace`, `factText`,
+`parseAliases`, `countryOf`, `COUNTRIES`, `MAX_ALIASES`, `MAX_ALIAS_LENGTH`,
+`MAX_PLACE_PART_LENGTH`, `EARLIEST_ACTIVE_YEAR`, and the types `SiteFacts` and `FactSource`.
+lone-star's SEO page reads the facts through `siteFacts` / `artistPlace`, so it shows what the
+card states. Nothing is removed or renamed; `resolveSeo`, `defaultSeoTitle`, the FAQ answers
+and `auditGeoFacts` are unchanged (the title still uses the city alone).
+
+---
+
+## 0.42.0 — regions painted a brand colour follow the Brand page
+
+*Published (built 2026-09-28; on the registry, checked 2026-09-28). Each site redeploys WITHOUT
+build cache to pick it up.*
 
 **Site action: bump to 0.42.0 and redeploy. Nothing to write** — the applier lifts the new
 token itself, inline, like every colour before it. For a region to actually FOLLOW the Brand

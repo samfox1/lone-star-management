@@ -20,7 +20,8 @@ import { acceptsValue, CURSOR_KEYS, cursorValueError, FAQ_EXTRA, FAQ_KEYS, field
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
-import { ABOUT_PLACEMENTS, safeHttpUrl } from '@samfox1/site-bridge/seo'
+import { ABOUT_PLACEMENTS, FACT_CONTENT_KEYS, MAX_PLACE_PART_LENGTH, safeHttpUrl } from '@samfox1/site-bridge/seo'
+import { cleanFactValue, isFactKey, thisYearAt, type FactContext, type FactKey } from '@/lib/seo-facts'
 import { INDEXNOW_CONTENT_KEY } from '@samfox1/site-bridge/indexnow'
 import { safeHref } from '@/lib/url'
 import { isTooLong, textLimit, tooLongError, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
@@ -140,13 +141,25 @@ export const SEO_LIMITS: Record<string, number> = {
   about_heading: 60,
   ...Object.fromEntries(FAQ_KEYS.map((k) => [k, 1200])),
   ...Object.fromEntries(FAQ_EXTRA.flatMap((e) => [[e.q, 200], [e.a, 1200]])),
+  // The place facts (lib/seo-facts.ts), in characters. The alias list and the year are
+  // shape rules, not one length, so they are not here.
+  [FACT_CONTENT_KEYS.region]: MAX_PLACE_PART_LENGTH,
+  [FACT_CONTENT_KEYS.country]: MAX_PLACE_PART_LENGTH,
 }
 
 /** What a manager may store under an SEO key — derived from SEO_FIELDS, so a key added
- *  to the schema without a rule here is refused, never silently accepted. */
-export function seoValueError(key: string, value: string): string | null {
+ *  to the schema without a rule here is refused, never silently accepted.
+ *
+ *  `ctx` matters only for two fact keys: the artist's name (an alias may not repeat it)
+ *  and "this year" (the Active since cap). Without it the name check is skipped and the
+ *  year is today's; saveSeoField always passes the real ones. */
+export function seoValueError(key: string, value: string, ctx?: Partial<FactContext>): string | null {
   if (!SEO_FIELDS.some((f) => f.key === key)) return 'Unknown SEO field.'
   if (!value) return null
+  if (isFactKey(key)) {
+    const r = cleanFactValue(key, value, { artistName: ctx?.artistName ?? '', thisYear: ctx?.thisYear ?? thisYearAt(new Date()) })
+    return 'error' in r ? r.error : null
+  }
   if (key === 'og_image') return safeHttpUrl(value) && /^https:/i.test(value) ? null : 'The social image must be an https URL.'
   if (key === 'about_placement') {
     // The REGISTRY check only. Whether the connected site can actually render `home` or
@@ -203,11 +216,44 @@ export async function saveSeoField(
   artistId: string,
   key: string,
   value: string,
+  /** The clock, for the Active since cap. A parameter so the rule is testable. */
+  now: Date = new Date(),
 ): Promise<{ ok: boolean; error?: string }> {
+  // The FACTS (lib/seo-facts.ts) have their own cleaner: the alias list is one name per
+  // line, which `normalizeSeoValue`'s one-line rule would fold into ONE name.
+  if (isFactKey(key)) return saveFactField(supabase, artistId, key, value, now)
   const trimmed = normalizeSeoValue(key, value)
   const invalid = seoValueError(key, trimmed)
   if (invalid) return { ok: false, error: invalid }
   return writeSiteContentValue(supabase, artistId, key, trimmed)
+}
+
+/**
+ * One fact through its rule (`cleanFactValue`), then the one site_content write. Stores
+ * the CLEANED value (a known country in the table's spelling, the alias list one name per
+ * line), never the raw input; blank deletes the row (= not stated).
+ *
+ * The alias rule needs the artist's CURRENT name, and the gate reads it itself: a name
+ * passed in by the caller could be stale or simply wrong. A failed read refuses, so an
+ * unchecked list is never stored. RLS scopes the read like the write.
+ */
+async function saveFactField(
+  supabase: SupabaseClient,
+  artistId: string,
+  key: FactKey,
+  value: string,
+  now: Date,
+): Promise<{ ok: boolean; error?: string }> {
+  let artistName = ''
+  if (key === FACT_CONTENT_KEYS.aliases && value.trim() !== '') {
+    const { data, error } = await supabase.from('artists').select('name').eq('id', artistId).maybeSingle()
+    if (error) return { ok: false, error: error.message }
+    if (!data) return { ok: false, error: 'Artist not found.' }
+    artistName = (data as { name: string | null }).name ?? ''
+  }
+  const r = cleanFactValue(key, value, { artistName, thisYear: thisYearAt(now) })
+  if ('error' in r) return { ok: false, error: r.error }
+  return writeSiteContentValue(supabase, artistId, key, r.value)
 }
 
 export async function saveEditorField(
