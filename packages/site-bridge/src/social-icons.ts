@@ -5,7 +5,9 @@
  * One brand mark per platform: a 24x24 SVG path and the brand's own colour. Icon data
  * from simple-icons (CC0), inlined so neither the editor nor a connected site takes a
  * runtime dependency on it. A line marked PLACEHOLDER is a plain lettermark drawn in the
- * generator for a platform simple-icons lacks, pending the brand's own logo.
+ * generator for a platform simple-icons lacks, pending the brand's own logo. A line marked
+ * OFFICIAL is that brand's own mark, sourced directly (not simple-icons, not a placeholder) —
+ * see OFFICIAL_MARKS in the generator for where it came from and when.
  *
  * A site is free to ignore all of this and draw its own glyphs — the standard names the
  * platform (./social), it does not dictate a pixel. This exists so that a site which has
@@ -54,7 +56,7 @@ export const SOCIAL_ICONS: Record<string, SocialIcon> = {
   "venmo": { path: "M21.772 13.119c-.267 0-.381-.251-.38-.655 0-.533.121-1.575.712-1.575.267 0 .357.243.357.598 0 .533-.13 1.632-.689 1.632Zm.502-3.377c-1.677 0-2.405 1.285-2.405 2.658 0 1.042.421 1.874 1.693 1.874 1.717 0 2.438-1.406 2.438-2.763 0-1.025-.462-1.769-1.726-1.769Zm-3.833 0c-.558 0-.964.17-1.393.477-.154-.275-.462-.477-.932-.477-.542 0-.947.219-1.247.437l-.04-.364H13.54l-.688 4.354h1.506l.479-3.053c.129-.065.323-.154.518-.154.145 0 .267.049.267.267 0 .056-.016.145-.024.218l-.429 2.722h1.498l.478-3.053c.138-.073.324-.154.51-.154.146 0 .268.049.268.267 0 .056-.017.145-.025.218l-.429 2.722h1.499l.461-2.908c.025-.153.049-.388.049-.549 0-.582-.267-.97-1.037-.97Zm-6.871 0c-.575 0-.98.219-1.287.421l-.017-.348H8.962l-.689 4.354H9.78l.478-3.053c.13-.065.324-.154.518-.154.147 0 .268.049.268.242 0 .081-.024.227-.032.299l-.422 2.666h1.499l.462-2.908c.024-.153.049-.388.049-.549 0-.582-.268-.97-1.03-.97Zm-5.631 1.834c.041-.485.413-.824.697-.824.162 0 .299.097.299.291 0 .404-.713.533-.996.533Zm.843-1.834c-1.604 0-2.382 1.39-2.382 2.698 0 1.01.478 1.817 1.814 1.817.527 0 1.07-.113 1.418-.282l.186-1.26c-.494.25-.874.347-1.271.347-.365 0-.64-.194-.64-.687.826-.008 2.252-.347 2.252-1.453 0-.687-.494-1.18-1.377-1.18Zm-4.239.267c.089.186.146.412.146.743 0 .606-.429 1.494-.777 2.06l-.373-2.989L0 9.969l.705 4.2h1.757c.77-1.01 1.718-2.448 1.718-3.554 0-.347-.073-.622-.235-.889l-1.402.283Z", hex: "#008CFF" },
   "paypal": { path: "M15.607 4.653H8.941L6.645 19.251H1.82L4.862 0h7.995c3.754 0 6.375 2.294 6.473 5.513-.648-.478-2.105-.86-3.722-.86m6.57 5.546c0 3.41-3.01 6.853-6.958 6.853h-2.493L11.595 24H6.74l1.845-11.538h3.592c4.208 0 7.346-3.634 7.153-6.949a5.24 5.24 0 0 1 2.848 4.686M9.653 5.546h6.408c.907 0 1.942.222 2.363.541-.195 2.741-2.655 5.483-6.441 5.483H8.714Z", hex: "#002991" },
   "resident advisor": { path: "M2 2h20v20H2zM3.5 3.5v17h17v-17zM6 7.5H10.5L11.5 8.5V11L10.6 11.9L11.7 16.5H10.1L9.1 12.5H7.5V16.5H6zM7.5 9V11H10V9zM14.5 7.5H16L18.2 16.5H16.6L16.1 14.5H14.4L13.9 16.5H12.3zM15.25 11L14.75 13H15.75z", hex: "#000000" }, // PLACEHOLDER lettermark, pending the brand kit
-  "eventbrite": { path: "M2 2h20v20H2zM8.5 7V17H15.5V15H10.5V13H14.5V11H10.5V9H15.5V7z", hex: "#000000" }, // PLACEHOLDER lettermark, pending the brand kit
+  "eventbrite": { path: "M20.24 16.11L12.3 9.92C12.17 9.82 12.31 9.61 12.45 9.7L15.55 11.43C16.96 12.22 18.74 11.77 19.59 10.4C20.49 8.95 20.01 7.05 18.54 6.2L13.99 3.57C13.84 3.49 13.95 3.27 14.1 3.33L16.2 4.17C16.2 4.17 16.25 4.19 16.27 4.19C16.49 4.27 16.73 4.31 16.98 4.31C18.11 4.31 19.04 3.41 19.13 2.35C19.23 0.97 18.17 0 16.91 0L7.24 0C6 0 4.96 1.01 4.97 2.25C4.98 2.91 5.27 3.5 5.74 3.9C6.08 4.2 7.26 5.14 7.81 5.59C7.91 5.67 7.86 5.83 7.73 5.83L5.79 5.83C3.76 5.84 2.11 7.49 2.11 9.53C2.11 10.56 2.54 11.49 3.21 12.16L14.42 22.81C15.21 23.55 16.27 24 17.44 24C19.9 24 21.89 22.01 21.89 19.56C21.89 18.17 21.24 16.93 20.24 16.11L20.24 16.11Z", hex: "#FF5E30" }, // OFFICIAL mark, not from simple-icons — see OFFICIAL_MARKS above
 }
 
 /** The mark for a platform slug, or null for one the registry does not know (the

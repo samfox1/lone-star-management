@@ -23,15 +23,15 @@ No Sync checkbox appears in the Connect modal: `SyncSwitch` (`connect-modal.tsx`
 
 Bridge slug `eventbrite` in `SOCIAL_PLATFORMS` (`packages/site-bridge/src/social.ts`, appended 2026-09-28), `urlHint: 'https://eventbrite.com/o/'`; its country sites (`eventbrite.co.uk`, `.com.au`, `.ca`…) as `aliasHosts`.
 
-Mark: **a PLACEHOLDER** — simple-icons has no Eventbrite mark, so `scripts/generate-social-icons.ts` draws a plain lettermark (an "E" knocked out of a square), black, marked `// PLACEHOLDER` in `social-icons.ts`. It is not the brand's artwork and was not copied from a brand site. Pending Sam's choice of the official brand-kit logo. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
+Mark: **the brand's own icon**, replacing the earlier placeholder (2026-09-28). Source: the official press kit linked from [eventbrite.com/blog/press](https://www.eventbrite.com/blog/press/) ("Download Press Kit"), which pairs Eventbrite's 2025 rebrand mark (the brushstroke "E" ribbon, "The Path") with the wordmark in the brand orange (`#FF5E30`). The kit has no standalone icon file or written usage rules, so the icon-only shape came from Eventbrite's own production site instead — its header renders this same ribbon mark alone at 24x24px for its compact nav slot, the same size and use case as this icon set, and its fill there is a CSS variable a colour class overrides to brand orange — Eventbrite's own pattern for recolouring it as one flat colour, not a distortion. The rule we follow: use the icon-only mark (not the wordmark) for a small/square slot, as one flat colour. `scripts/generate-social-icons.ts` (`OFFICIAL_MARKS`) has the full source note; `social-icons.ts` marks the line `// OFFICIAL`. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
 
 ## Code map
 - `src/lib/manager-tools/connections/services/eventbrite/index.ts` — this service's own code: `social` (link method, the organizer-id regex as `idFromUrl`).
 - `src/lib/connect-methods.ts` — assembles `CONNECT_METHODS` from the method above (a link-kind entry needs no handle spec).
 - `src/lib/connections.ts` — `idFromProfileUrl` (dispatches to `idFromUrl` above), `profileLink`/`connectInputError` for the link-only flow.
 - `.../connections/actions.ts` — `connectOneAction` (the profile-link-only path), `disconnectConnectionAction`.
-- `.../connections/connection-mark.tsx` — the dashboard's monochrome mark, from `socialIcon('eventbrite')` — the placeholder lettermark (see On the site).
-- `packages/site-bridge/src/social.ts` / `social-icons.ts` — the bridge's slug, `urlHint`, country `aliasHosts`, and placeholder mark.
+- `.../connections/connection-mark.tsx` — the dashboard's monochrome mark, from `socialIcon('eventbrite')` — the brand's own icon (see On the site).
+- `packages/site-bridge/src/social.ts` / `social-icons.ts` — the bridge's slug, `urlHint`, country `aliasHosts`, and the official mark.
 
 ## Integration (research)
 Docs read: [Create and edit your organizer profile](https://www.eventbrite.com/help/en-us/articles/161196/how-to-set-up-your-organizer-profile-page/) (documents the `<name>.eventbrite.com` custom-subdomain shape); real organizer pages observed at `eventbrite.com/o/organizer-96733738163` and `eventbrite.com/o/2666544056` (the `/o/<slug>-<id>` and bare-id shapes — not covered by the help article above); [Eventbrite Platform docs — API Basics / Events](https://www.eventbrite.com/platform/docs/api-basics) (OAuth and private-token auth, general shape only — could not load the full endpoint reference); organizer-events endpoint shape (`GET https://www.eventbriteapi.com/v3/organizations/{organization_id}/events/`) and the `GET /users/me/organizations/` lookup to get that id, both cross-checked against third-party API-documentation summaries rather than Eventbrite's own reference page loading cleanly.
@@ -43,7 +43,7 @@ Docs read: [Create and edit your organizer profile](https://www.eventbrite.com/h
 Specific to Eventbrite:
 - `tests/unit/site-editor/social-hosts.test.ts` — "Eventbrite on its country sites, and on an organizer subdomain", "every alias is a host the matcher can reach", and the look-alikes (`eventbrite.co.uk.evil.net`, `evileventbrite.co.uk`, `co.uk`).
 - `tests/unit/manager-tools/connections/connections.test.ts` — "the host rules decide" (a `.co.uk` organizer link and a subdomain page connect) and "Eventbrite: the organizer id comes out of an /o/ link, and nothing out of anyone else’s".
-- `tests/unit/media/social-icons.test.ts` — "the marks simple-icons lacks are PLACEHOLDERS".
+- `tests/unit/media/social-icons.test.ts` — "the marks sourced directly from a brand (not simple-icons, not a placeholder) say so".
 
 Shared suites that cover it by looping over the registry (so it joined them by existing):
 - `tests/unit/manager-tools/connections/services.test.ts` — the folder is listed in `services/index.ts`, and its connect method and its `CONNECTIONS` def are pinned line by line.
@@ -55,6 +55,5 @@ Shared suites that cover it by looping over the registry (so it joined them by e
 - `tests/components/site-editor/editor-social-buttons.test.tsx` — the editor’s Connect window lists every social by name.
 
 ## Known gaps
-- The mark is a PLACEHOLDER lettermark (simple-icons has no Eventbrite mark), pending Sam's choice of the official brand-kit logo.
 - (Fixed 2026-09-28.) Country domains collapsed to `co.uk` and read as nobody. The bridge now keeps three labels under a listed multi-part suffix (`registrableDomain`) and lists Eventbrite's country sites as `aliasHosts` (`EVENTBRITE_COUNTRIES`): explicit, never "any TLD". A country site missing from that list reads as nobody and is refused; add it there. `idFromUrl` is anchored on the host, so an `eventbrite.com/o/…` inside another site's path gives no id.
 - No sync is built — see Integration above for exactly what one would need.

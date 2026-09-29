@@ -48,7 +48,7 @@ None implemented. See "Integration (research)" below.
 
 Bridge slug `amazon music` in `SOCIAL_PLATFORMS` (`packages/site-bridge/src/social.ts`, appended 2026-09-28), `urlHint: 'https://music.amazon.com/artists/'`; `subdomainOnly`, with its country storefronts (`music.amazon.co.uk`, `.de`, `.co.jp`…) as `aliasHosts`; the rest of amazon.com is nobody's.
 
-Mark: **a PLACEHOLDER** — simple-icons has no Amazon Music mark, so `scripts/generate-social-icons.ts` draws a plain lettermark (an "A" knocked out of a circle), black, marked `// PLACEHOLDER` in `social-icons.ts`. It is not the brand's artwork and was not copied from a brand site. Pending Sam's choice of the official brand-kit logo. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
+Mark: **still a PLACEHOLDER** — checked Amazon's own brand page ([artists.amazonmusic.com/brand-guidelines](https://artists.amazonmusic.com/brand-guidelines), fetched 2026-09-28) and it doesn't fit. The rule that mattered: Amazon offers only a wordmark ("horizontal", primary, and "stacked" — still full "amazon music" lettering, captioned "use sparingly, only when necessary" — each in four background-tied colour builds), no standalone icon/symbol mark for a small or square space and no generic single-colour build outside those four backgrounds. Hand-tracing the wordmark into a 24px glyph would distort a lockup their rules don't offer loose ("Do not distort the logo") and be illegible at the size this draws at, so `scripts/generate-social-icons.ts` still draws a plain lettermark (an "A" knocked out of a circle), black, marked `// PLACEHOLDER` in `social-icons.ts`. It is not the brand's artwork and was not copied from a brand site. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
 
 ## Code map
 
@@ -83,8 +83,9 @@ Shared suites that cover it by looping over the registry (so it joined them by e
 - No catalog integration: connecting Amazon Music never pulls anything into the dashboard.
 - No id extraction: `idFromProfileUrl` won't read the ASIN out of a pasted Amazon Music link
   even though the URL shape supports it (`/artists/<ASIN>/<slug>`) — same shape as Tidal's gap.
-- The mark is a PLACEHOLDER lettermark (simple-icons has no Amazon mark of any kind), pending
-  Sam's choice of the official brand-kit logo. See On the site.
+- The mark is a PLACEHOLDER lettermark (simple-icons has no Amazon mark of any kind, and
+  Amazon's own brand-guidelines page offers only a wordmark, no icon mark that fits a 24px
+  square). See On the site.
 - (Fixed 2026-09-28.) Country domains collapsed to `co.uk` and read as nobody. The bridge now
   keeps three labels under a listed multi-part suffix (`registrableDomain`), and Amazon Music is
   `subdomainOnly` with an explicit list of its storefronts as `aliasHosts`: never "any TLD", so

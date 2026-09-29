@@ -26,7 +26,7 @@ Errors the manager can see, built in `parseHandle` (`src/lib/connect-methods.ts`
 
 Bridge slug `resident advisor` in `SOCIAL_PLATFORMS` (`packages/site-bridge/src/social.ts`, appended 2026-09-28), `urlHint: 'https://ra.co/dj/'`; `aliasHosts: ['residentadvisor.net']`.
 
-Mark: **a PLACEHOLDER** — simple-icons has no Resident Advisor mark, so `scripts/generate-social-icons.ts` draws a plain lettermark ("RA" inside a square outline), black, marked `// PLACEHOLDER` in `social-icons.ts`. It is not the brand's artwork and was not copied from a brand site. Pending Sam's choice of the official brand-kit logo. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
+Mark: **still a PLACEHOLDER** — searched ra.co, pro.ra.co (RA's advertiser site) and the open web (2026-09-28). The rule that mattered: there isn't one — RA publishes no brand, press or media-kit page and no logo-usage rules anywhere on its own sites; every hit is a third-party logo aggregator (Brandfetch, Brands of the World, seeklogo, vectorseek…), which is exactly the kind of source we don't take a mark from. So `scripts/generate-social-icons.ts` still draws a plain lettermark ("RA" inside a square outline), black, marked `// PLACEHOLDER` in `social-icons.ts`. It is not the brand's artwork and was not copied from a brand site. A site renders the profile link as a button once the manager turns it on in the site editor's Socials panel; a site with no glyph for the slug still renders it as a plain labelled link.
 
 ## Code map
 - `src/lib/manager-tools/connections/services/resident-advisor/index.ts` — this service's own code: `social`: the handle spec, `fromPath` for the `/dj/<slug>` path, the old-domain host.
@@ -63,6 +63,6 @@ Shared suites that cover it by looping over the registry (so it joined them by e
 - `tests/components/site-editor/editor-social-buttons.test.tsx` — the editor’s Connect window lists every social by name.
 
 ## Known gaps
-- The mark is a PLACEHOLDER lettermark (simple-icons has no RA mark), pending Sam's choice of the official brand-kit logo.
+- The mark is a PLACEHOLDER lettermark (simple-icons has no RA mark, and RA publishes no brand/press/media-kit page or logo-usage rules of its own to draw from).
 - The slug character rule is inferred from two example URLs, not a published spec.
 - No API: RA gigs cannot be pulled into the dashboard the way Bandsintown/Ticketmaster tour dates are; the only accessible endpoint (`ra.co/graphql`) is undocumented and unofficial.

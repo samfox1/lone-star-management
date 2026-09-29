@@ -43,13 +43,25 @@ describe('the generated social marks', () => {
   })
 
   it('the marks simple-icons lacks are PLACEHOLDERS, and the committed file says so', () => {
-    // Pending Sam's choice of the official brand-kit logos (2026-09-28). A placeholder that
-    // passed quietly as the real mark would never get replaced.
+    // Pending an official mark that fits the slot (2026-09-28: Eventbrite got one and dropped
+    // off this list — see OFFICIAL_MARKS in the generator). A placeholder that passed quietly
+    // as the real mark would never get replaced.
     const marked = committed()
       .split('\n')
       .filter((l) => l.includes('// PLACEHOLDER'))
       .map((l) => JSON.parse(l.trim().split(':')[0]))
-    expect(marked.sort()).toEqual(['amazon music', 'eventbrite', 'resident advisor'])
+    expect(marked.sort()).toEqual(['amazon music', 'resident advisor'])
+  })
+
+  it('the marks sourced directly from a brand (not simple-icons, not a placeholder) say so', () => {
+    // Eventbrite's mark comes from its own press kit + production site, not simple-icons and
+    // not a hand-drawn guess — the committed file should say which, the same way it flags a
+    // PLACEHOLDER, so this doesn't quietly get miscounted as either.
+    const marked = committed()
+      .split('\n')
+      .filter((l) => l.includes('// OFFICIAL'))
+      .map((l) => JSON.parse(l.trim().split(':')[0]))
+    expect(marked.sort()).toEqual(['eventbrite'])
   })
 
   it('CRITICAL: simple-icons is pinned exactly — the diff guard depends on it', () => {

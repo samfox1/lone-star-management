@@ -1,5 +1,18 @@
 # TODO
 
+## Developer accounts for "Connect with…" logins — Sam, AFTER the SEO/GEO batch (added 2026-09-28)
+
+Sam: "lets address this seo/geo thing and then I will create the developer accounts for
+those. Please remind me." A login button ("Connect with YouTube": sign in, Allow, done)
+replaces pasting a link, and for these two it also pulls data. Each needs a free developer
+app on that company's site; the client ID/secret go in Vercel.
+
+- [ ] **YouTube:** a Google Cloud project with an OAuth client (YouTube read-only scope),
+      in "testing" mode first (up to 100 test users, no Google review).
+- [ ] **Eventbrite:** an Eventbrite API app (OAuth); could pull the artist's show dates.
+- [ ] Optional, only saves typing a handle: Twitch, Patreon, Vimeo, Mixcloud, Bluesky.
+      Sam hasn't picked 2 vs 7 yet (recommended: just the two above).
+
 ## Shopify connect app — LATER, Sam creates it (added 2026-09-28)
 
 The "Connect with Shopify" portal is built (Connections → Shopify: type the store name,
