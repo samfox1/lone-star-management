@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { listContent } from '@/lib/content'
 import { entityCounts, metricValue, daysAgo } from '@/lib/analytics'
-import { dashboardDiff, requireArtist } from '../_data'
+import { dashboardDiff, getEventbriteSignedIn, requireArtist } from '../_data'
+import { eventbriteSignedInState } from '@/lib/eventbrite-oauth'
 import { isPastShow, todayIso } from '@/lib/tour'
 import { SyncDialog } from '../sync-dialog'
 import { sourcesForSection } from '../sync-sections'
@@ -12,7 +13,7 @@ import { TourAddButton } from './tour-add'
 /**
  * Tour dates: a centered, spacious date list with the Music-page toolbar (filter ·
  * sort · sync · + Add · publish). "+ Add" opens the two-pane modal (manual). Sync
- * from Bandsintown / Ticketmaster lives in Connections. New/imported dates land
+ * from Bandsintown / Ticketmaster / Eventbrite lives in Connections. New/imported dates land
  * off-site; the per-row toggle puts one ON the site live, here or in the editor
  * (ADR 0009) — a date must be published once first, since the door serves the
  * published snapshot and gates it on the working row. (Map is a later opt-in view.)
@@ -25,12 +26,13 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
   // diffUnpublished is the only way to know whether there are unpublished date EDITS,
   // now that presence is live and no longer a selection delta. It's the same query
   // behind the nav's pending dot, so the PublishBar and the dot always agree.
-  const [artist, rows, counts, diff, latest] = await Promise.all([
+  const [artist, rows, counts, diff, latest, eventbriteStored] = await Promise.all([
     requireArtist(id),
     listContent(supabase, 'tour_date', id),
     entityCounts(supabase, id, daysAgo(30)),
     dashboardDiff(id),
     supabase.rpc('latest_revisions', { p_artist_id: id }),
+    getEventbriteSignedIn(id),
   ])
   // What the PUBLISHED copy says about presence (PRESENCE_PLAN, revised 2026-09-11), so a
   // row's check can show "checked, publish to put on site" while the draft and the
@@ -72,7 +74,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
           <SyncDialog
             artistId={id}
             section="tour"
-            sources={sourcesForSection('tour', artist, false)}
+            sources={sourcesForSection('tour', artist, false, { eventbrite: eventbriteSignedInState(eventbriteStored) })}
             run={syncSectionAction}
             integrationsHref={`/artists/${id}/connections`}
           />

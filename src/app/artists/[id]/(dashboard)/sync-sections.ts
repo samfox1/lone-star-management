@@ -1,5 +1,5 @@
 import type { SyncNote } from '@/lib/sync'
-import { SHOPIFY_KEY } from '@/lib/connections'
+import { CONNECTIONS, SHOPIFY_KEY } from '@/lib/connections'
 import { INTEGRATIONS, isConnected, type IntegrationArtist } from './integrations'
 
 /**
@@ -57,17 +57,31 @@ export const SECTION_SERVICE_NOUN: Record<SyncSection, string> = {
   merch: 'merchandise service',
 }
 
+/**
+ * `signedIn`: the sources connected by the artist's own sign-in (Eventbrite — a Vault token,
+ * not a column), by key, read by the PAGE. true = signed in; false = not yet, and the sign-in
+ * is on offer; absent = not set up here, so not offered (nothing could pull it).
+ */
 export function sourcesForSection(
   section: SyncSection,
   artist: IntegrationArtist,
   shopifyConnected: boolean,
+  signedIn: Partial<Record<string, boolean>> = {},
 ): SyncSource[] {
   if (section === 'merch') {
     return [{ key: SHOPIFY_KEY, label: 'Shopify', connected: shopifyConnected }]
   }
-  return INTEGRATIONS.filter((i) => i.section === section).map((i) => ({
+  const registry = INTEGRATIONS.filter((i) => i.section === section).map((i) => ({
     key: i.key,
     label: i.label,
     connected: isConnected(i, artist),
   }))
+  // Derived from the connections, never hand-listed: a source with no id column that is not
+  // Shopify is a sign-in source.
+  const bySignIn = CONNECTIONS.filter((d) => d.source && !d.source.idField && d.key !== SHOPIFY_KEY && d.source.section === section && signedIn[d.key] !== undefined).map((d) => ({
+    key: d.key,
+    label: d.label,
+    connected: signedIn[d.key] === true,
+  }))
+  return [...registry, ...bySignIn]
 }

@@ -20,6 +20,8 @@ import { addContentAction, deleteContentAction, saveSourceIdAction } from '../..
 import { INTEGRATIONS } from '../../integrations'
 import { connectShopifyAction, disconnectShopifyAction, probeShopifyAction, syncShopifyAction } from '../../merch/actions'
 import { syncSectionAction } from '../../sync-section-action'
+import { disconnectEventbriteAction } from '../../tour/eventbrite-actions'
+import { EVENTBRITE_KEY } from '@/lib/manager-tools/connections/services/eventbrite'
 
 /**
  * The connected store's domain, for the edit window to show before a manager changes it —
@@ -153,6 +155,9 @@ export async function disconnectConnectionAction(artistId: string, key: string, 
     if (res?.error) return { error: res.error }
   }
   if (def.key === SHOPIFY_KEY) return disconnectShopifyAction(artistId)
+  // Eventbrite's shows come through the artist's own sign-in: Remove forgets it (the Vault
+  // token), which is what "nothing more is pulled" means for it.
+  if (def.key === EVENTBRITE_KEY) return disconnectEventbriteAction(artistId)
   if (def.source?.idField) return saveSourceIdAction(artistId, def.source.idField, '')
   return {}
 }
@@ -166,6 +171,8 @@ export async function disconnectConnectionAction(artistId: string, key: string, 
  */
 export async function syncProfileAction(artistId: string, key: string): Promise<ConnectResult> {
   const def = connectionByKey(key)
+  // A source pulled through the sign-in (Eventbrite) has no id in its link to pull by.
+  if (def?.key === EVENTBRITE_KEY) return { ok: false, error: 'A pasted link can’t pull shows. Open Eventbrite here and press Connect with Eventbrite.' }
   if (!def?.social || !def.source?.idField) return { ok: false, error: 'Nothing to sync.' }
   let link: LinkRowLike | undefined
   try {

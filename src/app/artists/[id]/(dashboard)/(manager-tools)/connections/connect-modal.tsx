@@ -8,6 +8,7 @@ import {
   SHOPIFY_KEY,
   connectInputError,
   connectionsAtoZ,
+  idFromProfileUrl,
   methodOf,
   searchConnections,
   type ConnectInput,
@@ -16,6 +17,7 @@ import {
 import { parseHandle } from '@/lib/connect-methods'
 import { isShopDomain, normalizeShopDomain, shopifyInstallPath } from '@/lib/merch/shop-domain'
 import { youtubeStartPath } from '@/lib/manager-tools/connections/services/youtube'
+import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { ConnectionMark } from './connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
@@ -51,6 +53,11 @@ import { connectOneAction, type ConnectResult } from './actions'
  * Shopify: the button shows only once nothing else is waiting to run, and a YouTube row left
  * blank waits for its trip instead of being run and refused.
  *
+ * EVENTBRITE, WHEN ITS APP IS SET UP (`eventbriteApp`, Sam 2026-09-28): the same shape as
+ * YouTube — "Connect with Eventbrite" above the paste field. The trip finds the organizer page
+ * AND pulls the shows; a pasted link is the profile only (the shows need the sign-in), so the
+ * row has no Sync switch. A link pasted first rides along as WHICH organizer page it means.
+ *
  * THE LATCH IS A REF (AGENTS.md rule 5). Two fast presses of Connect both read stale
  * state; the ref is what makes the second one a no-op.
  */
@@ -69,6 +76,7 @@ export function ConnectModal({
   onDone,
   shopifyApp = false,
   youtubeApp = false,
+  eventbriteApp = false,
   createPages,
 }: {
   artistId: string
@@ -86,6 +94,9 @@ export function ConnectModal({
   /** The Google app's credentials are set (a server-made boolean): the YouTube row offers
    *  Connect with YouTube above its paste field. */
   youtubeApp?: boolean
+  /** The Eventbrite app's credentials are set (a server-made boolean): the Eventbrite row
+   *  offers Connect with Eventbrite above its paste field. */
+  eventbriteApp?: boolean
   /** By connection key, a link that MAKES the page on that platform, for one the artist has
    *  none of yet (MusicBrainz: its own artist editor, pre-filled; built on the server). */
   createPages?: Partial<Record<string, string>>
@@ -103,6 +114,10 @@ export function ConnectModal({
   const viaApp = (p: Pick) => shopifyApp && p.def.key === SHOPIFY_KEY
   /** A YouTube pick left blank: it connects by the trip to Google, not by `connectOneAction`. */
   const viaGoogle = (p: Pick) => youtubeApp && p.def.key === YOUTUBE_KEY && !(p.input.handle ?? '').trim()
+  /** An Eventbrite pick left blank: it connects by the trip to Eventbrite. */
+  const viaEventbrite = (p: Pick) => eventbriteApp && p.def.key === EVENTBRITE_KEY && !(p.input.url ?? '').trim()
+  /** Waits for a trip instead of running here. */
+  const viaTrip = (p: Pick) => viaApp(p) || viaGoogle(p) || viaEventbrite(p)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !running && onClose()
@@ -135,7 +150,7 @@ export function ConnectModal({
     setStep('run')
     // Reset the rows about to run; leave the ones that already worked alone. A Shopify pick
     // in app mode never runs here: its connect is the trip to Shopify.
-    const runs = (p: Pick) => !viaApp(p) && !viaGoogle(p) && (!only || only.has(p.def.key))
+    const runs = (p: Pick) => !viaTrip(p) && (!only || only.has(p.def.key))
     setPicks((all) => all.map((p) => (runs(p) ? { ...p, status: 'wait', result: undefined } : p)))
     const queue = picks.filter(runs)
     for (const p of queue) {
@@ -162,13 +177,17 @@ export function ConnectModal({
   const failed = picks.filter((p) => p.status === 'fail')
   const done = picks.filter((p) => p.status === 'ok')
   const finished = step === 'run' && !running
-  const toRun = picks.filter((p) => !viaApp(p) && !viaGoogle(p))
-  /** The Google button, on the YouTube row: in details only when nothing else is waiting to
-   *  run (leaving would strand it), and after a run on a row that has not connected. */
-  const nothingElseToRun = picks.every((p) => p.def.key === YOUTUBE_KEY || viaApp(p))
-  const googleTrip = (p: Pick, now: 'details' | 'run') =>
-    youtubeApp && p.def.key === YOUTUBE_KEY && (now === 'details' ? nothingElseToRun : finished && p.status !== 'ok') ? (
+  const toRun = picks.filter((p) => !viaTrip(p))
+  /** A sign-in button (YouTube, Eventbrite), on its own row: in details only when nothing
+   *  ELSE is waiting to run (leaving would strand it), and after a run on a row that has not
+   *  connected. */
+  const othersWait = (self: Pick) => picks.every((p) => p === self || viaTrip(p))
+  const tripShown = (p: Pick, now: 'details' | 'run') => (now === 'details' ? othersWait(p) : finished && p.status !== 'ok')
+  const trip = (p: Pick, now: 'details' | 'run') =>
+    youtubeApp && p.def.key === YOUTUBE_KEY && tripShown(p, now) ? (
       <YouTubeTrip artistId={artistId} sync={p.input.sync !== false} />
+    ) : eventbriteApp && p.def.key === EVENTBRITE_KEY && tripShown(p, now) ? (
+      <EventbriteTrip href={eventbriteStartPath(artistId, idFromProfileUrl(p.def, p.input.url ?? ''))} />
     ) : null
   const appPick = picks.find(viaApp)
   const shopifyLink = appPick ? (
@@ -260,7 +279,7 @@ export function ConnectModal({
                   pick={p}
                   app={viaApp(p)}
                   error={viaApp(p) ? shopError : null}
-                  trip={googleTrip(p, 'details')}
+                  trip={trip(p, 'details')}
                   createPage={createPages?.[p.def.key]}
                   onChange={(patch) => setInput(p.def.key, patch)}
                 />
@@ -288,7 +307,7 @@ export function ConnectModal({
                   pick={p}
                   app={viaApp(p)}
                   error={viaApp(p) ? shopError : null}
-                  trip={googleTrip(p, 'run')}
+                  trip={trip(p, 'run')}
                   editable={finished && (p.status === 'fail' || viaApp(p))}
                   onChange={(patch) => setInput(p.def.key, patch)}
                 />
@@ -448,9 +467,11 @@ function ConnectField({
   )
 }
 
-/** Link only, or link AND pull: shown on a profile that can also feed the dashboard. */
+/** Link only, or link AND pull: shown on a profile whose pasted link can also feed the
+ *  dashboard. Not on a source pulled through a sign-in (Eventbrite: no id column), where a
+ *  paste can only ever be the link. */
 function SyncSwitch({ def, input, onChange }: { def: ConnectionDef; input: ConnectInput; onChange: (patch: ConnectInput) => void }) {
-  if (!def.social || !def.source) return null
+  if (!def.social || !def.source?.idField) return null
   return (
     <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-ink-muted">
       <input type="checkbox" checked={input.sync !== false} onChange={(e) => onChange({ sync: e.target.checked })} className="h-3.5 w-3.5 accent-ink" />
@@ -618,6 +639,22 @@ function YouTubeTrip({ artistId, sync }: { artistId: string; sync: boolean }) {
         Connect with YouTube
       </a>
       <span className="text-[12px] leading-snug text-ink-muted">Google shows a warning while Tapir is in testing: that’s expected.</span>
+    </div>
+  )
+}
+
+/**
+ * "Connect with Eventbrite": a real link to the start route, which checks the manager and
+ * sends the browser on to Eventbrite's sign-in. Finds the organizer page and pulls the
+ * shows; the organizer id of a link pasted first rides along (`href`, built by the caller).
+ */
+export function EventbriteTrip({ href }: { href: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <a href={href} className={buttonClass('solid', 'w-fit whitespace-nowrap')}>
+        Connect with Eventbrite
+      </a>
+      <span className="text-[12px] leading-snug text-ink-muted">Finds your organizer page and pulls your shows.</span>
     </div>
   )
 }

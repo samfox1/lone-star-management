@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { addContentAction, deleteContentAction, saveSourceIdAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { INTEGRATIONS } from '@/app/artists/[id]/(dashboard)/integrations'
 import type { LinkRowLike } from '@/lib/connections'
+import { disconnectEventbriteAction, syncEventbriteAction } from '@/app/artists/[id]/(dashboard)/tour/eventbrite-actions'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
@@ -26,6 +27,10 @@ vi.mock('@/app/artists/[id]/(dashboard)/merch/actions', () => ({
   connectShopifyAction: vi.fn(), disconnectShopifyAction: vi.fn(async () => ({})), probeShopifyAction: vi.fn(), syncShopifyAction: vi.fn(),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/sync-section-action', () => ({ syncSectionAction: vi.fn(async () => ({ results: [] })) }))
+vi.mock('@/app/artists/[id]/(dashboard)/tour/eventbrite-actions', () => ({
+  syncEventbriteAction: vi.fn(async () => ({ ok: true, message: '3 added', notes: [] })),
+  disconnectEventbriteAction: vi.fn(async () => ({})),
+}))
 
 /** What the `links` table answers. Tests set it per case. */
 let links: LinkRowLike[] = []
@@ -132,6 +137,17 @@ describe('connectOneAction — one paste, two jobs', () => {
     expect(spotifyPull()).not.toHaveBeenCalled()
   })
 
+  it('CRITICAL: an Eventbrite organizer link pasted is LINK ONLY — the profile row, no id, no pull (the shows need the sign-in)', async () => {
+    const { connectOneAction } = await actions()
+    const res = await connectOneAction('a1', 'eventbrite', { url: 'https://www.eventbrite.com/o/skeen-222', sync: true })
+    expect(res).toEqual({ ok: true })
+    expect(addContentAction).toHaveBeenCalledTimes(1)
+    const fd = vi.mocked(addContentAction).mock.calls[0][2] as FormData
+    expect(fd.get('url')).toBe('https://www.eventbrite.com/o/skeen-222')
+    expect(saveSourceIdAction).not.toHaveBeenCalled()
+    expect(syncEventbriteAction).not.toHaveBeenCalled()
+  })
+
   it('refuses an unknown connection and a bad input before touching anything', async () => {
     const { connectOneAction } = await actions()
     expect((await connectOneAction('a1', 'nope', { url: 'x' })).ok).toBe(false)
@@ -156,6 +172,25 @@ describe('disconnectConnectionAction — remove means the link AND the source', 
     expect(saveSourceIdAction).not.toHaveBeenCalled()
   })
 
+  it('CRITICAL: removing Eventbrite deletes the link, then forgets the sign-in (the Vault token)', async () => {
+    const { disconnectConnectionAction } = await actions()
+    expect(await disconnectConnectionAction('a1', 'eventbrite', 'l-eb')).toEqual({})
+    expect(deleteContentAction).toHaveBeenCalledWith('link', 'l-eb', 'a1')
+    expect(disconnectEventbriteAction).toHaveBeenCalledWith('a1')
+    expect(vi.mocked(deleteContentAction).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(disconnectEventbriteAction).mock.invocationCallOrder[0])
+    expect(saveSourceIdAction).not.toHaveBeenCalled()
+  })
+
+  it('a refused forget is the answer; a failed link delete stops before it', async () => {
+    const { disconnectConnectionAction } = await actions()
+    vi.mocked(disconnectEventbriteAction).mockResolvedValueOnce({ error: 'Couldn’t forget the Eventbrite sign-in. Try again.' })
+    expect((await disconnectConnectionAction('a1', 'eventbrite', 'l-eb')).error).toMatch(/forget/)
+    vi.mocked(deleteContentAction).mockResolvedValueOnce({ error: 'No.' })
+    vi.mocked(disconnectEventbriteAction).mockClear()
+    expect(await disconnectConnectionAction('a1', 'eventbrite', 'l-eb')).toEqual({ error: 'No.' })
+    expect(disconnectEventbriteAction).not.toHaveBeenCalled()
+  })
+
   it('a source with no link clears the id alone', async () => {
     const { disconnectConnectionAction } = await actions()
     await disconnectConnectionAction('a1', 'spotify', null)
@@ -173,6 +208,16 @@ describe('syncProfileAction — the id comes out of the PROFILE link', () => {
     const { syncProfileAction } = await actions()
     expect(await syncProfileAction('a1', 'spotify')).toEqual({ ok: true, message: '24 songs found' })
     expect(saveSourceIdAction).toHaveBeenCalledWith('a1', 'spotify_artist_id', '26K')
+  })
+
+  it('Eventbrite: a pasted link cannot pull — it says to Connect with Eventbrite, and saves nothing', async () => {
+    links = [{ id: 'l-eb', label: 'Eventbrite', url: 'https://www.eventbrite.com/o/skeen-222', role: null }]
+    const { syncProfileAction } = await actions()
+    const res = await syncProfileAction('a1', 'eventbrite')
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/Connect with Eventbrite/)
+    expect(saveSourceIdAction).not.toHaveBeenCalled()
+    expect(syncEventbriteAction).not.toHaveBeenCalled()
   })
 
   it('a link with no id in it says so and saves nothing', async () => {

@@ -6,12 +6,13 @@ documentation on how it is implemented and integrated"). Every README uses the s
 headings: connection type, what the manager enters, how it is stored, sync, on the site,
 code map, tests, known gaps.
 
-## The four kinds
+## The five kinds
 
 | Kind | What the manager enters | What happens |
 | --- | --- | --- |
 | **Link only** | The handle alone (`x.com/` [skeenmusic]), or a pasted profile link; for a platform with no handle (Tidal, WhatsApp, Eventbrite), its link | A `links` row the site can show as a button. Nothing is pulled. |
 | **Link + sync** | The artist link (or handle, for YouTube), with **Sync** on | The same `links` row, plus the id inside it pulls the catalog into the dashboard. Sync off = link only. |
+| **Link + sync by sign-in** | Nothing: **Connect with Eventbrite** signs in (or paste the link, which is link only) | The same `links` row, plus the artist's token kept in Vault, which pulls their shows into Tour. No id is in the link to pull by, so a paste cannot sync. |
 | **Service** | The service's own fields (an id, a name, a folder link, a store domain + token) | Feeds the dashboard (tour dates, files, merch). Never a social button on a site. |
 | **Identity** | The artist's page on a music fact database (MusicBrainz, Discogs), or its id (Wikidata `Q1299`) | A `links` row that feeds the site's fact card (`sameAs`) and is never a site button: the bridge marks the platform `identityOnly`, and the editor's Add button refuses it. MusicBrainz's Connect row can also create the page, pre-filled. |
 
@@ -38,7 +39,7 @@ A new connection starts **off the site**. A site button is added in the site edi
 | Deezer | Link + sync | Music | [deezer](deezer/README.md) |
 | Discogs | Identity (artist link) | Fact card | [discogs](discogs/README.md) |
 | Discord | Link only (invite) | — | [discord](discord/README.md) |
-| Eventbrite | Link only (organizer link) | — | [eventbrite](eventbrite/README.md) |
+| Eventbrite | Link + sync by sign-in (Connect with Eventbrite; a pasted organizer link is link only) | Tour dates | [eventbrite](eventbrite/README.md) |
 | Facebook | Link only | — | [facebook](facebook/README.md) |
 | Google Drive | Service | Files | [google-drive](google-drive/README.md) |
 | Instagram | Link only | — | [instagram](instagram/README.md) |

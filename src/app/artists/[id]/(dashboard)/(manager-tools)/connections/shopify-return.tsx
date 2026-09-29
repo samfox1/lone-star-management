@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/icons'
 import type { ShopifyReturn } from '@/lib/merch/shopify-oauth'
 
 /**
- * BACK FROM SHOPIFY (or Google, for Connect with YouTube): one line above the list —
+ * BACK FROM SHOPIFY (or Google, for Connect with YouTube; or Eventbrite): one line above the list —
  * "Shopify connected.", or what went wrong in plain words — until the manager dismisses it
  * or leaves. The words are chosen on the server from a CODE in the URL
  * (`shopifyReturnNotice`, `youtubeReturnNotice`), never read from the URL itself.
@@ -15,7 +15,7 @@ import type { ShopifyReturn } from '@/lib/merch/shopify-oauth'
  * fire before the dashboard's Toaster is listening. The `<param>`/`reason` params come out of
  * the address bar once shown, so a reload does not say it again.
  */
-export function ReturnNotice({ kind, message, param }: ShopifyReturn & { param: 'shopify' | 'youtube' }) {
+export function ReturnNotice({ kind, message, param }: ShopifyReturn & { param: 'shopify' | 'youtube' | 'eventbrite' }) {
   const [open, setOpen] = useState(true)
 
   useEffect(() => {
@@ -47,4 +47,8 @@ export function ShopifyReturnNotice(props: ShopifyReturn) {
 
 export function YouTubeReturnNotice(props: ShopifyReturn) {
   return <ReturnNotice {...props} param="youtube" />
+}
+
+export function EventbriteReturnNotice(props: ShopifyReturn) {
+  return <ReturnNotice {...props} param="eventbrite" />
 }

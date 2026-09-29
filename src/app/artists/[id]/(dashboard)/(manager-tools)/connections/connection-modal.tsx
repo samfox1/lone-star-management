@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
-import { SHOPIFY_KEY, methodOf, profileLink, type ConnectionRow } from '@/lib/connections'
+import { SHOPIFY_KEY, idFromProfileUrl, methodOf, profileLink, type ConnectionRow } from '@/lib/connections'
 import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
 import { KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
 import { ConnectionMark } from './connection-mark'
-import { ShopifyLink } from './connect-modal'
+import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
+import { EventbriteTrip, ShopifyLink } from './connect-modal'
 import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
 
 const FIELD_CLASS =
@@ -32,6 +33,7 @@ export function ConnectionModal({
   onClose,
   onChange,
   shopifyApp = false,
+  eventbriteApp = false,
 }: {
   artistId: string
   row: ConnectionRow
@@ -42,6 +44,9 @@ export function ConnectionModal({
   /** The Shopify app is set up (a server-made boolean): the Store row changes the store by
    *  going to Shopify, and there is no token to type. */
   shopifyApp?: boolean
+  /** The Eventbrite app is set up (a server-made boolean): its row can sign in from here —
+   *  to connect a pasted link's shows, or to renew or change the sign-in. */
+  eventbriteApp?: boolean
 }) {
   const router = useRouter()
   const [pulling, setPulling] = useState(false)
@@ -268,7 +273,15 @@ export function ConnectionModal({
             </div>
           </KvRow>
         )}
-        {row.def.source && (
+        {/* A pasted Eventbrite link is dimmed in the Connect grid, so its sign-in lives here:
+            the linked organizer page rides along as the one to connect. */}
+        {eventbriteApp && row.def.key === EVENTBRITE_KEY && (
+          <KvRow label="Sign-in" align="start">
+            <EventbriteTrip href={eventbriteStartPath(artistId, row.url ? idFromProfileUrl(row.def, row.url) : null)} />
+          </KvRow>
+        )}
+        {/* 'none' with a source: a sign-in source whose app is not set up here — nothing can pull. */}
+        {row.def.source && row.state !== 'none' && (
           <KvRow label="Catalog">
             <button type="button" onClick={pull} disabled={pulling} className={buttonClass('ghost', 'disabled:opacity-50')}>
               <Icon name="refresh" size={13} className={cx(pulling && 'animate-spin')} />

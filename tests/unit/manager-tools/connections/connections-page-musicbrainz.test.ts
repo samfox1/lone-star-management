@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
   requireArtist: vi.fn(async () => ({ id: 'a1', name: 'Skeen', slug: 'skeen', site_kind: 'custom', custom_site_url: 'https://skeenmusic.com' })),
   getShopifyDomain: vi.fn(async () => null),
+  getEventbriteSignedIn: vi.fn(async () => false),
   dashboardDiff: vi.fn(async () => ({ link: { dirty: false } })),
 }))
 vi.mock('@/lib/content', async (importOriginal) => ({ ...(await importOriginal<object>()), listContent: vi.fn(async () => state.links) }))

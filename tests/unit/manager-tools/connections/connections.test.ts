@@ -361,6 +361,22 @@ describe('buildConnectionRows — only what is hooked up', () => {
     expect(again.map((r) => r.key)).toEqual(order)
   })
 
+  it('CRITICAL: Eventbrite’s shows follow its SIGN-IN, not an id column; with the sign-in off, a pasted link is a plain social', () => {
+    const eb: LinkRowLike[] = [{ id: 'l-eb', label: 'Eventbrite', url: 'https://www.eventbrite.com/o/skeen-222', on_site: false, role: null }]
+    const signedIn = buildConnectionRows({ links: eb, artist: {}, shopifyConnected: false, signedIn: { eventbrite: true }, counts: { eventbrite: 4 } })
+    expect(signedIn.find((r) => r.key === 'eventbrite')).toMatchObject({ linkId: 'l-eb', state: 'synced', sourceId: undefined })
+    const pulledNothing = buildConnectionRows({ links: eb, artist: {}, shopifyConnected: false, signedIn: { eventbrite: true }, counts: {} })
+    expect(pulledNothing.find((r) => r.key === 'eventbrite')!.state).toBe('failed')
+    // Not signed in, the button is there: a "Sync" chip that says how.
+    const pasted = buildConnectionRows({ links: eb, artist: {}, shopifyConnected: false, signedIn: { eventbrite: false }, counts: {} })
+    expect(pasted.find((r) => r.key === 'eventbrite')!.state).toBe('connect')
+    // The app is not set up: nothing can pull, so no chip at all.
+    const off = buildConnectionRows({ links: eb, artist: {}, shopifyConnected: false, counts: {} })
+    expect(off.find((r) => r.key === 'eventbrite')!.state).toBe('none')
+    // Signed in with no link still makes a row (the token pulls on its own).
+    expect(buildConnectionRows({ links: [], artist: {}, shopifyConnected: false, signedIn: { eventbrite: true }, counts: { eventbrite: 1 } }).map((r) => r.key)).toEqual(['eventbrite'])
+  })
+
   it('Shopify joins the list when connected, and its state follows its products', () => {
     const on = buildConnectionRows({ links: [], artist: {}, shopifyConnected: true, counts: { shopify: 12 } })
     expect(on.map((r) => r.key)).toEqual([SHOPIFY_KEY])

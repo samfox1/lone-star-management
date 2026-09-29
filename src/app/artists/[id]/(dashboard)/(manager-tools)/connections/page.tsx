@@ -5,11 +5,12 @@ import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
 import { shopifyAppConfigured, shopifyReturnNotice } from '@/lib/merch/shopify-oauth'
 import { youtubeOAuthConfigured, youtubeReturnNotice } from '@/lib/youtube-oauth'
+import { eventbriteOAuthConfigured, eventbriteReturnNotice, eventbriteSignedInState } from '@/lib/eventbrite-oauth'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
-import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
+import { dashboardDiff, getEventbriteSignedIn, getShopifyDomain, requireArtist } from '../../_data'
 import { ConnectionList } from './connection-list'
-import { ShopifyReturnNotice, YouTubeReturnNotice } from './shopify-return'
+import { EventbriteReturnNotice, ShopifyReturnNotice, YouTubeReturnNotice } from './shopify-return'
 
 export const metadata = { title: 'Connections — Lone Star Management' }
 
@@ -60,15 +61,17 @@ export default async function ConnectionsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { id } = await params
-  // Back from Shopify's approve screen or Google's sign-in: the callback sends a CODE, the
-  // words are chosen here.
+  // Back from Shopify's approve screen, Google's or Eventbrite's sign-in: the callback sends
+  // a CODE, the words are chosen here.
   const query = await searchParams
   const shopifyReturn = shopifyReturnNotice(query)
   const youtubeReturn = youtubeReturnNotice(query)
+  const eventbriteReturn = eventbriteReturnNotice(query)
   const supabase = await createClient()
-  const [artist, shopifyDomain, links, counts, diff, { data: facts }] = await Promise.all([
+  const [artist, shopifyDomain, eventbriteStored, links, counts, diff, { data: facts }] = await Promise.all([
     requireArtist(id),
     getShopifyDomain(id),
+    getEventbriteSignedIn(id),
     listContent(supabase, 'link', id),
     sourceCounts(supabase, id),
     dashboardDiff(id),
@@ -83,7 +86,7 @@ export default async function ConnectionsPage({
     on_site: (l.on_site as boolean | null) ?? null,
     role: (l.role as string | null) ?? null,
   }))
-  const rows = buildConnectionRows({ links: linkRows, artist, shopifyConnected: !!shopifyDomain, counts })
+  const rows = buildConnectionRows({ links: linkRows, artist, shopifyConnected: !!shopifyDomain, signedIn: { eventbrite: eventbriteSignedInState(eventbriteStored) }, counts })
 
   // No MusicBrainz page yet (AI_VISIBILITY_AUDIT.md 4.1): its Connect row offers MusicBrainz's
   // own artist editor, filled from what we know. Only "Visual artist" says person; the
@@ -102,18 +105,20 @@ export default async function ConnectionsPage({
 
   // The floating Publish lights up on unpublished link EDITS — the same flag behind the
   // nav's pending dot, so the two always agree (the tour page's rule).
-  // `shopifyApp` / `youtubeApp` are the one thing about each app the browser learns: whether
-  // it is set up. The ids and the secrets stay on the server.
+  // `shopifyApp` / `youtubeApp` / `eventbriteApp` are the one thing about each app the browser
+  // learns: whether it is set up. The ids and the secrets stay on the server.
   return (
     <>
       {shopifyReturn && <ShopifyReturnNotice {...shopifyReturn} />}
       {youtubeReturn && <YouTubeReturnNotice {...youtubeReturn} />}
+      {eventbriteReturn && <EventbriteReturnNotice {...eventbriteReturn} />}
       <ConnectionList
         artistId={id}
         rows={rows}
         dirty={diff.link.dirty}
         shopifyApp={shopifyAppConfigured()}
         youtubeApp={youtubeOAuthConfigured()}
+        eventbriteApp={eventbriteOAuthConfigured()}
         createPages={createPages}
       />
     </>

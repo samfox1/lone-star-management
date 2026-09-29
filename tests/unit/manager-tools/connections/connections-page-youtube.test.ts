@@ -14,6 +14,7 @@ import type { ReactElement } from 'react'
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
   requireArtist: vi.fn(async () => ({ id: 'a1', name: 'Skeen' })),
   getShopifyDomain: vi.fn(async () => null),
+  getEventbriteSignedIn: vi.fn(async () => false),
   dashboardDiff: vi.fn(async () => ({ link: { dirty: false } })),
 }))
 vi.mock('@/lib/content', async (importOriginal) => ({ ...(await importOriginal<object>()), listContent: vi.fn(async () => []) }))

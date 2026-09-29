@@ -48,6 +48,15 @@ export const dashboardDiff = unstable_cache(
   { revalidate: 30 },
 )
 
+/** Whether the artist's Eventbrite sign-in is stored — its integrations row, which points at
+ *  the token in Vault (never the token). Cached per request. Reads a table that exists
+ *  whether or not the Eventbrite migration has run, so it is simply false until then. */
+export const getEventbriteSignedIn = cache(async (id: string): Promise<boolean> => {
+  const supabase = await createClient()
+  const { data } = await supabase.from('integrations').select('id').eq('artist_id', id).eq('provider', 'eventbrite').maybeSingle()
+  return !!data
+})
+
 /** The connected Shopify store domain for an artist, or null. Cached per request. */
 export const getShopifyDomain = cache(async (id: string): Promise<string | null> => {
   const supabase = await createClient()

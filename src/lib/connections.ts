@@ -13,6 +13,8 @@
  *   • every social platform the bridge knows (`SOCIAL_PLATFORMS`) is a connection;
  *   • every syncable source (`INTEGRATION_REGISTRY`) either attaches to the social with
  *     the same name, or stands alone as a service (Bandsintown, Ticketmaster, Drive);
+ *   • a source pulled through the artist's own sign-in (Eventbrite: a Vault token, not an
+ *     id column) attaches to its social from its service file's `signInSource`;
  *   • Shopify is the one service outside both registries — a Vault token, not an id
  *     column — so its whole def comes from its own service file.
  *
@@ -44,7 +46,8 @@ export type ConnectionSection = IntegrationSection | 'merch'
 export type ConnectionSource = {
   key: string
   section: ConnectionSection
-  /** The artist column holding the id. Absent for Shopify, whose state is in Vault. */
+  /** The artist column holding the id. Absent for Shopify and the sign-in sources
+   *  (Eventbrite), whose state is a token in Vault: a pasted link cannot pull them. */
   idField?: ArtistIdField
   /** What the id field wants, named for the manager ("Spotify artist ID"). */
   placeholder: string
@@ -88,6 +91,12 @@ export const CONNECTIONS: readonly ConnectionDef[] = (() => {
     const host = social && defs.find((d) => d.key === social.slug)
     if (host) host.source = source
     else defs.push({ key: intg.key, label: intg.label, kind: 'service', source })
+  }
+  // A source pulled through the artist's own sign-in (Eventbrite: a Vault token, no id
+  // column) attaches to its social the same way, without a registry entry.
+  for (const s of SERVICES) {
+    const host = s.signInSource && defs.find((d) => d.key === s.social?.key)
+    if (host) host.source = s.signInSource
   }
   // A service in neither registry (Shopify) brings its whole def.
   for (const s of SERVICES) if (s.service) defs.push(s.service)
@@ -309,6 +318,10 @@ export function buildConnectionRows(opts: {
   links: readonly LinkRowLike[]
   artist: IntegrationArtist
   shopifyConnected: boolean
+  /** Sources connected by the artist's own sign-in (a Vault token: Eventbrite), by key:
+   *  true = signed in; false = not yet, and the sign-in is on offer; absent = the sign-in is
+   *  not set up here, so the source cannot pull and the row is a plain social. */
+  signedIn?: Partial<Record<string, boolean>>
   counts: SourceCounts
 }): ConnectionRow[] {
   const rows: ConnectionRow[] = []
@@ -316,11 +329,16 @@ export function buildConnectionRows(opts: {
     const link = def.social ? opts.links.find((l) => isProfileLink(l) && socialSlug(l.label ?? '') === def.social) : undefined
     let connected = false
     let sourceId: string | undefined
+    let pullable = !!def.source
     if (def.source) {
       if (def.key === SHOPIFY_KEY) connected = opts.shopifyConnected
       else if (def.source.idField) {
         connected = isConnected({ idField: def.source.idField }, opts.artist)
         sourceId = opts.artist[def.source.idField] ?? undefined
+      } else {
+        const signedIn = opts.signedIn?.[def.key]
+        connected = signedIn === true
+        pullable = signedIn !== undefined
       }
     }
     if (!link && !connected) continue
@@ -331,7 +349,7 @@ export function buildConnectionRows(opts: {
       linkId: link?.id,
       url: link?.url ?? undefined,
       sourceId,
-      state: connectionState(def, connected, opts.counts[def.source?.key ?? ''] ?? 0),
+      state: pullable ? connectionState(def, connected, opts.counts[def.source?.key ?? ''] ?? 0) : 'none',
     })
   }
   return sortConnectionRows(rows)

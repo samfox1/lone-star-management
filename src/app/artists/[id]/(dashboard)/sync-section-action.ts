@@ -3,6 +3,8 @@
 import { INTEGRATIONS } from './integrations'
 import { SHOPIFY_KEY } from './sync-sections'
 import { syncShopifyAction } from './merch/actions'
+import { syncEventbriteAction } from './tour/eventbrite-actions'
+import { EVENTBRITE_KEY } from '@/lib/manager-tools/connections/services/eventbrite'
 import type { SyncNote } from '@/lib/sync'
 import type { SyncRunResult } from './sync-dialog'
 
@@ -34,11 +36,16 @@ export async function syncSectionAction(
       ? keys.includes(SHOPIFY_KEY)
         ? [{ key: SHOPIFY_KEY, label: 'Shopify', run: () => syncShopifyAction(artistId) }]
         : []
-      : INTEGRATIONS.filter((i) => i.section === section && keys.includes(i.key)).map((i) => ({
-          key: i.key,
-          label: i.label,
-          run: () => i.pull(artistId),
-        }))
+      : [
+          ...INTEGRATIONS.filter((i) => i.section === section && keys.includes(i.key)).map((i) => ({
+            key: i.key,
+            label: i.label,
+            run: () => i.pull(artistId),
+          })),
+          // Eventbrite is not in the registry (its sign-in is a Vault token, not a column),
+          // so it is resolved by name here, like Shopify for merch.
+          ...(section === 'tour' && keys.includes(EVENTBRITE_KEY) ? [{ key: EVENTBRITE_KEY, label: 'Eventbrite', run: () => syncEventbriteAction(artistId) }] : []),
+        ]
 
   const results: SyncRunResult[] = []
   for (const job of jobs) {

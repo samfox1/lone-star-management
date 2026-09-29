@@ -193,7 +193,9 @@ const BEFORE_CONNECTIONS = [
   { key: 'venmo', label: 'Venmo', kind: 'social', social: 'venmo', urlHint: 'https://venmo.com/u/' },
   { key: 'paypal', label: 'PayPal', kind: 'social', social: 'paypal', urlHint: 'https://paypal.me/' },
   { key: 'resident advisor', label: 'Resident Advisor', kind: 'social', social: 'resident advisor', urlHint: 'https://ra.co/dj/' },
-  { key: 'eventbrite', label: 'Eventbrite', kind: 'social', social: 'eventbrite', urlHint: 'https://eventbrite.com/o/' },
+  // Its shows come through the artist's own sign-in (Connect with Eventbrite, 2026-09-28): a
+  // source with no id column, so a pasted link stays link only.
+  { key: 'eventbrite', label: 'Eventbrite', kind: 'social', social: 'eventbrite', urlHint: 'https://eventbrite.com/o/', source: { key: 'eventbrite', section: 'tour', placeholder: 'Eventbrite organizer link' } },
   // 2026-09-28, identity only: a connection, never a site button
   { key: 'musicbrainz', label: 'MusicBrainz', kind: 'social', social: 'musicbrainz', urlHint: 'https://musicbrainz.org/artist/', identityOnly: true },
   { key: 'discogs', label: 'Discogs', kind: 'social', social: 'discogs', urlHint: 'https://www.discogs.com/artist/', identityOnly: true },

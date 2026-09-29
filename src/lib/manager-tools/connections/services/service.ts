@@ -8,6 +8,8 @@
  *   social  — a profile a site can show: the bridge slug, how the manager enters it (a
  *             handle spec or `{ kind: 'link' }`), and the source id inside its link;
  *   source  — a syncable source: its INTEGRATION_REGISTRY entry;
+ *   signInSource — a source its social pulls through the artist's own sign-in (a Vault
+ *             token, no id column: Eventbrite);
  *   service — a connection in neither registry, defined whole (Shopify).
  *
  * The shared modules ASSEMBLE from these files and keep every rule that is not one
@@ -20,7 +22,7 @@
  * import this folder, so a runtime import back would be a cycle.
  */
 import type { HandleMethod, LinkMethod } from '@/lib/connect-methods'
-import type { ConnectionDef } from '@/lib/connections'
+import type { ConnectionDef, ConnectionSource } from '@/lib/connections'
 import type { IntegrationDef } from '@/lib/integrations-registry'
 
 /** How a social is entered: a handle spec (its label comes from the bridge's platform
@@ -40,6 +42,10 @@ export type Service = {
     idFromUrl?: (url: string) => string | null
   }
   source?: IntegrationDef
+  /** A source connected by the artist's own SIGN-IN — a token in Vault, not an artist-id
+   *  column (Eventbrite) — so it is not in INTEGRATION_REGISTRY. Attached to this service's
+   *  social def as its `source`. No `idField`: a pasted link cannot pull. */
+  signInSource?: ConnectionSource
   /** Plain data: it rides in CONNECTIONS from the server page to client components. */
   service?: ConnectionDef
 }

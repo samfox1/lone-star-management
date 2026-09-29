@@ -54,4 +54,13 @@ describe('sourcesForSection — what a page offers to sync', () => {
     expect(sourcesForSection('videos', {}, false).map((s: SyncSource) => s.key)).toEqual(['youtube'])
     expect(sourcesForSection('tour', {}, false).map((s: SyncSource) => s.key)).toEqual(['bandsintown', 'ticketmaster'])
   })
+
+  it('CRITICAL: tour offers Eventbrite by its SIGN-IN (Vault), never a column — and not at all when the sign-in is off', () => {
+    const tour = (signedIn?: Partial<Record<string, boolean>>) => sourcesForSection('tour', { bandsintown_name: 'x' }, false, signedIn)
+    expect(tour({ eventbrite: true }).find((s: SyncSource) => s.key === 'eventbrite')).toEqual({ key: 'eventbrite', label: 'Eventbrite', connected: true })
+    expect(tour({ eventbrite: false }).find((s: SyncSource) => s.key === 'eventbrite')?.connected).toBe(false)
+    expect(tour().map((s: SyncSource) => s.key)).toEqual(['bandsintown', 'ticketmaster'])
+    // Only the section it feeds.
+    expect(sourcesForSection('music', {}, false, { eventbrite: true }).some((s: SyncSource) => s.key === 'eventbrite')).toBe(false)
+  })
 })

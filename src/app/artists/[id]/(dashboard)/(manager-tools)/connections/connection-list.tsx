@@ -36,6 +36,7 @@ export function ConnectionList({
   dirty = false,
   shopifyApp = false,
   youtubeApp = false,
+  eventbriteApp = false,
   createPages,
 }: {
   artistId: string
@@ -45,6 +46,8 @@ export function ConnectionList({
   shopifyApp?: boolean
   /** The Google app is set up: YouTube can connect by signing in to Google (a server-made boolean). */
   youtubeApp?: boolean
+  /** The Eventbrite app is set up: Eventbrite can connect by signing in (a server-made boolean). */
+  eventbriteApp?: boolean
   /** Links that make a page on a platform the artist has none of yet (MusicBrainz), by key. */
   createPages?: Partial<Record<string, string>>
 }) {
@@ -79,6 +82,7 @@ export function ConnectionList({
             artistId={artistId}
             row={r}
             shopifyApp={shopifyApp}
+            eventbriteApp={eventbriteApp}
             onChange={(next) => setRows((all) => (next ? all.map((x) => (x.key === r.key ? next : x)) : all.filter((x) => x.key !== r.key)))}
           />
         ))}
@@ -90,6 +94,7 @@ export function ConnectionList({
           taken={rows.map((r) => r.key)}
           shopifyApp={shopifyApp}
           youtubeApp={youtubeApp}
+          eventbriteApp={eventbriteApp}
           createPages={createPages}
           onClose={() => setConnect(false)}
           onDone={() => router.refresh()}
@@ -105,11 +110,13 @@ function ConnectionRowView({
   artistId,
   row,
   shopifyApp,
+  eventbriteApp,
   onChange,
 }: {
   artistId: string
   row: ConnectionRow
   shopifyApp: boolean
+  eventbriteApp: boolean
   onChange: (next: ConnectionRow | null) => void
 }) {
   const router = useRouter()
@@ -195,7 +202,15 @@ function ConnectionRowView({
         </span>
       </div>
 
-      <ConnectionModal artistId={artistId} row={row} open={open} shopifyApp={shopifyApp} onClose={() => setOpen(false)} onChange={onChange} />
+      <ConnectionModal
+        artistId={artistId}
+        row={row}
+        open={open}
+        shopifyApp={shopifyApp}
+        eventbriteApp={eventbriteApp}
+        onClose={() => setOpen(false)}
+        onChange={onChange}
+      />
     </>
   )
 }

@@ -28,6 +28,7 @@ import type { AppleTrackInput } from '@/lib/apple'
 import type { YouTubeVideoInput } from '@/lib/youtube'
 import type { BandsintownTourDate } from '@/lib/bandsintown'
 import type { TicketmasterTourDate } from '@/lib/ticketmaster'
+import { PULLED_COLUMNS, planTourPull, slotNewRows, type ExistingTourRow, type IncomingShow } from '@/lib/tour-pull'
 import type { ReleaseType } from '@/lib/releases'
 import { groupReleases, matchTrackCandidate, normalizeTitle, type CatalogRelease, type CatalogReleaseRef } from '@/lib/sync-match'
 
@@ -118,6 +119,8 @@ export function syncOutcome(
 
 /** Postgres RLS / authorization denial — a hard contract breach, never partial. */
 const RLS_DENIED = '42501'
+/** Postgres unique violation: the row is already there (a concurrent pull won the race). */
+const UNIQUE_VIOLATION = '23505'
 
 /** One incoming external item: its stable id + the columns to write. */
 type ExternalItem = { externalId: string; values: Record<string, unknown> }
@@ -849,4 +852,72 @@ export function syncTicketmasterTourDates(
     })),
     insertDefaults: { on_site: false },
   })
+}
+
+/**
+ * EVENTBRITE SHOWS → tour dates (Sam, 2026-09-28). Not `syncExternal`: that refreshes every
+ * column of a row it owns on every pull, so a manager's fix would be undone by the next Pull
+ * now. This carries out `planTourPull` (lib/tour-pull.ts) instead:
+ *
+ *   - a new event is inserted OFF the site (`on_site: false`: the library is where things
+ *     arrive; the tour page's tick puts it in the draft and Publish commits it), owned by
+ *     `source: 'eventbrite'`, keyed by `eventbrite_id`, remembering what was pulled;
+ *   - an event already here changes only in the columns the manager never touched, and the
+ *     update is filtered to rows Eventbrite owns;
+ *   - new rows are slotted by date among a dragged list (the tour page's own Add rule).
+ *
+ * It writes `tour_dates` (and renumbers it through `reorder_rows`) and nothing else: no
+ * revision, so nothing reaches fans until the manager publishes. Through the caller's
+ * RLS-scoped client, so it can only ever write into its own artist.
+ */
+export async function syncEventbriteTourDates(supabase: SupabaseClient, artistId: string, shows: readonly IncomingShow[]): Promise<SyncResult> {
+  const { data, error } = await supabase
+    .from('tour_dates')
+    .select(`id, source, eventbrite_id, pulled, sort_order, ${PULLED_COLUMNS.join(', ')}`)
+    .eq('artist_id', artistId)
+  if (error) throw new Error(error.message)
+  const existing = (data ?? []) as unknown as (ExistingTourRow & { sort_order: number | null })[]
+  const plan = planTourPull(existing, shows)
+
+  let added = 0
+  let updated = 0
+  let skipped = plan.skipped
+  const errors: SyncError[] = []
+  const inserted: { id: string; date: string | null }[] = []
+
+  for (const show of plan.inserts) {
+    const { data: row, error: iErr } = await supabase
+      .from('tour_dates')
+      .insert({ artist_id: artistId, ...show.values, eventbrite_id: show.externalId, source: 'eventbrite', on_site: false, pulled: show.values })
+      .select('id, date')
+      .single()
+    if (iErr) {
+      if (iErr.code === RLS_DENIED) throw new Error(iErr.message)
+      // Another pull inserted this event a moment ago (the unique index): it is here.
+      if (iErr.code === UNIQUE_VIOLATION) skipped++
+      else errors.push({ externalId: show.externalId, op: 'insert', message: iErr.message })
+      continue
+    }
+    added++
+    inserted.push({ id: row!.id as string, date: (row!.date as string | null) ?? null })
+  }
+
+  for (const u of plan.updates) {
+    const { error: uErr } = await supabase.from('tour_dates').update({ ...u.patch, pulled: u.pulled }).eq('id', u.id).eq('source', 'eventbrite')
+    if (uErr) {
+      if (uErr.code === RLS_DENIED) throw new Error(uErr.message)
+      errors.push({ externalId: u.externalId, op: 'update', message: uErr.message })
+    } else if (Object.keys(u.patch).length) updated++
+  }
+
+  const order = slotNewRows(
+    existing.map((r) => ({ id: r.id, date: (r.date as string | null) ?? null, sort_order: r.sort_order ?? null })),
+    inserted,
+  )
+  if (order) {
+    const { error: rErr } = await supabase.rpc('reorder_rows', { p_table: 'tour_dates', p_artist: artistId, p_ids: order })
+    if (rErr) errors.push({ externalId: 'order', op: 'update', message: `The new shows could not be put in date order: ${rErr.message}` })
+  }
+
+  return { added, updated, skipped, merged: 0, failed: errors.length, errors, notes: [] }
 }
