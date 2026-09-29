@@ -12,6 +12,13 @@ app on that company's site; the client ID/secret go in Vercel.
 - [ ] **Eventbrite:** an Eventbrite API app (OAuth); could pull the artist's show dates.
 - [ ] Optional, only saves typing a handle: Twitch, Patreon, Vimeo, Mixcloud, Bluesky.
       Sam hasn't picked 2 vs 7 yet (recommended: just the two above).
+- One app per service, owned by Tapir, serves every artist; artists only sign in with their
+  own account. Make the accounts with a tapirwebsites.com email, not a personal one.
+- [ ] **Privacy policy page on tapirwebsites.com — before Google's review, NOT now.** Sam
+      (2026-09-28): "I dont think im ready for my site to be reviewed yet." Google's OAuth
+      review (needed before artists outside the 100 test users can connect YouTube) asks for
+      a public homepage + privacy policy. Stay in testing mode (Skeen etc. added by email)
+      until the site is ready.
 
 ## Shopify connect app — LATER, Sam creates it (added 2026-09-28)
 
