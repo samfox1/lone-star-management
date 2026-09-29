@@ -10,6 +10,7 @@
  */
 import net from 'node:net'
 import { lookup as dnsLookup } from 'node:dns/promises'
+import { pickTransport } from './net-guard'
 
 /** Minimal HTML entity decode for meta content (the few that actually show up). */
 function decodeEntities(s: string): string {
@@ -111,9 +112,9 @@ export function isPublicHttpUrl(raw: string): boolean {
 /**
  * Resolve a host and confirm every address is public. Closes the literal bypasses the
  * sync gate can't (decimal/octal/short-form IPv4 → getaddrinfo normalizes them) and a
- * hostname that points at a private IP. Failure/anything private → false. A pure
- * DNS-rebind (public now, private at connect) remains out of scope — this is
- * enrich-only, and the fetched body is never trusted as authenticated.
+ * hostname that points at a private IP. Failure/anything private → false. A DNS rebind
+ * (public now, private at connect) is caught by the transport (lib/net-guard), which
+ * judges the address the socket connects to.
  */
 async function hostResolvesPublic(host: string, lookup: HostLookup): Promise<boolean> {
   const h = host.replace(/^\[|\]$/g, '')
@@ -142,7 +143,10 @@ type FetchOpts = { fetchImpl?: typeof fetch; maxBytes?: number; timeoutMs?: numb
  * guard. Capped at a few hops so a redirect loop can't spin.
  */
 export async function fetchOpenGraph(url: string, opts: FetchOpts = {}): Promise<OpenGraph | null> {
-  const doFetch = opts.fetchImpl ?? fetch
+  // net-guard's transport, not the global fetch: hostResolvesPublic below checks the name,
+  // but a second lookup at connect could answer differently (DNS rebinding). The transport
+  // judges the answer the socket actually uses.
+  const doFetch = pickTransport(opts.fetchImpl)
   const lookup = opts.lookup ?? defaultLookup
   const maxBytes = opts.maxBytes ?? 512_000
   let current = url

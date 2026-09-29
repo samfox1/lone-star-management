@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { buildEpkPdf } from '@/lib/manager-tools/epk/epk-pdf'
 import { DOCUMENTS_BUCKET, epkReadiness } from '@/lib/epk'
 import { getPublishedSite } from '@/lib/site'
+import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -103,7 +104,7 @@ async function loadAttachments(site: Awaited<ReturnType<typeof getPublishedSite>
  * Fetch the header portrait: the published profile photo, falling back to the hero image —
  * the same order `/[slug]/epk` renders, so the PDF and the page show the same face.
  *
- * The `media` bucket is public, so this is an ordinary fetch, no service role needed.
+ * The `media` bucket is public, so no service role is needed.
  * Every failure is non-fatal and returns undefined: an unreachable object, a slow host, a
  * non-200. The gate guarantees a photo EXISTS; it cannot guarantee it is retrievable right
  * now, and a press kit without a portrait beats no press kit at all. A format pdf-lib
@@ -113,13 +114,15 @@ async function loadAttachments(site: Awaited<ReturnType<typeof getPublishedSite>
 async function loadPhoto(site: Awaited<ReturnType<typeof getPublishedSite>>) {
   const url = site?.media.find((m) => m.purpose === 'profile_photo')?.url ?? site?.artist.hero_image_url
   if (!url) return undefined
-  try {
-    // Bounded: this runs inside a request the manager is waiting on, so a hung image host
-    // must not hold the download open indefinitely.
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000), cache: 'no-store' })
-    if (!res.ok) return undefined
-    return new Uint8Array(await res.arrayBuffer())
-  } catch {
-    return undefined
-  }
+  // SSRF: the address is manager-writable (hero_image_url, or a media row's url) and this
+  // runs on the server, so it goes through the same guard as every outside address: a public
+  // host, every redirect hop re-checked, and the address a name resolves to judged at
+  // connect (lib/net-guard). Bounded in time AND size: a manager is waiting on this request.
+  // guardedFetch never throws; no answer, a non-2xx or a cut-off body is simply no photo.
+  const r = await guardedFetch(url, { as: 'bytes', timeoutMs: 5000, deadlineMs: 5000, maxBytes: PHOTO_MAX_BYTES })
+  if (r.status === null || r.status < 200 || r.status >= 300 || r.truncated || !r.bytes) return undefined
+  return r.bytes
 }
+
+/** A portrait bigger than this is not going into a press-kit PDF. */
+const PHOTO_MAX_BYTES = 15 * 1024 * 1024

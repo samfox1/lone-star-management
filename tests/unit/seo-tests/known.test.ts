@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { publishedFromPayload, readKnown, seoSiteOrigin } from '@/lib/seo-tests/known'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
+import { FACT_CONTENT_KEYS, artistPlace, sameAsFrom } from '@samfox1/site-bridge/seo'
 import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
 
 const A = 'artist-1'
@@ -131,5 +132,45 @@ describe('publishedFromPayload', () => {
     expect(p.genre).toBe('house')
     expect(p.releases).toEqual([{ title: 'EP One', releasedOn: '2026-05-01' }])
     expect(p.publishedAt).toBe('2026-09-28T21:14:03.123456+00:00')
+  })
+})
+
+describe('publishedFromPayload: the facts the tests need, as the fact card reads them', () => {
+  const withArtist = (artist: Record<string, unknown>, content: Record<string, string> = {}) =>
+    payload({ artist: { ...payload().artist, ...artist }, site_content: { ...payload().site_content, ...content } } as Partial<PublicSitePayload>)
+
+  it('CRITICAL: region and country come from the published fact keys, the country in the bridge table\'s spelling and code', () => {
+    const site = withArtist({}, { [FACT_CONTENT_KEYS.region]: ' Illinois ', [FACT_CONTENT_KEYS.country]: 'usa' })
+    const p = publishedFromPayload(site, [])
+    expect(p.region).toBe('Illinois')
+    expect(p.country).toBe('United States')
+    expect(p.countryCode).toBe('US')
+    // The same code the fact card states (the bridge's own place), not a second reading.
+    expect((artistPlace(site)?.address as Record<string, unknown>).addressCountry).toBe(p.countryCode)
+  })
+
+  it('a country the table does not know is kept as typed, with no code; nothing set is null', () => {
+    const p = publishedFromPayload(withArtist({}, { [FACT_CONTENT_KEYS.country]: 'Atlantis' }), [])
+    expect(p.country).toBe('Atlantis')
+    expect(p.countryCode).toBeNull()
+    const none = publishedFromPayload(payload(), [])
+    expect([none.region, none.country, none.countryCode]).toEqual([null, null, null])
+  })
+
+  it('CRITICAL: artist type: only a published Person is a visual artist; anything else is a musician (the bridge\'s rule)', () => {
+    expect(publishedFromPayload(withArtist({ schema_type: 'Person' }), []).artistType).toBe('Person')
+    expect(publishedFromPayload(withArtist({ schema_type: 'MusicGroup' }), []).artistType).toBe('MusicGroup')
+    expect(publishedFromPayload(withArtist({ schema_type: null }), []).artistType).toBe('MusicGroup')
+    expect(publishedFromPayload(payload(), []).artistType).toBe('MusicGroup')
+  })
+
+  it('CRITICAL: the Spotify artist id is kept exactly when the bridge would put its profile on the fact card', () => {
+    for (const id of ['26KxuQlgIw8VP8YX2IkMWR', 'bad id!', '', null]) {
+      const site = withArtist({ spotify_artist_id: id }, {})
+      const p = publishedFromPayload({ ...site, links: [], identity_links: [] }, [])
+      const onCard = sameAsFrom({ ...site, links: [], identity_links: [] })
+      expect(p.spotifyArtistId, String(id)).toBe(onCard.length ? id : null)
+      if (p.spotifyArtistId) expect(onCard).toEqual([`https://open.spotify.com/artist/${p.spotifyArtistId}`])
+    }
   })
 })

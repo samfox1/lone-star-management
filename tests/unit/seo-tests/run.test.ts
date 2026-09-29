@@ -29,6 +29,7 @@ const known = (over: Partial<SeoKnown> = {}): SeoKnown => ({
   published: {
     bio: 'A bio.', genre: 'house', location: 'Chicago, IL', seoTitle: 'Example', seoDescription: 'Desc', ogImage: null,
     links: [], tourDates: [], releases: [], photos: [], publishedAt: PUBLISHED_AT,
+    region: null, country: null, countryCode: null, artistType: 'MusicGroup', spotifyArtistId: null,
   },
   ...over,
 })
@@ -242,5 +243,25 @@ describe('failures after the claim', () => {
     const f = world({ finishRow: false })
     const out = await runSeoTests(f.client, A, 'manual', { engine: engine(), readKnown: async () => known() })
     expect(out).toMatchObject({ ok: false, reason: 'error' })
+  })
+})
+
+describe('`na` (does not apply) is a verdict the run keeps', () => {
+  const na = (id: SeoTestId): SeoTestResult => ({ id, status: 'na', value: 'doesn’t apply', sentence: 'this doesn’t apply to you.', evidence: [] })
+
+  it('CRITICAL: a test answering `na` is stored as `na`, not turned into "this test broke"', () => {
+    const tests = allPass()
+    tests.genre = () => na('genre')
+    const results = runAllTests(tests, { known: known() } as SeoEvidence)
+    expect(results.find((r) => r.id === 'genre')?.status).toBe('na')
+  })
+
+  it('CRITICAL: a missed part of the evidence never overwrites a test that does not apply (`na` needs no look)', async () => {
+    const tests = allPass()
+    tests.mb = () => na('mb')
+    const f = world()
+    const out = await runSeoTests(f.client, A, 'manual', { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('down') } }), readKnown: async () => known() })
+    expect(out.ok).toBe(true)
+    expect(stored(f).results.find((r) => r.id === 'mb')?.status).toBe('na')
   })
 })

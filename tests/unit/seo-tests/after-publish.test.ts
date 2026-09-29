@@ -22,7 +22,7 @@ const ORIGIN = 'https://www.example-artist.com'
 const PUBLISHED_AT = '2026-09-28T21:14:03.123456+00:00'
 const known = (siteUrl: string | null = ORIGIN): SeoKnown => ({
   artistName: 'Example', siteUrl, today: '2026-09-28',
-  published: { bio: null, genre: null, location: null, seoTitle: null, seoDescription: null, ogImage: null, links: [], tourDates: [], releases: [], photos: [], publishedAt: PUBLISHED_AT },
+  published: { bio: null, genre: null, location: null, seoTitle: null, seoDescription: null, ogImage: null, links: [], tourDates: [], releases: [], photos: [], publishedAt: PUBLISHED_AT, region: null, country: null, countryCode: null, artistType: 'MusicGroup', spotifyArtistId: null },
 })
 
 const engine: SeoEngine = {

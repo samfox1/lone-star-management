@@ -52,8 +52,22 @@ describe('profiles', () => {
     const r = p(evidence({ known: k }))
     expect(r.status).toBe('fail')
     expect(r.value).toBe('4 of 5')
-    expect(ev(r, 'not on your site')).toMatch(/skeen\.bandcamp\.com/)
+    expect(ev(r, 'in Tapir: not on your site')).toMatch(/skeen\.bandcamp\.com/)
     plain(r)
+  })
+  it('CRITICAL: the Spotify profile a site adds from the artist id is one Tapir published, not "not in Tapir"', () => {
+    // Tapir's links hold no Spotify profile; the bridge writes it into the card from the id alone.
+    const k = known({}, { links: known().published!.links.filter((l) => l.url !== PROFILES[0]), spotifyArtistId: '26KxuQlgIw8VP8YX2IkMWR' })
+    const r = p(evidence({ known: k }))
+    expect(r.status).toBe('pass')
+    expect(r.value).toBe('4 of 4')
+    expect(ev(r, 'not in Tapir')).toBeUndefined()
+  })
+  it('names a Spotify profile Tapir has (from the id) that the card is missing', () => {
+    const k = known({}, { spotifyArtistId: 'Zq0Other0Id' })
+    const r = p(evidence({ known: k }))
+    expect(r.status).toBe('fail')
+    expect(ev(r, 'in Tapir: not on your site')).toMatch(/open\.spotify\.com\/artist\/Zq0Other0Id/)
   })
   it('fails a profile on the card that Tapir does not have', () => {
     const r = p(withGraph(graphWith(0, artistNode({ sameAs: [...PROFILES, 'https://www.tiktok.com/@skeen200'] }))))
@@ -94,15 +108,17 @@ describe('apple', () => {
   const norway = 'https://music.apple.com/no/artist/skeen/1754431714'
   /** The card names `url` as the Apple link (null = none), the artist's country (null = not
    *  said), and Tapir's own Apple link is that same url. */
-  const cardApple = (url: string | null, country: unknown = 'US', body = '') => {
+  const cardApple = (url: string | null, country: unknown = 'US', body = '', tapir: { country: string; countryCode: string | null } | null = null) => {
     const loc = { '@type': 'Place', address: { addressLocality: 'Chicago', addressRegion: 'IL', ...(country === null ? {} : { addressCountry: country }) } }
     const sameAs = url ? [PROFILES[0], url] : [PROFILES[0]]
     const links = known().published!.links.map((l) => (l.label === 'Apple Music' ? { ...l, url: url ?? l.url } : l))
     return evidence({
       home: homeHtml({ ld: [graphBlock([artistNode({ sameAs, foundingLocation: loc })])], body }).replace(/<a href="https:\/\/music\.apple\.com[^"]*">Apple Music<\/a>/, ''),
-      known: known({}, { links }),
+      // Tapir's own country: none unless a test gives one, so the card's is what these read.
+      known: known({}, { links, country: tapir?.country ?? null, countryCode: tapir?.countryCode ?? null }),
     })
   }
+  const US = { country: 'United States', countryCode: 'US' }
   it('passes an Apple link on the store of the country the artist is based in', () => {
     const r = a(evidence())
     expect(r.status).toBe('pass')
@@ -114,7 +130,7 @@ describe('apple', () => {
     expect(r.lead).toBe('Almost')
     expect(r.sentence).toMatch(/Norway/)
     expect(r.action).toEqual({ kind: 'fix', fix: 'apple-storefront', label: expect.any(String) })
-    expect(ev(r, 'after the fix')).toBe('https://music.apple.com/us/artist/skeen/1754431714')
+    expect(ev(r, 'in Tapir: after the fix')).toBe('https://music.apple.com/us/artist/skeen/1754431714')
     plain(r)
   })
   it('offers no one-click fix for a link that is not in Tapir (the site hard-codes it)', () => {
@@ -130,10 +146,32 @@ describe('apple', () => {
     expect(a(cardApple(norway, 'Norway')).status).toBe('pass')
     expect(a(cardApple(norway, { '@type': 'Country', name: 'Norway' })).status).toBe('pass')
   })
-  it('is unknown when the site does not say which country the artist is in', () => {
+  it('is unknown when neither Tapir nor the site says which country the artist is in', () => {
     const r = a(cardApple(norway, null))
     expect(r.status).toBe('unknown')
     expect(r.action).toEqual(expect.objectContaining({ target: 'facts' }))
+  })
+  it('CRITICAL: where you’re based comes from the Facts you published in Tapir first (a card on an older bridge states no country)', () => {
+    const r = a(cardApple(norway, null, '', US))
+    expect(r.status).toBe('fail')
+    expect(r.action).toEqual(expect.objectContaining({ kind: 'fix' }))
+    expect(ev(r, 'in Tapir: you’re based in')).toBe('US = the United States')
+    plain(r)
+  })
+  it('CRITICAL: Tapir’s country wins over a card that says otherwise, and both are shown', () => {
+    const r = a(cardApple(norway, 'US', '', { country: 'Norway', countryCode: 'NO' }))
+    expect(r.status).toBe('pass')
+    expect(ev(r, 'in Tapir: you’re based in')).toBe('NO = Norway')
+    expect(ev(r, 'fact card: based in')).toBe('US = the United States')
+  })
+  it('falls back to the card’s country when Tapir has none, labelled as the site’s', () => {
+    const r = a(cardApple('https://music.apple.com/us/artist/skeen/1754431714', 'CA'))
+    expect(ev(r, 'fact card: based in')).toBe('CA = Canada')
+    expect(r.evidence.some((e) => /^in Tapir: you/.test(e.label))).toBe(false)
+  })
+  it('a country Tapir holds that no table knows is read by its English name, else not used', () => {
+    expect(a(cardApple(norway, null, '', { country: 'Norway', countryCode: null })).status).toBe('pass')
+    expect(a(cardApple(norway, null, '', { country: 'Atlantis', countryCode: null })).status).toBe('unknown')
   })
   it('fails a US-store link for a Canadian artist, without the US-only one-click fix', () => {
     const r = a(cardApple('https://music.apple.com/us/artist/skeen/1754431714', 'CA'))
@@ -145,10 +183,12 @@ describe('apple', () => {
     expect(a(cardApple('https://music.apple.com/artist/1754431714', null)).status).toBe('pass')
     expect(a(cardApple('https://geo.music.apple.com/artist/skeen/1754431714', null)).status).toBe('pass')
   })
-  it('passes when there is no Apple link at all, saying so', () => {
+  it('CRITICAL: does not apply (`na`) when the site has no Apple Music link: no store to get wrong is not a pass', () => {
     const r = a(cardApple(null))
-    expect(r.status).toBe('pass')
+    expect(r.status).toBe('na')
     expect(r.value).toMatch(/no Apple/i)
+    expect(r.sentence).toMatch(/doesn’t apply/)
+    expect(r.action).toBeUndefined()
   })
   it('reads Apple links the page shows as buttons too, not only the card', () => {
     const r = a(cardApple(null, 'US', `<a href="${norway}?l=nb">Apple Music</a>`))
@@ -193,13 +233,13 @@ describe('shows', () => {
     const k = known({}, { tourDates: [...known().published!.tourDates, { date: '2026-11-01', venue: 'Miramar', city: 'Milwaukee', isPast: false }] })
     const r = s(evidence({ known: k }))
     expect(r.status).toBe('fail')
-    expect(ev(r, 'in Tour, not on your site')).toMatch(/Milwaukee/)
+    expect(ev(r, 'in Tapir: in Tour, not on your site')).toMatch(/Milwaukee/)
   })
   it('does not expect a show with no city (search engines need a place), but says so', () => {
     const k = known({}, { tourDates: [...known().published!.tourDates, { date: '2026-11-01', venue: 'TBA', city: null, isPast: false }] })
     const r = s(evidence({ known: k }))
     expect(r.status).toBe('pass')
-    expect(ev(r, 'left out (no city)')).toMatch(/Nov 1, 2026/)
+    expect(ev(r, 'in Tapir: left out (no city)')).toMatch(/Nov 1, 2026/)
   })
   it('fails a show on the site that Tour does not have, like one marked past or cancelled', () => {
     const k = known({}, { tourDates: [{ date: '2026-10-15', venue: 'Smartbar', city: 'Chicago', isPast: true }] })
@@ -261,6 +301,50 @@ describe('releases', () => {
     const out = r(withGraph(g, { known: known({}, { releases: [] }) }))
     expect(out.status).toBe('fail')
     expect(out.action).toEqual(expect.objectContaining({ target: 'music' }))
+  })
+  it('CRITICAL: does not apply (`na`) to a visual artist with no releases anywhere', () => {
+    const g = healthyGraph().slice(0, 3)
+    const out = r(withGraph(g, { known: known({}, { releases: [], artistType: 'Person' }) }))
+    expect(out.status).toBe('na')
+    expect(out.sentence).toMatch(/visual artist/)
+  })
+  it('a visual artist whose card lists a release Music doesn’t have still fails (a look found something)', () => {
+    const out = r(evidence({ known: known({}, { releases: [], artistType: 'Person' }) }))
+    expect(out.status).toBe('fail')
+    expect(ev(out, 'not in Music')).toMatch(/You Were There/)
+  })
+  it('names what Tapir has that the card is missing as Tapir’s', () => {
+    const out = r(withGraph(graphWith(5, null)))
+    expect(ev(out, 'in Tapir: not on your site')).toBe('OutWest')
+  })
+  it('CRITICAL: fails a release the fact card lists that no page shows (skeen, 2026-09-29: “Home Again” on the card, not on the page)', () => {
+    const g = [...healthyGraph(), { '@type': 'MusicAlbum', name: 'Home Again', byArtist: { '@id': `${ORIGIN}/#artist` }, datePublished: '2025-04-18' }]
+    const k = known({}, { releases: [...known().published!.releases, { title: 'Home Again', releasedOn: '2025-04-18' }] })
+    const out = r(withGraph(g, { known: k }))
+    expect(out.status).toBe('fail')
+    expect(out.sentence).toMatch(/Home Again/)
+    expect(ev(out, 'on your fact card, not on your pages')).toBe('Home Again')
+    plain(out)
+  })
+  it('counts a release a page shows only as a cover picture’s description (a cover grid)', () => {
+    const g = [...healthyGraph(), { '@type': 'MusicAlbum', name: 'Home Again', byArtist: { '@id': `${ORIGIN}/#artist` } }]
+    const k = known({}, { releases: [...known().published!.releases, { title: 'Home Again', releasedOn: '2025-04-18' }] })
+    const out = r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<img src="/c/home-again.jpg" alt="Home Again cover art">' }), known: k }))
+    expect(out.status).toBe('pass')
+  })
+  it('matches whole words: a short title (“Up”) is not found inside another word (“upcoming”)', () => {
+    const g = [...healthyGraph(), { '@type': 'MusicAlbum', name: 'Up', byArtist: { '@id': `${ORIGIN}/#artist` } }]
+    const k = known({}, { releases: [...known().published!.releases, { title: 'Up', releasedOn: null }] })
+    const hidden = r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<p>Upcoming shows soon.</p>' }), known: k }))
+    expect(hidden.status).toBe('fail')
+    expect(ev(hidden, 'on your fact card, not on your pages')).toBe('Up')
+    expect(r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<p>New single: Up.</p>' }), known: k })).status).toBe('pass')
+  })
+  it('is unknown when a listed release is not on the pages read and a page could not be read', () => {
+    const g = [...healthyGraph(), { '@type': 'MusicAlbum', name: 'Home Again', byArtist: { '@id': `${ORIGIN}/#artist` } }]
+    const k = known({}, { releases: [...known().published!.releases, { title: 'Home Again', releasedOn: '2025-04-18' }] })
+    const out = r(evidence({ pages: [page('/', homeHtml({ ld: [graphBlock(g)] })), page('/music', null, null, { error: 'timeout' })], known: k }))
+    expect(out.status).toBe('unknown')
   })
   it('is unknown without published data', () => {
     expect(r(evidence({ known: known({ published: null }) })).status).toBe('unknown')

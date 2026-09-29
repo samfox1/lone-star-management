@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PublicSitePayload, SiteRelease } from '@samfox1/site-bridge/payload'
-import { resolveSeo } from '@samfox1/site-bridge/seo'
+import { resolveSeo, siteFacts } from '@samfox1/site-bridge/seo'
 import { isCustom, isPublicSiteUrl } from '@/lib/custom-site'
 import { mediaUrl } from '@/lib/storage-url'
 import type { SeoKnown } from './types'
@@ -37,6 +37,10 @@ const PHOTO_PURPOSES = new Set(['profile_photo', 'gallery_image'])
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
 
+/** The shape the bridge accepts before it writes `open.spotify.com/artist/<id>` into the fact
+ *  card (`sameAsFrom`). known.test.ts checks this against `sameAsFrom` itself. */
+const SPOTIFY_ID = /^[A-Za-z0-9]+$/
+
 /**
  * The door's payload as `SeoKnown.published`. Pure. Title, description and share image are what
  * a bridge site computes from this same payload (`resolveSeo`: the manager's override, else the
@@ -44,6 +48,10 @@ const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !
  */
 export function publishedFromPayload(site: PublicSitePayload, releases: readonly SiteRelease[]): NonNullable<SeoKnown['published']> {
   const seo = resolveSeo(site)
+  // The Facts as the fact card reads them (`siteFacts`: every rule re-applied), from the same
+  // published payload, so a test compares the card to what it SHOULD state.
+  const facts = siteFacts(site)
+  const spotify = typeof site.artist?.spotify_artist_id === 'string' ? site.artist.spotify_artist_id : ''
   const links: NonNullable<SeoKnown['published']>['links'] = []
   const seen = new Set<string>()
   for (const l of site.links ?? []) {
@@ -73,6 +81,12 @@ export function publishedFromPayload(site: PublicSitePayload, releases: readonly
       .filter((m) => PHOTO_PURPOSES.has(m.purpose) && typeof m.path === 'string' && m.path !== '')
       .map((m) => ({ url: mediaUrl(m.path), alt: text(m.alt) })),
     publishedAt: text(site.published_at),
+    region: text(facts.region),
+    country: text(facts.country),
+    countryCode: facts.countryCode,
+    // The bridge's rule (`artistNode`): Person only when it says Person; else a musician.
+    artistType: site.artist?.schema_type === 'Person' ? 'Person' : 'MusicGroup',
+    spotifyArtistId: SPOTIFY_ID.test(spotify) ? spotify : null,
   }
 }
 

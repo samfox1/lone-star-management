@@ -3,19 +3,26 @@
  * engines), compared to what Tapir published where the comparison is the claim. Pure,
  * synchronous, never throws.
  *
- *   profiles  the artist's `sameAs` lists exactly the identity profiles Tapir published
- *   apple     an Apple Music link's store matches the country the site says they're based in
+ *   profiles  the artist's `sameAs` lists exactly the identity profiles Tapir published (its
+ *             links, plus the Spotify profile the bridge writes from the artist id)
+ *   apple     an Apple Music link's store matches the country the artist is based in: Tapir's
+ *             published Facts first, the card's own statement only when Tapir has none
  *   shows     no past show stated as upcoming; upcoming shows match Tour
- *   releases  every published release is on the card (the newest first of all)
+ *   releases  every published release is on the card (the newest first of all), and every
+ *             release the card lists is shown on a page, as words or a cover's description
  *   card      every block on every tested page parses, is not empty, and has what each type needs
+ *
+ * Evidence rows that state what TAPIR holds are labelled "in Tapir: …" (types.ts rule 3).
+ * `na` (does not apply): `apple` with no Apple Music link on the site; `releases` for a visual
+ * artist with no releases anywhere.
  */
 import { JSON_LD_REQUIRED, isIdentityProfileUrl } from '@samfox1/site-bridge/seo'
 import { appleStorefrontFix, appleStorefrontOf, countryCode, countryName } from './apple-storefront'
 import {
-  artistNodeOf, dayOf, fold, hasType, homeOf, isObj, ldNodes, linkKey, num, pageNodes, pagesOf, plural, prettyDay,
-  shortUrl, strings, textOf, typesOf, type LdNode, type Page, type PageState,
+  artistNodeOf, dayOf, decodeEntities, fold, hasType, homeOf, isObj, ldNodes, linkKey, num, pageNodes, pagesOf, plural, prettyDay,
+  shortUrl, strings, textOf, typesOf, wordsOf, type LdNode, type Page, type PageState,
 } from './html'
-import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
+import type { SeoEvidence, SeoKnown, SeoTest, SeoTestId, SeoTestResult } from './types'
 
 type Id = Extract<SeoTestId, 'profiles' | 'apple' | 'shows' | 'releases' | 'card'>
 type Result = Omit<SeoTestResult, 'id'>
@@ -68,9 +75,12 @@ const profiles = make('profiles', (e) => {
   const pub = e.known.published
   if (!pub) return noPublished('your profiles')
   const expected = new Map<string, string>()
-  for (const l of pub.links) {
-    const key = linkKey(l.url)
-    if (key && isProfile(l.url) && !expected.has(key)) expected.set(key, l.url)
+  // The bridge writes the Spotify profile into the card from the artist id alone (`sameAsFrom`),
+  // after the links; it is a profile Tapir published, not one the site made up.
+  const fromId = pub.spotifyArtistId ? [`https://open.spotify.com/artist/${pub.spotifyArtistId}`] : []
+  for (const url of [...pub.links.map((l) => l.url), ...fromId]) {
+    const key = linkKey(url)
+    if (key && isProfile(url) && !expected.has(key)) expected.set(key, url)
   }
   const live = card.artist ? strings(card.artist.sameAs) : []
   const seen = new Map<string, string>()
@@ -91,7 +101,7 @@ const profiles = make('profiles', (e) => {
   const limits = 'We check the links match the profiles you published in Tapir. We don’t open each profile, so we can’t confirm an account is really yours.'
   const evidence = [
     { label: 'listed on your site', value: live.length ? listOf(live.map((u) => shortUrl(u, 50)), 8) : 'none' },
-    ...(missing.length ? [{ label: 'not on your site', value: listOf(missing.map((u) => shortUrl(u, 50))) }] : []),
+    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing.map((u) => shortUrl(u, 50))) }] : []),
     ...(extra.length ? [{ label: 'not in Tapir', value: listOf(extra.map((u) => shortUrl(u, 50))) }] : []),
     ...(notProfile.length ? [{ label: 'not a profile page', value: listOf(notProfile.map((u) => shortUrl(u, 50))) }] : []),
     ...(twice.length ? [{ label: 'listed twice', value: listOf(twice.map((u) => shortUrl(u, 50))) }] : []),
@@ -126,7 +136,7 @@ const isAppleMusic = (u: string) => {
 }
 
 /** The artist's place on the card → its country code, when the site states one. */
-function artistCountry(artist: LdNode | null): string | null {
+function cardCountry(artist: LdNode | null): string | null {
   if (!artist) return null
   for (const k of ['foundingLocation', 'homeLocation', 'location']) {
     const raw = artist[k]
@@ -137,6 +147,22 @@ function artistCountry(artist: LdNode | null): string | null {
     }
   }
   return null
+}
+
+/**
+ * Where the artist is based, for the store comparison. TAPIR'S PUBLISHED FACTS FIRST: the
+ * question is "the store vs where you are", and the artist's own answer is the Country they
+ * published on the Facts tab (the code the bridge's table gives it, else the name as typed).
+ * The card only restates that, and a site on a bridge before 0.43.0 states no country at all,
+ * which would leave this test "couldn't check" for every such site though Tapir knows the
+ * answer. The card's own country is used only when Tapir has none (a site that states it by
+ * hand), and is labelled as the site's.
+ */
+function basedIn(pub: SeoKnown['published'], artist: LdNode | null): { code: string; from: 'tapir' | 'card' } | null {
+  const tapir = pub ? (pub.countryCode ?? countryCode(pub.country)) : null
+  if (tapir) return { code: tapir, from: 'tapir' }
+  const card = cardCountry(artist)
+  return card ? { code: card, from: 'card' } : null
 }
 
 const apple = make('apple', (e) => {
@@ -151,29 +177,44 @@ const apple = make('apple', (e) => {
   if (card.artist) for (const u of strings(card.artist.sameAs)) add(u)
   for (const p of pagesOf(e)) if (p.ok) for (const u of p.page.links) add(u)
   const links = [...found.values()]
-  if (!links.length) return { status: 'pass', value: 'no Apple Music link', sentence: 'Your site has no Apple Music link, so there’s no store to get wrong.', evidence: [{ label: 'Apple Music links', value: 'none on your site' }], limits }
+  // Nothing to open the wrong store: not a pass (nothing was right), not a miss. A profile
+  // Tapir has that the site lacks is the `profiles` test's to name.
+  if (!links.length) return { status: 'na', value: 'no Apple Music link', sentence: 'your site has no Apple Music link, so this doesn’t apply.', evidence: [{ label: 'Apple Music links', value: 'none on your site' }], limits }
   const pinned = links.map((u) => ({ u, store: appleStorefrontOf(u) })).filter((x): x is { u: string; store: string } => !!x.store)
   const evidence = [{ label: 'Apple Music links', value: listOf(links.map((u) => shortUrl(u, 60))) }]
   if (!pinned.length) return { status: 'pass', value: 'fan’s own store', sentence: 'Your Apple Music link lets Apple open each fan’s own store.', evidence, limits }
-  const country = artistCountry(card.artist)
+  const place = basedIn(e.known.published, card.artist)
+  const onCard = cardCountry(card.artist)
   const facts = { kind: 'edit', target: 'facts', label: 'Add your country' } as const
-  if (!country) {
+  if (!place) {
     const first = pinned[0]
+    const typed = e.known.published?.country
     return {
       status: 'unknown', value: 'country not said',
-      sentence: `your Apple Music link opens the ${countryName(first.store)} store, and your site doesn’t say which country you’re based in, so we can’t tell if that’s right.`,
-      action: facts, evidence: [...evidence, { label: 'store', value: `${first.store} = ${countryName(first.store)}` }, { label: 'you’re based in', value: 'not on your site' }], limits,
+      sentence: `your Apple Music link opens the ${countryName(first.store)} store, and we don’t know which country you’re based in, so we can’t tell if that’s right.`,
+      action: facts,
+      evidence: [
+        ...evidence, { label: 'store', value: `${first.store} = ${countryName(first.store)}` },
+        { label: 'in Tapir: you’re based in', value: typed ? `${typed} (a country we don’t recognise)` : 'no country on the Facts tab' },
+        { label: 'fact card: based in', value: 'no country' },
+      ],
+      limits,
     }
   }
+  const country = place.code
   const wrong = pinned.filter((x) => x.store !== country.toLowerCase())
-  const base = [...evidence, { label: 'you’re based in', value: `${country} = ${countryName(country)}` }]
+  const base = [
+    ...evidence,
+    place.from === 'tapir' ? { label: 'in Tapir: you’re based in', value: `${country} = ${countryName(country)}` } : { label: 'fact card: based in', value: `${country} = ${countryName(country)}` },
+    ...(place.from === 'tapir' && onCard && onCard !== country ? [{ label: 'fact card: based in', value: `${onCard} = ${countryName(onCard)}` }] : []),
+  ]
   if (!wrong.length) {
     return { status: 'pass', value: `${country} store`, sentence: `Your Apple Music link opens the ${countryName(country)} store, where you’re based.`, evidence: base, limits }
   }
   const w = wrong[0]
   const inTapir = (e.known.published?.links ?? []).some((l) => linkKey(l.url) === linkKey(w.u))
   const fix = country === 'US' && inTapir ? appleStorefrontFix(w.u) : null
-  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: `${w.store} = ${countryName(w.store)}` }, ...(fix ? [{ label: 'after the fix', value: fix.fixed }] : [])]
+  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: `${w.store} = ${countryName(w.store)}` }, ...(fix ? [{ label: 'in Tapir: after the fix', value: fix.fixed }] : [])]
   const sentence = `your Apple Music link opens the ${countryName(w.store)} store, but you’re based in ${countryName(country)}.`
   if (fix) return { status: 'fail', lead: 'Almost', value: `${countryName(w.store).replace(/^the /, '')} store`.slice(0, 28), sentence, todo: 'Switch it to the US store. One click.', action: { kind: 'fix', fix: 'apple-storefront', label: 'Fix the Apple Music link' }, evidence: rows, limits }
   return {
@@ -234,9 +275,9 @@ const shows = make('shows', (e) => {
   const evidence = [
     { label: 'upcoming on your site', value: upcoming.length ? listOf(upcoming.map((u) => `${prettyDay(u.day)} · ${u.name}`)) : 'none' },
     ...(stale.length ? [{ label: 'past, listed as coming up', value: listOf(stale) }] : []),
-    ...(missing.length ? [{ label: 'in Tour, not on your site', value: listOf(missing) }] : []),
+    ...(missing.length ? [{ label: 'in Tapir: in Tour, not on your site', value: listOf(missing) }] : []),
     ...(extra.length ? [{ label: 'on your site, not in Tour', value: listOf(extra) }] : []),
-    ...(noCity.length ? [{ label: 'left out (no city)', value: listOf(noCity.map((t) => `${prettyDay(dayOf(t.date)!)} · ${t.venue ?? 'no venue'}`)) }] : []),
+    ...(noCity.length ? [{ label: 'in Tapir: left out (no city)', value: listOf(noCity.map((t) => `${prettyDay(dayOf(t.date)!)} · ${t.venue ?? 'no venue'}`)) }] : []),
     { label: 'today', value: prettyDay(today) },
   ]
   const tour = { kind: 'edit', target: 'tour', label: 'Open Tour' } as const
@@ -249,13 +290,31 @@ const shows = make('shows', (e) => {
 
 /* ── releases ───────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Is `title` shown on a page: as words in its text, or as a picture's description (a cover
+ * grid names each release only in its covers' descriptions)? The words rule of the `words`
+ * test (letters and digits, whole words in order); a title of 6+ letters also matches with its
+ * spaces dropped ("Heatwaves&Horizons").
+ */
+function shownOn(title: string, pages: readonly Page[]): boolean {
+  const want = ` ${wordsOf(title).join(' ')} `
+  if (!want.trim()) return true
+  const flat = want.replace(/\s+/g, '')
+  return pages.some((p) =>
+    [p.text, ...p.images.map((i) => decodeEntities(i.alt ?? ''))].some((t) => {
+      const have = ` ${wordsOf(t).join(' ')} `
+      return have.includes(want) || (flat.length >= 6 && have.replace(/\s+/g, '').includes(flat))
+    }),
+  )
+}
+
 const releases = make('releases', (e) => {
   const card = homeCard(e)
   if ('state' in card) return unreadable(card.state, 'read your releases')
   const pub = e.known.published
   if (!pub) return noPublished('your releases to Music')
   if (card.broken) return { status: 'unknown', value: 'couldn’t read', sentence: 'part of your fact card can’t be read, so we couldn’t see every release it lists.', evidence: [{ label: 'fact card', value: 'a block doesn’t parse (see “Search engines can read your fact card”)' }] }
-  const limits = 'We match releases by title in the facts your site gives search engines; we don’t check their songs, dates or links.'
+  const limits = 'We match releases by title in the facts your site gives search engines, and look for each one it lists in your pages’ words and cover descriptions with scripts off. We don’t check their songs, dates or links.'
   const albums = card.nodes.filter((n) => hasType(n, 'MusicAlbum', 'MusicRelease'))
   const live = albums.map((a) => ({ name: textOf(a.name) ?? '', day: dayOf(a.datePublished) })).filter((a) => a.name)
   const pool = new Map<string, number>()
@@ -278,14 +337,33 @@ const releases = make('releases', (e) => {
   const n = pub.releases.length
   const newest = [...pub.releases].sort((x, y) => (dayOf(y.releasedOn) ?? '').localeCompare(dayOf(x.releasedOn) ?? ''))[0]
   const newestLive = [...live].filter((a) => a.day).sort((x, y) => y.day!.localeCompare(x.day!))[0]
+  // Every release the card lists must be one a page SHOWS (Google: markup describes what the
+  // page shows). skeen, 2026-09-29: the card listed "Home Again", "Summer Sun" and "#lola!"
+  // (released and ticked on the site, but none of their songs are), the page's grid did not.
+  const pages = pagesOf(e)
+  const readable = pages.filter((p): p is Extract<PageState, { ok: true }> => p.ok).map((p) => p.page)
+  const seenName = new Set<string>()
+  const unshown = live.filter((a) => {
+    const k = fold(a.name)
+    if (seenName.has(k)) return false
+    seenName.add(k)
+    return !shownOn(a.name, readable)
+  }).map((a) => a.name)
+  const blind = pages.filter((p) => (!p.ok && p.noAnswer) || (p.ok && p.truncated)).map((p) => p.path)
   const evidence = [
     { label: 'on your site', value: `${live.length} ${plural(live.length, 'release')}` },
     ...(newestLive ? [{ label: 'newest on your site', value: `${newestLive.name} · ${prettyDay(newestLive.day!)}` }] : []),
-    ...(missing.length ? [{ label: 'missing', value: listOf(missing) }] : []),
+    { label: 'in Tapir', value: `${n} published ${plural(n, 'release')}` },
+    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing) }] : []),
     ...(extra.length ? [{ label: 'not in Music', value: listOf(extra) }] : []),
+    ...(unshown.length ? [{ label: 'on your fact card, not on your pages', value: listOf(unshown) }] : []),
+    ...(unshown.length && blind.length ? [{ label: 'not read', value: blind.join(', ') }] : []),
   ]
   const music = { kind: 'edit', target: 'music', label: 'Open Music' } as const
   if (!n && !live.length) {
+    if (pub.artistType === 'Person') {
+      return { status: 'na', value: 'no releases', sentence: 'you’re listed in Tapir as a visual artist with no releases, so this doesn’t apply.', evidence, limits }
+    }
     return { status: 'fail', value: 'no releases', sentence: 'Tapir has no published releases for you yet, so search engines have none to list.', todo: 'Add your releases in Music, then publish.', action: music, evidence, limits }
   }
   const value = `${n - missing.length} of ${n}`
@@ -294,6 +372,18 @@ const releases = make('releases', (e) => {
   }
   if (missing.length) return { status: 'fail', value, sentence: `${missing.length} of your ${n} ${plural(n, 'release')} ${missing.length === 1 ? 'isn’t' : 'aren’t'} listed for search engines.`, todo: UPDATE, action: music, evidence, limits }
   if (extra.length) return { status: 'fail', value, sentence: `your site lists ${extra.length} ${plural(extra.length, 'release')} that ${extra.length === 1 ? 'isn’t' : 'aren’t'} in Music.`, todo: 'Publish from Tapir so your site drops it.', action: music, evidence, limits }
+  if (unshown.length) {
+    const named = unshown.slice(0, 3).map((t) => `“${t}”`).join(', ') + (unshown.length > 3 ? ` and ${unshown.length - 3} more` : '')
+    if (blind.length) {
+      return { status: 'unknown', value: 'couldn’t check', sentence: `we couldn’t read all of ${blind.join(', ')}, and your fact card lists ${named}, which the pages we read don’t show.`, evidence, limits }
+    }
+    return {
+      status: 'fail', value: `${unshown.length} not shown`,
+      sentence: `your fact card lists ${unshown.length} ${plural(unshown.length, 'release')} your pages don’t show: ${named}.`,
+      todo: 'Put their songs on your site in Music and publish, or ask whoever built your site to list only the releases your pages show.',
+      action: music, evidence, limits,
+    }
+  }
   return {
     status: 'pass', value: `${num(n)} ${plural(n, 'release')}`,
     sentence: n === 1 ? `Your release “${newest!.title}” is listed.` : `All ${n} of your releases are listed, including your newest, “${newest!.title}”.`,

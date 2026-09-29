@@ -99,6 +99,12 @@ for every artist (see Known gaps).
   never a column value here.
 - The token lives in Supabase **Vault** (`vault.secrets` / `vault.decrypted_secrets`),
   reachable only through the `SECURITY DEFINER` RPCs below.
+- **The secret is bound to its artist** (description `shopify:<artist_id>`, Eventbrite's
+  pattern), and every Shopify RPC checks the binding before it reads, renews or deletes it.
+  Managers cannot write `integrations` directly at all (INSERT/UPDATE revoked from
+  `authenticated`): before `20260929150000_shopify_secret_binding.sql` a manager could
+  repoint their own row's `secret_ref` at another artist's secret and read, overwrite or
+  delete it through these RPCs.
 - `merch` rows synced from Shopify: `source = 'shopify'`, keyed by `shopify_product_id`,
   with `handle`, `description`, `images`, `variants` (jsonb — never a table, since a manager
   never edits a variant), plus metafield-backed `shipping_estimate`, `preorder_note`,

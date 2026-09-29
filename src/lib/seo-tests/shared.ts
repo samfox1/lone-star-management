@@ -5,7 +5,8 @@
  *            it loads, it is a picture, big enough, wide, not huge
  *   preview  the words and address a shared link carries: og:title, og:description, og:url,
  *            twitter:card on the home page
- *   alt      every content `<img>` on every tested page has a real description
+ *   alt      every content `<img>` on every tested page has a real description; with no photo
+ *            on the pages or in Tapir it does not apply (`na`)
  */
 import {
   clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, shortUrl, type PageState,
@@ -190,7 +191,16 @@ const alt = make('alt', (e) => {
     }
   }
   if (blind.length) return { status: 'unknown', value: 'couldn’t check', sentence: `we couldn’t read all of ${blind.join(', ')}, so we can’t say every photo has a description.`, evidence, limits }
-  if (!total) return { status: 'pass', value: 'no photos', sentence: 'We found no photos on your pages, so there’s nothing to describe.', evidence, limits }
+  if (!total) {
+    // No photo in the pages as they arrive. If Tapir published photos, the site may add them
+    // with a script we don't run: we couldn't see them, which is not "none". With none
+    // anywhere there is nothing to describe: the test doesn't apply (not a pass).
+    const published = e.known.published?.photos.length ?? 0
+    if (published) {
+      return { status: 'unknown', value: 'couldn’t check', sentence: `we found no photos in your pages as they arrive, though you published ${published} in Tapir, so a script may add them where we can’t see.`, evidence: [...evidence, { label: 'in Tapir: photos', value: `${published} published` }], limits }
+    }
+    return { status: 'na', value: 'no photos', sentence: 'we found no photos on your pages and none in Tapir, so this doesn’t apply.', evidence, limits }
+  }
   return { status: 'pass', value: `${described} of ${total}`, sentence: total === 1 ? 'Your one photo has a description.' : `All ${total} photos have a description.`, evidence, limits }
 })
 

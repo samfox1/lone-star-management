@@ -82,10 +82,11 @@ function isPrivateIpv6(h: number[]): boolean {
  * browser (`tag.slice(0, 80)`, `sitemap.urls`). So the rule is not "is it a URL" but "is
  * it a PUBLIC one", and it is enforced at both the door and the fetch.
  *
- * What this does NOT stop, stated plainly: a hostname that RESOLVES to a private address
- * (DNS rebinding). Nothing here resolves DNS — pinning the socket to a checked IP means
- * a custom undici dispatcher, and the fetcher is injected. The redirect chain IS checked
- * hop by hop (see seo-audit), which closes the easy version of the same trick.
+ * This is the TEXT half only: it never resolves DNS, so a hostname that RESOLVES to a private
+ * address passes it. The server-side half is lib/net-guard, which judges every address a name
+ * resolves to at the moment the socket connects (closing DNS rebinding too); every server
+ * fetch of a manager-supplied address goes through both. This half stays DNS-free because
+ * it also runs in the browser.
  */
 /** Opt-in relaxations. Deliberately an ARGUMENT rather than an `NODE_ENV` sniff: the
  *  test runner sets NODE_ENV='test', so an env-read hatch would open itself inside the
@@ -130,10 +131,13 @@ export function isPublicSiteUrl(
   if (!PUBLIC_PORTS.has(u.port)) return false
   if (v6) return !isPrivateIpv6(v6)
   if (v4) return !isPrivateIpv4(v4)
-  if (PRIVATE_SUFFIX.test(host)) return false
+  // A trailing dot is the same, fully-qualified name: `metadata.google.internal.` resolves
+  // exactly like the dotless one, so judge the name without it.
+  const name = host.replace(/\.$/, '')
+  if (PRIVATE_SUFFIX.test(name)) return false
   // A single label ("intranet", "router") resolves only on the local network's search
   // domain. Every site on the internet has a dot in it.
-  return host.replace(/\.$/, '').includes('.')
+  return name.includes('.')
 }
 
 /**

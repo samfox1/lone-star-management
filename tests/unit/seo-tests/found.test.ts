@@ -411,10 +411,14 @@ describe('words: your words are in the page itself', () => {
     const about = ABOUT.replace(/OutWest EP/g, 'EP')
     const r = run('words', { pages: { '/': home, '/about': about }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: 'Skeen is a Chicago DJ and producer.' } } })
     expect(r).toMatchObject({ status: 'fail', sentence: expect.stringContaining('OutWest') })
+    // The count is what the pages showed; the names are Tapir's, and say so (types.ts rule 3).
+    expect(r.evidence).toContainEqual({ label: 'releases', value: '1 of 2 in the text' })
+    expect(r.evidence).toContainEqual({ label: 'in Tapir: releases not in the text', value: 'OutWest' })
   })
   it('an upcoming show missing → fail; a past show is not looked for', () => {
     const home = HOME.replace('Oct 4 · Hideaway, Chicago', 'Oct 4 · TBA')
     expect(run('words', { pages: { '/': home, '/about': ABOUT } })).toMatchObject({ status: 'fail', sentence: expect.stringContaining('Hideaway') })
+    expect(run('words', { pages: { '/': home, '/about': ABOUT } }).evidence).toContainEqual({ label: 'in Tapir: shows not in the text', value: 'Hideaway' })
     // Navy Pier is past AND only in the bio; removing the bio sentence would be a bio miss, not a show miss.
     expect(ev(run('words'))).not.toMatch(/Navy Pier/)
   })

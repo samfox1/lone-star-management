@@ -39,6 +39,20 @@ vi.mock('@/lib/manager-tools/epk/epk-pdf', () => ({
   buildEpkPdf: (...args: unknown[]) => buildEpkPdfMock(...args),
 }))
 
+// DNS for the photo fetch (lib/net-guard's transport). Every name is ENOTFOUND unless a test
+// says otherwise, so nothing here ever reaches the network.
+const dnsAnswers = vi.hoisted(() => ({ map: {} as Record<string, string[]>, calls: [] as string[] }))
+vi.mock('node:dns/promises', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:dns/promises')>()
+  const lookup = async (host: string) => {
+    dnsAnswers.calls.push(host)
+    const v = dnsAnswers.map[host]
+    if (!v) throw Object.assign(new Error(`getaddrinfo ENOTFOUND ${host}`), { code: 'ENOTFOUND' })
+    return v.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }))
+  }
+  return { ...real, lookup, default: { ...real, lookup } }
+})
+
 import { GET } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/download/route'
 
 function site(artist: Partial<SiteData['artist']> = {}): SiteData {
@@ -78,6 +92,31 @@ beforeEach(() => {
   buildEpkPdfMock.mockResolvedValue({ bytes: new Uint8Array([1, 2, 3]), skipped: [] })
   downloadMock.mockResolvedValue({ data: null })
   vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([9]))))
+  dnsAnswers.map = {}
+  dnsAnswers.calls = []
+})
+
+describe('EPK download route — the portrait fetch (SSRF)', () => {
+  // The photo URL is manager-writable (`artists_update` / `media_rw` let a manager store any
+  // http(s) address in hero_image_url or a media row's url), and this route fetches it
+  // SERVER-side. It must go through the same guard as every other outside address.
+  it('CRITICAL: a photo address whose NAME resolves privately is never fetched', async () => {
+    dnsAnswers.map = { 'img.example': ['169.254.169.254'] }
+    const res = await call()
+    expect(res.status).toBe(200)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(dnsAnswers.calls).toEqual(['img.example'])
+    expect(buildEpkPdfMock.mock.calls[0][0].photo).toBeUndefined()
+  })
+
+  it('CRITICAL: a private-literal photo address is refused before any lookup', async () => {
+    getPublishedSiteMock.mockResolvedValue({ ...site(), media: [{ purpose: 'profile_photo', url: 'http://169.254.169.254/latest/meta-data/' }] })
+    const res = await call()
+    expect(res.status).toBe(200)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(dnsAnswers.calls).toEqual([])
+    expect(buildEpkPdfMock.mock.calls[0][0].photo).toBeUndefined()
+  })
 })
 
 describe('EPK download route — who gets a PDF', () => {

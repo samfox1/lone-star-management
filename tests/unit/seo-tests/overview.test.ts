@@ -30,6 +30,11 @@ describe('priority and failing', () => {
     const out = failingInPriority([r('alt', 'fail'), r('title', 'pass'), r('mb', 'unknown'), r('allowed', 'fail'), r('google', 'unknown'), r('bio', 'fail')])
     expect(out.map((x) => x.id)).toEqual(['allowed', 'bio', 'alt', 'google', 'mb'])
   })
+
+  it('CRITICAL: a test that does not apply (`na`) is not failing: left out like a pass', () => {
+    const out = failingInPriority([r('genre', 'na'), r('mb', 'na'), r('title', 'fail'), r('apple', 'unknown')])
+    expect(out.map((x) => x.id)).toEqual(['title', 'apple'])
+  })
 })
 
 describe('timeline', () => {
@@ -59,6 +64,8 @@ describe('timeline', () => {
     expect(r3.kind === 'test' && r3.changes).toEqual([{ id: 'title', from: 'fail', to: 'pass' }])
     const r2 = events[2]
     expect(r2.kind === 'test' && r2.changes).toEqual([]) // compared to r1: nothing changed
+    // A test's history may mix statuses: `na` → fail is a change like any other.
+    expect(runChanges(summary('a', '2026-09-27T10:00:00Z', { genre: 'na' }), summary('b', '2026-09-28T10:00:00Z', { genre: 'fail' }))).toEqual([{ id: 'genre', from: 'na', to: 'fail' }])
     const lone = buildTimeline([summary('r9', '2026-09-28T10:00:00Z', { title: 'pass' })], [], since)
     expect(lone[0].kind === 'test' && lone[0].changes).toBeNull()
   })

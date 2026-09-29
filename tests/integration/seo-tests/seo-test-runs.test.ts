@@ -17,8 +17,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { claimRun, finishRun } from '@/lib/seo-tests/store'
-import { SEO_TEST_IDS, type SeoTestResult } from '@/lib/seo-tests/types'
+import { claimRun, finishRun, seoScore } from '@/lib/seo-tests/store'
+import { SEO_TEST_IDS, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
@@ -64,6 +64,36 @@ describe.skipIf(!MIGRATION_PUSHED)('seo_test_runs', () => {
     expect(row).toMatchObject({ id: claim.runId, status: 'done', trigger: 'manual', passed: SEO_TEST_IDS.length - 2, total: SEO_TEST_IDS.length, site_fresh: true })
     expect(Object.keys(row.summary as object).sort()).toEqual([...SEO_TEST_IDS].sort())
     expect(row.finished_at).not.toBeNull()
+  })
+
+  it('CRITICAL: `na` (does not apply) is left out of the score on both sides, and the TS mirror agrees', async () => {
+    const F = await createThrowawayArtist(svc, 'seo-runs na', mA)
+    made.push(F)
+    // 19 pass, 3 fail, 1 unknown, 1 na: "19 of 23", not "19 of 24".
+    const mixed: SeoTestResult[] = SEO_TEST_IDS.map((id, i) => ({
+      id, status: (i < 19 ? 'pass' : i < 22 ? 'fail' : i === 22 ? 'unknown' : 'na') as SeoTestStatus, value: 'v', sentence: 's.', evidence: [],
+    }))
+    const claim = await claimRun(svc, F.id, 'publish')
+    if (!claim.ok) throw new Error(claim.error)
+    expect(await finishRun(svc, claim.runId, { results: mixed, siteUrl: null, siteFresh: null, publishedAt: null })).toEqual({ ok: true })
+    const [row] = await rowsOf(F.id)
+    expect(row).toMatchObject({ status: 'done', passed: 19, total: 23 })
+    expect({ passed: row.passed, total: row.total }).toEqual(seoScore(mixed))
+    expect((row.summary as Record<string, string>)[SEO_TEST_IDS[23]]).toBe('na')
+  })
+
+  it('CRITICAL: a run where every test is `na` is a done run of 0 of 0; an unknown status is refused', async () => {
+    const G = await createThrowawayArtist(svc, 'seo-runs all na', mA)
+    made.push(G)
+    const claim = await claimRun(svc, G.id, 'publish')
+    if (!claim.ok) throw new Error(claim.error)
+    const bad = SEO_TEST_IDS.map((id) => ({ id, status: 'great', value: 'v', sentence: 's.', evidence: [] }))
+    const refused = await svc.from('seo_test_runs').update({ status: 'done', results: bad }).eq('id', claim.runId)
+    expect(refused.error?.message).toMatch(/seo_test_bad_status/)
+    expect((await rowsOf(G.id))[0].status).toBe('running')
+    const allNa: SeoTestResult[] = SEO_TEST_IDS.map((id) => ({ id, status: 'na', value: 'v', sentence: 's.', evidence: [] }))
+    expect(await finishRun(svc, claim.runId, { results: allNa, siteUrl: null, siteFresh: null, publishedAt: null })).toEqual({ ok: true })
+    expect((await rowsOf(G.id))[0]).toMatchObject({ status: 'done', passed: 0, total: 0 })
   })
 
   it('CRITICAL: a finished run cannot change, not by its manager (RLS) and not by the service role (trigger)', async () => {

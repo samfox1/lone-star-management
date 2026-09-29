@@ -37,6 +37,12 @@ export function decodeEntities(s: string): string {
 /** Whitespace runs → one space, trimmed. */
 export const collapse = (s: string): string => s.replace(/\s+/g, ' ').trim()
 
+/** Words for comparing and counting: letters and digits, lower-cased. The one rule for "the
+ *  same words" when Tapir's text is looked for in a page (found.ts `words`, facts.ts `releases`). */
+export function wordsOf(text: string): string[] {
+  return text.normalize('NFKC').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+}
+
 /* ── the tokenizer ──────────────────────────────────────────────────────────────────── */
 
 export type Attrs = Record<string, string>

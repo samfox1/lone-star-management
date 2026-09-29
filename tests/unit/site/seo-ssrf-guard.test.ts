@@ -47,6 +47,13 @@ describe('isPublicSiteUrl', () => {
       'http://printer.local/',
       'http://box.home.arpa/',
       'http://intranet/', // a single label is never a site on the internet
+      // A trailing dot is the same name (fully qualified). It must not step around the
+      // suffix rule: `metadata.google.internal.` resolves exactly like the dotless one.
+      'http://metadata.google.internal./',
+      'http://api.localhost./',
+      'http://printer.local./',
+      'http://box.home.arpa./',
+      'http://localhost./',
     ]) {
       expect(isPublicSiteUrl(url), url).toBe(false)
     }

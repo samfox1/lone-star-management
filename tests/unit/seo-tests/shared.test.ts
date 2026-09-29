@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
 import { SEO_TEST_DEFS } from '@/lib/seo-tests/defs'
 import type { SeoEvidence, SeoTestResult } from '@/lib/seo-tests/types'
-import { OG_IMAGE, aboutHtml, evidence, homeHtml, page } from './_page-fixture'
+import { OG_IMAGE, aboutHtml, evidence, homeHtml, known, page } from './_page-fixture'
 
 const ev = (r: SeoTestResult, label: string) => r.evidence.find((e) => e.label === label)?.value
 const JARGON = /json-ld|\bmeta\b|og:|canonical|schema|@type|sameAs/i
@@ -199,10 +199,17 @@ describe('alt', () => {
   it('reads a description with entities as a description', () => {
     expect(withBody('<img src="/x.jpg" alt="Skeen &amp; band">').status).toBe('pass')
   })
-  it('passes a site with no pictures, saying so', () => {
+  it('CRITICAL: does not apply (`na`) with no photos on the pages and none published in Tapir: nothing described is not a pass', () => {
     const r = a(evidence({ home: '<html><head><title>Skeen</title></head><body>hi</body></html>', about: null }))
-    expect(r.status).toBe('pass')
+    expect(r.status).toBe('na')
     expect(r.value).toBe('no photos')
+    expect(r.sentence).toMatch(/doesn’t apply/)
+  })
+  it('CRITICAL: is unknown with no photos in the pages while Tapir has published some (a script may add them)', () => {
+    const k = known({}, { photos: [{ url: 'https://cdn.example/p.jpg', alt: null }, { url: 'https://cdn.example/g.jpg', alt: 'On stage' }] })
+    const r = a(evidence({ home: '<html><head><title>Skeen</title></head><body>hi</body></html>', about: null, known: k }))
+    expect(r.status).toBe('unknown')
+    expect(ev(r, 'in Tapir: photos')).toBe('2 published')
   })
   it('fails even when another page could not be read, if one picture is missing a description', () => {
     const r = a(evidence({ pages: [page('/', homeHtml({ body: '<img src="/z.jpg">' })), page('/about', null, null, { error: 'timeout' })] }))

@@ -6,6 +6,7 @@
  */
 import { SEO_RULES, auditGeoFacts, auditJsonLd, auditSeo, type SeoFinding } from '@samfox1/site-bridge/seo'
 import { isPublicSiteUrl } from './custom-site'
+import { pickTransport, type Resolver } from './net-guard'
 
 export type LiveAudit = {
   url: string
@@ -40,19 +41,26 @@ const MAX_HOPS = 3
  * should not go. Every hop is re-checked against `isPublicSiteUrl`, because a public host
  * can 302 straight to `http://169.254.169.254/` and node's fetch would follow it happily.
  * Redirects are therefore taken by hand (`redirect: 'manual'`) rather than by the client.
+ *
+ * Where each hop's NAME points is checked at connect by lib/net-guard's transport, the
+ * default (and what the global `fetch` is swapped for if a caller passes it). A name that
+ * resolves to a private address, or rebinds to one, is refused like a private literal.
+ * `fetcher` is for tests, or a production wrapper around `pickTransport()`.
  */
-export async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<Fetched> {
+export async function fetchGuarded(url: string, fetcher?: typeof fetch, opts: { resolver?: Resolver } = {}): Promise<Fetched> {
+  const transport = pickTransport(fetcher, opts.resolver)
   let target = url
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (!isPublicSiteUrl(target)) return NOT_FETCHED
     let r: Response
     try {
-      r = await fetcher(target, { headers: { 'user-agent': 'lone-star-seo-check/1.0' }, cache: 'no-store', redirect: 'manual' })
+      r = await transport(target, { headers: { 'user-agent': 'lone-star-seo-check/1.0' }, cache: 'no-store', redirect: 'manual' })
     } catch {
       return NOT_FETCHED
     }
     const status = typeof r.status === 'number' ? r.status : r.ok ? 200 : 0
     if (status >= 300 && status < 400) {
+      discard(r)
       const location = r.headers?.get?.('location') ?? null
       let next: string | null = null
       try {
@@ -64,12 +72,24 @@ export async function fetchGuarded(url: string, fetcher: typeof fetch): Promise<
       target = next
       continue
     }
+    if (!r.ok) discard(r)
     return { status, body: r.ok ? await r.text() : null, url: target, headers: r.headers }
   }
   return NOT_FETCHED
 }
 
-async function text(url: string, fetcher: typeof fetch): Promise<string | null> {
+/** Let go of a body nobody will read, so its connection is freed now rather than at GC.
+ *  Never awaited: cancelling one branch of a CLONED response (a tee) settles only when the
+ *  other branch is cancelled too, so awaiting it can hang forever. */
+function discard(r: Response): void {
+  try {
+    r.body?.cancel?.().catch(() => {})
+  } catch {
+    // Already errored or locked: nothing left to free.
+  }
+}
+
+async function text(url: string, fetcher?: typeof fetch): Promise<string | null> {
   return (await fetchGuarded(url, fetcher)).body
 }
 

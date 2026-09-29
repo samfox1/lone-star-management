@@ -6,7 +6,11 @@
  *   - `isPublicSiteUrl` on the first address AND on every redirect target. A public host can
  *     302 to `http://169.254.169.254/`; redirects are therefore taken by hand.
  *   - `allow`, the caller's own rule for every hop (same-origin for a site's pages).
- *   - a timeout and a byte cap, so a slow or endless answer cannot hold a run open.
+ *   - WHERE THE NAME POINTS, at connect (lib/net-guard): the default transport resolves each
+ *     hop's host itself and refuses to connect if any address is private, so a name like
+ *     `169.254.169.254.nip.io`, or a rebinding record, is refused as `not-public` too.
+ *   - a timeout per hop, an optional deadline for the whole call, and a byte cap, so a slow or
+ *     endless answer cannot hold a run open.
  *
  * It never throws. No answer is `status: null` with the reason in `error`, and a test that
  * reads it reports `unknown`, never `pass` (types.ts, honesty rule 1).
@@ -15,6 +19,7 @@
  * ping still use; this one adds the visitor's name, the timeout, the cap and bytes.
  */
 import { isPublicSiteUrl } from '@/lib/custom-site'
+import { isBlockedAddressError, pickTransport, type Resolver } from '@/lib/net-guard'
 
 export type GuardedError = 'not-public' | 'not-allowed' | 'network' | 'timeout' | 'too-many-redirects' | 'bad-redirect'
 
@@ -37,10 +42,19 @@ export type GuardedResponse = {
 }
 
 export type GuardedOptions = {
+  /** Tests inject a fake web here. Production passes nothing (net-guard's transport), or a
+   *  wrapper around `pickTransport()`: an injected fetcher is trusted to check addresses itself.
+   *  The global `fetch` is never trusted and is treated as "nothing". */
   fetcher?: typeof fetch
+  /** Where names are looked up, for the default transport. Tests inject one; default: DNS. */
+  resolver?: Resolver
   /** The exact User-Agent to send. Default: Tapir's own check name. */
   userAgent?: string
+  /** Per hop (each request and its body). */
   timeoutMs?: number
+  /** The WHOLE call: every hop and the body together. Default: no limit beyond the per-hop
+   *  timeout, which lets a four-hop chain take four timeouts. */
+  deadlineMs?: number
   maxBytes?: number
   as?: 'text' | 'bytes'
   /** A further rule every hop must pass (the first address included). */
@@ -98,28 +112,51 @@ async function readCapped(r: Response, max: number): Promise<{ bytes: Uint8Array
   return { bytes, truncated }
 }
 
+/** Why a request or its body failed, in this module's words. */
+function failure(e: unknown): GuardedError {
+  if (isBlockedAddressError(e)) return 'not-public'
+  const name = e instanceof Error ? e.name : ''
+  return name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network'
+}
+
+/** Let go of a body nobody will read, so its connection is freed now rather than at GC.
+ *  Never awaited: cancelling one branch of a CLONED response (a tee) settles only when the
+ *  other branch is cancelled too, so awaiting it can hang forever. */
+function discard(r: Response): void {
+  try {
+    r.body?.cancel?.().catch(() => {})
+  } catch {
+    // Already errored or locked: nothing left to free.
+  }
+}
+
 export async function guardedFetch(url: string, opts: GuardedOptions = {}): Promise<GuardedResponse> {
-  const fetcher = opts.fetcher ?? fetch
+  const fetcher = pickTransport(opts.fetcher, opts.resolver)
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES
+  const budget = opts.deadlineMs == null ? null : Math.max(0, opts.deadlineMs)
+  const endsAt = budget == null ? Infinity : Date.now() + budget
+  const deadline = budget == null ? null : AbortSignal.timeout(budget)
   let target = url
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (!isPublicSiteUrl(target)) return none('not-public', hop)
     if (opts.allow && !opts.allow(target)) return none('not-allowed', hop)
+    if (Date.now() >= endsAt) return none('timeout', hop)
+    const perHop = AbortSignal.timeout(timeoutMs)
     let r: Response
     try {
       r = await fetcher(target, {
         headers: { 'user-agent': opts.userAgent ?? TAPIR_CHECK_UA, accept: opts.as === 'bytes' ? '*/*' : 'text/html,application/xhtml+xml,*/*;q=0.8' },
         cache: 'no-store',
         redirect: 'manual',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: deadline ? AbortSignal.any([perHop, deadline]) : perHop,
       })
     } catch (e) {
-      const name = e instanceof Error ? e.name : ''
-      return none(name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network', hop)
+      return none(failure(e), hop)
     }
     const status = typeof r.status === 'number' ? r.status : 0
     if (status >= 300 && status < 400) {
+      discard(r)
       const location = r.headers?.get?.('location') ?? null
       let next: string | null = null
       try {
@@ -143,8 +180,7 @@ export async function guardedFetch(url: string, opts: GuardedOptions = {}): Prom
         truncated,
       }
     } catch (e) {
-      const name = e instanceof Error ? e.name : ''
-      return { ...none(name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network', hop), status, finalUrl: target, headers: headersOf(r) }
+      return { ...none(failure(e), hop), status, finalUrl: target, headers: headersOf(r) }
     }
   }
   return none('too-many-redirects', MAX_HOPS)

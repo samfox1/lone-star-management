@@ -11,15 +11,32 @@
  * a backstop that should never fire.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEO_TEST_IDS, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
 
 /** Mirrors the migration, for tests and copy. The database is the authority. */
 export const SEO_RUN_KEEP = 30
 export const SEO_MANUAL_COOLDOWN_S = 60
 
-const STATUSES: readonly SeoTestStatus[] = ['pass', 'fail', 'unknown']
-const isStatus = (v: unknown): v is SeoTestStatus => typeof v === 'string' && (STATUSES as readonly string[]).includes(v)
+/** Every status the contract has, `na` included (types.ts derives the list from the union). */
+const isStatus = (v: unknown): v is SeoTestStatus => typeof v === 'string' && (SEO_TEST_STATUSES as readonly string[]).includes(v)
 const isTestId = (v: unknown): v is SeoTestId => typeof v === 'string' && (SEO_TEST_IDS as readonly string[]).includes(v)
+
+/**
+ * The score, as the migration's finish trigger derives it: `passed` = the passes, `total` =
+ * every result that is not `na` ("does not apply" is left out on BOTH sides, so 19 passes and
+ * one `na` out of 24 is "19 of 23"). For tests and for a page that has results in hand; the
+ * stored `passed` / `total` are the database's and always win.
+ */
+export function seoScore(results: readonly { status: SeoTestStatus }[]): { passed: number; total: number } {
+  let passed = 0
+  let total = 0
+  for (const r of results) {
+    if (!isScored(r.status)) continue
+    total++
+    if (r.status === 'pass') passed++
+  }
+  return { passed, total }
+}
 
 /* ── claim / finish ─────────────────────────────────────────────────────────────────── */
 
@@ -177,7 +194,10 @@ export function capResults(results: readonly SeoTestResult[]): SeoTestResult[] {
  *  about itself. `siteUrl` is '' when no site was connected. */
 export type StoredSeoRun = SeoTestRun & {
   finishedAt: string | null
+  /** Derived by the database: the passes. */
   passed: number
+  /** Derived by the database: every result but `na` (see `seoScore`). 0 when every test was
+   *  `na`, which a run can store (it has results; none of them scored). */
   total: number
   /** true = the live site showed the latest publish; false = it showed an older one; null =
    *  couldn't tell. Anything but true: "your site may not have updated yet". */
@@ -292,5 +312,40 @@ export async function currentRun(supabase: SupabaseClient, artistId: string, now
     return { ranAt: String(row.ran_at), trigger: TRIGGERS.find((t) => t === row.trigger) ?? 'manual' }
   } catch {
     return null
+  }
+}
+
+/* ── the Test tab's read, with "not switched on" as its own state ──────────────────── */
+
+/** PostgREST's "no such table" (PGRST205) and Postgres's own (42P01): the seo_test_runs
+ *  migration is not pushed yet. Anything else is a real read failure. */
+export function isMissingTable(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false
+  if (error.code === 'PGRST205' || error.code === '42P01') return true
+  return /could not find the table|relation .* does not exist/i.test(error.message ?? '')
+}
+
+/**
+ * What the Test tab shows: `off` (testing isn't switched on: the table is not there yet),
+ * `error` (couldn't read), or `ready` (`latest: null` there means never tested). Never throws.
+ * RLS-scoped; the caller has already checked the manager owns the artist.
+ */
+export type SeoTestTab =
+  | { state: 'off' }
+  | { state: 'error' }
+  | { state: 'ready'; latest: StoredSeoRun | null; history: Record<SeoTestId, SeoTestHistory>; running: { ranAt: string; trigger: SeoRunTrigger } | null }
+
+export async function readTestTab(supabase: SupabaseClient, artistId: string): Promise<SeoTestTab> {
+  try {
+    // One tiny read tells "not switched on" from "couldn't read". Not a HEAD request: a HEAD
+    // answer has no body, so it would carry no error code to tell by.
+    const probe = await supabase.from('seo_test_runs').select('id').eq('artist_id', artistId).limit(1)
+    if (probe.error) return isMissingTable(probe.error) ? { state: 'off' } : { state: 'error' }
+    const [latest, history, running] = await Promise.all([latestRun(supabase, artistId), historyFor(supabase, artistId), currentRun(supabase, artistId)])
+    return { state: 'ready', latest, history, running }
+  } catch (e) {
+    // latestRun / historyFor throw "seo_test_runs: <message>": a table dropped between the probe
+    // and the read is still "off"; anything else is a failed read.
+    return isMissingTable({ message: e instanceof Error ? e.message : String(e) }) ? { state: 'off' } : { state: 'error' }
   }
 }

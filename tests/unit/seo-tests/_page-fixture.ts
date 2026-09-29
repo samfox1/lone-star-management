@@ -69,7 +69,12 @@ export type HomeOpts = {
   head?: string
   body?: string
   ld?: string[]
+  /** The music section, as words (a healthy page shows the releases its fact card lists).
+   *  Defaults to the three healthy releases; '' for none. */
+  music?: string
 }
+
+export const MUSIC_SECTION = '<section><h2>Music</h2><ul><li>You Were There</li><li>Heatwaves &amp; Horizons</li><li>OutWest</li></ul></section>'
 
 export const OG_IMAGE = 'https://cdn.example-artist.com/og/social-card.png'
 
@@ -102,6 +107,7 @@ export function homeHtml(o: HomeOpts = {}): string {
     '<img aria-hidden="true" alt="" src="/marquee.jpg"/>',
     '<a href="https://music.apple.com/us/artist/skeen/1754431714">Apple Music</a>',
     o.body ?? '',
+    o.music ?? MUSIC_SECTION,
     ...ld,
     '</body></html>',
   ].join('')
@@ -149,6 +155,12 @@ export function known(over: Partial<SeoKnown> = {}, pub: Partial<NonNullable<Seo
       ],
       photos: [],
       publishedAt: '2026-09-28T12:00:00Z',
+      region: 'IL',
+      country: 'United States',
+      countryCode: 'US',
+      artistType: 'MusicGroup',
+      // The same profile as PROFILES[0]: the bridge adds it from the id, and it is one profile.
+      spotifyArtistId: '26KxuQlgIw8VP8YX2IkMWR',
       ...pub,
     },
     ...over,

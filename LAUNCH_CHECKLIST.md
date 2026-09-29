@@ -58,6 +58,12 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
       until something does. Add a cron (Vercel Cron or Supabase `pg_cron` + an Edge Function) that runs
       `runSeoTests(service client, artistId, 'scheduled')` per custom-site artist; the table already
       accepts `trigger = 'scheduled'` from the service role.
+- [ ] MusicBrainz's 1 request a second is kept PER PROCESS only (the gate in lib/seo-tests/musicbrainz.ts
+      is module memory). Several server instances (Vercel functions, or a weekly run fanned out per
+      artist) share one outbound IP but not that gate, so together they can exceed the limit and get
+      503s (each lookup then ends "couldn't check", never a false "no page"). Before scheduled runs or
+      real traffic: a shared limiter (a row + advisory lock in Postgres, or Upstash) or one queue that
+      does every MusicBrainz lookup.
 
 ## 6. Before the switch
 

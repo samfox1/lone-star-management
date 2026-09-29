@@ -116,8 +116,11 @@ describe.skipIf(PENDING)(PENDING ? 'PENDING MIGRATION 20260929120500 (not pushed
       expect(error).toBeNull()
       const { data: bRow } = await svc.from('integrations').select('secret_ref').eq('artist_id', b.id).eq('provider', 'eventbrite').single()
       const { data: aRow } = await svc.from('integrations').select('secret_ref').eq('artist_id', a.id).eq('provider', 'eventbrite').single()
-      // A's manager may write their OWN row (integrations_rw is FOR ALL)…
-      const repoint = await asA.from('integrations').update({ secret_ref: bRow!.secret_ref }).eq('artist_id', a.id).eq('provider', 'eventbrite').select('id')
+      // Plant the repoint with the SERVICE role. A manager could once write their own row's
+      // pointer (integrations_rw is FOR ALL); 20260929150000 revoked that, and
+      // tests/integration/shopify/shopify-secret-binding.test.ts pins the refusal. The binding
+      // is the second layer, so it is proven here on its own…
+      const repoint = await svc.from('integrations').update({ secret_ref: bRow!.secret_ref }).eq('artist_id', a.id).eq('provider', 'eventbrite').select('id')
       expect(repoint.data).toHaveLength(1)
       try {
         // …but the door reads nothing through it,

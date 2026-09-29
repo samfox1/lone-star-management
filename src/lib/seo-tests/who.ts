@@ -8,6 +8,11 @@
  *   genre   the fact card's artist node names a style
  *   place   the fact card's place has a city, a region and a country
  *   mb      MusicBrainz's answer (gathered by musicbrainz.ts)
+ *
+ * Evidence rows that state what TAPIR holds are labelled "in Tapir: …" (types.ts rule 3).
+ * `na` (does not apply), decided from what Tapir PUBLISHED, so it needs no look at the site:
+ * `genre` and `mb` for an artist published as a visual artist (a Person card has no music
+ * style, and MusicBrainz lists people who make music).
  */
 import { MAX_TITLE, defaultSeoTitle } from '@samfox1/site-bridge/seo'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
@@ -16,6 +21,10 @@ import {
   shortUrl, squash, strings, textOf, type LdNode, type PageState,
 } from './html'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
+
+/** Published in Tapir as a visual artist (Facts "Artist type"). Unknown when nothing is
+ *  published: then no test can say it does not apply. */
+const visualArtist = (e: SeoEvidence) => e.known.published?.artistType === 'Person'
 
 type Id = Extract<SeoTestId, 'title' | 'desc' | 'bio' | 'genre' | 'place' | 'mb'>
 type Result = Omit<SeoTestResult, 'id'>
@@ -53,6 +62,8 @@ const title = make('title', (e) => {
   if (home.page.titleCount > 1) evidence.push({ label: 'titles on the page', value: String(home.page.titleCount) })
   const source = titleSource(t, e)
   if (source) evidence.push({ label: 'source', value: source })
+  const written = collapse(e.known.published?.seoTitle ?? '')
+  if (written && source !== 'written on the SEO page') evidence.push({ label: 'in Tapir: title', value: clip(written, 120) })
   const good = goodTitle(e)
   if (name && isBareName(t, name)) {
     return { status: 'fail', value: clip(t, 28), sentence: `your title is just “${clip(t, 60)}”. Add your city and sound so Google can tell you apart.`, good, todo: 'Write a title with your name, city and sound, then publish.', action: listing, evidence, limits }
@@ -72,7 +83,7 @@ function titleSource(live: string, e: SeoEvidence): string | null {
   const pub = e.known.published
   if (!pub) return null
   const written = collapse(pub.seoTitle ?? '')
-  if (written) return fold(written) === fold(live) ? 'written on the SEO page' : `not the title you published (“${clip(written, 60)}”)`
+  if (written) return fold(written) === fold(live) ? 'written on the SEO page' : 'not the title you published'
   const facts = { name: e.known.artistName, genre: pub.genre, location: pub.location }
   const built = (['MusicGroup', 'Person', null] as const).map((schema_type) => defaultSeoTitle({ ...facts, schema_type }))
   return built.some((b) => b && fold(b) === fold(live)) ? 'built from your facts (no title written)' : 'not written in Tapir'
@@ -162,7 +173,10 @@ const bio = make('bio', (e) => {
   const cardRow = fromCard ? [{ label: 'fact card', value: `description · ${num(fromCard.length)} characters` }] : []
   if (!candidates.length) {
     if (!pub) return { status: 'unknown', value: 'couldn’t check', sentence: 'we couldn’t find a bio to look for on your site.', evidence: cardRow, limits }
-    return { status: 'fail', value: `0 of ${num(BIO_GOAL)}`, sentence: 'you haven’t written a bio yet.', todo: 'Write your bio: who you are, your sound, your big shows and releases.', action, evidence: [{ label: 'bio', value: 'none found on the site' }], limits }
+    return {
+      status: 'fail', value: `0 of ${num(BIO_GOAL)}`, sentence: 'you haven’t written a bio yet.', todo: 'Write your bio: who you are, your sound, your big shows and releases.', action,
+      evidence: [{ label: 'in Tapir: bio', value: 'none published' }, { label: 'fact card', value: cardDesc ? 'no bio in it (only your summary)' : 'no bio in it' }], limits,
+    }
   }
   let best = { chars: 0, path: '' }
   for (const p of readable) {
@@ -209,26 +223,40 @@ function cardArtist(e: SeoEvidence): { node: LdNode } | { none: string } | { hom
 }
 
 const genre = make('genre', (e) => {
+  const limits = 'We read the facts your site gives search engines; words about your sound elsewhere on the page aren’t counted.'
+  // Decided from Tapir alone: a visual artist has no music style, whatever the site shows.
+  if (visualArtist(e)) {
+    return { status: 'na', value: 'visual artist', sentence: 'you’re listed in Tapir as a visual artist, so a music style doesn’t apply.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
+  }
   const a = cardArtist(e)
   if ('home' in a) return unreadable(a.home, 'read your fact card')
   const facts = { kind: 'edit', target: 'facts', label: 'Change your sound' } as const
-  const limits = 'We read the facts your site gives search engines; words about your sound elsewhere on the page aren’t counted.'
-  const inTapir = !!collapse(e.known.published?.genre ?? '')
-  const todo = inTapir ? 'Your sound is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your sound on the Facts tab, then publish.'
+  const saved = collapse(e.known.published?.genre ?? '')
+  const todo = saved ? 'Your sound is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your sound on the Facts tab, then publish.'
+  const tapirRow = saved ? [{ label: 'in Tapir: genre', value: clip(saved, 120) }] : []
   if ('none' in a) {
-    return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your sound for search engines (${a.none}).`, todo, action: facts, evidence: [{ label: 'fact card', value: a.none }], limits }
+    return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your sound for search engines (${a.none}).`, todo, action: facts, evidence: [{ label: 'fact card', value: a.none }, ...tapirRow], limits }
   }
   if (hasType(a.node, 'Person') && !hasType(a.node, 'MusicGroup')) {
+    // Tapir says musician (or published nothing): the card is the one that is off.
+    if (!e.known.published) {
+      return {
+        status: 'unknown', value: 'not for a person card',
+        sentence: 'your fact card describes you as a person, which has no place for a music style, and we couldn’t read what you published in Tapir to know if that’s right.',
+        evidence: [{ label: 'artist type', value: 'Person' }],
+        limits: 'Search engines only read a music style from a musician’s card, and without what you published we can’t tell whether you are one.',
+      }
+    }
     return {
-      status: 'unknown', value: 'not for a person card',
-      sentence: 'your fact card describes you as a person, and that kind of card has no place for a music style.',
-      evidence: [{ label: 'artist type', value: 'Person' }],
-      limits: 'Search engines only read a music style from a musician’s card, so this test can’t check a visual artist’s.',
+      status: 'fail', value: 'not named',
+      sentence: 'your fact card describes you as a visual artist, so it has no place for your sound, but in Tapir you’re a musician.',
+      todo: 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.',
+      action: facts, evidence: [{ label: 'artist type', value: 'Person' }, { label: 'in Tapir: artist type', value: 'Musician' }, ...tapirRow], limits,
     }
   }
   const genres = strings(a.node.genre)
   const evidence = [{ label: 'genre', value: genres.length ? genres.join(', ') : 'not set' }]
-  if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your sound for search engines.', todo, action: facts, evidence, limits }
+  if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your sound for search engines.', todo, action: facts, evidence: [...evidence, ...tapirRow], limits }
   const said = genres.length === 1 ? genres[0] : `${genres.slice(0, -1).join(', ')} and ${genres[genres.length - 1]}`
   return { status: 'pass', value: clip(genres.join(', '), 28), sentence: `Your site says your sound is ${said}.`, evidence, limits }
 })
@@ -272,16 +300,31 @@ const place = make('place', (e) => {
   const missing = [!city && 'the city', !region && 'the state or region', !country && 'the country'].filter((x): x is string => !!x)
   const has = [city, region, country].filter(Boolean).join(', ')
   const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')}, or ${missing[missing.length - 1]}`
+  // What Tapir published decides the to-do: a part it HAS that the card lacks is a site that
+  // hasn't caught up (a bridge before 0.43.0 states no region or country), not a missing fact.
+  const pub = e.known.published
+  const saved = { city: !!collapse(pub?.location ?? ''), region: !!pub?.region, country: !!pub?.country }
+  const lacks = [!city && !saved.city && 'the city', !region && !saved.region && 'the state or region', !country && !saved.country && 'the country'].filter((x): x is string => !!x)
+  const part = (v: string | null | undefined) => collapse(v ?? '') || 'not set'
+  const rows = pub ? [...evidence, { label: 'in Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : evidence
+  const todo = lacks.length
+    ? `Add ${lacks.join(' and ')} on the Facts tab, then publish.`
+    : 'It’s published in Tapir but your site doesn’t state it yet. Publish, then test again; if it stays, your site needs an update from whoever built it.'
   return {
     status: 'fail', lead: 'Almost', value: city && !region && !country ? 'city only' : `missing ${missing.length}`,
     sentence: `your site says ${has}, but not ${list}.`,
-    todo: `Add ${missing.join(' and ')} on the Facts tab, then publish.`, action: facts, evidence, limits,
+    todo, action: facts, evidence: rows, limits,
   }
 })
 
 /* ── mb ─────────────────────────────────────────────────────────────────────────────── */
 
 const mb = make('mb', (e) => {
+  // Decided from Tapir alone: MusicBrainz lists people who make music, and its editors remove
+  // an entry for someone who doesn't, so "Create the page" would be wrong advice here.
+  if (visualArtist(e)) {
+    return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Tapir as a visual artist, so this doesn’t apply.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }] }
+  }
   const m = e.musicbrainz
   const asked = m.asked?.length ? [{ label: 'asked about', value: m.asked.map((u) => shortUrl(u, 50)).join(' · ') }] : []
   const baseLimits = 'We asked which artist on MusicBrainz links to your site and your strongest profiles. A MusicBrainz page that links to none of them is missed.'

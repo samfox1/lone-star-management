@@ -33,6 +33,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { after } from 'next/server'
 import { INDEXNOW_CONTENT_KEY, INDEXNOW_KEY_PATH, INDEXNOW_VERSION_HEADER, isIndexNowKey } from '@samfox1/site-bridge/indexnow'
 import { isPublicSiteUrl } from './custom-site'
+import { pickTransport } from './net-guard'
 import { fetchGuarded } from './seo-audit'
 import { bridgeSupportsIndexNow } from './site-editor/manifest'
 
@@ -114,18 +115,21 @@ function pageUrls(xml: string | null, origin: string): string[] {
 
 /**
  * Ping IndexNow for one site. Never throws; at most ONE request to api.indexnow.org.
- * `fetcher` is injected so tests never touch the network.
+ * `fetcher` is injected so tests never touch the network. Left out, it is lib/net-guard's
+ * transport, NOT the global fetch: `timed` wraps it, and a wrapped global fetch would resolve
+ * the manager's host again with no check on where it points.
  */
 export async function pingIndexNow(
   site: SiteRow | null | undefined,
   key: string | null | undefined,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<PingOutcome> {
   try {
     const origin = indexNowOrigin(site)
     if (!origin) return { sent: false, reason: 'no-site' }
     if (!isIndexNowKey(key)) return { sent: false, reason: 'no-key' }
-    const timed: typeof fetch = (input, init) => fetcher(input, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const base = pickTransport(fetcher)
+    const timed: typeof fetch = (input, init) => base(input, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
 
     // The key file first: the same check IndexNow will make. Through the SSRF-guarded fetch
     // (every redirect hop re-checked), and judged where it really answered: apex → www is
@@ -191,7 +195,7 @@ export async function ensureIndexNowKey(supabase: SupabaseClient, artistId: stri
 }
 
 /** Read the artist's site and key, then ping. Never throws. */
-async function pingAfterPublish(supabase: SupabaseClient, artistId: string, fetcher: typeof fetch = fetch): Promise<PingOutcome> {
+async function pingAfterPublish(supabase: SupabaseClient, artistId: string, fetcher?: typeof fetch): Promise<PingOutcome> {
   try {
     const state = await readState(supabase, artistId)
     if (!state) return { sent: false, reason: 'error' }

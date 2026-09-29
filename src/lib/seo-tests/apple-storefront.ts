@@ -12,8 +12,9 @@
  *   - What Apple's own app does with another country's link could not be checked here.
  *   - `geo.music.apple.com/...` and a link with no store let Apple pick each fan's store.
  * So no fixed store is "right" for every fan. The test (facts.ts) only calls a store wrong when
- * it differs from the country the artist's own site says they're based in, and the one-click
- * fix is offered only when that country is the US (this function only writes /us/).
+ * it differs from the country the artist is based in (the Country they published on the Facts
+ * tab; the site's own fact card only when Tapir has none), and the one-click fix is offered
+ * only when that country is the US (this function only writes /us/).
  *
  * Pure. Never throws.
  */

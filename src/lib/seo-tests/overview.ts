@@ -32,16 +32,17 @@ export const SEO_TEST_PRIORITY: Record<SeoTestId, number> = {
   mb: 22, bingwm: 23,
 }
 
-/** Fails first, then couldn't-checks, each in priority order. Passes are left out. */
+/** Fails first, then couldn't-checks, each in priority order. Passes and tests that do not
+ *  apply (`na`) are left out: neither is something to fix. */
 export function failingInPriority(results: readonly SeoTestResult[]): SeoTestResult[] {
   const rank = (r: SeoTestResult) => (r.status === 'fail' ? 0 : 1) * 100 + (SEO_TEST_PRIORITY[r.id] ?? 99)
-  return results.filter((r) => r.status !== 'pass').sort((a, b) => rank(a) - rank(b))
+  return results.filter((r) => r.status === 'fail' || r.status === 'unknown').sort((a, b) => rank(a) - rank(b))
 }
 
 export type SeoTestChange = { id: SeoTestId; from: SeoTestStatus; to: SeoTestStatus }
 
 /** What changed from one run to the next, in priority order. A test absent from either run
- *  (it did not exist yet) is not a change. */
+ *  (it did not exist yet) is not a change; `na` to anything else (or back) is. */
 export function runChanges(prev: SeoRunSummary, next: SeoRunSummary): SeoTestChange[] {
   const out: SeoTestChange[] = []
   for (const [id, to] of Object.entries(next.statuses) as [SeoTestId, SeoTestStatus][]) {

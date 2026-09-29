@@ -186,3 +186,13 @@ describe('lookupMusicBrainz', () => {
     expect(f).not.toHaveBeenCalled()
   })
 })
+
+describe('a visual artist is not looked up', () => {
+  it('CRITICAL: an artist published as a visual artist asks MusicBrainz nothing (the `mb` test does not apply)', async () => {
+    const f = mbFetch()
+    const out = await lookupMusicBrainz(known({}, { artistType: 'Person' }), { fetcher: f, ...noWait })
+    expect(f).not.toHaveBeenCalled()
+    expect(out.looked).toBe(false)
+    expect(out.error).toMatch(/visual artist/)
+  })
+})

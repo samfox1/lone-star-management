@@ -23,6 +23,7 @@
  * It never throws.
  */
 import { isPublicSiteUrl } from '@/lib/custom-site'
+import { pickTransport } from '@/lib/net-guard'
 import { BROWSER_UA, FETCHING_BOTS } from './bots'
 import { guardedFetch, type GuardedResponse } from './guarded-fetch'
 import { ROBOTS_MAX_BYTES, parseRobots } from './robots-txt'
@@ -164,7 +165,9 @@ export async function gatherSiteEvidence(origin: string, opts: GatherOptions = {
   const maxPaths = Math.max(1, opts.maxPaths ?? DEFAULT_MAX_PATHS)
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS
-  const base = opts.fetcher ?? fetch
+  // Never the global fetch: `visit` wraps this, and a wrapped global fetch would resolve each
+  // host again with no check on where it points (lib/net-guard).
+  const base = pickTransport(opts.fetcher)
 
   let start: string
   try {

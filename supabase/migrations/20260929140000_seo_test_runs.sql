@@ -15,7 +15,8 @@
 --   2. FINISH  one UPDATE of the running row to `done` (with `results`) or `failed` (with a
 --              `note`). The finish trigger derives `passed`, `total` and `summary` FROM
 --              `results`, so the counts on the page can never disagree with the results they
---              count, and stamps `finished_at`.
+--              count, and stamps `finished_at`. `total` leaves out `na` ("does not apply"),
+--              and a result with any status but pass / fail / unknown / na is refused.
 --   3. KEPT    a finished row is immutable: RLS admits a manager's UPDATE only on a running
 --              row, and the finish trigger refuses any change to a finished one (the service
 --              role included). There is no DELETE for managers; retention prunes.
@@ -45,8 +46,10 @@ create table public.seo_test_runs (
   site_url     text,
   -- One SeoTestResult per test, in SEO_TEST_IDS order (types.ts).
   results      jsonb not null default '[]'::jsonb,
-  -- DERIVED from `results` by the finish trigger: count of `pass`, count of results, and
-  -- { testId: status } for the cheap history / timeline reads.
+  -- DERIVED from `results` by the finish trigger: count of `pass`, count of results that are
+  -- not `na` ("does not apply" is left out of the score on BOTH sides: 19 passes and one `na`
+  -- out of 24 is "19 of 23"), and { testId: status } for the cheap history / timeline reads,
+  -- `na` included (a test's history may mix statuses).
   passed       int not null default 0,
   total        int not null default 0,
   summary      jsonb not null default '{}'::jsonb,
@@ -65,7 +68,9 @@ create table public.seo_test_runs (
   constraint seo_test_runs_results_size check (octet_length(results::text) <= 262144),
   constraint seo_test_runs_summary_shape check (jsonb_typeof(summary) = 'object'),
   constraint seo_test_runs_counts check (passed >= 0 and total >= 0 and passed <= total and total <= 64),
-  constraint seo_test_runs_done_has_results check (status <> 'done' or total > 0),
+  -- A done run HAS results. Counted on `results`, not `total`: a run where every test is `na`
+  -- is a real run with a score of 0 of 0, not an empty one.
+  constraint seo_test_runs_done_has_results check (status <> 'done' or (jsonb_typeof(results) = 'array' and jsonb_array_length(results) > 0)),
   constraint seo_test_runs_note check (note is null or (char_length(note) <= 300 and note !~ '[\r\n]'))
 );
 
@@ -214,7 +219,14 @@ begin
     new.results := '[]'::jsonb;
   end if;
   if jsonb_typeof(new.results) = 'array' then
-    select count(*)::int,
+    -- The four statuses of types.ts `SeoTestStatus`, and nothing else: `total` leaves out
+    -- exactly `na`, so a status this trigger does not know would be counted as scored.
+    if exists (select 1 from jsonb_array_elements(new.results) r
+                where coalesce(r.value ->> 'status', '') not in ('pass', 'fail', 'unknown', 'na')) then
+      raise exception 'seo_test_bad_status: a result has a status the tests do not use'
+        using errcode = 'check_violation';
+    end if;
+    select (count(*) filter (where r.value ->> 'status' <> 'na'))::int,
            (count(*) filter (where r.value ->> 'status' = 'pass'))::int,
            coalesce(jsonb_object_agg(r.value ->> 'id', r.value ->> 'status') filter (where r.value ->> 'id' is not null), '{}'::jsonb)
       into new.total, new.passed, new.summary

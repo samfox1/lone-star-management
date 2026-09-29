@@ -74,6 +74,11 @@ export const KNOWN: SeoKnown = {
     releases: [{ title: 'You Were There', releasedOn: '2026-02-14' }, { title: 'OutWest', releasedOn: '2025-06-01' }],
     photos: [],
     publishedAt: '2026-09-28T09:14:00Z',
+    region: null,
+    country: null,
+    countryCode: null,
+    artistType: 'MusicGroup',
+    spotifyArtistId: null,
   },
 }
 

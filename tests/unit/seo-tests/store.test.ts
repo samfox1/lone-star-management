@@ -9,8 +9,8 @@
  *     with every test id present, and a status the page does not know is dropped.
  */
 import { describe, expect, it } from 'vitest'
-import { capResult, claimRun, currentRun, historyFor, latestRun } from '@/lib/seo-tests/store'
-import { SEO_TEST_IDS, type SeoTestResult } from '@/lib/seo-tests/types'
+import { capResult, claimRun, currentRun, historyFor, latestRun, seoScore } from '@/lib/seo-tests/store'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
 import { fakeClient, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
 
 const A = 'artist-1'
@@ -108,5 +108,37 @@ describe('readers', () => {
     const at = (ranAt: string) => currentRun(fakeClient(() => ({ data: { ran_at: ranAt, trigger: 'publish' } })).client, A, now)
     expect(await at('2026-09-28T21:08:00Z')).toEqual({ ranAt: '2026-09-28T21:08:00Z', trigger: 'publish' })
     expect(await at('2026-09-28T21:00:00Z')).toBeNull()
+  })
+})
+
+describe('`na` (does not apply): kept, shown, and left out of the score on both sides', () => {
+  const row = (id: string, ranAt: string, summary: Record<string, string>) => ({
+    id, artist_id: A, ran_at: ranAt, finished_at: ranAt, trigger: 'manual', site_url: 'https://x.example', passed: 1, total: 23, summary, site_fresh: true, published_at: null, note: null,
+  })
+
+  it('CRITICAL: a test\'s history may mix `na` with the other statuses; `na` is never dropped', async () => {
+    const f = fakeClient(() => ({ data: [row('r2', '2026-09-28T03:00:00Z', { genre: 'na', mb: 'na' }), row('r1', '2026-09-27T03:00:00Z', { genre: 'fail', mb: 'unknown' })] }))
+    const h = await historyFor(f.client, A, 8)
+    expect(h.genre.map((d) => d.status)).toEqual(['fail', 'na'])
+    expect(h.mb.map((d) => d.status)).toEqual(['unknown', 'na'])
+  })
+
+  it('CRITICAL: latestRun keeps a stored `na` result', async () => {
+    const f = fakeClient(() => ({ data: { ...row('r1', '2026-09-28T03:00:00Z', {}), results: [{ id: 'genre', status: 'na', value: 'doesn’t apply', sentence: 's.', evidence: [] }] } }))
+    expect((await latestRun(f.client, A))?.results.map((r) => r.status)).toEqual(['na'])
+  })
+
+  it('CRITICAL: seoScore counts passes over every status but `na` (the migration\'s rule)', () => {
+    const of = (...st: SeoTestStatus[]) => seoScore(st.map((status) => ({ status })))
+    expect(of('pass', 'fail', 'unknown', 'na')).toEqual({ passed: 1, total: 3 })
+    expect(of(...Array.from({ length: 19 }, () => 'pass' as const), 'fail', 'fail', 'unknown', 'na', 'fail')).toEqual({ passed: 19, total: 23 })
+    expect(of('na', 'na')).toEqual({ passed: 0, total: 0 })
+    expect(of()).toEqual({ passed: 0, total: 0 })
+  })
+
+  it('every status the contract has is one the readers keep (derived, not hand-listed)', async () => {
+    const summary = Object.fromEntries(SEO_TEST_STATUSES.map((st, i) => [SEO_TEST_IDS[i], st]))
+    const h = await historyFor(fakeClient(() => ({ data: [row('r1', '2026-09-28T03:00:00Z', summary)] })).client, A, 8)
+    SEO_TEST_STATUSES.forEach((st, i) => expect(h[SEO_TEST_IDS[i]].map((d) => d.status)).toEqual([st]))
   })
 })

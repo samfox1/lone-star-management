@@ -12,8 +12,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { readSeoOverview, type SeoOverview } from '@/lib/seo-tests/overview'
 import { loadEngine, runSeoTests } from '@/lib/seo-tests/run'
-import { currentRun, historyFor, latestRun, type StoredSeoRun } from '@/lib/seo-tests/store'
-import type { SeoRunTrigger, SeoTestHistory, SeoTestId } from '@/lib/seo-tests/types'
+import { latestRun, readTestTab, type SeoTestTab, type StoredSeoRun } from '@/lib/seo-tests/store'
 import { updateContentAction } from '../../../actions'
 import { callerOwns } from '../../../_owns'
 
@@ -30,15 +29,22 @@ async function owned(artistId: string): Promise<{ ok: true; supabase: Awaited<Re
   return { ok: true, supabase }
 }
 
+/** Why "Test again" did not run, for the page to act on without reading the sentence:
+ *  `busy` a run is going, `cooldown` tested inside the last minute (`retryInS` = seconds left),
+ *  `denied` not this artist's manager, `error` anything else. */
+export type SeoRunRefusal = 'busy' | 'cooldown' | 'denied' | 'error'
+
 /**
  * "Test again". Runs all 24 tests now and stores the run. Refused (plainly) while a run is going
  * or within a minute of the last one: the database decides, so two tabs cannot both start one.
  */
-export async function runSeoTestsAction(artistId: string): Promise<{ ok: true; run: StoredSeoRun | null } | (Fail & { retryInS?: number | null })> {
+export async function runSeoTestsAction(
+  artistId: string,
+): Promise<{ ok: true; run: StoredSeoRun | null } | (Fail & { reason?: SeoRunRefusal; retryInS?: number | null })> {
   const gate = await owned(artistId)
   if (!gate.ok) return gate
   const out = await runSeoTests(gate.supabase, artistId, 'manual')
-  if (!out.ok) return { ok: false, error: out.error, retryInS: out.retryInS ?? null }
+  if (!out.ok) return { ok: false, reason: out.reason, error: out.error, retryInS: out.retryInS ?? null }
   revalidatePath(`/artists/${artistId}`, 'layout')
   let run: StoredSeoRun | null = null
   try {
@@ -61,8 +67,9 @@ export type SeoFix = 'apple-storefront'
  * are read and changed.
  *
  * Two checks, because /us/ is right only for a US-based artist:
- *   • the OFFER: the latest stored run's `apple` test must be offering this fix (it does only
- *     when the artist's site says they're US-based). It only ever narrows what is written.
+ *   • the OFFER: the latest stored run's `apple` test must be offering this fix (facts.ts offers
+ *     it only when the artist is US-based: the country Tapir published first, else the one the
+ *     site's fact card states). It only ever narrows what is written.
  *   • the LINK: what is written is recomputed from each link AS IT IS NOW, never taken from a
  *     stored result (the manager may have edited it since the run).
  */
@@ -102,18 +109,20 @@ export async function applySeoFixAction(artistId: string, fix: SeoFix): Promise<
   return { ok: true, changed }
 }
 
-/** The Test tab: the latest run, each test's history dots, and a run in progress. */
+/**
+ * The Test tab: `store.readTestTab` behind the ownership gate. `state` says which of three things
+ * the page is looking at: `off` (testing isn't switched on yet: the seo_test_runs migration is not
+ * pushed), `error` (couldn't read, with the sentence), or `ready` (the latest run, each test's
+ * history dots, a run in progress; `latest: null` = never tested).
+ */
 export async function readSeoTestsAction(
   artistId: string,
-): Promise<{ ok: true; latest: StoredSeoRun | null; history: Record<SeoTestId, SeoTestHistory>; running: { ranAt: string; trigger: SeoRunTrigger } | null } | Fail> {
+): Promise<({ ok: true } & Exclude<SeoTestTab, { state: 'error' }>) | (Fail & { state?: 'error' })> {
   const gate = await owned(artistId)
   if (!gate.ok) return gate
-  try {
-    const [latest, history, running] = await Promise.all([latestRun(gate.supabase, artistId), historyFor(gate.supabase, artistId), currentRun(gate.supabase, artistId)])
-    return { ok: true, latest, history, running }
-  } catch {
-    return { ok: false, error: 'Couldn’t read the test results.' }
-  }
+  const tab = await readTestTab(gate.supabase, artistId)
+  if (tab.state === 'error') return { ok: false, state: 'error', error: 'Couldn’t read the test results.' }
+  return { ok: true, ...tab }
 }
 
 /** The Overview tab. Parts that cannot be read come back null, never 0 (overview.ts). */

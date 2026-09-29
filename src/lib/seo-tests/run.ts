@@ -21,7 +21,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { siteFreshness } from './fresh'
 import { readKnown as readKnownDefault } from './known'
 import { claimRun, failRun, finishRun } from './store'
-import { SEO_TEST_IDS, type SeoEvidence, type SeoKnown, type SeoRunTrigger, type SeoTest, type SeoTestId, type SeoTestResult } from './types'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoEvidence, type SeoKnown, type SeoRunTrigger, type SeoTest, type SeoTestId, type SeoTestResult } from './types'
 
 /** What `gatherSiteEvidence` answers: the site's side of the evidence (everything but the share
  *  picture, MusicBrainz and what Tapir knows, which the run adds). */
@@ -78,7 +78,8 @@ const NO_SITE = (id: SeoTestId) => unknownResult(id, 'No site', 'no site is conn
 const NO_ANSWER = (id: SeoTestId) => unknownResult(id, 'Couldn’t check', 'your site didn’t answer in time, so we couldn’t check this.')
 const OUT_OF_TIME = (id: SeoTestId) => unknownResult(id, 'Couldn’t check', 'we ran out of time before this part answered.')
 
-const STATUSES = new Set(['pass', 'fail', 'unknown'])
+/** Every status the contract has, `na` included: a test that does not apply says so. */
+const STATUSES = new Set<string>(SEO_TEST_STATUSES)
 
 /** A result FOR THIS TEST, in the contract's shape. Anything else is a broken test. */
 function isResultFor(r: unknown, id: SeoTestId): r is SeoTestResult {
@@ -202,7 +203,9 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
         for (const part of got.missed) {
           for (const id of DEPENDS[part]) {
             const at = results.findIndex((r) => r.id === id)
-            if (at >= 0) results[at] = OUT_OF_TIME(id)
+            // `na` needs no look (a visual artist's `mb` never asks MusicBrainz), so a missing
+            // part of the evidence cannot make it "couldn't check".
+            if (at >= 0 && results[at].status !== 'na') results[at] = OUT_OF_TIME(id)
           }
         }
         if (got.timedOut) notes.push('Part of the check ran out of time.')

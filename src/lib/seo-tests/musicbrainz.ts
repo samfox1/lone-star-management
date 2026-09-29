@@ -191,6 +191,9 @@ function artistsIn(json: unknown, askedOrder: string[]): Found[] | null {
 export async function lookupMusicBrainz(known: SeoKnown, opts: Opts = {}): Promise<Answer> {
   const now = opts.now ?? Date.now
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  // MusicBrainz lists people who make music: a visual artist's `mb` test does not apply, so
+  // nothing is asked (MusicBrainz's 1-a-second budget is shared by every lookup).
+  if (known.published?.artistType === 'Person') return { looked: false, artistUrl: null, matchedOn: null, error: 'a visual artist isn’t looked up on MusicBrainz' }
   const links = known.published?.links ?? []
   for (const l of links) {
     const id = musicbrainz.social?.idFromUrl?.(String(l.url ?? '').trim())

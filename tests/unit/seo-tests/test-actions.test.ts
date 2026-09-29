@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   updateError: null as string | null,
   links: [] as { id: string; url: string }[],
   offered: true,
+  runsError: null as { code?: string; message: string } | null,
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
@@ -53,10 +54,14 @@ function world() {
     if (c.table === 'artists') return { data: h.owns ? { id: A } : null }
     if (c.table === 'links') return { data: h.links }
     if (c.table === 'seo_test_runs') {
+      if (h.runsError) return { error: h.runsError }
       const apple = h.offered
         ? { id: 'apple', status: 'fail', value: 'Norway store', sentence: 's', evidence: [], action: { kind: 'fix', fix: 'apple-storefront', label: 'Fix' } }
         : { id: 'apple', status: 'pass', value: 'US store', sentence: 's', evidence: [] }
-      return { data: { id: 'run-1', artist_id: A, ran_at: '2026-09-28T21:00:00Z', trigger: 'manual', summary: {}, results: [apple] } }
+      const row = { id: 'run-1', artist_id: A, ran_at: '2026-09-28T21:00:00Z', trigger: 'manual', status: 'done', summary: { apple: apple.status }, results: [apple] }
+      // One row for a `maybeSingle` read; a list for the history read and the probe.
+      if (c.terminal === 'maybeSingle') return { data: c.filters.some(([, col, v]) => col === 'status' && v === 'running') ? null : row }
+      return { data: [row] }
     }
     return { data: [] }
   })
@@ -70,6 +75,7 @@ beforeEach(() => {
   h.updates = []
   h.updateError = null
   h.offered = true
+  h.runsError = null
   h.links = [
     { id: 'l-apple', url: 'https://music.apple.com/no/artist/example/123' },
     { id: 'l-spotify', url: 'https://open.spotify.com/artist/1' },
@@ -108,10 +114,45 @@ describe('Test again', () => {
     expect(h.runs[0].slice(1)).toEqual([A, 'manual'])
   })
 
-  it('a cool-down comes back as the plain sentence and the seconds', async () => {
+  it('CRITICAL: a cool-down comes back machine-readable: reason + seconds, beside the plain sentence', async () => {
     h.runResult = { ok: false, reason: 'cooldown', error: 'Tested a moment ago. Try again in 42 seconds.', retryInS: 42 }
     const m = await actions()
-    expect(await m.runSeoTestsAction(A)).toEqual({ ok: false, error: 'Tested a moment ago. Try again in 42 seconds.', retryInS: 42 })
+    expect(await m.runSeoTestsAction(A)).toEqual({ ok: false, reason: 'cooldown', error: 'Tested a moment ago. Try again in 42 seconds.', retryInS: 42 })
+  })
+
+  it('CRITICAL: busy comes back as reason "busy", so the page never reads it out of the sentence', async () => {
+    h.runResult = { ok: false, reason: 'busy', error: 'A test is already running. It will show here when it finishes.', retryInS: null }
+    const m = await actions()
+    expect(await m.runSeoTestsAction(A)).toEqual({ ok: false, reason: 'busy', error: 'A test is already running. It will show here when it finishes.', retryInS: null })
+  })
+})
+
+describe('reading the Test tab: "not switched on" is its own state', () => {
+  it('CRITICAL: the table not being there yet (migration not pushed) is state "off", not an error', async () => {
+    const m = await actions()
+    for (const err of [
+      { code: 'PGRST205', message: "Could not find the table 'public.seo_test_runs' in the schema cache" },
+      { code: '42P01', message: 'relation "public.seo_test_runs" does not exist' },
+    ]) {
+      h.runsError = err
+      expect(await m.readSeoTestsAction(A), err.code).toEqual({ ok: true, state: 'off' })
+    }
+  })
+
+  it('CRITICAL: any other read failure is state "error" with a plain sentence, never "off" or "never tested"', async () => {
+    h.runsError = { code: '42501', message: 'permission denied for table seo_test_runs' }
+    const m = await actions()
+    expect(await m.readSeoTestsAction(A)).toEqual({ ok: false, state: 'error', error: 'Couldn’t read the test results.' })
+  })
+
+  it('switched on: state "ready" with the latest run, the history dots and any run in progress', async () => {
+    const m = await actions()
+    const out = await m.readSeoTestsAction(A)
+    expect(out).toMatchObject({ ok: true, state: 'ready', running: null })
+    if (out.ok && out.state === 'ready') {
+      expect(out.latest?.id).toBe('run-1')
+      expect(out.history.apple.map((d) => d.status)).toEqual(['fail'])
+    }
   })
 })
 

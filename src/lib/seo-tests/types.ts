@@ -54,6 +54,15 @@ export type SeoTestDef = {
  */
 export type SeoTestStatus = 'pass' | 'fail' | 'unknown' | 'na'
 
+/** Every status, derived from a `Record` over the union so a fifth status is a compile error
+ *  here until it is listed (AGENTS.md rule 4). The validators (run.ts, store.ts) read this. */
+const STATUS_SET: Record<SeoTestStatus, true> = { pass: true, fail: true, unknown: true, na: true }
+export const SEO_TEST_STATUSES = Object.keys(STATUS_SET) as readonly SeoTestStatus[]
+
+/** Does this status count in the score ("19 of 23")? Everything but `na`, on both sides. The
+ *  migration's finish trigger applies the same rule; store.ts `seoScore` mirrors it. */
+export const isScored = (status: SeoTestStatus): boolean => status !== 'na'
+
 /** What the manager can do about a result. Drawn as an ICON button with a hover label. */
 export type SeoTestAction =
   /** Open one of the page's own tabs / editors. */
@@ -154,6 +163,19 @@ export type SeoKnown = {
     releases: { title: string; releasedOn: string | null }[]
     photos: { url: string; alt: string | null }[]
     publishedAt: string | null
+    /** The Facts "Region" (`fact_region`), as the bridge reads it (`siteFacts`): '' → null. */
+    region: string | null
+    /** The Facts "Country" (`fact_country`): the bridge table's spelling when it knows the
+     *  country, else as typed. null = not set. */
+    country: string | null
+    /** `country` as ISO 3166-1 alpha-2 ("US"), when the bridge's table knows it; else null. */
+    countryCode: string | null
+    /** The Facts "Artist type" (`artists.schema_type`): 'Person' = Visual artist, anything
+     *  else = Musician ('MusicGroup'), the bridge's own rule. */
+    artistType: 'MusicGroup' | 'Person'
+    /** `artists.spotify_artist_id` when it is the shape the bridge accepts. The bridge adds
+     *  `open.spotify.com/artist/<id>` to the fact card's profiles from the id alone. */
+    spotifyArtistId: string | null
   } | null
 }
 

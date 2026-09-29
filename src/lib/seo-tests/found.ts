@@ -21,7 +21,7 @@
  */
 import { SEO_BOTS, botsForTest, robotsTokensOf } from './bots'
 import { sameSite } from './evidence'
-import { collapse, decodeEntities, parsePage, type Page } from './html'
+import { collapse, decodeEntities, parsePage, wordsOf, type Page } from './html'
 import { describeRule, robotsVerdict, type RobotsVerdict } from './robots-txt'
 import type { SeoBot, SeoEvidence, SeoPageFetch, SeoTest, SeoTestId, SeoTestResult } from './types'
 
@@ -73,11 +73,6 @@ type Visit =
   | { kind: 'wall'; by: string; status: number }
   | { kind: 'login' }
   | { kind: 'soft404' }
-
-/** Words for comparing and counting: letters and digits, lower-cased. */
-function wordsOf(text: string): string[] {
-  return text.normalize('NFKC').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
-}
 
 /** A firewall's "prove you are human" or "you are blocked" page, by the vendor's own marks.
  *  A script the vendor adds to NORMAL pages (Cloudflare's /cdn-cgi/challenge-platform/scripts
@@ -640,13 +635,15 @@ const words: Inner = (e) => {
   const releases = (pub.releases ?? []).map((r) => r.title).filter((t) => t && t.trim())
   if (releases.length) {
     const miss = releases.filter((t) => !inText(t, true))
-    rows.push({ label: 'releases', value: `${releases.length - miss.length} of ${releases.length} in the text${miss.length ? ` · missing: ${miss.slice(0, 5).map((t) => clip(t, 30)).join(', ')}` : ''}` })
+    rows.push({ label: 'releases', value: `${releases.length - miss.length} of ${releases.length} in the text` })
+    if (miss.length) rows.push({ label: 'in Tapir: releases not in the text', value: miss.slice(0, 5).map((t) => clip(t, 30)).join(', ') })
     missing.push(...miss)
   }
   const shows = (pub.tourDates ?? []).filter((t) => !t.isPast).map((t) => (t.venue ?? t.city ?? '').trim()).filter(Boolean)
   if (shows.length) {
     const miss = shows.filter((t) => !inText(t, true))
-    rows.push({ label: 'shows', value: `${shows.length - miss.length} of ${shows.length} upcoming in the text${miss.length ? ` · missing: ${miss.slice(0, 5).map((t) => clip(t, 30)).join(', ')}` : ''}` })
+    rows.push({ label: 'shows', value: `${shows.length - miss.length} of ${shows.length} upcoming in the text` })
+    if (miss.length) rows.push({ label: 'in Tapir: shows not in the text', value: miss.slice(0, 5).map((t) => clip(t, 30)).join(', ') })
     missing.push(...miss)
   }
   if (!parts.length && !releases.length && !shows.length) {

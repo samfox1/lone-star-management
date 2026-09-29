@@ -47,9 +47,11 @@ describe('title', () => {
     expect(ev(r, 'source')).toMatch(/written on the SEO page/i)
     plain(r)
   })
-  it('says when the live title is not the one published', () => {
+  it('says when the live title is not the one published, and quotes Tapir’s title as Tapir’s', () => {
     const r = t(evidence({ known: known({}, { seoTitle: 'Skeen · Chicago DJ' }) }))
     expect(ev(r, 'source')).toMatch(/not the title you published/i)
+    expect(ev(r, 'source')).not.toMatch(/Chicago DJ/)
+    expect(ev(r, 'in Tapir: title')).toBe('Skeen · Chicago DJ')
   })
   it('says when no title was written and the live one is built from the facts', () => {
     const r = t(evidence({ home: homeHtml({ title: 'Skeen · Chicago house musician' }), known: known({}, { seoTitle: null }) }))
@@ -212,6 +214,11 @@ describe('bio', () => {
     const r = b(evidence({ home: homeHtml({ ld: [graphBlock([artistNode({ description: undefined })])] }), known: known({}, { bio: null }) }))
     expect(r.status).toBe('fail')
     expect(r.sentence).toMatch(/haven[’']t written/i)
+    // What was really seen: none in Tapir, none on the card. Not "none found on the site": we
+    // had nothing to look for.
+    expect(ev(r, 'in Tapir: bio')).toBe('none published')
+    expect(ev(r, 'fact card')).toMatch(/no bio/)
+    expect(ev(r, 'bio')).toBeUndefined()
   })
   it('does not take the summary the fact card falls back to (no bio) as a bio', () => {
     const summary = 'Meet Skeen, a Chicago DJ, producer and filmmaker, building a career in dance music from the ground up.'
@@ -279,10 +286,31 @@ describe('genre', () => {
     expect(g(evidence({ home: homeHtml({ ld: [] }) })).status).toBe('fail')
     expect(g(evidence({ home: homeHtml({ ld: ['<script type="application/ld+json">{"@graph": [</script>'] }) })).status).toBe('fail')
   })
-  it('is unknown for a Person card, which has no place for a style', () => {
+  it('CRITICAL: does not apply (`na`) to an artist published in Tapir as a visual artist, whatever the card says', () => {
+    const person = known({}, { artistType: 'Person', genre: null })
+    const r = g(evidence({ home: homeHtml({ ld: [graphBlock([artistNode({ '@type': 'Person', genre: undefined })])] }), known: person }))
+    expect(r.status).toBe('na')
+    expect(r.sentence).toMatch(/visual artist/)
+    expect(r.action).toBeUndefined()
+    // `na` needs no look: it stands when the home page could not be read too.
+    expect(g(evidence({ pages: [], known: person })).status).toBe('na')
+    expect(g(evidence({ known: person })).status).toBe('na')
+  })
+  it('fails a card that calls a musician a person (no place for a style), saying Tapir has them as a musician', () => {
     const r = g(withArtist({ '@type': 'Person', genre: undefined }))
+    expect(r.status).toBe('fail')
+    expect(ev(r, 'in Tapir: artist type')).toBe('Musician')
+    expect(ev(r, 'artist type')).toBe('Person')
+    plain(r)
+  })
+  it('is unknown for a Person card when nothing is published to say what kind of artist this is', () => {
+    const r = g(evidence({ home: homeHtml({ ld: [graphBlock([artistNode({ '@type': 'Person', genre: undefined })])] }), known: known({ published: null }) }))
     expect(r.status).toBe('unknown')
     expect(r.limits).toBeTruthy()
+  })
+  it('names the sound Tapir has, as Tapir’s, when the card has none', () => {
+    const r = g(withArtist({ genre: undefined }))
+    expect(ev(r, 'in Tapir: genre')).toBe('House, Tech House')
   })
   it('is unknown without a home page', () => {
     expect(g(evidence({ pages: [] })).status).toBe('unknown')
@@ -311,6 +339,19 @@ describe('place', () => {
     expect(r.sentence).toMatch(/state or region/)
     expect(r.action).toEqual(expect.objectContaining({ target: 'facts' }))
     plain(r)
+  })
+  it('CRITICAL: a region and country published in Tapir but missing from the card: publish / update the site, not "add"', () => {
+    const r = p(withPlace({ '@type': 'Place', name: 'Chicago' }))
+    expect(r.status).toBe('fail')
+    expect(r.todo).toMatch(/published in Tapir/)
+    expect(r.todo).not.toMatch(/^Add/)
+    expect(ev(r, 'in Tapir: place')).toBe('city Chicago, IL · region IL · country United States')
+    plain(r)
+  })
+  it('says add them on the Facts tab when Tapir has no region or country either', () => {
+    const r = p(evidence({ home: homeHtml({ ld: [graphBlock([artistNode({ foundingLocation: { '@type': 'Place', name: 'Chicago' } })])] }), known: known({}, { region: null, country: null, countryCode: null }) }))
+    expect(r.todo).toMatch(/^Add the state or region and the country on the Facts tab/)
+    expect(ev(r, 'in Tapir: place')).toBe('city Chicago, IL · region not set · country not set')
   })
   it('does not read a region out of a free-text name ("Chicago, IL")', () => {
     expect(p(withPlace({ '@type': 'Place', name: 'Chicago, IL' })).status).toBe('fail')
@@ -361,6 +402,15 @@ describe('mb', () => {
     const r = m(evidence({ musicbrainz: { looked: false, artistUrl: null, matchedOn: null, error: 'MusicBrainz was busy (503)' } }))
     expect(r.status).toBe('unknown')
     expect(r.sentence).toMatch(/busy/)
+  })
+  it('CRITICAL: does not apply (`na`) to a visual artist: MusicBrainz lists people who make music', () => {
+    const person = known({}, { artistType: 'Person' })
+    for (const musicbrainz of [{ looked: true, artistUrl: null, matchedOn: null }, { looked: false, artistUrl: null, matchedOn: null, error: 'x' }]) {
+      const r = m(evidence({ known: person, musicbrainz }))
+      expect(r.status).toBe('na')
+      expect(r.sentence).toMatch(/visual artist/)
+      expect(r.action).toBeUndefined() // never "Create the page" for someone MusicBrainz would not list
+    }
   })
   it('says when the answer is the link from Connections, not a lookup', () => {
     const r = m(evidence({ musicbrainz: { looked: true, artistUrl: 'https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d', matchedOn: 'your MusicBrainz link in Connections' } }))

@@ -31,6 +31,13 @@ vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/ser
 // The SEO / GEO test run is scheduled beside the ping (its own `after`); this suite counts the
 // PING's `after` only. The run's scheduling is pinned in tests/unit/seo-tests/publish-hook.test.ts.
 vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: vi.fn() }))
+// The ping reads the site through lib/net-guard's transport, never the global fetch (the SSRF
+// guard, pinned in tests/unit/site/server-fetch-guard.test.ts). This suite is about WHEN a
+// publish pings, so the default transport is pointed at the stubbed `fetch` below.
+vi.mock('@/lib/net-guard', async (orig) => ({
+  ...(await orig<typeof import('@/lib/net-guard')>()),
+  pickTransport: (fetcher?: typeof fetch) => fetcher ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
+}))
 vi.mock('@supabase/supabase-js', async (orig) => ({
   ...(await orig<typeof import('@supabase/supabase-js')>()),
   createClient: () => ({ auth: { signInWithPassword: async () => ({ error: h.password.error }) } }),
