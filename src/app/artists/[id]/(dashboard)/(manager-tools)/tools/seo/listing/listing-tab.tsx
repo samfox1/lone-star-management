@@ -1,29 +1,29 @@
 'use client'
 /* eslint-disable @next/next/no-img-element -- runtime Storage URLs; next/image would add a second resize. */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MAX_DESCRIPTION, MAX_TITLE } from '@samfox1/site-bridge/seo'
-import { recommendAlt, recommendSlug } from '@samfox1/site-bridge/alt'
+import { recommendAlt } from '@samfox1/site-bridge/alt'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
-import { renameMediaAction, saveSeoFieldAction, setMediaAltAction } from '../../../../actions'
+import { saveSeoFieldAction, setMediaAltAction } from '../../../../actions'
 import { CardModal } from '../../../../card-modal'
-import { MetaDot, ModalHeader } from '../../../../modal-kit'
+import { HeaderIcon, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { ShareImageModal, type OgSource } from '../og-image-picker'
+import type { NamedSwatch } from '../../../../editor/color-picker'
 import { AreaField, Count, EndSlot, FieldError, LineField } from '../_ui/parts'
 import { clearHash, useOpenOnHash } from '../_ui/hash'
 
 export type AltPhoto = { id: string; url: string; alt: string; slug: string; caption: string | null }
 
-/** The most `seo_description` may hold (the save gate's SEO_LIMITS; Google shows 160). */
-export const DESCRIPTION_CAP = 300
-
-/** The card this page draws is always 1200 × 630, at one fixed path per artist. */
-const OUR_CARD = /\/storage\/v1\/object\/public\/media\/[^/]+\/og\/social-card\.png/
+/** The description's ONE limit: what Google shows (the bridge's MAX_DESCRIPTION). The save gate
+ *  would take up to 300, but a red count at 160 and a refusal only at 300 were two limits for
+ *  one box (the UI review, N21). */
+export const DESCRIPTION_CAP = MAX_DESCRIPTION
 
 /**
  * LISTING (round 2, prototypes/seo_variants_20260928_r2.html): how the artist shows up when
@@ -44,6 +44,7 @@ export function ListingTab({
   shareUrl,
   sources,
   photos,
+  brandColors,
 }: {
   artistId: string
   artistName: string
@@ -55,9 +56,14 @@ export function ListingTab({
   shareUrl: string
   sources: OgSource[]
   photos: AltPhoto[]
+  /** The artist's Brand colours, by name: the picture's background swatches. */
+  brandColors: readonly NamedSwatch[]
 }) {
   const [v, setV] = useState(initial)
   const [errors, setErrors] = useState<Record<string, string | null>>({})
+  /** The field being written: its count shows only then (Sam, 2026-09-29). */
+  const [editing, setEditing] = useState<'seo_title' | 'seo_description' | null>(null)
+  const done = () => setEditing(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const descRef = useRef<HTMLTextAreaElement>(null)
   const refuse = (k: string, msg: string | null) => setErrors((e) => ({ ...e, [k]: msg }))
@@ -71,7 +77,8 @@ export function ListingTab({
     normalize: (val, k) => {
       const cap = k === 'seo_title' ? MAX_TITLE : DESCRIPTION_CAP
       const tooLong = val.replace(/\s+/g, ' ').trim().length > cap
-      refuse(k, tooLong ? `Keep it under ${cap} characters.` : null)
+      // "Not saved": leaving the tab would otherwise lose it without a word (review N22).
+      refuse(k, tooLong ? `Keep it under ${cap} characters. Not saved.` : null)
       return tooLong ? null : val
     },
   })
@@ -88,7 +95,7 @@ export function ListingTab({
   return (
     <div>
       <LedgerSection label="Google">
-        <LedgerRow title="Page title" guide="Blank builds it from Facts.">
+        <LedgerRow title="Page title">
           <div className="flex w-[380px] min-w-0 max-w-full flex-col items-end gap-1">
             <LineField
               ref={titleRef}
@@ -97,16 +104,18 @@ export function ListingTab({
               placeholder={fallbackTitle}
               invalid={!!errors.seo_title}
               onChange={(val) => set('seo_title', val)}
-              className="w-full text-right"
+              onFocus={() => setEditing('seo_title')}
+              onBlur={done}
+              className="w-full text-ellipsis text-left min-[900px]:text-right"
             />
             {errors.seo_title ? <FieldError>{errors.seo_title}</FieldError> : null}
           </div>
-          <Count n={title.length} max={MAX_TITLE} />
+          {editing === 'seo_title' ? <Count n={title.length} max={MAX_TITLE} /> : null}
           <EndSlot>
-            <RowIcon icon="edit" label="Edit" onClick={() => titleRef.current?.focus()} />
+            <RowIcon icon="edit" label="Edit the page title" onClick={() => titleRef.current?.focus()} />
           </EndSlot>
         </LedgerRow>
-        <LedgerRow title="Description" guide="Blank uses the bio.">
+        <LedgerRow title="Description">
           <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
             <AreaField
               ref={descRef}
@@ -114,15 +123,17 @@ export function ListingTab({
               value={v.seo_description}
               placeholder={bioLine.slice(0, MAX_DESCRIPTION) || 'What you do, in a line or two'}
               onChange={(val) => set('seo_description', val)}
+              onFocus={() => setEditing('seo_description')}
+              onBlur={done}
               tone="muted"
               small
-              className="w-full max-w-[52ch] text-right"
+              className="w-full max-w-[52ch] text-left min-[900px]:text-right"
             />
             {errors.seo_description ? <FieldError>{errors.seo_description}</FieldError> : null}
           </div>
-          <Count n={desc.length} max={MAX_DESCRIPTION} />
+          {editing === 'seo_description' ? <Count n={desc.length} max={MAX_DESCRIPTION} /> : null}
           <EndSlot>
-            <RowIcon icon="edit" label="Edit" onClick={() => descRef.current?.focus()} />
+            <RowIcon icon="edit" label="Edit the description" onClick={() => descRef.current?.focus()} />
           </EndSlot>
         </LedgerRow>
         <LedgerRow title="Preview">
@@ -136,7 +147,7 @@ export function ListingTab({
       </LedgerSection>
 
       <LedgerSection label="Share">
-        <ShareRow artistId={artistId} currentUrl={shareUrl} sources={sources} />
+        <ShareRow artistId={artistId} currentUrl={shareUrl} sources={sources} brandColors={brandColors} />
       </LedgerSection>
 
       <LedgerSection label="Photos">
@@ -146,8 +157,9 @@ export function ListingTab({
   )
 }
 
-/** Share image (`#share`): the card a shared link shows; its editor is the share modal. */
-function ShareRow({ artistId, currentUrl, sources }: { artistId: string; currentUrl: string; sources: OgSource[] }) {
+/** The preview picture (`#share`, Sam's name for the share image, 2026-09-29): the card a
+ *  shared link shows; its editor is the picture window. */
+function ShareRow({ artistId, currentUrl, sources, brandColors }: { artistId: string; currentUrl: string; sources: OgSource[]; brandColors: readonly NamedSwatch[] }) {
   const [url, setUrl] = useState(currentUrl)
   const [open, setOpen] = useState(false)
   useOpenOnHash('share', () => setOpen(true))
@@ -157,10 +169,10 @@ function ShareRow({ artistId, currentUrl, sources }: { artistId: string; current
   }
   return (
     <div id="share" className="scroll-mt-28">
-      <LedgerRow title="Share image" guide="iMessage, X, Instagram." meta={url && OUR_CARD.test(url) ? '1200 × 630' : undefined}>
+      <LedgerRow title="Preview picture">
         <button
           type="button"
-          aria-label={url ? 'Open the share picture' : 'Add a share picture'}
+          aria-label={url ? 'Open the preview picture' : 'Make a preview picture'}
           onClick={() => setOpen(true)}
           className={cx(
             'h-[92px] w-[176px] flex-none overflow-hidden rounded-lg border border-hairline bg-paper',
@@ -172,10 +184,10 @@ function ShareRow({ artistId, currentUrl, sources }: { artistId: string; current
           {url ? <img src={url} alt="" className="block h-full w-full object-cover" /> : <Icon name="plus" size={18} />}
         </button>
         <EndSlot>
-          <RowIcon icon="edit" label="Change" onClick={() => setOpen(true)} />
+          <RowIcon icon="edit" label="Change the preview picture" onClick={() => setOpen(true)} />
         </EndSlot>
       </LedgerRow>
-      {open ? <ShareImageModal artistId={artistId} sources={sources} onClose={close} onSaved={setUrl} /> : null}
+      {open ? <ShareImageModal artistId={artistId} sources={sources} brandColors={brandColors} onClose={close} onSaved={setUrl} /> : null}
     </div>
   )
 }
@@ -189,11 +201,10 @@ function AltRow({ artistId, artistName, photos: initial }: { artistId: string; a
     setOpen(false)
     clearHash('alt')
   }
-  const automatic = photos.filter((p) => !p.alt.trim()).length
-  const meta = photos.length ? `${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}${automatic ? ` · ${automatic} automatic` : ''}` : undefined
+  const meta = photos.length ? `${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}` : undefined
   return (
     <div id="alt" className="scroll-mt-28">
-      <LedgerRow title="Alt text" guide="What Google Images reads." meta={meta}>
+      <LedgerRow title="Photo descriptions" meta={meta}>
         {photos.length ? (
           <button type="button" aria-label="Open the photos" onClick={() => setOpen(true)} className={cx('flex gap-1.5 rounded-md', FOCUS_RING, 'focus-visible:outline-offset-2')}>
             {photos.slice(0, 6).map((p) => (
@@ -203,16 +214,22 @@ function AltRow({ artistId, artistName, photos: initial }: { artistId: string; a
         ) : (
           <span className="font-space text-[12px] text-ink-faint">No photos on the site yet</span>
         )}
-        <EndSlot>{photos.length ? <RowIcon icon="edit" label="Edit" onClick={() => setOpen(true)} /> : null}</EndSlot>
+        <EndSlot>{photos.length ? <RowIcon icon="edit" label="Edit the photo descriptions" onClick={() => setOpen(true)} /> : null}</EndSlot>
       </LedgerRow>
       {open && photos.length ? <AltModal artistId={artistId} artistName={artistName} photos={photos} onChange={setPhotos} onClose={close} /> : null}
     </div>
   )
 }
 
-/** One row per photo: the picture, its alt text (blank = the automatic one, shown faint) and
- *  its file name. Alt saves as it is typed; the file name when the field is left. */
+/**
+ * THE PHOTO DESCRIPTIONS, one photo at a time (Sam, 2026-09-29: "arrows to move between
+ * photos so one is showing at a time"): the picture large enough to describe, its description
+ * under it (blank = the one made for you, shown faint as the hint), ← → to move (the arrow
+ * keys too, when not typing) and a quiet "3 of 6". Each photo's words save as they are typed.
+ * No file names here: they are codes a manager can't read (the UI review, L8).
+ */
 function AltModal({ artistId, artistName, photos, onChange, onClose }: { artistId: string; artistName: string; photos: AltPhoto[]; onChange: (p: AltPhoto[]) => void; onClose: () => void }) {
+  const [at, setAt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const altSave = useDebouncedFieldSave<string>({
     persist: async (id, val) => {
@@ -225,62 +242,39 @@ function AltModal({ artistId, artistName, photos, onChange, onClose }: { artistI
     onChange(photos.map((p) => (p.id === id ? { ...p, alt } : p)))
     altSave.save(id, alt)
   }
-  const rename = async (p: AltPhoto, raw: string) => {
-    const slug = raw.trim()
-    if (!slug || slug === p.slug) return
-    const r = await renameMediaAction(artistId, p.id, slug)
-    if (r.error) return setError(r.error)
-    setError(null)
-    if (r.storage_path) onChange(photos.map((x) => (x.id === p.id ? { ...x, slug: recommendSlug(slug), url: x.url.replace(/\/[^/]+(\?.*)?$/, `/${r.storage_path!.split('/').pop()}$1`) } : x)))
-  }
+  const i = Math.min(at, photos.length - 1)
+  const p = photos[i]
+  const go = (d: -1 | 1) => setAt((n) => Math.max(0, Math.min(photos.length - 1, n + d)))
+  // ← → move between photos, except while typing (they move the cursor there).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, [contenteditable="true"]')) return
+      e.preventDefault()
+      setAt((n) => Math.max(0, Math.min(photos.length - 1, n + (e.key === 'ArrowRight' ? 1 : -1))))
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [photos.length])
+  if (!p) return null
+  const preset = recommendAlt({ artist: artistName, caption: p.caption })
   return (
-    <CardModal open onClose={onClose} label="Alt text">
-      <ModalHeader
-        square={
-          <div className="flex h-full w-full items-center justify-center rounded-xl border border-hairline text-ink">
-            <Icon name="photo" size={26} />
-          </div>
-        }
-        title="Alt text"
-        meta={
-          <>
-            {`${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`}
-            <MetaDot />
-            Google Images
-          </>
-        }
-      />
-      <div className="mt-5">
-        {photos.map((p) => {
-          const preset = recommendAlt({ artist: artistName, caption: p.caption })
-          return (
-            <div key={p.id} className="flex items-center gap-4 border-b border-hairline-soft py-3 last:border-b-0">
-              <img src={p.url} alt="" className="h-10 w-10 flex-none rounded-md object-cover" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <LineField label={`Alt text for ${p.slug}`} value={p.alt} placeholder={preset} onChange={(val) => setAlt(p.id, val)} className="w-full" />
-                <FileName photo={p} alt={p.alt || preset} onRename={(s) => void rename(p, s)} />
-              </div>
-            </div>
-          )
-        })}
+    // No footer: each photo's words save as they are typed, and ✕ closes (the modal kit's rule).
+    <CardModal open onClose={onClose} label="Photo descriptions" footer={null}>
+      <ModalHeader mark={<HeaderIcon name="photo" />} title="Photo descriptions" meta="Google Images" />
+      <div className="mt-5 flex flex-col gap-3">
+        <div className="flex h-[340px] items-center justify-center overflow-hidden rounded-xl bg-surface">
+          <img key={p.id} src={p.url} alt="" className="max-h-full max-w-full object-contain" />
+        </div>
+        <AreaField key={p.id} label={`Description of photo ${i + 1}`} value={p.alt} placeholder={preset} rows={2} small onChange={(val) => setAlt(p.id, val)} className="w-full" />
         {error ? <FieldError>{error}</FieldError> : null}
+        <div className="flex items-center justify-center gap-3">
+          <RowIcon icon="chevronLeft" label="Previous photo" variant="primary" onClick={() => go(-1)} disabled={i === 0} />
+          <span className="min-w-[56px] text-center font-space text-[12px] text-ink-faint" aria-live="polite">{`${i + 1} of ${photos.length}`}</span>
+          <RowIcon icon="chevronRight" label="Next photo" variant="primary" onClick={() => go(1)} disabled={i === photos.length - 1} />
+        </div>
       </div>
     </CardModal>
-  )
-}
-
-function FileName({ photo, alt, onRename }: { photo: AltPhoto; alt: string; onRename: (slug: string) => void }) {
-  const [draft, setDraft] = useState(photo.slug)
-  return (
-    <LineField
-      label={`File name for ${photo.slug}`}
-      value={draft}
-      placeholder={recommendSlug(alt)}
-      onChange={setDraft}
-      onBlur={() => onRename(draft)}
-      mono
-      tone="faint"
-      className="w-full"
-    />
   )
 }

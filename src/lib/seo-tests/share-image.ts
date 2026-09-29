@@ -9,6 +9,7 @@
  *
  * Never throws: no answer is `status: null` with the reason in `error` (types.ts).
  */
+import { trimTrailingSlashes } from '@/lib/url'
 import { guardedFetch } from './guarded-fetch'
 import { metaOf, parsePage } from './html'
 import type { SeoEvidence } from './types'
@@ -115,7 +116,7 @@ export async function fetchShareImage(
   const noAnswer = (url: string, error: string): ShareImage => ({ url, status: null, contentType: null, width: null, height: null, bytes: null, error })
   let u: URL
   try {
-    u = new URL(raw, `${origin.replace(/\/+$/, '')}/`)
+    u = new URL(raw, `${trimTrailingSlashes(origin)}/`)
   } catch {
     return noAnswer(raw, 'bad-url')
   }

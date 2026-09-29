@@ -99,7 +99,7 @@ describe('profiles', () => {
   it('is unknown without published data (nothing to compare to)', () => {
     const r = p(evidence({ known: known({ published: null }) }))
     expect(r.status).toBe('unknown')
-    expect(r.sentence).toMatch(/published in Tapir/)
+    expect(r.sentence).toMatch(/haven’t published from Tapir/)
   })
 })
 
@@ -177,7 +177,7 @@ describe('apple', () => {
     const r = a(cardApple('https://music.apple.com/us/artist/skeen/1754431714', 'CA'))
     expect(r.status).toBe('fail')
     expect(r.action?.kind).not.toBe('fix')
-    expect(r.todo).toMatch(/\/ca\//)
+    expect(r.todo).toMatch(/Canada store/)
   })
   it('passes a link with no store in it (Apple picks the fan’s store)', () => {
     expect(a(cardApple('https://music.apple.com/artist/1754431714', null)).status).toBe('pass')
@@ -187,7 +187,8 @@ describe('apple', () => {
     const r = a(cardApple(null))
     expect(r.status).toBe('na')
     expect(r.value).toMatch(/no Apple/i)
-    expect(r.sentence).toMatch(/doesn’t apply/)
+    // The page writes "Doesn't apply:" in front; the sentence gives the reason, not an echo.
+    expect(r.sentence).toMatch(/no Apple Music link/)
     expect(r.action).toBeUndefined()
   })
   it('reads Apple links the page shows as buttons too, not only the card', () => {
@@ -335,7 +336,8 @@ describe('releases', () => {
   it('matches whole words: a short title (“Up”) is not found inside another word (“upcoming”)', () => {
     const g = [...healthyGraph(), { '@type': 'MusicAlbum', name: 'Up', byArtist: { '@id': `${ORIGIN}/#artist` } }]
     const k = known({}, { releases: [...known().published!.releases, { title: 'Up', releasedOn: null }] })
-    const hidden = r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<p>Upcoming shows soon.</p>' }), known: k }))
+    // No /about page: the fixture's bio says "from the ground up", and "up" there IS the word.
+    const hidden = r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<p>Upcoming shows soon.</p>' }), about: null, known: k }))
     expect(hidden.status).toBe('fail')
     expect(ev(hidden, 'on your fact card, not on your pages')).toBe('Up')
     expect(r(evidence({ home: homeHtml({ ld: [graphBlock(g)], body: '<p>New single: Up.</p>' }), known: k })).status).toBe('pass')

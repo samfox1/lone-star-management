@@ -88,6 +88,42 @@ function clock() {
 }
 
 describe('waitForFreshSite', () => {
+  it('stops early when told to: shouldStop() is asked before every poll', async () => {
+    // A publish hook superseded by a newer publish must stop polling mid-wait.
+    const s = site(['2026-09-20T10:00:00.500Z'])
+    const c = clock()
+    let asked = 0
+    const out = await waitForFreshSite({ origin: 'https://www.site.example', publishedAt: LATEST, moments: MOMENTS, fetcher: s.fetcher, sleep: c.sleep, now: c.now, shouldStop: () => ++asked > 2 })
+    expect(out).toMatchObject({ stopped: true, fresh: null })
+    expect(s.seen.filter((u) => u.endsWith('/sitemap.xml'))).toHaveLength(2)
+    expect(c.elapsed()).toBeLessThan(30_000)
+  })
+
+  it('stops early on an aborted signal, before the first poll, and during a wait', async () => {
+    const s = site(['2026-09-20T10:00:00.500Z'])
+    const gone = new AbortController()
+    gone.abort()
+    const first = await waitForFreshSite({ origin: 'https://www.site.example', publishedAt: LATEST, moments: MOMENTS, fetcher: s.fetcher, sleep: clock().sleep, now: clock().now, signal: gone.signal })
+    expect(first).toMatchObject({ stopped: true, waitedMs: 0 })
+    expect(s.seen).toHaveLength(0)
+
+    // Real time: a 10 s pause between polls is cut short when the signal fires.
+    const later = new AbortController()
+    setTimeout(() => later.abort(), 50)
+    const t = Date.now()
+    const out = await waitForFreshSite({ origin: 'https://www.site.example', publishedAt: LATEST, moments: MOMENTS, fetcher: s.fetcher, signal: later.signal })
+    expect(out).toMatchObject({ stopped: true })
+    expect(Date.now() - t).toBeLessThan(2000)
+  })
+
+  it('without a stop, nothing says stopped', async () => {
+    const s = site(['2026-09-28T21:14:03.123Z'])
+    const c = clock()
+    const out = await waitForFreshSite({ origin: 'https://www.site.example', publishedAt: LATEST, moments: MOMENTS, fetcher: s.fetcher, sleep: c.sleep, now: c.now, shouldStop: () => false })
+    expect(out).toMatchObject({ fresh: true })
+    expect(out.stopped).toBeUndefined()
+  })
+
   it('CRITICAL: returns fresh as soon as the sitemap names this publish, poking "/" each time', async () => {
     const s = site(['2026-09-20T10:00:00.500Z', '2026-09-20T10:00:00.500Z', '2026-09-28T21:14:03.123Z'])
     const c = clock()

@@ -14,7 +14,8 @@ export const BIO = "Skeen is a Chicago DJ and producer. He's played ZHU at Navy 
 export const doc = (title: string, body: string, head = '') =>
   `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${title}</title>${head}</head><body>${body}</body></html>`
 
-const NAV = '<header><nav><a href="/">Home</a> <a href="/about">About</a> <a href="/music">Music</a></nav></header>'
+/** One-page menu: every link is a page we open, or a spot on this one (#music). */
+const NAV = '<header><nav><a href="/">Home</a> <a href="/about">About</a> <a href="#music">Music</a></nav></header>'
 export const HOME = doc(
   'Skeen · Chicago house DJ and producer',
   `${NAV}<main><h1>Skeen</h1><section id="music"><h2>Music</h2><ul><li>You Were There</li><li>OutWest</li></ul></section><section id="shows"><h2>Shows</h2><p>Oct 4 · Hideaway, Chicago</p></section><p>Listen on Spotify, Apple Music and SoundCloud. Book Skeen for your next club night in Chicago or anywhere else.</p></main>`,

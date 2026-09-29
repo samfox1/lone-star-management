@@ -41,13 +41,18 @@ export const OG_BACKGROUNDS: OgBackground[] = [
 ]
 
 /**
- * The fill for a stored background value.
+ * The fill for a background: a colour (`#rrggbb`, `#rgb`: a Brand colour or one mixed in the
+ * picker, Sam 2026-09-29) or one of the named ones above.
  *
  * Falls back to WHITE, never to "no fill": the whole point of this card is that it is
  * opaque, and a value that stopped resolving would silently reintroduce the
- * black-on-black bug it exists to prevent.
+ * black-on-black bug it exists to prevent. Only an opaque 3- or 6-digit hex is a colour here:
+ * an alpha channel would be the transparency again.
  */
 export function ogBackgroundHex(value: string | undefined): string {
+  const v = (value ?? '').trim()
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase()
+  if (/^#[0-9a-f]{3}$/i.test(v)) return `#${[...v.slice(1)].map((c) => c + c).join('')}`.toLowerCase()
   return OG_BACKGROUNDS.find((b) => b.value === value)?.hex ?? '#ffffff'
 }
 

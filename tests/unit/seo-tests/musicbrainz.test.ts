@@ -53,11 +53,28 @@ describe('musicBrainzForms: the spellings MusicBrainz stores a link under', () =
 })
 
 describe('lookupMusicBrainz', () => {
-  it('takes a connected MusicBrainz artist link as the answer, without asking', async () => {
-    const k = known({}, { links: [...known().published!.links, { label: 'MusicBrainz', url: `https://musicbrainz.org/artist/${MBID.toUpperCase()}/`, onSite: false }] })
-    const f = mbFetch()
-    expect(await lookupMusicBrainz(k, { fetcher: f, ...noWait })).toEqual({ looked: true, artistUrl: `https://musicbrainz.org/artist/${MBID}`, matchedOn: 'your MusicBrainz link in Connections', artistName: null })
-    expect(f).not.toHaveBeenCalled()
+  // verify-content.md M2: a Connections link used to pass unopened (a made-up id passed too).
+  const connected = () => known({}, { links: [...known().published!.links, { label: 'MusicBrainz', url: `https://musicbrainz.org/artist/${MBID.toUpperCase()}/`, onSite: false }] })
+  it('M2 opens a connected MusicBrainz artist link, once, and reports the name there', async () => {
+    const f = mbFetch({ json: { id: MBID, name: 'Skeen', type: 'Person' } })
+    expect(await lookupMusicBrainz(connected(), { fetcher: f, ...noWait })).toEqual({
+      looked: true, artistUrl: `https://musicbrainz.org/artist/${MBID}`, matchedOn: 'your MusicBrainz link in Connections', artistName: 'Skeen', fromConnections: true,
+    })
+    expect(f).toHaveBeenCalledTimes(1)
+    const u = asked(f)
+    expect(u.origin + u.pathname).toBe(`https://musicbrainz.org/ws/2/artist/${MBID}`)
+    expect(u.searchParams.get('fmt')).toBe('json')
+  })
+  it('M2 a connected link MusicBrainz has no artist for is "no page", said about the link', async () => {
+    const r = await lookupMusicBrainz(connected(), { fetcher: mbFetch({ status: 404, json: { error: 'Not Found' } }), ...noWait })
+    expect(r).toEqual(expect.objectContaining({ looked: true, artistUrl: null, fromConnections: true }))
+  })
+  it('M2 could not open the connected link = could not ask, never a pass', async () => {
+    expect((await lookupMusicBrainz(connected(), { fetcher: mbFetch(new Error('down')), ...noWait })).looked).toBe(false)
+    resetMusicBrainzGate()
+    expect((await lookupMusicBrainz(connected(), { fetcher: mbFetch({ status: 503, text: '' }, { status: 503, text: '' }), ...noWait })).looked).toBe(false)
+    resetMusicBrainzGate()
+    expect((await lookupMusicBrainz(connected(), { fetcher: mbFetch({ json: { hello: 1 } }), ...noWait })).looked).toBe(false)
   })
   it('ignores a MusicBrainz link that is not an artist page', async () => {
     const k = known({}, { links: [{ label: 'MusicBrainz', url: `https://musicbrainz.org/release/${MBID}`, onSite: false }] })

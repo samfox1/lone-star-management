@@ -237,6 +237,8 @@ export function robotsVerdict(
   // redirects as a 404.
   if (s >= 300) return { verdict: 'allowed', why: 'no-file' }
   if (s < 200) return { verdict: 'unknown', why: 'no-answer' }
+  // A 2xx we hold no body for: we did not read it, so we cannot say it has no rules.
+  if (robots.body == null) return { verdict: 'unknown', why: 'no-answer' }
   const check = checkRobots(parseRobots(robots.body ?? ''), tokens, path)
   return { verdict: check.allowed ? 'allowed' : 'blocked', why: 'rules', check }
 }

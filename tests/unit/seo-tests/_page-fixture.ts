@@ -9,10 +9,20 @@ import type { SeoEvidence, SeoKnown, SeoPageFetch } from '@/lib/seo-tests/types'
 export const ORIGIN = 'https://www.example-artist.com'
 export const TODAY = '2026-09-28'
 
-/** 2,600 characters of bio, in sentences, with an apostrophe and an ampersand in it. */
-export const LONG_BIO = Array.from({ length: 26 }, (_, i) => `Sentence ${String(i + 1).padStart(2, '0')} of Skeen's story & the shows in Chicago, told plainly, words and more words, until it is long enough ok.`)
-  .join(' ')
-  .slice(0, 2600)
+/** A healthy bio: over 100 words, naming the genre (house), the city (Chicago) and highlights
+ *  from Music and Tour (OutWest, Smartbar), in distinct sentences, with an apostrophe and an
+ *  ampersand in it. The first sentence names none of the three facts, so a page showing only
+ *  part of it can be told apart. */
+export const LONG_BIO = [
+  'Skeen started out filming friends at parties and never really stopped.',
+  'Today he is a Chicago DJ and producer who plays house music & tech house long into the night.',
+  'His debut EP OutWest came out in 2024 and still gets played in clubs across the Midwest.',
+  'He has headlined Smartbar, opened for ZHU at Navy Pier and toured the country with Jigitz.',
+  'Every set is filmed for his video diary about building a career in dance music from the ground up.',
+  'When he isn\'t on stage he is in the studio with his USB, three cameras and a ridiculous idea.',
+  'He answers every message from fans and still books his own shows, one city at a time.',
+  'Hopefully he will see you in your city soon, somewhere loud, late and full of friends.',
+].join(' ')
 
 export const PROFILES = [
   'https://open.spotify.com/artist/26KxuQlgIw8VP8YX2IkMWR',

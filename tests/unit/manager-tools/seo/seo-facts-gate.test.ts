@@ -21,10 +21,15 @@ import { SEO_LIMITS, saveEditorField, saveSeoField, seoValueError } from '@/lib/
 const K = FACT_CONTENT_KEYS
 const NOW = new Date('2026-09-28T12:00:00Z')
 
-function fake(artist: { data: { name: string | null } | null; error: { message: string } | null } = { data: { name: 'Skeen' }, error: null }) {
+function fake(
+  artist: { data: { name: string | null } | null; error: { message: string } | null } = { data: { name: 'Skeen' }, error: null },
+  /** The stored country row, as the gate's own read finds it. */
+  country: { data: { value: string | null } | null; error: { message: string } | null } = { data: null, error: null },
+) {
   const upserts: { key: string; value: string }[] = []
   const deletes: string[] = []
   const artistReads: string[] = []
+  const countryReads: string[] = []
   const client = {
     from: (table: string) => {
       if (table === 'artists') {
@@ -44,6 +49,20 @@ function fake(artist: { data: { name: string | null } | null; error: { message: 
       }
       if (table !== 'site_content') throw new Error(`unexpected table ${table}`)
       return {
+        select: (cols: string) => {
+          const filters: string[] = []
+          const chain = {
+            eq: (col: string, val: string) => {
+              filters.push(`${col}=${val}`)
+              return chain
+            },
+            maybeSingle: () => {
+              countryReads.push(`${cols}:${filters.join('&')}`)
+              return Promise.resolve(country)
+            },
+          }
+          return chain
+        },
         upsert: (row: { key: string; value: string }) => {
           upserts.push({ key: row.key, value: row.value })
           return Promise.resolve({ error: null })
@@ -61,7 +80,7 @@ function fake(artist: { data: { name: string | null } | null; error: { message: 
       }
     },
   } as unknown as SupabaseClient
-  return { client, upserts, deletes, artistReads }
+  return { client, upserts, deletes, artistReads, countryReads }
 }
 
 describe('the fact keys are SEO keys', () => {
@@ -95,14 +114,33 @@ describe('saveSeoField stores the cleaned fact', () => {
     expect(f.upserts).toEqual([{ key: K.region, value: 'Cook County' }])
   })
 
-  it('country: the table spelling when known, as typed when not', async () => {
+  it('CRITICAL: country: the table spelling; a country off the list is refused and nothing is written', async () => {
     const f = fake()
-    await saveSeoField(f.client, 'a1', K.country, 'usa', NOW)
-    await saveSeoField(f.client, 'a1', K.country, 'Narnia', NOW)
-    expect(f.upserts).toEqual([
-      { key: K.country, value: 'United States' },
-      { key: K.country, value: 'Narnia' },
-    ])
+    expect(await saveSeoField(f.client, 'a1', K.country, 'usa', NOW)).toEqual({ ok: true })
+    expect(await saveSeoField(f.client, 'a1', K.country, 'Narnia', NOW)).toEqual({ ok: false, error: 'Pick a country from the list.' })
+    expect(f.upserts).toEqual([{ key: K.country, value: 'United States' }])
+  })
+
+  it('CRITICAL: region: judged against the country the gate reads itself, stored in the list’s spelling', async () => {
+    const us = fake(undefined, { data: { value: 'United States' }, error: null })
+    expect(await saveSeoField(us.client, 'a1', K.region, 'illinois', NOW)).toEqual({ ok: true })
+    expect(await saveSeoField(us.client, 'a1', K.region, 'Ontario', NOW)).toEqual({ ok: false, error: 'Pick a state from the list.' })
+    expect(us.upserts).toEqual([{ key: K.region, value: 'Illinois' }])
+    expect(us.countryReads).toEqual([`value:artist_id=a1&key=${K.country}`, `value:artist_id=a1&key=${K.country}`])
+    // A country with no list (or none stored): the region is typed text.
+    const de = fake(undefined, { data: { value: 'Germany' }, error: null })
+    expect(await saveSeoField(de.client, 'a1', K.region, 'Bavaria', NOW)).toEqual({ ok: true })
+    const none = fake()
+    expect(await saveSeoField(none.client, 'a1', K.region, 'IL', NOW)).toEqual({ ok: true })
+  })
+
+  it('CRITICAL: a failed country read refuses the region: an unchecked region is never stored', async () => {
+    const f = fake(undefined, { data: null, error: { message: 'boom' } })
+    expect((await saveSeoField(f.client, 'a1', K.region, 'Illinois', NOW)).ok).toBe(false)
+    expect(f.upserts).toEqual([])
+    // Clearing needs no read.
+    expect(await saveSeoField(f.client, 'a1', K.region, '  ', NOW)).toEqual({ ok: true })
+    expect(f.deletes).toEqual([K.region])
   })
 
   it('CRITICAL: other names keep one per line (the one-line rule would merge them into one name)', async () => {

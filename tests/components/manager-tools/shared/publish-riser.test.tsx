@@ -172,7 +172,9 @@ describe('PublishRiser', () => {
     render(<PublishRiser dirty message="x" onPublish={ok} onRevert={vi.fn()} />)
     const cls = bar().className.split(/\s+/)
     // Motion only under motion-safe: a bare transition would animate for everyone.
-    expect(cls).toContain('motion-safe:transition-transform')
+    // (transform AND visibility: hidden, the bar is `invisible` too, and visibility rides the
+    // slide so it turns hidden only when the slide down ends — review 2026-09-29, L4.)
+    expect(cls).toContain('motion-safe:transition-[transform,visibility]')
     expect(cls.filter((c) => /^transition/.test(c))).toEqual([])
     expect(cls).toContain('fixed')
     expect(cls).toContain('bottom-0')

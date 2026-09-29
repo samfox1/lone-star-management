@@ -268,7 +268,7 @@ export function CreateModal({
                     setError(null)
                   }}
                   aria-label="Back"
-                  className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg border border-hairline text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+                  className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-surface hover:text-ink"
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>

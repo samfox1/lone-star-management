@@ -3,9 +3,11 @@
  * run every test in SEO_TEST_IDS order → store. The page only ever reads what this stored.
  *
  * What a run guarantees, each pinned by tests/unit/seo-tests/run.test.ts:
- *   • ONE AT A TIME, and a cool-down for "Test again", enforced by the DATABASE (the claim in
- *     store.ts; the rules live in the migration). A refused claim gathers nothing and fetches
- *     nothing, so a hammered button cannot hammer the artist's site or MusicBrainz.
+ *   • ONE AT A TIME, cool-downs, publish coalescing and a per-manager ceiling, enforced by the
+ *     DATABASE (seo_test_claim; the rules live in the migration). A refused claim gathers nothing
+ *     and fetches nothing, so a hammered button cannot hammer the artist's site or MusicBrainz.
+ *   • NO BROWSER WRITES: claims and results go through the service-role writer only; a manager's
+ *     session can read runs and nothing else.
  *   • ONE TEST CANNOT SINK THE RUN. Every test is wrapped: a throw, or an answer that is not a
  *     result for that test, becomes `unknown` ("this test broke") and the other 23 stand.
  *   • A TIME BUDGET for the whole gather. Whatever has not answered by then is `unknown` with
@@ -20,8 +22,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { siteFreshness } from './fresh'
 import { readKnown as readKnownDefault } from './known'
-import { claimRun, failRun, finishRun } from './store'
-import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoEvidence, type SeoKnown, type SeoRunTrigger, type SeoTest, type SeoTestId, type SeoTestResult } from './types'
+import { claimRun, failRun, finishRun, type SeoClaimRefusal } from './store'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoEvidence, type SeoKnown, type SeoRunReach, type SeoRunTrigger, type SeoTest, type SeoTestId, type SeoTestResult } from './types'
 
 /** What `gatherSiteEvidence` answers: the site's side of the evidence (everything but the share
  *  picture, MusicBrainz and what Tapir knows, which the run adds). */
@@ -62,9 +64,17 @@ export type RunDeps = {
   note?: string | null
 }
 
+/**
+ * WHO writes the run. `writer` is the SERVICE-ROLE client (lib/supabase/admin): the only role that
+ * may call seo_test_claim / seo_test_finish. `userId` is the signed-in manager the caller has
+ * already checked owns the artist (null only for a scheduled run); the database's per-person
+ * limits count it. `publishedAt`: for a publish run, the publish it is for.
+ */
+export type RunWho = { writer: SupabaseClient; userId: string | null; publishedAt?: string | null }
+
 export type SeoRunOutcome =
   | { ok: true; runId: string; results: SeoTestResult[]; siteFresh: boolean | null; note: string | null }
-  | { ok: false; reason: 'busy' | 'cooldown' | 'denied' | 'error'; error: string; retryInS?: number | null }
+  | { ok: false; reason: SeoClaimRefusal; error: string; retryInS?: number | null }
 
 /* ── results the run writes itself ──────────────────────────────────────────────────── */
 
@@ -172,12 +182,17 @@ export async function readPublishMoments(supabase: SupabaseClient, artistId: str
 }
 
 /**
- * Run the tests for one artist and store the run. Never throws. The caller has already checked
- * the signed-in manager owns the artist (test-actions.ts); RLS and the claim trigger check again.
+ * Run the tests for one artist and store the run. Never throws.
+ *
+ * `supabase` is the READER: the signed-in manager's own session, so what the run reads about the
+ * artist is RLS-scoped exactly as the page is. Every WRITE goes through `who.writer` (the service
+ * role). The caller has already checked the manager owns the artist (test-actions.ts, the publish
+ * hook); the claim function checks again against `who.userId`.
  */
-export async function runSeoTests(supabase: SupabaseClient, artistId: string, trigger: SeoRunTrigger, deps: RunDeps = {}): Promise<SeoRunOutcome> {
+export async function runSeoTests(supabase: SupabaseClient, artistId: string, trigger: SeoRunTrigger, who: RunWho, deps: RunDeps = {}): Promise<SeoRunOutcome> {
   const now = deps.now ?? Date.now
-  const claim = await claimRun(supabase, artistId, trigger)
+  const writer = who.writer
+  const claim = await claimRun(writer, artistId, trigger, { userId: who.userId, publishedAt: who.publishedAt ?? null })
   if (!claim.ok) return { ok: false, reason: claim.reason, error: claim.error, retryInS: claim.retryInS }
   const deadline = now() + (deps.budgetMs ?? SEO_RUN_BUDGET_MS)
 
@@ -185,6 +200,9 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
     const known = await (deps.readKnown ?? readKnownDefault)(supabase, artistId, { now: now() })
     let results: SeoTestResult[]
     let siteFresh: boolean | null = null
+    // Did the site answer? The gather's own verdict; null when there is no site, or when OUR
+    // code broke before it could look (that says nothing about the site).
+    let reach: SeoRunReach | null = null
     const notes: string[] = deps.note ? [deps.note] : []
 
     if (!known.siteUrl) {
@@ -196,9 +214,11 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
         (deps.readMoments ?? readPublishMoments)(supabase, artistId).catch(() => [] as string[]),
       ])
       if (!got.ok) {
+        if (got.timedOut) reach = { state: 'no-answer', status: null, error: 'timeout' }
         results = SEO_TEST_IDS.map(got.timedOut ? OUT_OF_TIME : NO_ANSWER)
         notes.push(got.timedOut ? 'Your site took too long to answer, so nothing could be checked.' : 'We couldn’t read your site, so nothing could be checked.')
       } else {
+        reach = got.evidence.reach ?? null
         results = runAllTests(engine.tests, got.evidence)
         for (const part of got.missed) {
           for (const id of DEPENDS[part]) {
@@ -215,17 +235,23 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
       }
     }
 
-    const saved = await finishRun(supabase, claim.runId, {
+    const saved = await finishRun(writer, claim.runId, {
       results,
       siteUrl: known.siteUrl,
       siteFresh,
       publishedAt: known.published?.publishedAt ?? null,
       note: notes.length ? notes.join(' ') : null,
+      reach,
     })
-    if (!saved.ok) return { ok: false, reason: 'error', error: saved.error }
+    if (!saved.ok) {
+      // Refused (the size check) or not running any more: never leave it "running", or the
+      // artist reads as busy until the 5-minute sweep.
+      await failRun(writer, claim.runId, 'The test finished but its results couldn’t be saved.')
+      return { ok: false, reason: 'error', error: saved.error }
+    }
     return { ok: true, runId: claim.runId, results, siteFresh, note: notes.length ? notes.join(' ') : null }
   } catch {
-    await failRun(supabase, claim.runId, 'The test couldn’t finish.')
+    await failRun(writer, claim.runId, 'The test couldn’t finish.')
     return { ok: false, reason: 'error', error: 'The test couldn’t finish. Try again in a minute.' }
   }
 }

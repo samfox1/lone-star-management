@@ -170,7 +170,7 @@ export function TourRow({
             there is no Save, no "old show" toggle (a past date is an old show), and no
             click numbers (the Analytics button in the corner goes to that page). */}
         <ModalHeader
-          square={<DateSquare date={tour.date} past={tour.past} />}
+          mark={<DateSquare date={tour.date} past={tour.past} />}
           title={tour.venue || 'Untitled venue'}
           meta={
             <>

@@ -35,10 +35,9 @@ describe('the fixed questions', () => {
     }
     // The automatic answer shows, never a stored written one (the site ignores it).
     expect(screen.queryByText('Stale.')).toBeNull()
-    expect(screen.getByText('comes from Tour')).toBeTruthy()
-    expect(screen.getByText('comes from Music')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Open Tour' }).getAttribute('href')).toBe('/artists/a1/tour')
-    expect(screen.getByRole('link', { name: 'Open Music' }).getAttribute('href')).toBe('/artists/a1/music')
+    // The tag is the way there.
+    expect(screen.getByRole('link', { name: 'comes from Tour' }).getAttribute('href')).toBe('/artists/a1/tour')
+    expect(screen.getByRole('link', { name: 'comes from Music' }).getAttribute('href')).toBe('/artists/a1/music')
   })
   it('CRITICAL: an editable answer opens in place, starting from the automatic one, and saves to its FAQ key', async () => {
     show()
@@ -50,10 +49,19 @@ describe('the fixed questions', () => {
     fireEvent.change(box, { target: { value: 'House, from Chicago.' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_KEYS[1], 'House, from Chicago.'))
   })
-  it('a written answer can go back to the automatic one; with none written there is nothing to clear', async () => {
+  it('CRITICAL: going back to the automatic answer asks first; No keeps the words', async () => {
+    show({ [FAQ_KEYS[0]]: 'My own words.' })
+    fireEvent.click(screen.getByRole('button', { name: 'Use the automatic answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(seoMock).not.toHaveBeenCalled()
+    expect(screen.getByText('My own words.')).toBeTruthy()
+  })
+  it('a written answer can go back to the automatic one (after Yes); with none written there is nothing to clear', async () => {
     show({ [FAQ_KEYS[0]]: 'My own words.' })
     expect(screen.getByText('My own words.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use the automatic answer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use automatic' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_KEYS[0], ''))
     expect(screen.getByText(AUTO[0])).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Use the automatic answer' })).toBeNull()
@@ -72,6 +80,9 @@ describe('your own questions', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Answer: Where is Skeen from?' }), { target: { value: 'Chicago.' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[1].a, 'Chicago.'))
     fireEvent.click(screen.getByRole('button', { name: 'Remove: Can I book Skeen?' }))
+    // It asks first: nothing is removed until Remove is pressed.
+    expect(seoMock).not.toHaveBeenCalledWith('a1', FAQ_EXTRA[0].q, '')
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[0].q, ''))
     expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[0].a, '')
   })

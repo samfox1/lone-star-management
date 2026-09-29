@@ -29,9 +29,11 @@ function fakeFetch(pages: Record<string, Page>): FakeFetch {
     const key = String(url)
     calls.push(key)
     const page = pages[key]
+    // Real Responses (a body stream, headers), so the code reads them exactly as it reads
+    // fetch's: the guarded read streams the body and stops at its cap.
     if (page == null || typeof page === 'string') {
       const body = page ?? null
-      return { ok: body != null, status: body != null ? 200 : 404, headers: new Headers(), text: async () => body ?? '' } as Response
+      return new Response(body ?? '', { status: body != null ? 200 : 404 })
     }
     // A real client FOLLOWS a redirect unless told not to, and it follows it wherever it
     // points — that is precisely why the caller has to ask for `manual` and walk the
@@ -39,12 +41,10 @@ function fakeFetch(pages: Record<string, Page>): FakeFetch {
     if (page.status >= 300 && page.status < 400 && page.location && init?.redirect !== 'manual') {
       return impl(new URL(page.location, key).toString(), init)
     }
-    return {
-      ok: page.status >= 200 && page.status < 300,
+    return new Response(page.status === 204 || page.status === 304 ? null : (page.body ?? ''), {
       status: page.status,
       headers: new Headers(page.location ? { location: page.location } : {}),
-      text: async () => page.body ?? '',
-    } as Response
+    })
   }
   return Object.assign(impl as unknown as typeof fetch, { calls })
 }

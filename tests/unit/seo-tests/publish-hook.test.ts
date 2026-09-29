@@ -61,6 +61,9 @@ describe('the SEO / GEO run after a publish', () => {
     expect(await run(actions)).toEqual({ ok: true })
     expect(h.schedule).toHaveBeenCalledTimes(1)
     expect(h.schedule.mock.calls[0][1]).toBe(A)
+    // The manager the password gate verified: the run's claim is made in their name (the
+    // database's per-person limits count it), by the service role.
+    expect(h.schedule.mock.calls[0][2]).toBe('u1')
   })
 
   it("Brand's publish schedules none: colours, fonts and logos change no page's words", async () => {

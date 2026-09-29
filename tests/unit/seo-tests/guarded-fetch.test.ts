@@ -238,6 +238,25 @@ describe('the whole call has a deadline', () => {
     expect(Date.now() - t).toBeLessThan(600)
   })
 
+  it('CRITICAL: a body that drips and IGNORES the abort signal still ends at the timeout', async () => {
+    // A transport that does not tie its body to the request's signal (a fake, a wrapper that
+    // drops it) must not let a dripping body hold the read open: the reader races the signal.
+    let timer: ReturnType<typeof setInterval> | undefined
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start: (c) => void (timer = setInterval(() => c.enqueue(new Uint8Array([120])), 20)),
+          cancel: () => clearInterval(timer),
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch
+    const t = Date.now()
+    const r = await guardedFetch(SITE, { fetcher, timeoutMs: 250 })
+    clearInterval(timer)
+    expect(Date.now() - t).toBeLessThan(1500)
+    expect(r).toMatchObject({ status: 200, error: 'timeout', text: null })
+  }, 4000)
+
   it('a deadline already spent sends nothing', async () => {
     const f = chain()
     expect(await guardedFetch('https://a.example.com/', { fetcher: f, deadlineMs: 0 })).toMatchObject({ status: null, error: 'timeout' })

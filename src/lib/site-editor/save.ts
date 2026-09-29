@@ -150,14 +150,14 @@ export const SEO_LIMITS: Record<string, number> = {
 /** What a manager may store under an SEO key — derived from SEO_FIELDS, so a key added
  *  to the schema without a rule here is refused, never silently accepted.
  *
- *  `ctx` matters only for two fact keys: the artist's name (an alias may not repeat it)
- *  and "this year" (the Active since cap). Without it the name check is skipped and the
+ *  `ctx` matters only for three fact keys: the artist's name (an alias may not repeat it),
+ *  "this year" (the Active since cap) and the country (a region on its list). Without it the name check is skipped and the
  *  year is today's; saveSeoField always passes the real ones. */
 export function seoValueError(key: string, value: string, ctx?: Partial<FactContext>): string | null {
   if (!SEO_FIELDS.some((f) => f.key === key)) return 'Unknown SEO field.'
   if (!value) return null
   if (isFactKey(key)) {
-    const r = cleanFactValue(key, value, { artistName: ctx?.artistName ?? '', thisYear: ctx?.thisYear ?? thisYearAt(new Date()) })
+    const r = cleanFactValue(key, value, { artistName: ctx?.artistName ?? '', thisYear: ctx?.thisYear ?? thisYearAt(new Date()), country: ctx?.country ?? null })
     return 'error' in r ? r.error : null
   }
   if (key === 'og_image') return safeHttpUrl(value) && /^https:/i.test(value) ? null : 'The social image must be an https URL.'
@@ -251,7 +251,21 @@ async function saveFactField(
     if (!data) return { ok: false, error: 'Artist not found.' }
     artistName = (data as { name: string | null }).name ?? ''
   }
-  const r = cleanFactValue(key, value, { artistName, thisYear: thisYearAt(now) })
+  // The region rule needs the country AS STORED (a region list for the US, Canada, Australia
+  // and the UK), and the gate reads it itself, like the name above: a caller's could be stale.
+  // A failed read refuses, so an unchecked region is never stored.
+  let country: string | null = null
+  if (key === FACT_CONTENT_KEYS.region && value.trim() !== '') {
+    const refused = { ok: false, error: 'Couldn’t check your country. Try again.' }
+    try {
+      const { data, error } = await supabase.from('site_content').select('value').eq('artist_id', artistId).eq('key', FACT_CONTENT_KEYS.country).maybeSingle()
+      if (error) return refused
+      country = ((data as { value: string | null } | null)?.value ?? '').trim() || null
+    } catch {
+      return refused
+    }
+  }
+  const r = cleanFactValue(key, value, { artistName, thisYear: thisYearAt(now), country })
   if ('error' in r) return { ok: false, error: r.error }
   return writeSiteContentValue(supabase, artistId, key, r.value)
 }

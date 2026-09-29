@@ -12,6 +12,7 @@
  *
  * Every reader is total: junk html gives empty answers, never a throw.
  */
+import { trimTrailingSlashes } from '@/lib/url'
 import type { SeoEvidence, SeoPageFetch } from './types'
 
 /* ── entities ───────────────────────────────────────────────────────────────────────── */
@@ -19,6 +20,7 @@ import type { SeoEvidence, SeoPageFetch } from './types'
 const NAMED: Record<string, string> = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', middot: '·', mdash: '—', ndash: '–', hellip: '…',
   rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', copy: '©', reg: '®', trade: '™', bull: '•', times: '×',
+  shy: '\u00AD', zwnj: '\u200C', zwj: '\u200D', lrm: '\u200E', rlm: '\u200F', ensp: '\u2002', emsp: '\u2003', thinsp: '\u2009',
 }
 
 /** `&#x27;` → `'`, `&amp;` → `&`. React escapes the quotes and ampersands a bio is full of,
@@ -55,9 +57,78 @@ type Tok =
  *  its images are duplicates of the real ones, and its words are for browsers without
  *  scripts, not what a visitor sees. */
 const RAW = new Set(['script', 'style', 'title', 'textarea', 'noscript', 'xmp', 'iframe', 'noembed', 'noframes'])
-/** Attribute values may hold a quoted `>`; each alternative starts with a different
- *  character, so this cannot backtrack. */
-const TAG = /<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/y
+/** What JavaScript's `\s` matches, by char code (the old tag regex's name rule used `\s`). */
+function isSpace(c: number): boolean {
+  return (
+    c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) ||
+    c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff
+  )
+}
+
+/**
+ * The tag grammar the old regex read, `<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>`
+ * (plain characters, "…" and '…' runs, then `>`), walked by hand. The regex rescanned to the
+ * end of the page from EVERY `<` whose tag never closes: quadratic, ~153 s for 1 MiB of
+ * `<a href="` (security review 2026-09-29), on the one thread every request shares.
+ *
+ * Linear: two lookup tables built once, backwards (the next `>`/`"`/`'`, and where a tag name
+ * stops), and every quote reached from outside a quoted run remembers where its tag ends, so
+ * a later `<` that reaches the same quote reuses the answer instead of rescanning. One
+ * difference, pathological only: a tag NAME holding a quote is not re-split when its tag
+ * fails to close (the regex backtracked into the name; no real page has one).
+ */
+function tagReader(html: string): { nameEnd: (from: number) => number; bodyEnd: (from: number) => number } {
+  const n = html.length
+  let special: Int32Array | null = null
+  let stop: Int32Array | null = null
+  const ends = new Map<number, number>()
+  const build = () => {
+    special = new Int32Array(n + 1)
+    stop = new Int32Array(n + 1)
+    special[n] = n
+    stop[n] = n
+    for (let i = n - 1; i >= 0; i--) {
+      const c = html.charCodeAt(i)
+      special[i] = c === 62 || c === 34 || c === 39 ? i : special[i + 1]
+      stop[i] = c === 62 || c === 47 || isSpace(c) ? i : stop[i + 1]
+    }
+  }
+  return {
+    /** Where `[^\s/>]*` starting at `from` stops. */
+    nameEnd(from) {
+      if (!stop) build()
+      return from >= n ? n : stop![from]
+    },
+    /** The index of the `>` that ends a tag body starting at `from`, or -1 when it never ends. */
+    bodyEnd(from) {
+      if (!special) build()
+      const seen: number[] = []
+      let p = from
+      let out = -1
+      for (;;) {
+        const k = p >= n ? n : special![p]
+        if (k >= n) break
+        if (html.charCodeAt(k) === 62) {
+          out = k
+          break
+        }
+        const known = ends.get(k)
+        if (known !== undefined) {
+          out = known
+          break
+        }
+        seen.push(k)
+        const close = html.indexOf(html[k], k + 1)
+        if (close < 0) break
+        p = close + 1
+      }
+      for (const k of seen) ends.set(k, out)
+      return out
+    },
+  }
+}
+
+const isLetter = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122)
 const ATTR = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
 
 export function parseAttrs(s: string): Attrs {
@@ -73,6 +144,7 @@ export function parseAttrs(s: string): Attrs {
 function tokenize(html: string): Tok[] {
   const toks: Tok[] = []
   const n = html.length
+  const tags = tagReader(html)
   let i = 0
   while (i < n) {
     const lt = html.indexOf('<', i)
@@ -93,20 +165,22 @@ function tokenize(html: string): Tok[] {
       i = end < 0 ? n : end + 1
       continue
     }
-    TAG.lastIndex = lt
-    const m = TAG.exec(html)
-    if (!m) {
+    const isClose = next === '/'
+    const nameStart = lt + (isClose ? 2 : 1)
+    const bodyStart = nameStart < n && isLetter(html.charCodeAt(nameStart)) ? tags.nameEnd(nameStart + 1) : -1
+    const end = bodyStart < 0 ? -1 : tags.bodyEnd(bodyStart)
+    if (end < 0) {
       toks.push({ t: 'text', text: '<' })
       i = lt + 1
       continue
     }
-    const name = m[2].toLowerCase()
-    i = TAG.lastIndex
-    if (m[1]) {
+    const name = html.slice(nameStart, bodyStart).toLowerCase()
+    i = end + 1
+    if (isClose) {
       toks.push({ t: 'close', name })
       continue
     }
-    const attrText = m[3]
+    const attrText = html.slice(bodyStart, end)
     const selfClosing = /\/\s*$/.test(attrText)
     const tok: Tok = { t: 'open', name, attrs: parseAttrs(attrText), selfClosing }
     if (RAW.has(name) && !selfClosing) {
@@ -345,6 +419,8 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 export function namesArtist(text: string, name: string): boolean {
   const n = fold(name)
   if (!n) return false
+  // Japanese, Chinese, Korean and Thai run words together: "米津玄師公式サイト" names 米津玄師.
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/u.test(n)) return fold(text).includes(n)
   return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n)}(?![\\p{L}\\p{N}])`, 'u').test(fold(text))
 }
 
@@ -365,7 +441,7 @@ export function isBareName(text: string, name: string): boolean {
 
 /* ── links ──────────────────────────────────────────────────────────────────────────── */
 
-const TRACKING = /^(utm_.*|si|igsh|igshid|fbclid|gclid|ref|feature|ref_src|mc_cid|mc_eid)$/i
+const TRACKING = /^(utm_.*|si|igsh|igshid|fbclid|ref|feature)$/i
 
 /**
  * One profile, however it is spelled: host without `www.`, path without a trailing slash,
@@ -382,7 +458,7 @@ export function linkKey(url: string): string | null {
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
   for (const k of [...u.searchParams.keys()]) if (TRACKING.test(k)) u.searchParams.delete(k)
   u.searchParams.sort()
-  return `${u.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '')}${u.pathname.replace(/\/+$/, '')}${u.search}`
+  return `${u.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '')}${trimTrailingSlashes(u.pathname)}${u.search}`
 }
 
 /** A link as a person reads it: no scheme, no `www.`, no trailing slash, capped. */
@@ -393,7 +469,8 @@ export function shortUrl(url: string, max = 60): string {
 
 /** Cut to `max` characters with an ellipsis. */
 export function clip(s: string, max: number): string {
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
+  const chars = Array.from(s)
+  return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : s
 }
 
 /** "1,234" whatever the machine's locale. */

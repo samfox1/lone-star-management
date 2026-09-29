@@ -6,7 +6,9 @@
  */
 import { SEO_RULES, auditGeoFacts, auditJsonLd, auditSeo, type SeoFinding } from '@samfox1/site-bridge/seo'
 import { isPublicSiteUrl } from './custom-site'
-import { pickTransport, type Resolver } from './net-guard'
+import { trimTrailingSlashes } from './url'
+import type { Resolver } from './net-guard'
+import { guardedFetch } from './seo-tests/guarded-fetch'
 
 export type LiveAudit = {
   url: string
@@ -29,64 +31,48 @@ export const AUDIT_RULES: readonly { rule: string; label: string }[] = SEO_RULES
 /** What a fetch found: the body when it was 2xx, and the http status (null = it threw,
  *  was refused before it left, or ran out of redirect hops). `url` and `headers` belong to
  *  the LAST hop, the one that answered: set whenever a response that is not a redirect came
- *  back (the IndexNow ping reads where the key file really lives, and its version header). */
-type Fetched = { status: number | null; body: string | null; url?: string; headers?: Headers }
+ *  back (the IndexNow ping reads where the key file really lives, and its version header).
+ *  `truncated`: the body was longer than the cap and is only its start. */
+type Fetched = { status: number | null; body: string | null; url?: string; headers?: Headers; truncated?: boolean }
 
 const NOT_FETCHED: Fetched = { status: null, body: null }
-/** apex → www is one hop, http → https another. Three is generous; the fourth is a loop. */
-const MAX_HOPS = 3
+/** Per hop, and for the whole call. The IndexNow ping runs this on every Publish. */
+const FETCH_TIMEOUT_MS = 10_000
+const FETCH_DEADLINE_MS = 20_000
+/** A home page, a sitemap or a key file. The transport inflates gzip, so without a cap a few
+ *  hundred KB on the wire could be gigabytes in memory (security review 2026-09-29, F3). */
+const FETCH_MAX_BYTES = 2 * 1024 * 1024
 
 /**
- * Fetch a url the server was told about by a MANAGER, never following it anywhere it
- * should not go. Every hop is re-checked against `isPublicSiteUrl`, because a public host
- * can 302 straight to `http://169.254.169.254/` and node's fetch would follow it happily.
- * Redirects are therefore taken by hand (`redirect: 'manual'`) rather than by the client.
+ * Fetch a url the server was told about by a MANAGER, never following it anywhere it should
+ * not go, never reading more than FETCH_MAX_BYTES, never waiting past the deadline.
  *
- * Where each hop's NAME points is checked at connect by lib/net-guard's transport, the
- * default (and what the global `fetch` is swapped for if a caller passes it). A name that
- * resolves to a private address, or rebinds to one, is refused like a private literal.
- * `fetcher` is for tests, or a production wrapper around `pickTransport()`.
+ * A thin wrapper over the SEO tests' `guardedFetch` (lib/seo-tests/guarded-fetch), so both
+ * guarded fetches share one walk: every hop re-checked against `isPublicSiteUrl` (a public host
+ * can 302 straight to `http://169.254.169.254/`), where each NAME points checked at connect by
+ * lib/net-guard's transport (the default, and what the global `fetch` is swapped for), a capped
+ * body read that races the timeout. `fetcher` is for tests, or a production wrapper around
+ * `pickTransport()`.
  */
-export async function fetchGuarded(url: string, fetcher?: typeof fetch, opts: { resolver?: Resolver } = {}): Promise<Fetched> {
-  const transport = pickTransport(fetcher, opts.resolver)
-  let target = url
-  for (let hop = 0; hop <= MAX_HOPS; hop++) {
-    if (!isPublicSiteUrl(target)) return NOT_FETCHED
-    let r: Response
-    try {
-      r = await transport(target, { headers: { 'user-agent': 'lone-star-seo-check/1.0' }, cache: 'no-store', redirect: 'manual' })
-    } catch {
-      return NOT_FETCHED
-    }
-    const status = typeof r.status === 'number' ? r.status : r.ok ? 200 : 0
-    if (status >= 300 && status < 400) {
-      discard(r)
-      const location = r.headers?.get?.('location') ?? null
-      let next: string | null = null
-      try {
-        next = location ? new URL(location, target).toString() : null
-      } catch {
-        next = null
-      }
-      if (!next) return { status, body: null }
-      target = next
-      continue
-    }
-    if (!r.ok) discard(r)
-    return { status, body: r.ok ? await r.text() : null, url: target, headers: r.headers }
-  }
-  return NOT_FETCHED
-}
-
-/** Let go of a body nobody will read, so its connection is freed now rather than at GC.
- *  Never awaited: cancelling one branch of a CLONED response (a tee) settles only when the
- *  other branch is cancelled too, so awaiting it can hang forever. */
-function discard(r: Response): void {
-  try {
-    r.body?.cancel?.().catch(() => {})
-  } catch {
-    // Already errored or locked: nothing left to free.
-  }
+export async function fetchGuarded(
+  url: string,
+  fetcher?: typeof fetch,
+  opts: { resolver?: Resolver; timeoutMs?: number; maxBytes?: number } = {},
+): Promise<Fetched> {
+  const timeoutMs = opts.timeoutMs ?? FETCH_TIMEOUT_MS
+  const r = await guardedFetch(url, {
+    fetcher,
+    resolver: opts.resolver,
+    userAgent: 'lone-star-seo-check/1.0',
+    timeoutMs,
+    deadlineMs: Math.max(timeoutMs, FETCH_DEADLINE_MS),
+    maxBytes: opts.maxBytes ?? FETCH_MAX_BYTES,
+  })
+  if (r.status === null) return NOT_FETCHED
+  if (r.error === 'bad-redirect') return { status: r.status, body: null }
+  const ok = r.status >= 200 && r.status < 300
+  const body = ok && !r.error ? r.text : null
+  return { status: r.status, body, url: r.finalUrl ?? undefined, headers: new Headers(r.headers), ...(r.truncated ? { truncated: true } : {}) }
 }
 
 async function text(url: string, fetcher?: typeof fetch): Promise<string | null> {
@@ -112,17 +98,90 @@ function decodeEntities(s: string): string {
   })
 }
 
-/** Visible text of an html page, roughly: scripts/styles dropped, tags stripped,
- *  entities turned back into the characters the manager actually typed. */
-function visibleText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' '),
-  )
+/** `html` with every `<tag…</tag>` block (first close after each open, as a lazy match
+ *  would) replaced by a space. Linear: once no close is left, no later open can have one. */
+function dropBlocks(html: string, tag: string): string {
+  const open = new RegExp(`<${tag}`, 'gi')
+  const close = new RegExp(`</${tag}>`, 'gi')
+  const out: string[] = []
+  let from = 0
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    close.lastIndex = m.index + tag.length + 1
+    const c = close.exec(html)
+    if (!c) break
+    out.push(html.slice(from, m.index), ' ')
+    from = close.lastIndex
+    open.lastIndex = from
+  }
+  out.push(html.slice(from))
+  return out.join('')
+}
+
+/** Every `<…>` (at least one character inside) replaced by a space. Linear: the first `>`
+ *  after a `<` ends it, and once no `>` is left, no later `<` can start a tag. */
+function dropTags(html: string): string {
+  const out: string[] = []
+  let from = 0
+  let at = html.indexOf('<')
+  while (at >= 0) {
+    const gt = html.indexOf('>', at + 1)
+    if (gt < 0) break
+    if (gt === at + 1) {
+      at = html.indexOf('<', at + 1)
+      continue
+    }
+    out.push(html.slice(from, at), ' ')
+    from = gt + 1
+    at = html.indexOf('<', from)
+  }
+  out.push(html.slice(from))
+  return out.join('')
+}
+
+/**
+ * Visible text of an html page, roughly: scripts/styles dropped, tags stripped, entities
+ * turned back into the characters the manager actually typed.
+ *
+ * Walked, not regexed: `/<script[\s\S]*?<\/script>/` and `/<[^>]+>/` rescanned to the end
+ * of the page from every open that never closes, quadratic on a page the server fetched
+ * (security review 2026-09-29, F4). Same answers as those regexes.
+ */
+export function visibleText(html: string): string {
+  return decodeEntities(dropTags(dropBlocks(dropBlocks(html, 'script'), 'style')))
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const LD_TYPE = /type="application\/ld\+json"/gi
+
+/**
+ * The first JSON-LD block's text: the first `<script …type="application/ld+json"…>` (within
+ * the tag) and everything up to the next `</script>`, or null. The same answer as the old
+ * `/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i`, which was
+ * worse than quadratic on a page of unclosed `<script` tags. Linear: the tag's end and the
+ * next `type=` are found once and reused until the walk passes them.
+ */
+export function firstJsonLd(html: string): string | null {
+  const open = /<script/gi
+  let gt = -1
+  let typeAt = -1
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    const body = m.index + 7
+    if (gt < body) gt = html.indexOf('>', body)
+    if (gt < 0) return null
+    if (typeAt < body) {
+      LD_TYPE.lastIndex = body
+      const t = LD_TYPE.exec(html)
+      typeAt = t ? t.index : Number.POSITIVE_INFINITY
+    }
+    if (typeAt < gt) {
+      const close = /<\/script>/gi
+      close.lastIndex = gt + 1
+      const c = close.exec(html)
+      return c ? html.slice(gt + 1, c.index) : null
+    }
+  }
+  return null
 }
 
 /** Same scheme, host and port as the site being audited. */
@@ -139,7 +198,7 @@ export async function auditLiveSite(
   fetcher: typeof fetch = fetch,
   opts: { bio?: string | null } = {},
 ): Promise<LiveAudit> {
-  const base = origin.replace(/\/+$/, '')
+  const base = trimTrailingSlashes(origin)
   const blank = { url: base, ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null } satisfies Omit<LiveAudit, 'error'>
   // The one place the server fetches a manager-supplied address. A private / loopback /
   // link-local target is the server's own network, and this check reports fragments of
@@ -156,16 +215,16 @@ export async function auditLiveSite(
   // Anything else (429, 500, a thrown fetch) means nobody LOOKED, which is not a pass.
   const editError = edit.body == null && edit.status !== 404 ? (edit.status ? `HTTP ${edit.status}` : 'no response') : null
   const findings: SeoFinding[] = auditSeo({ home, edit: edit.body, editError })
-  const ld = home.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
+  const ld = firstJsonLd(home)
   let graph: Record<string, number> = {}
   let releaseKinds: Record<string, number> = {}
-  if (ld) {
-    const summary = auditJsonLd(ld[1])
+  if (ld !== null) {
+    const summary = auditJsonLd(ld)
     graph = summary.counts
     releaseKinds = summary.kinds
     for (const f of summary.findings) findings.push({ rule: f.rule === 'json-ld' ? 'json-ld' : 'facts', problem: f.problem })
     try {
-      findings.push(...auditGeoFacts(JSON.parse(ld[1])))
+      findings.push(...auditGeoFacts(JSON.parse(ld)))
     } catch {
       /* already reported by auditJsonLd */
     }

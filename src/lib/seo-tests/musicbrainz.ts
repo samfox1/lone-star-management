@@ -14,7 +14,8 @@
  * 503 / 429, waiting as asked (capped). Two server instances still share one IP without
  * sharing this gate: the retry is what covers that.
  *
- * A MusicBrainz artist link the manager already connected is taken as the answer, unasked.
+ * A MusicBrainz artist link the manager already connected is OPENED (/ws/2/artist/<id>) instead:
+ * 404 = MusicBrainz has no artist there; otherwise its name is reported for the test to compare.
  * Could not ask (network, busy, an answer we can't read) = `looked: false`: the test says
  * "couldn't check", never "MusicBrainz doesn't know you". Never throws.
  */
@@ -97,7 +98,9 @@ const CLEANUPS: Clean[] = [
   {
     host: /(^|\.)tidal\.com$/,
     steps: [
-      [/^(?:https?:\/\/)?(?:(?:[^/]+\.)*(?:desktop|listen|stage|www)\.)?tidal\.com\/(?:#!\/)?([\w/]+).*$/, 'https://tidal.com/$1'],
+      // `[^/.]` (one label at a time), not `[^/]`: the nested quantifier split a long host every way
+      // before failing, exponential in its labels (security review 2026-09-29).
+      [/^(?:https?:\/\/)?(?:(?:[^/.]+\.)*(?:desktop|listen|stage|www)\.)?tidal\.com\/(?:#!\/)?([\w/]+).*$/, 'https://tidal.com/$1'],
       [/^https:\/\/tidal\.com\/(?:[a-z]{2}\/)?(?:browse\/|store\/)?(?:[a-z]+\/\d+\/)?([a-z]+)\/(\d+)(?:\/[\w]*)?$/, 'https://tidal.com/$1/$2'],
     ],
   },
@@ -184,6 +187,30 @@ function artistsIn(json: unknown, askedOrder: string[]): Found[] | null {
   return found.sort((a, b) => pos(a.resource) - pos(b.resource))
 }
 
+/** One request to MusicBrainz's web service, by its rules: the shared one-a-second gate, our
+ *  User-Agent, one retry after a 503 / 429. `status` null = no answer (see `error`). */
+async function ask(url: string, opts: Opts, now: () => number, sleep: (ms: number) => Promise<void>): Promise<{ status: number | null; json?: unknown; error?: string }> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (opts.signal?.aborted) return { status: null, error: 'the test ran out of time before asking' }
+    await gate(now, sleep)
+    const r = await guardedFetch(url, { fetcher: opts.fetcher, userAgent: TAPIR_CHECK_UA, timeoutMs: TIMEOUT_MS, maxBytes: 512 * 1024, allow: (next) => next.startsWith('https://musicbrainz.org/ws/2/') })
+    if (r.status === 503 || r.status === 429) {
+      if (attempt === 1) return { status: null, error: r.status === 503 ? 'MusicBrainz was busy (503)' : 'MusicBrainz asked us to slow down (429)' }
+      const after = Number.parseInt(r.headers['retry-after'] ?? '', 10)
+      await sleep(Math.min(RETRY_CAP_MS, Math.max(GAP_MS, Number.isFinite(after) ? after * 1000 : GAP_MS)))
+      continue
+    }
+    if (r.status === null) return { status: null, error: `couldn’t reach MusicBrainz (${r.error ?? 'no answer'})` }
+    if (r.status !== 200) return { status: r.status }
+    try {
+      return { status: 200, json: JSON.parse(r.text ?? '') }
+    } catch {
+      return { status: null, error: 'MusicBrainz sent an answer we couldn’t read' }
+    }
+  }
+  return { status: null, error: 'MusicBrainz was busy' }
+}
+
 /**
  * MusicBrainz's answer for this artist. See the header for what is asked and when it counts
  * as asked.
@@ -197,7 +224,17 @@ export async function lookupMusicBrainz(known: SeoKnown, opts: Opts = {}): Promi
   const links = known.published?.links ?? []
   for (const l of links) {
     const id = musicbrainz.social?.idFromUrl?.(String(l.url ?? '').trim())
-    if (id && MBID.test(id)) return { looked: true, artistUrl: `https://musicbrainz.org/artist/${id.toLowerCase()}`, matchedOn: 'your MusicBrainz link in Connections', artistName: null }
+    if (!id || !MBID.test(id)) continue
+    // The manager's own link, OPENED (verify-content.md M2): a well-formed id MusicBrainz doesn't
+    // have is "no page there", and the name it has is reported for the test to compare.
+    const mbid = id.toLowerCase()
+    const r = await ask(`https://musicbrainz.org/ws/2/artist/${mbid}?fmt=json`, opts, now, sleep)
+    const matchedOn = 'your MusicBrainz link in Connections'
+    if (r.status === 404) return { looked: true, artistUrl: null, matchedOn, artistName: null, fromConnections: true }
+    if (r.status === 200 && isObj(r.json) && typeof r.json.id === 'string' && MBID.test(r.json.id)) {
+      return { looked: true, artistUrl: `https://musicbrainz.org/artist/${r.json.id.toLowerCase()}`, matchedOn, artistName: typeof r.json.name === 'string' ? r.json.name : null, fromConnections: true }
+    }
+    return { looked: false, artistUrl: null, matchedOn: null, error: r.error ?? (r.status === 200 ? 'MusicBrainz sent an answer we couldn’t read' : `MusicBrainz answered with error ${r.status}`) }
   }
   const site = known.siteUrl && isPublicSiteUrl(known.siteUrl) ? musicBrainzForms(known.siteUrl, { site: true }) : []
   const profiles = links
@@ -215,37 +252,16 @@ export async function lookupMusicBrainz(known: SeoKnown, opts: Opts = {}): Promi
   if (!asked.length) return { looked: false, artistUrl: null, matchedOn: null, error: 'there was no site or profile link to look up' }
   const url = `${API}?${asked.map((r) => `resource=${encodeURIComponent(r)}`).join('&')}&inc=artist-rels&fmt=json`
   const notAsked = (error: string): Answer => ({ looked: false, artistUrl: null, matchedOn: null, error, asked: shown })
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (opts.signal?.aborted) return notAsked('the test ran out of time before asking')
-    await gate(now, sleep)
-    const r = await guardedFetch(url, {
-      fetcher: opts.fetcher,
-      userAgent: TAPIR_CHECK_UA,
-      timeoutMs: TIMEOUT_MS,
-      maxBytes: 512 * 1024,
-      allow: (next) => next.startsWith(`${API}?`),
-    })
-    if (r.status === 503 || r.status === 429) {
-      if (attempt === 1) return notAsked(r.status === 503 ? 'MusicBrainz was busy (503)' : 'MusicBrainz asked us to slow down (429)')
-      const after = Number.parseInt(r.headers['retry-after'] ?? '', 10)
-      await sleep(Math.min(RETRY_CAP_MS, Math.max(GAP_MS, Number.isFinite(after) ? after * 1000 : GAP_MS)))
-      continue
-    }
-    if (r.status === null) return notAsked(`couldn’t reach MusicBrainz (${r.error ?? 'no answer'})`)
-    if (r.status === 404) return { looked: true, artistUrl: null, matchedOn: null, artistName: null, asked: shown }
-    if (r.status !== 200) return notAsked(`MusicBrainz answered with error ${r.status}`)
-    let json: unknown
-    try {
-      json = JSON.parse(r.text ?? '')
-    } catch {
-      return notAsked('MusicBrainz sent an answer we couldn’t read')
-    }
-    const found = artistsIn(json, asked)
-    if (!found) return notAsked('MusicBrainz sent an answer we couldn’t read')
-    const name = fold(known.artistName)
-    const best = found.find((f) => name && fold(f.name) === name) ?? found[0]
-    if (!best) return { looked: true, artistUrl: null, matchedOn: null, artistName: null, asked: shown }
-    return { looked: true, artistUrl: `https://musicbrainz.org/artist/${best.id}`, matchedOn: best.resource, artistName: best.name || null, asked: shown }
-  }
-  return notAsked('MusicBrainz was busy')
+  const r = await ask(url, opts, now, sleep)
+  if (r.status === null) return notAsked(r.error ?? 'MusicBrainz didn’t answer')
+  if (r.status === 404) return { looked: true, artistUrl: null, matchedOn: null, artistName: null, asked: shown }
+  if (r.status !== 200) return notAsked(`MusicBrainz answered with error ${r.status}`)
+  const found = artistsIn(r.json, asked)
+  if (!found) return notAsked('MusicBrainz sent an answer we couldn’t read')
+  // The artist with THIS artist's name when there is one; else the first, and the `mb` test
+  // compares the name and says when it's someone else's (verify-content.md M1).
+  const name = fold(known.artistName)
+  const best = found.find((f) => name && fold(f.name) === name) ?? found[0]
+  if (!best) return { looked: true, artistUrl: null, matchedOn: null, artistName: null, asked: shown }
+  return { looked: true, artistUrl: `https://musicbrainz.org/artist/${best.id}`, matchedOn: best.resource, artistName: best.name || null, asked: shown }
 }

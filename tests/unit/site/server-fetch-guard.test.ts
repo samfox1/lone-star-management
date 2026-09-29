@@ -138,3 +138,94 @@ describe('the production callers default to the guarded transport', () => {
     expect(dnsState.calls).toEqual(['shop.example-artist.com', 'shop.example-artist.com'])
   })
 })
+
+/* Size and time (security review 2026-09-29, F3). The transport inflates gzip, so a few hundred
+   KB on the wire can be gigabytes in memory: every reader must stop pulling at its cap, and a
+   body that drips a byte at a time must end at the timeout, not hold the request open. */
+describe('every server read of an outside address is capped and bounded in time', () => {
+  /** A web whose answer is `total` bytes of html, pulled a MiB at a time; counts what was pulled. */
+  function big(total: number, headers: Record<string, string> = { 'content-type': 'text/html' }) {
+    const counter = { pulled: 0 }
+    const chunk = new TextEncoder().encode(`<p>${'x'.repeat(1024 * 1024 - 7)}</p>`)
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            if (counter.pulled >= total) return c.close()
+            counter.pulled += chunk.length
+            c.enqueue(chunk)
+          },
+        }),
+        { status: 200, headers },
+      )) as unknown as typeof fetch
+    return { fetcher, counter }
+  }
+
+  /** A body that sends one byte every 20 ms, forever, and stops only when the request is aborted. */
+  function drip(honoursSignal: boolean) {
+    return (async (_input: string | URL | Request, init?: RequestInit) => {
+      let timer: ReturnType<typeof setInterval> | undefined
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          timer = setInterval(() => c.enqueue(new Uint8Array([120])), 20)
+          if (honoursSignal) init?.signal?.addEventListener('abort', () => {
+            clearInterval(timer)
+            c.error(init.signal!.reason)
+          })
+        },
+        cancel() {
+          clearInterval(timer)
+        },
+      })
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/html' } })
+    }) as unknown as typeof fetch
+  }
+
+  const SIXTY_FOUR_MIB = 64 * 1024 * 1024
+
+  it('CRITICAL: fetchGuarded stops pulling at its cap (2 MiB), whatever the answer’s size', async () => {
+    const { fetcher, counter } = big(SIXTY_FOUR_MIB)
+    const r = await fetchGuarded(`${ORIGIN}/`, fetcher)
+    // The cap, plus the chunk that crossed it and the one a stream pulls ahead: not 64 MiB.
+    expect(counter.pulled).toBeLessThanOrEqual(2 * 1024 * 1024 + 2 * 1024 * 1024)
+    expect(r.status).toBe(200)
+    expect(r.body?.length ?? 0).toBeLessThanOrEqual(2 * 1024 * 1024)
+    expect(r.truncated).toBe(true)
+  })
+
+  it('CRITICAL: fetchGuarded ends a dripping body at its timeout', async () => {
+    const t = Date.now()
+    const r = await fetchGuarded(`${ORIGIN}/`, drip(true), { timeoutMs: 300 })
+    expect(Date.now() - t).toBeLessThan(2000)
+    expect(r.body).toBeNull()
+  }, 5000)
+
+  it('CRITICAL: fetchOpenGraph stops pulling at its cap, and still reads the tags at the top', async () => {
+    const counter = { pulled: 0 }
+    const head = new TextEncoder().encode('<html><head><meta property="og:title" content="Vinyl LP"></head><body>')
+    const chunk = new Uint8Array(1024 * 1024).fill(120)
+    const fetchImpl = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            if (counter.pulled >= SIXTY_FOUR_MIB) return c.close()
+            const piece = counter.pulled === 0 ? head : chunk
+            counter.pulled += piece.length
+            c.enqueue(piece)
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'text/html' } },
+      )) as unknown as typeof fetch
+    const og = await fetchOpenGraph('https://shop.example-artist.com/p', { fetchImpl, lookup: async () => ['93.184.216.34'] })
+    expect(og?.title).toBe('Vinyl LP')
+    // Its 512 KB cap, plus the chunk that crossed it and the one a stream pulls ahead.
+    expect(counter.pulled).toBeLessThanOrEqual(512_000 + 2 * 1024 * 1024 + head.length)
+  })
+
+  it('CRITICAL: fetchOpenGraph ends a dripping body at its timeout', async () => {
+    const t = Date.now()
+    const og = await fetchOpenGraph('https://shop.example-artist.com/p', { fetchImpl: drip(true), lookup: async () => ['93.184.216.34'], timeoutMs: 300 })
+    expect(Date.now() - t).toBeLessThan(2000)
+    expect(og).toBeNull()
+  }, 5000)
+})

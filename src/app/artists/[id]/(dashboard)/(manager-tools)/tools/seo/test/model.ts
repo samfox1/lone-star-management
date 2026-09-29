@@ -4,19 +4,22 @@
  * in as arguments), so every number and sentence the tab shows is testable without rendering.
  *
  * COUNTS (Sam's header, round 2: "19 of 24 tests pass" · "5 need you"):
- *   pass       status 'pass'
- *   need you   status 'fail' (the "Needs you" filter shows exactly these)
- *   unknown    "couldn't check": NOT a pass and not a fail; said separately, never hidden
- *   na         "doesn't apply": left out of both sides of "19 of 24" (types.ts SeoTestStatus)
+ *   pass       status 'pass'                        → the "Passing" filter
+ *   need you   status 'fail'                        → the "Needs you" filter
+ *   unknown    "couldn't check": NOT a pass and not a fail; said beside the score and given
+ *              its own filter, "Couldn't check", so every row sits in exactly one filter
+ *   na         "doesn't apply": left out of both sides of "19 of 24" (types.ts SeoTestStatus);
+ *              shown only under All
+ * So pass + need + couldn't = the score's M, and All = M + doesn't-apply.
  * Derived from `results`, never from the row's stored `passed` / `total`: the stored total counts
  * `na` results, and the page must not.
  */
 import { SEO_TEST_DEFS, SEO_TEST_GROUPS } from '@/lib/seo-tests/defs'
 import { SEO_MANUAL_COOLDOWN_S, type StoredSeoRun } from '@/lib/seo-tests/store'
-import type { SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
+import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
 import { SEO_EDIT_TARGETS } from '../sections'
 
-export type TestFilter = 'all' | 'need' | 'pass'
+export type TestFilter = 'all' | 'need' | 'pass' | 'unknown'
 
 export type RunCounts = { pass: number; fail: number; unknown: number; na: number; applicable: number }
 
@@ -32,10 +35,99 @@ export function countResults(results: readonly SeoTestResult[]): RunCounts {
   return c
 }
 
+const FILTER_STATUS: Record<Exclude<TestFilter, 'all'>, SeoTestStatus> = { need: 'fail', pass: 'pass', unknown: 'unknown' }
+
 export function matchesFilter(result: SeoTestResult | null, filter: TestFilter): boolean {
   if (filter === 'all') return true
-  if (!result) return false
-  return filter === 'need' ? result.status === 'fail' : result.status === 'pass'
+  return !!result && result.status === FILTER_STATUS[filter]
+}
+
+/** What an emptied filter says instead of a blank page. */
+export const EMPTY_FILTER: Record<Exclude<TestFilter, 'all'>, string> = {
+  need: 'Nothing needs you',
+  pass: 'Nothing passing yet',
+  unknown: 'Every test could be checked',
+}
+
+/* ── the headline: ONE helper for the Test tab and the Overview ─────────────────────── */
+
+/** Tests that do not need the artist's site at all (MusicBrainz is asked about the artist). */
+export const SITE_FREE_TESTS: readonly SeoTestId[] = ['mb']
+
+/** Tests that read ONLY the home page's own html (its title, summary, fact card). */
+const HOME_PAGE_TESTS: readonly SeoTestId[] = ['title', 'desc', 'card']
+
+/**
+ * THE SITE DIDN'T ANSWER (review 2026-09-29, P1: a site that timed out read "1 thing needs you:
+ * Create your MusicBrainz page"; one that answered error 500 read nine to-dos about a "settings
+ * file"). Decided from STATUSES only, so rewording a test's sentences cannot break it: the three
+ * tests that read nothing but the home page could not check it, and no test that needs the site
+ * passed. A site that is up passes at least one of those (a title, a fact card, a bot's visit),
+ * whatever else is wrong with it. Stands in for a run-level "did the home page answer" field the
+ * engine does not store yet.
+ */
+export function isUnreachable(results: readonly SeoTestResult[]): boolean {
+  if (!results.length) return false
+  const by = new Map(results.map((r) => [r.id, r.status]))
+  const homeUnread = HOME_PAGE_TESTS.every((id) => by.get(id) === 'unknown')
+  const siteAnswered = results.some((r) => r.status === 'pass' && !SITE_FREE_TESTS.includes(r.id))
+  return homeUnread && !siteAnswered
+}
+
+export type RunHeadline =
+  /** The run had no site to test. */
+  | { kind: 'no-site'; title: string; detail: string[] }
+  /** The site didn't answer: one plain thing, no score. */
+  | { kind: 'unreachable'; title: string; detail: string[] }
+  /** Nothing passed or failed, but the site did answer: no score either. */
+  | { kind: 'unchecked'; title: string; detail: string[] }
+  /** Every test was `na`: 0 of 0 is not a score. */
+  | { kind: 'none-apply'; title: string; detail: string[] }
+  | { kind: 'score'; title: string; detail: string[] }
+
+/** What each way of NOT answering reads as (the run's `reach`, 2026-09-29). */
+const NOT_ANSWERED: Record<Exclude<SeoRunReach['state'], 'answered'>, { title: string; detail: string }> = {
+  'no-answer': { title: 'We couldn’t reach your site', detail: 'It may be down, so nothing else was checked' },
+  'server-error': { title: 'Your site answered with an error', detail: 'It may be down, so nothing else was checked' },
+  refused: { title: 'Your site turned our visit away', detail: 'So nothing else could be checked' },
+}
+
+/**
+ * THE HEADLINE for a run, the same words on the Test tab and the Overview. The score is always
+ * "N of M tests pass" (M leaves `na` out); never "All M pass", which read true while tests
+ * couldn't be checked (review P2). `detail` is what sits beside it, in order: "5 need you",
+ * "1 couldn't be checked". `headlineLine` joins them for one-line places.
+ *
+ * Whether the site answered is read from the run's own `reach` FIRST (what the run saw when it
+ * opened the home page). Only a run without one (an older run, or a run whose own code broke)
+ * falls back to the statuses rule (`isUnreachable`).
+ */
+export function runHeadline(run: Pick<StoredSeoRun, 'results' | 'siteUrl'> & { reach?: SeoRunReach | null }): RunHeadline {
+  if (hasNoSite(run)) return { kind: 'no-site', title: 'No site connected', detail: [] }
+  const reach = run.reach ?? null
+  if (reach && reach.state !== 'answered' && NOT_ANSWERED[reach.state]) {
+    const w = NOT_ANSWERED[reach.state]
+    return { kind: 'unreachable', title: w.title, detail: [w.detail] }
+  }
+  if (!reach && isUnreachable(run.results)) return { kind: 'unreachable', title: NOT_ANSWERED['no-answer'].title, detail: [NOT_ANSWERED['no-answer'].detail] }
+  const c = countResults(run.results)
+  if (c.applicable === 0) return { kind: 'none-apply', title: 'None of the tests apply to you', detail: [] }
+  if (c.pass === 0 && c.fail === 0) return { kind: 'unchecked', title: 'We couldn’t check your site this time', detail: [] }
+  const detail: string[] = []
+  if (c.fail) detail.push(`${c.fail} need${c.fail === 1 ? 's' : ''} you`)
+  if (c.unknown) detail.push(`${c.unknown} couldn’t be checked`)
+  return { kind: 'score', title: c.applicable === 1 ? `${c.pass} of 1 test passes` : `${c.pass} of ${c.applicable} tests pass`, detail }
+}
+
+/** "23 of 24 tests pass · 1 couldn’t be checked". */
+export function headlineLine(h: RunHeadline): string {
+  return [h.title, ...h.detail].join(' · ')
+}
+
+/** Do the rows carry results worth opening? Not when the run had no site or the site didn't
+ *  answer: 24 rows of "couldn't check" would bury the one thing that matters. */
+export function rowsAreResults(h: RunHeadline): boolean {
+  return h.kind !== 'no-site' && h.kind !== 'unreachable'
 }
 
 export type TestRow = { def: SeoTestDef; result: SeoTestResult | null }
@@ -94,6 +186,50 @@ export function isStale(run: Pick<StoredSeoRun, 'siteFresh' | 'trigger'>): boole
   return run.siteFresh === false || (run.trigger === 'publish' && run.siteFresh !== true)
 }
 
+/** "Your site may not have updated yet" is news only for a while: after an hour, "test again in
+ *  a minute" would have been done or not needed (review: it stayed on days-old runs). */
+export const STALE_FOR_MS = 60 * 60_000
+
+export function showStale(run: Pick<StoredSeoRun, 'siteFresh' | 'trigger' | 'ranAt'>, nowMs: number): boolean {
+  const at = Date.parse(run.ranAt)
+  return isStale(run) && Number.isFinite(at) && nowMs - at < STALE_FOR_MS
+}
+
+/** A run older than this is said to be old (review: no age limit, no "this is old" line). */
+export const OLD_AFTER_DAYS = 30
+
+/** "6 weeks ago" for a run older than OLD_AFTER_DAYS, else null. */
+export function oldRunText(ranAt: string, nowMs: number): string | null {
+  const at = Date.parse(ranAt)
+  if (!Number.isFinite(at)) return null
+  const days = Math.floor((nowMs - at) / 86_400_000)
+  if (days <= OLD_AFTER_DAYS) return null
+  if (days < 7 * 9) return `${Math.floor(days / 7)} weeks ago`
+  if (days < 365) return `${Math.floor(days / 30)} months ago`
+  const years = Math.floor(days / 365)
+  return years === 1 ? 'a year ago' : `${years} years ago`
+}
+
+/** The host a person reads, "www.skeenmusic.com", or '' for a bad address. */
+export function hostOf(url: string | null | undefined): string {
+  try {
+    return url ? new URL(url).host : ''
+  } catch {
+    return ''
+  }
+}
+
+/** The run tested another address than the artist's site has now (review N12). Compared by
+ *  origin; no current site is a different state (no site connected), not a change. */
+export function siteChanged(runSiteUrl: string, currentSite: string | null): boolean {
+  if (!runSiteUrl || !currentSite) return false
+  try {
+    return new URL(runSiteUrl).origin !== new URL(currentSite).origin
+  } catch {
+    return false
+  }
+}
+
 /** When "Test again" opens after a run started at `ranAt` (ms), or null. The database is the
  *  authority (a manual run within 60 s of the last one is refused); this only says so early. */
 export function cooldownEnd(ranAt: string | null | undefined): number | null {
@@ -101,21 +237,26 @@ export function cooldownEnd(ranAt: string | null | undefined): number | null {
   return Number.isFinite(t) ? t + SEO_MANUAL_COOLDOWN_S * 1000 : null
 }
 
-/** Whole seconds left until `end`, 0 when passed. */
+/** Whole seconds left until `end`, 0 when passed. Never more than the cool-down itself: a
+ *  browser clock that is behind the server's would otherwise read "3660 s" (review N5). */
 export function secondsLeft(end: number | null, nowMs: number): number {
-  return end == null ? 0 : Math.max(0, Math.ceil((end - nowMs) / 1000))
+  if (end == null) return 0
+  const s = Math.ceil((end - nowMs) / 1000)
+  return s > SEO_MANUAL_COOLDOWN_S ? 0 : Math.max(0, s)
 }
 
 export type RunRefusal = { kind: 'cooldown'; retryInS: number } | { kind: 'busy'; error: string } | { kind: 'failed'; error: string }
 
 /**
- * What a refused or failed "Test again" means. runSeoTestsAction passes `retryInS` for the
- * cool-down but not the claim's `reason`, so "busy" is read from its sentence (store.ts
- * claimRun: "A test is already running…"). The report asks for `reason` to be passed through.
+ * What a refused or failed "Test again" means, from the claim's own `reason` (test-actions.ts
+ * passes it through). Only an answer WITHOUT a reason (an older server) is read from its words.
  */
-export function classifyRunError(res: { error: string; retryInS?: number | null }): RunRefusal {
-  if (typeof res.retryInS === 'number' && res.retryInS > 0) return { kind: 'cooldown', retryInS: res.retryInS }
-  if (/a moment ago/i.test(res.error)) return { kind: 'cooldown', retryInS: SEO_MANUAL_COOLDOWN_S }
+export function classifyRunError(res: { error: string; reason?: string | null; retryInS?: number | null }): RunRefusal {
+  const wait = typeof res.retryInS === 'number' && res.retryInS > 0 ? Math.min(res.retryInS, SEO_MANUAL_COOLDOWN_S) : SEO_MANUAL_COOLDOWN_S
+  if (res.reason === 'cooldown') return { kind: 'cooldown', retryInS: wait }
+  if (res.reason === 'busy') return { kind: 'busy', error: res.error }
+  if (res.reason) return { kind: 'failed', error: res.error || 'The test couldn’t finish.' }
+  if (/a moment ago/i.test(res.error)) return { kind: 'cooldown', retryInS: wait }
   if (/already running/i.test(res.error)) return { kind: 'busy', error: res.error }
   return { kind: 'failed', error: res.error || 'The test couldn’t finish.' }
 }
@@ -173,4 +314,36 @@ export const STATUS_WORD: Record<SeoTestStatus, string> = {
   fail: 'needed you',
   unknown: 'couldn’t check',
   na: 'didn’t apply',
+}
+
+/* ── checking it yourself: other tools, behind "Show the details" ───────────────────── */
+
+/**
+ * The outside checkers the old top row offered ("Test with": Rich Results Test, Schema
+ * validator, PageSpeed, Search Console, Bing Webmaster), now beside the test each one checks,
+ * inside "Show the details" where a product name is allowed (review N4: five jargon names sat in
+ * the header). `site` is the address the run tested.
+ */
+export function checkItYourself(id: SeoTestId, site: string): { label: string; href: string }[] {
+  const enc = encodeURIComponent(`${site.replace(/\/+$/, '')}/`)
+  const rich = { label: 'Google’s Rich Results Test', href: `https://search.google.com/test/rich-results?url=${enc}` }
+  const schema = { label: 'Schema.org validator', href: `https://validator.schema.org/#url=${enc}` }
+  const console_ = { label: 'Google Search Console', href: 'https://search.google.com/search-console' }
+  const bing = { label: 'Bing Webmaster Tools', href: 'https://www.bing.com/webmasters' }
+  const speed = { label: 'Google PageSpeed Insights', href: `https://pagespeed.web.dev/analysis?url=${enc}` }
+  const BY: Partial<Record<SeoTestId, { label: string; href: string }[]>> = {
+    google: [console_],
+    allowed: [console_],
+    list: [console_],
+    bing: [bing],
+    bingwm: [bing],
+    words: [speed],
+    card: [rich, schema],
+    genre: [schema],
+    place: [schema],
+    profiles: [schema],
+    shows: [rich],
+    releases: [schema],
+  }
+  return site ? (BY[id] ?? []) : []
 }

@@ -358,6 +358,24 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
     }
   })
 
+  it('full-height lines: under a tabbed tool\u2019s two fixed panels, the in-flow slots carry the same lines, stretched past <main>\u2019s bottom padding', () => {
+    // Sam, 2026-09-29 (a full-page screenshot): the fixed panels are one window tall, so their
+    // lines stopped partway down a long page. jsdom does no layout: the mechanism is pinned.
+    const mainPadY = /<main className="[^"]*\bpy-(\d+)\b/.exec(readFileSync(join(dash, 'layout.tsx'), 'utf8'))?.[1]
+    expect(mainPadY).toMatch(/^\d+$/)
+    for (const tool of tabbed) {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
+      const panelSlot = screen.getByRole('navigation', { name: tool.label }).parentElement!
+      for (const slot of [railSlot, panelSlot]) expect(slot.className.split(/\s+/), tool.seg).toEqual(expect.arrayContaining(['md:border-r', 'md:border-hairline']))
+      // The sizer carries no border of its own: the slot's line stands in for the panel's.
+      expect(panelSlot.querySelector('[aria-hidden="true"]')!.className, tool.seg).not.toMatch(/(^|\s)border-r(\s|$)/)
+      expect(railSlot.parentElement!.className.split(/\s+/), tool.seg).toContain(`md:-mb-${mainPadY}`)
+      cleanup()
+    }
+  })
+
   it('a tool WITHOUT tabs keeps its spacing: no pull, the same gap-8', () => {
     const tool = plain[0]
     pathname = `/artists/a1/${tool.seg}`

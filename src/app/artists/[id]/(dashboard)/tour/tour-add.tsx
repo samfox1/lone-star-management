@@ -92,7 +92,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
         }
       >
         <ModalHeader
-          square={<DateSquare date={v.date || null} />}
+          mark={<DateSquare date={v.date || null} />}
           title={<span className={v.venue ? undefined : 'text-hairline'}>{v.venue || 'New date'}</span>}
           meta={<span>{place || 'draft'}</span>}
         />

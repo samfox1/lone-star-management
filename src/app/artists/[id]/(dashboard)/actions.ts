@@ -4,8 +4,6 @@ import { INTEGRATION_REGISTRY } from '@/lib/integrations-registry'
 import { MEDIA_KINDS } from '@samfox1/site-bridge/payload'
 import { renameMedia } from '@/lib/media-rename'
 import { artistFactUpdate } from '@/lib/artist-facts'
-import { auditLiveSite, type LiveAudit } from '@/lib/seo-audit'
-import { publicSiteOrigin } from '@/lib/custom-site'
 import { ensureIndexNowKey, scheduleIndexNowPing } from '@/lib/indexnow'
 import { scheduleSeoTestRun } from '@/lib/seo-tests/after-publish'
 
@@ -584,19 +582,6 @@ export async function placeGalleryPhotoAction(
  * locks its look: the art is the artist's, the caption is the manager's (Sam,
  * 2026-08-21). Draft until republished, like any content edit. RLS scopes the write.
  */
-/** The SEO / GEO page's live check: fetch the public site and run the bridge audits. */
-export async function runSeoAuditAction(artistId: string): Promise<LiveAudit> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'Not signed in.' }
-  const { data: artist } = await supabase.from('artists').select('slug, site_kind, custom_site_url, bio').eq('id', artistId).single()
-  const origin = publicSiteOrigin(artist)
-  if (!origin) return { url: '', ok: false, rules: [], graph: {}, releaseKinds: {}, sitemap: null, robots: null, error: 'No public site URL to check.' }
-  return auditLiveSite(origin, fetch, { bio: (artist?.bio as string | null) ?? null })
-}
-
 /** The floating Publish bar's action on the SEO / GEO pages: everything that editor
  *  changes (media, site text and the profile, in one write — `publishSite`), behind
  *  the same password gate as every other publish. */
@@ -1271,7 +1256,7 @@ async function publishGated(
     // Same gate as the ping: a publish that changes no page's words (Brand) tests nothing new.
     // The publish is already live: nothing here may turn it into a reported failure.
     try {
-      scheduleSeoTestRun(supabase, artistId)
+      scheduleSeoTestRun(supabase, artistId, gate.userId)
     } catch (e) {
       console.warn('[seo-tests] run not scheduled:', e instanceof Error ? e.message : e)
     }

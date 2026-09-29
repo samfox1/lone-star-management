@@ -118,10 +118,15 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
         inert={!dirty}
         className={cx(
           'fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper px-4 pt-[18px] pb-[calc(18px+env(safe-area-inset-bottom,0px))] sm:px-8',
-          'motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out',
+          // `visibility` rides the same transition: it turns visible at the START of the slide
+          // up and hidden at the END of the slide down, so the motion is kept.
+          'motion-safe:transition-[transform,visibility] motion-safe:duration-200 motion-safe:ease-out',
           // The shadow only while up: it reaches 32px ABOVE the bar, so a hidden bar parked
           // just below the viewport would still grey its bottom edge (2026-09-23 screenshot).
-          dirty ? 'translate-y-0 shadow-[0_-8px_24px_rgba(0,0,0,0.05)]' : 'translate-y-[110%]',
+          // INVISIBLE while down, not only parked: a full-page capture, iPhone Safari's
+          // collapsing bar or a trackpad overscroll showed its red dot and Publish with no
+          // words under the fold (review 2026-09-29, L4).
+          dirty ? 'visible translate-y-0 shadow-[0_-8px_24px_rgba(0,0,0,0.05)]' : 'invisible translate-y-[110%]',
         )}
       >
         <p className="flex min-w-0 items-start">

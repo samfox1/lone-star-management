@@ -181,7 +181,7 @@ describe('hostile answers', () => {
       expect(f.calls).toHaveLength(0)
       expect(e.plain).toEqual([{ path: '/', finalUrl: null, status: null, headers: {}, html: null, error: 'not-public' }])
       expect(e.byBot.googlebot[0].status).toBeNull()
-      expect(e.robots).toEqual({ status: null, body: null })
+      expect(e.robots).toEqual({ status: null, body: null, error: 'not-public' })
       expect(e.sitemap).toBeNull()
     }
   })

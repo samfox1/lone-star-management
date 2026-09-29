@@ -21,6 +21,7 @@
  * revalidate). The wait below requests "/" on every poll so its copy is refreshed alongside the
  * sitemap, then pauses a moment before the run, but a page it did not poke can still be old.
  */
+import { trimTrailingSlashes } from '@/lib/url'
 import { guardedFetch, type GuardedOptions } from './guarded-fetch'
 
 /** Postgres microseconds vs JS milliseconds, plus a little slack. */
@@ -56,10 +57,41 @@ export function siteFreshness(
   return null
 }
 
-/** The `<lastmod>` values of a sitemap, in order. A sitemap INDEX lists sitemaps, not pages. */
+const OPEN = '<lastmod>'
+const CLOSE = '</lastmod>'
+
+/**
+ * The `<lastmod>` values of a sitemap, in order, trimmed. A sitemap INDEX lists sitemaps, not
+ * pages. A value holding a `<` is not one (a CDATA, a nested tag), and the search goes on from
+ * just after its `<lastmod>`, as the old regex did.
+ *
+ * A walk with indexOf, NOT a regex: this runs on a document the site serves, on every Publish,
+ * before any claim, and `/<lastmod>\s*([^<]+?)\s*<\/lastmod>/` backtracked on `<lastmod>` +
+ * spaces: 27 s for 32 KiB (security review 2026-09-29). Every position is looked at a bounded
+ * number of times: the next `</lastmod>` is found once and reused until the walk passes it,
+ * and each value is checked for `<` only up to the next `<`.
+ */
 export function sitemapLastmods(xml: string | null | undefined): string[] {
   if (!xml || /<sitemapindex[\s>]/i.test(xml)) return []
-  return [...xml.matchAll(/<lastmod>\s*([^<]+?)\s*<\/lastmod>/g)].map((m) => m[1])
+  const out: string[] = []
+  let from = 0
+  let close = -1
+  for (;;) {
+    const open = xml.indexOf(OPEN, from)
+    if (open < 0) break
+    const start = open + OPEN.length
+    if (close < start) close = xml.indexOf(CLOSE, start)
+    if (close < 0) break
+    const lt = xml.indexOf('<', start)
+    if (lt < close) {
+      from = start // a `<` inside: not a value; look again after this <lastmod>
+      continue
+    }
+    const value = xml.slice(start, close).trim()
+    if (value) out.push(value)
+    from = close + CLOSE.length
+  }
+  return out
 }
 
 /** A hop may stay on the site's host or its www / apex twin, and nowhere else. */
@@ -91,6 +123,8 @@ export type FreshWait = {
   fresh: boolean | null
   waitedMs: number
   marker: 'sitemap' | 'none'
+  /** The caller told it to stop (shouldStop / signal) before the site turned; `fresh` is null. */
+  stopped?: true
 }
 
 export type WaitOptions = {
@@ -108,6 +142,10 @@ export type WaitOptions = {
   fallbackWaitMs?: number
   /** After the marker turns, give "/" a moment to finish regenerating. */
   settleMs?: number
+  /** Asked before every poll: true stops the wait (a newer publish superseded this one). */
+  shouldStop?: () => boolean
+  /** Aborting stops the wait before the next poll, and cuts a pause between polls short. */
+  signal?: AbortSignal
 }
 
 export const FRESH_MAX_WAIT_MS = 90_000
@@ -133,14 +171,22 @@ export async function waitForFreshSite(o: WaitOptions): Promise<FreshWait> {
   const start = now()
   const waited = () => now() - start
   if (!o.publishedAt) return { fresh: null, waitedMs: 0, marker: 'none' }
+  const stop = () => o.signal?.aborted === true || o.shouldStop?.() === true
+  // A pause the signal can end early. Resolves either way; the loop asks stop() next.
+  const pause = (ms: number) =>
+    o.signal
+      ? Promise.race([sleep(ms), new Promise<void>((resolve) => o.signal!.addEventListener('abort', () => resolve(), { once: true }))])
+      : sleep(ms)
 
   const base: GuardedOptions = { fetcher: o.fetcher, allow: sameSite(o.origin), timeoutMs: POLL_TIMEOUT_MS }
-  const origin = o.origin.replace(/\/+$/, '')
+  const origin = trimTrailingSlashes(o.origin)
   const poke = () => guardedFetch(`${origin}/`, { ...base, maxBytes: 1024 }).catch(() => null)
 
   let sawMarker = false
+  const stopped = (): FreshWait => ({ fresh: null, waitedMs: waited(), marker: sawMarker ? 'sitemap' : 'none', stopped: true })
   try {
     for (;;) {
+      if (stop()) return stopped()
       const [map] = await Promise.all([guardedFetch(`${origin}/sitemap.xml`, { ...base, maxBytes: 512 * 1024 }).catch(() => null), poke()])
       const lastmods = map && map.status === 200 ? sitemapLastmods(map.text) : []
       const verdict = siteFreshness(lastmods, o.publishedAt, o.moments ?? [])
@@ -155,7 +201,7 @@ export async function waitForFreshSite(o: WaitOptions): Promise<FreshWait> {
         return { fresh: null, waitedMs: waited(), marker: 'none' }
       }
       if (waited() + intervalMs > maxWaitMs) return { fresh: sawMarker ? false : null, waitedMs: waited(), marker: sawMarker ? 'sitemap' : 'none' }
-      await sleep(intervalMs)
+      await pause(intervalMs)
     }
   } catch {
     return { fresh: null, waitedMs: waited(), marker: sawMarker ? 'sitemap' : 'none' }

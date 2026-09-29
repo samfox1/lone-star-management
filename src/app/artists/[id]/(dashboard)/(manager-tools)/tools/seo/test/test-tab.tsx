@@ -14,13 +14,19 @@ import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
 import { useMounted, useNow } from './clock'
 import type { TestTabData } from './load'
 import {
+  EMPTY_FILTER,
   classifyRunError,
   cooldownEnd,
   countResults,
   groupsFor,
-  hasNoSite,
-  isStale,
+  hostOf,
+  matchesFilter,
+  oldRunText,
+  rowsAreResults,
+  runHeadline,
   secondsLeft,
+  showStale,
+  siteChanged,
   whenText,
   type RunRefusal,
   type TestFilter,
@@ -33,33 +39,38 @@ import { DropIcon, QuietRow, rowButtonId, TestRowItem, type RowContext } from '.
  * THE TEST TAB (Sam, 2026-09-28: "This test should be a big part of this project and should be
  * very helpful to users who dont know technology"). Round 2's list, prototypes/
  * seo_variants_20260928_r2.html: the header ("19 of 24 tests pass", "5 need you · tested today
- * at 9:14 PM, after you published"), the All / Needs you / Passing filter, TEST AGAIN, and the
- * 24 tests in their four groups; each row opens r5's dropdown under itself (test-row.tsx).
+ * at 9:14 PM, after you published"), the filter, TEST AGAIN, and the 24 tests in their four
+ * groups; each row opens r5's dropdown under itself (test-row.tsx).
  *
  * Everything shown is a READ of a stored run (lib/seo-tests/store.ts): the counts and the words
- * come from the results (model.ts), never from this file.
+ * come from the results (model.ts `runHeadline`, the same helper the Overview uses).
  *
- * THE STATES, each real: testing isn't switched on (the table isn't there); couldn't read; never
- * tested; testing now (rows keep their last result, dimmed); another run going (a publish's
- * run, or a second tab: we look again every few seconds); cool-down ("You can test again in
- * 42 s"); the run failed; no site connected (said once, at the top); a run after a publish that
- * could not confirm the site had caught up.
+ * THE STATES, each real: tests not on yet (the table isn't there); couldn't read; never tested;
+ * testing now (rows keep their last result, dimmed); another run going (a publish's, or a second
+ * tab: we look again every few seconds); cool-down; the run failed (now, or the last attempt
+ * before a reload); no site connected, and the site didn't answer (each said ONCE, at the top,
+ * with no score and no rows to open); none apply; nothing could be checked; a run after a
+ * publish that could not confirm the site had caught up (for an hour); a run over 30 days old;
+ * a run of an address the artist's site no longer has.
  */
 
 const COPY = {
-  off: 'Testing isn’t switched on yet',
+  off: 'Site tests are coming soon',
+  offSub: 'Nothing for you to do.',
   readFailed: 'Couldn’t read the test results',
   never: 'Not tested yet',
   neverSub: `${SEO_TEST_DEFS.length} tests · about a minute`,
   testing: 'Testing your site…',
-  testingSub: (s: number) => `Visiting it the way Google and ChatGPT do · ${s} s`,
+  testingSub: (s: number) => `Checking your site · ${s} s`,
   busy: 'A test is already running. It will show here when it finishes.',
   cooldown: (s: number) => `You can test again in ${s} s`,
   stale: 'Your site may not have updated yet. Test again in a minute.',
   noSiteNow: 'No site is connected, so there’s nothing to test yet.',
   noSiteRun: 'No site was connected',
-  noSite: 'No site connected',
   failed: 'The test couldn’t finish. Try again in a minute.',
+  lastFailed: (when: string) => `Your last test${when ? `, ${when},` : ''} couldn’t finish. Test again in a minute.`,
+  old: (ago: string) => `Last tested ${ago}. Test again to see where you stand now.`,
+  moved: (was: string, now: string) => `These results are for ${was}, an old address. Test again to check ${now}.`,
 }
 
 /** How often a run someone else started is looked for again, and for how long at most. */
@@ -72,14 +83,13 @@ const clickedAt = () => Date.now()
 export function TestTab({
   artistId,
   data,
-  siteConnected,
-  siteUrl,
+  currentSite,
   initialOpen = null,
 }: {
   artistId: string
   data: TestTabData
-  siteConnected: boolean
-  siteUrl: string | null
+  /** The artist's site as the tests would fetch it now (known.ts `seoSiteOrigin`), or null. */
+  currentSite: string | null
   /** A test to open on arrival (the Overview's to-do rows, `?open=`). */
   initialOpen?: SeoTestId | null
 }) {
@@ -88,13 +98,14 @@ export function TestTab({
   const [latest, setLatest] = useSeeded<StoredSeoRun | null>(ready ? ready.latest : null)
   const history = ready?.history ?? null
   const serverRunning = !!ready?.running
+  const siteConnected = !!currentSite
 
   const [running, setRunning] = useState(false)
   const runningRef = useRef(false)
   const [startedAt, setStartedAt] = useState(0)
   const [refusal, setRefusal] = useState<RunRefusal | null>(null)
   const [refusedUntil, setRefusedUntil] = useState<number | null>(null)
-  const [filter, setFilter] = useState<TestFilter>('all')
+  const [filterChoice, setFilterChoice] = useState<TestFilter>('all')
   const [openId, setOpenId] = useState<SeoTestId | null>(initialOpen)
   const [fixed, setFixed] = useState<ReadonlySet<SeoTestId>>(new Set())
   const [fixing, setFixing] = useState<SeoTestId | null>(null)
@@ -115,7 +126,7 @@ export function TestTab({
   // A peek at the clock (no ticking) says whether a cool-down is still on; the second read
   // ticks once a second only while something on screen counts.
   const peek = useNow(false)
-  const cooling = cooldownAt != null && peek != null && peek < cooldownAt
+  const cooling = peek != null && secondsLeft(cooldownAt, peek) > 0
   const now = useNow(running || busy || cooling)
   const coolS = now == null ? 0 : secondsLeft(cooldownAt, now)
   const canRun = ready != null && siteConnected && !running && !busy && coolS === 0
@@ -130,6 +141,11 @@ export function TestTab({
       clearTimeout(stop)
     }
   }, [busy, router])
+
+  // `?open=`: bring the opened row into view once, under the sticky header (scroll-mt on the row).
+  useEffect(() => {
+    if (initialOpen) document.getElementById(rowButtonId(initialOpen))?.scrollIntoView?.({ block: 'start' })
+  }, [initialOpen])
 
   async function run() {
     // The latch is a ref (AGENTS.md rule 5): two fast clicks both read the pre-render state.
@@ -180,15 +196,21 @@ export function TestTab({
 
   /* ── what the header says ── */
   const results = latest?.results ?? []
-  const noSite = latest ? hasNoSite(latest) : false
+  const head = latest ? runHeadline(latest) : null
+  const showRows = !!head && rowsAreResults(head)
   const counts = countResults(results)
+  // A filter whose count went to 0 (a new run) falls back to All rather than stranding the page.
+  const filter: TestFilter = filterChoice === 'unknown' && counts.unknown === 0 ? 'all' : filterChoice
   const nowDate = mounted && now != null ? new Date(now) : null
   const when = latest && nowDate ? whenText(latest.ranAt, nowDate) : ''
+  const tested = when ? `tested ${when}${latest?.trigger === 'publish' ? ', after you published' : ''}` : null
 
   let title: ReactNode
   let sub: string | null = null
-  if (data.state === 'off') title = COPY.off
-  else if (data.state === 'error') title = COPY.readFailed
+  if (data.state === 'off') {
+    title = COPY.off
+    sub = COPY.offSub
+  } else if (data.state === 'error') title = COPY.readFailed
   else if (running) {
     title = (
       <>
@@ -197,35 +219,46 @@ export function TestTab({
       </>
     )
     sub = COPY.testingSub(now == null ? 0 : Math.max(0, Math.round((now - startedAt) / 1000)))
-  } else if (!latest) {
+  } else if (!latest || !head) {
     title = COPY.never
     sub = COPY.neverSub
-  } else if (noSite) {
-    // Said ONCE, here: the run's 24 "no site" results are not repeated row by row.
-    title = siteConnected ? COPY.noSiteRun : COPY.noSite
-    sub = when ? `tested ${when}` : null
   } else {
-    title = counts.applicable === 1 ? `${counts.pass} of 1 test passes` : `${counts.pass} of ${counts.applicable} tests pass`
-    const parts = [counts.fail ? `${counts.fail} need${counts.fail === 1 ? 's' : ''} you` : 'Nothing needs you']
-    if (counts.unknown) parts.push(`${counts.unknown} couldn’t be checked`)
-    if (when) parts.push(`tested ${when}${latest.trigger === 'publish' ? ', after you published' : ''}`)
-    sub = parts.join(' · ')
+    // Said ONCE, here: a run with no site, or a site that didn't answer, is one sentence, not
+    // 24 rows of "couldn't check" (and never a score).
+    title = head.kind === 'no-site' && siteConnected ? COPY.noSiteRun : head.title
+    sub = [...head.detail, tested].filter(Boolean).join(' · ') || null
   }
 
   /* ── the quiet lines under the header, one per thing worth saying ── */
-  const notices: { key: string; node: ReactNode; tone?: 'red' }[] = []
-  if (busy) notices.push({ key: 'busy', node: (<><Spinner small />{COPY.busy}</>) })
-  if (!running && refusal?.kind === 'failed') notices.push({ key: 'failed', node: refusal.error, tone: 'red' })
+  const nowMs = nowDate?.getTime() ?? null
+  const notices: { key: string; node: ReactNode; tone?: 'red'; live?: boolean }[] = []
+  if (busy) notices.push({ key: 'busy', node: (<><Spinner small />{COPY.busy}</>), live: true })
+  if (!running && refusal?.kind === 'failed') notices.push({ key: 'failed', node: refusal.error, tone: 'red', live: true })
+  else if (!running && ready?.lastFailed && (!latest || Date.parse(ready.lastFailed.ranAt) > Date.parse(latest.ranAt))) {
+    notices.push({ key: 'lastFailed', node: COPY.lastFailed(nowDate ? whenText(ready.lastFailed.ranAt, nowDate) : ''), tone: 'red' })
+  }
+  // Not a live region: it changes every second and would be read aloud every second.
   if (!running && !busy && coolS > 0) notices.push({ key: 'cool', node: COPY.cooldown(coolS) })
-  if (ready && !siteConnected && !noSite) notices.push({ key: 'nosite', node: COPY.noSiteNow })
-  else if (latest && !noSite && !running && isStale(latest)) notices.push({ key: 'stale', node: COPY.stale })
-  else if (latest && !noSite && !running && latest.note) notices.push({ key: 'note', node: latest.note })
+  if (ready && !siteConnected && head?.kind !== 'no-site') notices.push({ key: 'nosite', node: COPY.noSiteNow })
+  if (latest && !running && siteChanged(latest.siteUrl, currentSite)) notices.push({ key: 'moved', node: COPY.moved(hostOf(latest.siteUrl), hostOf(currentSite)) })
+  const ago = latest && nowMs != null ? oldRunText(latest.ranAt, nowMs) : null
+  if (latest && !running && ago) notices.push({ key: 'old', node: COPY.old(ago) })
+  else if (latest && showRows && !running && nowMs != null && showStale(latest, nowMs)) notices.push({ key: 'stale', node: COPY.stale })
+  else if (latest && showRows && !running && latest.note) notices.push({ key: 'note', node: latest.note })
 
-  const interactive = !!latest && !noSite
-  const groups: TestGroupView[] = interactive ? groupsFor(results, filter) : SEO_TEST_GROUPS.map((g) => ({ id: g.id, label: g.label, pass: 0, applicable: 0, rows: SEO_TEST_DEFS.filter((d) => d.group === g.id).map((def) => ({ def, result: null })) }))
+  const groups: TestGroupView[] = showRows
+    ? groupsFor(results, filter)
+    : SEO_TEST_GROUPS.map((g) => ({ id: g.id, label: g.label, pass: 0, applicable: 0, rows: SEO_TEST_DEFS.filter((d) => d.group === g.id).map((def) => ({ def, result: null })) }))
+
+  function chooseFilter(f: TestFilter) {
+    setFilterChoice(f)
+    // An open row the new filter hides is closed, not left open out of sight (review N7).
+    if (openId && !matchesFilter(results.find((r) => r.id === openId) ?? null, f)) setOpenId(null)
+  }
 
   const ctxFor = (row: TestRow): RowContext => ({
     artistId,
+    site: latest?.siteUrl ?? '',
     testedWhen: when,
     now: nowDate,
     history: history?.[row.def.id] ?? ([] as SeoTestHistory),
@@ -264,8 +297,7 @@ export function TestTab({
         </div>
         {ready ? (
           <div className="flex flex-wrap items-center gap-2.5">
-            {interactive ? <FilterSeg filter={filter} onChange={setFilter} need={counts.fail} pass={counts.pass} /> : null}
-            {siteUrl ? <TestWithMenu siteUrl={siteUrl} /> : null}
+            {showRows ? <FilterSeg filter={filter} onChange={chooseFilter} need={counts.fail} pass={counts.pass} unknown={counts.unknown} /> : null}
             <button
               type="button"
               onClick={() => void run()}
@@ -286,30 +318,35 @@ export function TestTab({
       </div>
 
       {notices.length ? (
-        <div className="mt-3 flex flex-col gap-1" aria-live="polite">
+        <div className="mt-3 flex flex-col gap-1">
           {notices.map((n) => (
-            <div key={n.key} data-notice={n.key} className={cx('flex items-center gap-2 font-space text-[12px]', n.tone === 'red' ? 'text-accent-red' : 'text-ink-muted')}>
+            <div
+              key={n.key}
+              data-notice={n.key}
+              role={n.live ? 'status' : undefined}
+              className={cx('flex items-center gap-2 font-space text-[12px]', n.tone === 'red' ? 'text-accent-red' : 'text-ink-muted')}
+            >
               {n.node}
             </div>
           ))}
         </div>
       ) : null}
 
-      <div
-        ref={listRef}
-        onKeyDown={onListKey}
-        inert={running || busy || undefined}
-        className={cx('transition-opacity duration-150', (running || busy) && 'opacity-50')}
-      >
+      <div ref={listRef} onKeyDown={onListKey} inert={running || busy || undefined} className={cx('transition-opacity duration-150', (running || busy) && 'opacity-50')}>
+        {filter !== 'all' && !groups.length ? (
+          <p data-empty-filter="" className="py-8 font-space text-[12px] text-ink-muted">
+            {EMPTY_FILTER[filter]}
+          </p>
+        ) : null}
         {groups.map((g) => (
           <section key={g.id} aria-label={g.label} className="grid grid-cols-1 gap-x-8 border-b border-hairline pb-[34px] pt-2 last:border-b-0 min-[900px]:grid-cols-[150px_minmax(0,1fr)]">
             <h3 className="pt-4 font-space text-[11px] uppercase tracking-[0.1em] text-ink-faint min-[900px]:pt-[22px]">
               {g.label}
-              {interactive ? <span className="mt-1.5 block text-[11px] normal-case tracking-[0.04em] text-ink-muted">{`${g.pass} of ${g.applicable}`}</span> : null}
+              {showRows ? <span className="mt-1.5 block text-[11px] normal-case tracking-[0.04em] text-ink-muted">{`${g.pass} of ${g.applicable}`}</span> : null}
             </h3>
             <div className="flex min-w-0 flex-col pt-2">
               {g.rows.map((row) =>
-                interactive ? (
+                showRows ? (
                   <TestRowItem key={row.def.id} row={row} open={openId === row.def.id} onToggle={() => setOpenId((o) => (o === row.def.id ? null : row.def.id))} ctx={ctxFor(row)} />
                 ) : (
                   <QuietRow key={row.def.id} row={row} />
@@ -332,20 +369,25 @@ function Spinner({ small = false }: { small?: boolean }) {
   )
 }
 
-/** All / Needs you / Passing, with their counts (r2's segmented control). */
-function FilterSeg({ filter, onChange, need, pass }: { filter: TestFilter; onChange: (f: TestFilter) => void; need: number; pass: number }) {
+/**
+ * All / Needs you / Passing / Couldn't check, with their counts (r2's segmented control plus one).
+ * Every scored row is in exactly one filter; "Couldn't check" shows only when there is one.
+ */
+function FilterSeg({ filter, onChange, need, pass, unknown }: { filter: TestFilter; onChange: (f: TestFilter) => void; need: number; pass: number; unknown: number }) {
   const opts: { f: TestFilter; label: string; n?: number }[] = [
     { f: 'all', label: 'All' },
     { f: 'need', label: 'Needs you', n: need },
     { f: 'pass', label: 'Passing', n: pass },
+    ...(unknown ? [{ f: 'unknown' as const, label: 'Couldn’t check', n: unknown }] : []),
   ]
   return (
-    <div role="group" aria-label="Show" className="flex gap-0.5 rounded-[10px] border border-hairline bg-surface p-[3px]">
+    <div role="group" aria-label="Show" className="flex flex-wrap gap-0.5 rounded-[10px] border border-hairline bg-surface p-[3px]">
       {opts.map((o) => (
         <button
           key={o.f}
           type="button"
           aria-pressed={filter === o.f}
+          aria-label={o.n !== undefined ? `${o.label} ${o.n}` : undefined}
           onClick={() => onChange(o.f)}
           className={cx(
             'whitespace-nowrap rounded-[7px] px-2.5 py-1.5 text-[12px] font-medium transition-colors',
@@ -357,60 +399,6 @@ function FilterSeg({ filter, onChange, need, pass }: { filter: TestFilter; onCha
           {o.n !== undefined ? <em className="ml-1 font-space text-[11px] not-italic text-ink-faint">{o.n}</em> : null}
         </button>
       ))}
-    </div>
-  )
-}
-
-/**
- * "Test with" (moved here from the old top row, 2026-09-29): Google's and Bing's own checkers,
- * opened on the artist's site. One icon; the list opens under it.
- */
-function TestWithMenu({ siteUrl }: { siteUrl: string }) {
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const away = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const esc = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', away)
-    document.addEventListener('keydown', esc)
-    return () => {
-      document.removeEventListener('pointerdown', away)
-      document.removeEventListener('keydown', esc)
-    }
-  }, [open])
-  const enc = encodeURIComponent(`${siteUrl}/`)
-  const tools = [
-    { label: 'Rich Results Test', href: `https://search.google.com/test/rich-results?url=${enc}` },
-    { label: 'Schema validator', href: `https://validator.schema.org/#url=${enc}` },
-    { label: 'PageSpeed', href: `https://pagespeed.web.dev/analysis?url=${enc}` },
-    { label: 'Search Console', href: 'https://search.google.com/search-console' },
-    { label: 'Bing Webmaster', href: 'https://www.bing.com/webmasters' },
-  ]
-  return (
-    <div ref={box} className="relative">
-      <DropIcon icon="external" label="Test with other tools" onClick={() => setOpen((o) => !o)} expanded={open} />
-      {open ? (
-        <div role="menu" aria-label="Test with other tools" className="absolute right-0 top-11 z-20 flex w-56 flex-col rounded-lg border border-hairline bg-paper p-1 shadow-lg">
-          {tools.map((t) => (
-            <a
-              key={t.label}
-              role="menuitem"
-              href={t.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
-              className="flex items-center justify-between rounded-md px-3 py-2 font-space text-[11px] text-ink-muted hover:bg-surface hover:text-ink"
-            >
-              {t.label} <Icon name="external" size={12} aria-hidden="true" />
-            </a>
-          ))}
-        </div>
-      ) : null}
     </div>
   )
 }

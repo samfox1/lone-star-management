@@ -1,18 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { buttonClass } from '@/components/ui/ui'
-import { Icon } from '@/components/ui/icons'
 import { OG_BACKGROUNDS, OG_CARD_HEIGHT, OG_CARD_WIDTH, drawOgCard, ogBackgroundHex } from '@/lib/manager-tools/seo/og-card'
 import { CardModal } from '../../../card-modal'
-import { KvRow, MetaDot, ModalHeader, SelectMenu } from '../../../modal-kit'
+import { HeaderIcon, KvLabel, MetaDot, ModalHeader, SelectMenu } from '../../../modal-kit'
+import { BrandSwatchProvider, ColorPalette, type NamedSwatch } from '../../../editor/color-picker'
 import { saveOgCardAction } from './actions'
+import { RowIcon } from '../../_ui/row-icon'
 
 export type OgSource = { url: string; label: string }
 
 /**
- * THE SHARE PICTURE, in the modal-kit grammar (round 2's "Share image" card: the picture big,
- * then Image and Background rows, Save). Pick one of the artist's own images, sit it on a
+ * THE PREVIEW PICTURE (Sam's name for the share image, 2026-09-29), in the modal-kit grammar:
+ * the picture big, the Image and Background choices beside it, Save. Pick one of the artist's own images, sit it on a
  * solid background, and store the 1200x630 card that comes out.
  *
  * This replaces a URL text box. Two things that box could not do, and both fail where
@@ -24,24 +24,29 @@ export type OgSource = { url: string; label: string }
  *
  * The canvas is the SAME `drawOgCard` the export calls, so the preview is the file. The
  * stored value stays a plain absolute https URL under `og_image` — no contract change
- * for a consuming site. Save renders and stores the card, then closes; closing without Save
- * changes nothing.
+ * for a consuming site. "Use this picture" renders and stores the card, then closes; closing
+ * without it changes nothing.
  */
 export function ShareImageModal({
   artistId,
   sources,
+  brandColors = [],
   onClose,
   onSaved,
 }: {
   artistId: string
   /** The artist's own images — brand logos first, then the hero/profile photos. */
   sources: OgSource[]
+  /** The artist's Brand colours, by name: offered first as the background (the standing
+   *  colour rule: every colour control is the ColorPalette, swatches + the picker). */
+  brandColors?: readonly NamedSwatch[]
   onClose: () => void
   /** The stored card's URL, once saved. */
   onSaved: (url: string) => void
 }) {
   const [source, setSource] = useState<string>(sources[0]?.url ?? '')
-  const [background, setBackground] = useState(OG_BACKGROUNDS[0].value)
+  /** The background as a hex: a Brand colour, one of the four plain ones, or any mixed. */
+  const [background, setBackground] = useState(OG_BACKGROUNDS[0].hex)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -64,7 +69,7 @@ export function ShareImageModal({
       if (!cancelled) drawOgCard(ctx, img, background)
     }
     img.onerror = () => {
-      if (!cancelled) setError('That image could not be loaded.')
+      if (!cancelled) setError('That picture couldn’t be loaded.')
     }
     img.src = source
     return () => {
@@ -82,7 +87,7 @@ export function ShareImageModal({
     setError(null)
     try {
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-      if (!blob) throw new Error('Could not render the card.')
+      if (!blob) throw new Error('Couldn’t make the picture.')
       const fd = new FormData()
       fd.set('file', blob, 'og-card.png')
       const result = await saveOgCardAction(artistId, fd)
@@ -92,7 +97,7 @@ export function ShareImageModal({
         onClose()
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the card.')
+      setError(e instanceof Error && e.message === 'Couldn’t make the picture.' ? e.message : 'Couldn’t save the picture.')
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -109,22 +114,25 @@ export function ShareImageModal({
         ) : null}
       </div>
       {sources.length ? (
-        <button type="button" onClick={() => void save()} disabled={busy} className={buttonClass('confirm', 'min-w-[88px] justify-center')}>
-          {busy ? 'Saving…' : 'Save'}
-        </button>
+        // ONE explicit action, as the kit's boxed icon (not a pill), and deliberately not an
+        // autosave: the card is written to ONE fixed PUBLIC file that shared links read at
+        // once, so trying colours must not overwrite what's already out there. Only this does.
+        <span className="flex items-center gap-2.5">
+          {busy ? <span className="font-space text-[11px] text-ink-faint">Saving…</span> : null}
+          <RowIcon icon="check" label="Use this picture" variant="boxed" size="sm" tone="accent" labelSide="top" labelAlign="end" onClick={() => void save()} disabled={busy} />
+        </span>
       ) : null}
     </div>
   )
 
   return (
-    <CardModal open onClose={onClose} label="Share image" footer={footer}>
+    // WIDE, and never scrolling (Sam, 2026-09-29: "this modal shouldn't be scrollable. Just
+    // make it bigger"): the picture on the left at the shape it's shared at, the two choices
+    // beside it. Fits a 1280 × 800 laptop with room to spare.
+    <CardModal open wide onClose={onClose} label="Preview picture" footer={footer}>
       <ModalHeader
-        square={
-          <div className="flex h-full w-full items-center justify-center rounded-xl border border-hairline text-ink">
-            <Icon name="photo" size={26} />
-          </div>
-        }
-        title="Share image"
+        mark={<HeaderIcon name="photo" />}
+        title="Preview picture"
         meta={
           <>
             {`${OG_CARD_WIDTH} × ${OG_CARD_HEIGHT}`}
@@ -137,26 +145,30 @@ export function ShareImageModal({
       />
       {sources.length === 0 ? (
         // Leads with the absence: a reader with no image needs to know that first.
-        <p className="mt-5 text-[14px] text-ink-muted">No logo or hero image yet. Add one on the Brand page.</p>
+        <p className="mt-5 text-[14px] text-ink-muted">No logo or main photo yet. Add one on the Brand page.</p>
       ) : (
-        <div className="mt-5">
+        <div className="mt-5 grid grid-cols-1 items-start gap-6 min-[760px]:grid-cols-[minmax(0,1fr)_240px]">
           {/* Shown at the shape it will be shared at: the background IS the point, so the
               preview must not borrow the page's. */}
           <canvas
             ref={canvasRef}
             width={OG_CARD_WIDTH}
             height={OG_CARD_HEIGHT}
-            aria-label="Share picture preview"
+            aria-label="Preview picture"
             className="block w-full rounded-[10px] border border-hairline"
             style={{ backgroundColor: ogBackgroundHex(background) }}
           />
-          <div className="mt-3">
-            <KvRow label="Image">
+          <div className="flex min-w-0 flex-col gap-5">
+            <div className="flex flex-col gap-1.5">
+              <KvLabel>Image</KvLabel>
               <SelectMenu label="Image" value={source} options={sources.map((s) => ({ value: s.url, label: s.label }))} required onChange={setSource} />
-            </KvRow>
-            <KvRow label="Background">
-              <SelectMenu label="Background" value={background} options={OG_BACKGROUNDS.map((b) => ({ value: b.value, label: b.label }))} required onChange={setBackground} />
-            </KvRow>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <KvLabel>Background</KvLabel>
+              <BrandSwatchProvider colors={brandColors}>
+                <ColorPalette variant="row" label="Background" aria="Background" value={background} used={OG_BACKGROUNDS.map((b) => b.hex)} onChange={(hex) => hex && setBackground(hex)} />
+              </BrandSwatchProvider>
+            </div>
           </div>
         </div>
       )}

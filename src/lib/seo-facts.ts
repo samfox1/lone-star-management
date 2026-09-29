@@ -31,6 +31,7 @@ import {
   siteFacts,
   type SiteFacts,
 } from '@samfox1/site-bridge/seo'
+import { regionIn, regionsFor } from '@/lib/seo-regions'
 
 export type FactField = keyof typeof FACT_CONTENT_KEYS
 export type FactKey = (typeof FACT_CONTENT_KEYS)[FactField]
@@ -81,7 +82,13 @@ export type FactContext = {
   artistName: string
   /** From `thisYearAt`. */
   thisYear: number
+  /** The artist's country as STORED, for the region rule: where it has a list
+   *  (lib/seo-regions.ts), the region must be on it. Absent or blank: the region is text. */
+  country?: string | null
 }
+
+/** A country that isn't in the bridge's table (the Facts dropdown lists exactly those). */
+export const COUNTRY_NOT_LISTED = 'Pick a country from the list.'
 
 /** The alias list as it is stored: one name per line. */
 export function joinAliases(list: readonly string[]): string {
@@ -92,9 +99,13 @@ export function joinAliases(list: readonly string[]): string {
  * What the save gate stores for a fact key, or why it refuses. A blank value is
  * `{ value: '' }`, which the gate turns into a delete (= not stated).
  *
- *  region       one line of plain text, at most MAX_PLACE_PART_LENGTH characters.
- *  country      the same; a country the bridge's table knows is stored in the table's
- *               spelling ("usa" → "United States"), anything else as typed.
+ *  region       one line of plain text, at most MAX_PLACE_PART_LENGTH characters. When the
+ *               stored country has a region list (US states, Canada's provinces, Australia's
+ *               states, the UK's nations: lib/seo-regions.ts), exactly one of its names,
+ *               stored in the list's spelling ("illinois" → "Illinois"); otherwise as typed.
+ *  country      a country the bridge's table knows, stored in the table's spelling ("usa" →
+ *               "United States"). Anything else is refused (Sam, 2026-09-29: the Facts
+ *               country is a dropdown of exactly that table).
  *  aliases      one name per line: each one line of plain text, at most MAX_ALIAS_LENGTH
  *               characters; at most MAX_ALIASES; no repeats and never the artist's name
  *               (ignoring case). Blank lines are dropped.
@@ -115,7 +126,15 @@ export function cleanFactValue(key: FactKey, raw: string, ctx: FactContext): { v
     return { value: v }
   }
   if (chars(v) > MAX_PLACE_PART_LENGTH) return { error: `Keep it under ${MAX_PLACE_PART_LENGTH} characters.` }
-  if (key === FACT_CONTENT_KEYS.country) return { value: countryOf(v)?.name ?? v }
+  if (key === FACT_CONTENT_KEYS.country) {
+    const known = countryOf(v)
+    return known ? { value: known.name } : { error: COUNTRY_NOT_LISTED }
+  }
+  const list = regionsFor(ctx.country)
+  if (list) {
+    const named = regionIn(list, v)
+    return named ? { value: named } : { error: `Pick a ${list.noun} from the list.` }
+  }
   return { value: v }
 }
 
@@ -178,7 +197,7 @@ export function factErrors(content: FactsContent, artist: FactsArtist, thisYear:
   const city = artist.location ?? ''
   const cityBad = factTextError(city) ?? (chars(factText(city)) > CITY_MAX_LENGTH ? `Keep it under ${CITY_MAX_LENGTH} characters.` : null)
   if (cityBad) out.city = cityBad
-  const ctx = { artistName: artist.name ?? '', thisYear }
+  const ctx = { artistName: artist.name ?? '', thisYear, country: content[FACT_CONTENT_KEYS.country] ?? null }
   for (const field of Object.keys(FACT_CONTENT_KEYS) as FactField[]) {
     const raw = content[FACT_CONTENT_KEYS[field]]
     if (typeof raw !== 'string' || !raw.trim()) continue

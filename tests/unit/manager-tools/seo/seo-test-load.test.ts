@@ -11,7 +11,7 @@ import { isMissingTable, loadTestTab } from '@/app/artists/[id]/(dashboard)/(man
 /** A query builder that answers every chain with `result`. */
 function fake(result: { data: unknown; error: { code?: string; message?: string } | null }): SupabaseClient {
   const chain: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'order', 'limit', 'maybeSingle', 'single']) chain[m] = () => chain
+  for (const m of ['select', 'eq', 'in', 'order', 'limit', 'maybeSingle', 'single']) chain[m] = () => chain
   chain.then = (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => Promise.resolve(result).then(ok, bad)
   return { from: () => chain } as unknown as SupabaseClient
 }

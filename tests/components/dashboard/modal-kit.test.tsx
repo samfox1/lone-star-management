@@ -2,7 +2,8 @@
 // The modal row kit: a label / value row that turns into an input when clicked and saves ONE field.
 /**
  * modal-kit — the grammar every dashboard modal is built from (prototype G, 2026-09-11):
- * a header (square · title · mono meta), label / value ROWS, and a Delete / Done footer.
+ * a header (bare mark or the thing's picture · title · mono meta), label / value ROWS, and a
+ * Delete / Done footer.
  *
  * The row is the load-bearing piece, so it is what gets pinned:
  *   - a value reads as text until clicked, then it is an input with that value;
@@ -12,11 +13,61 @@
  *   - a refused save keeps the OLD value on screen and reports the error;
  *   - KvCells: three cells on one row, each saving its own field alone.
  */
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { KvCells, KvField } from '@/app/artists/[id]/(dashboard)/modal-kit'
+import { DateSquare, HeaderIcon, KvCells, KvField, ModalHeader } from '@/app/artists/[id]/(dashboard)/modal-kit'
 
 afterEach(() => cleanup())
+
+/**
+ * THE HEADER MARK STANDS ALONE (Sam, 2026-09-29: "I dont like how you add these logos to the
+ * top left of these modals" / "have it bigger standing alone. I dont like things bordered in if
+ * they dont have to be"). Light tier: the mechanism, not the pixels.
+ */
+describe('ModalHeader', () => {
+  const BOXY = /(^|\s)(border|border-\S+|bg-\S+|rounded\S*|ring\S*|shadow\S*)(\s|$)/
+
+  it('an icon, a logo or a date stands bare: no border, no background, no rounded box around it', () => {
+    render(<ModalHeader mark={<HeaderIcon name="photo" />} title="Share image" />)
+    const slot = document.querySelector('[data-header-mark]')!
+    expect(slot).not.toBeNull()
+    expect(slot.className).not.toMatch(BOXY)
+    for (const el of slot.querySelectorAll('*')) expect((el.getAttribute('class') ?? ''), el.tagName).not.toMatch(BOXY)
+    cleanup()
+    render(<ModalHeader mark={<DateSquare date="2026-10-15" />} title="Smartbar" />)
+    for (const el of [document.querySelector('[data-header-mark]')!, ...document.querySelectorAll('[data-header-mark] *')]) expect(el.getAttribute('class') ?? '').not.toMatch(BOXY)
+    expect(screen.getByText('15')).toBeTruthy()
+  })
+  it('a picture that IS the content shows as itself and wins over the mark', () => {
+    // eslint-disable-next-line @next/next/no-img-element
+    render(<ModalHeader art={<img alt="cover" src="/c.jpg" />} mark={<HeaderIcon name="tracks" />} title="Song" />)
+    expect(document.querySelector('[data-header-art] img')).not.toBeNull()
+    expect(document.querySelector('[data-header-mark]')).toBeNull()
+    expect(document.querySelector('[data-header-art]')!.className).not.toMatch(/(^|\s)(border|ring)\S*/)
+  })
+  it('CRITICAL: no modal header anywhere in the dashboard boxes its mark (read from every call site)', () => {
+    // Every `<ModalHeader … />` in the dashboard tree, walked (never hand-listed): a mark or a
+    // picture passed in a bordered / filled box is the exact thing Sam asked to remove.
+    const root = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
+    const files: string[] = []
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const f = join(d, e.name)
+        if (e.isDirectory()) walk(f)
+        else if (e.name.endsWith('.tsx')) files.push(f)
+      }
+    }
+    walk(root)
+    const calls = files.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/<ModalHeader\b([\s\S]*?)\btitle=/g)].map((m) => ({ f, head: m[1] })))
+    expect(calls.length).toBeGreaterThan(8)
+    for (const { f, head } of calls) {
+      expect(head, f).not.toMatch(/\bsquare=/)
+      expect(head, f).not.toMatch(/\b(border|bg-(?!cover)|ring-)\S*/)
+    }
+  })
+})
 
 describe('KvField', () => {
   it('reads as text, and an empty value reads as "—"', () => {

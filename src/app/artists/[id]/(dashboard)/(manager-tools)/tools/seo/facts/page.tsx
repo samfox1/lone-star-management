@@ -2,7 +2,7 @@ import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 import { connectionHandle, connectionOfLink, identityUrlOf, isProfileLink, type LinkRowLike } from '@/lib/connections'
 import { listContent } from '@/lib/content'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
-import { BIO_GOAL } from '@/lib/seo-tests/who'
+import { BIO_MIN_WORDS } from '@/lib/seo-tests/who'
 import { loadSeoBase } from '../load'
 import { FactsTab, type FactsTabProps, type ProfileLink } from './facts-tab'
 
@@ -58,7 +58,7 @@ export default async function SeoFactsPage({ params }: { params: Promise<{ id: s
       city={base.location ?? ''}
       facts={facts}
       bio={base.bio}
-      bioGoal={BIO_GOAL}
+      bioMinWords={BIO_MIN_WORDS}
       about={{ placement: base.seo.about_placement ?? '', heading: base.seo.about_heading ?? '' }}
       bookingEmail={((mail.data?.booking_email as string | null) ?? '').trim()}
       profiles={profiles}

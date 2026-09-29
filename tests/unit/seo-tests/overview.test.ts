@@ -71,6 +71,36 @@ describe('timeline', () => {
   })
 })
 
+describe('a run where the site did not answer (`reach`)', () => {
+  const since = Date.parse('2026-09-01T00:00:00Z')
+  const down = { state: 'no-answer' as const, status: null }
+
+  it('CRITICAL: gives no to-dos that depend on reading the site; only a test that never reads it (MusicBrainz) stays', () => {
+    const results = [r('title', 'unknown'), r('google', 'fail'), r('mb', 'fail'), r('bio', 'unknown')]
+    expect(failingInPriority(results, { state: 'server-error', status: 503 }).map((x) => x.id)).toEqual(['mb'])
+    expect(failingInPriority(results, down).map((x) => x.id)).toEqual(['mb'])
+    // Answered, or an older run with no reach at all: every failing test, as before.
+    expect(failingInPriority(results, { state: 'answered', status: 200 }).map((x) => x.id)).toEqual(['google', 'mb', 'title', 'bio'])
+    expect(failingInPriority(results, null).map((x) => x.id)).toEqual(['google', 'mb', 'title', 'bio'])
+  })
+
+  it('CRITICAL: the timeline carries its reach and lists NO changes for it ("We couldn\'t reach your site", not 20 tests "now unknown")', () => {
+    const runs = [
+      { ...summary('r3', '2026-09-28T10:00:00Z', { title: 'pass' }), reach: { state: 'answered' as const, status: 200 } },
+      { ...summary('r2', '2026-09-20T10:00:00Z', { title: 'unknown', google: 'unknown' }), reach: down },
+      { ...summary('r1', '2026-09-10T10:00:00Z', { title: 'fail', google: 'pass' }), reach: { state: 'answered' as const, status: 200 } },
+    ]
+    const events = buildTimeline(runs, [], since)
+    const byId = Object.fromEntries(events.map((e) => [e.kind === 'test' ? e.runId : e.at, e]))
+    const r2 = byId.r2
+    expect(r2.kind === 'test' && r2.reach).toEqual(down)
+    expect(r2.kind === 'test' && r2.changes).toEqual([])
+    // The next reached run is compared with the last run that DID reach the site.
+    const r3 = byId.r3
+    expect(r3.kind === 'test' && r3.changes).toEqual([{ id: 'title', from: 'fail', to: 'pass' }])
+  })
+})
+
 describe('visits from search and AI', () => {
   it('uses the Analytics page\'s buckets: Google/Bing + unbucketed search hosts; the ai bucket', () => {
     expect(

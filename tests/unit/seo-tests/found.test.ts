@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { SEO_BOTS, botsForTest } from '@/lib/seo-tests/bots'
 import { SEO_TEST_DEFS } from '@/lib/seo-tests/defs'
-import { FOUND_TESTS } from '@/lib/seo-tests/found'
+import { FOUND_NAMES, FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoTestResult } from '@/lib/seo-tests/types'
 import {
   ABOUT, BIO, CF_1020, CF_BLOCK, CF_CHALLENGE, EMPTY_SHELL, HOME, HOME_WITH_CF_SCRIPTS, KNOWN, LOGIN, O, OTHER_PAGE, ROBOTS_OK, SITEMAP_OK, SOFT_404,
@@ -39,17 +39,21 @@ describe('every test, every fixture: the contract', () => {
       it(`${id} / ${name}: never throws, answers for itself, plain words, a limit`, () => {
         const r = run(id, f)
         expect(r.id).toBe(id)
-        expect(['pass', 'fail', 'unknown']).toContain(r.status)
+        expect(['pass', 'fail', 'unknown', 'na']).toContain(r.status)
         expect(r.value.length).toBeGreaterThan(0)
         expect(r.value.length).toBeLessThanOrEqual(28)
         expect(r.sentence.length).toBeGreaterThan(0)
         // Honesty rule 2: every test says what it cannot see.
         expect(r.limits?.length ?? 0).toBeGreaterThan(20)
-        // No jargon outside the details.
-        expect(shown(r)).not.toMatch(/crawler|HTTP|robots\.txt|canonical|user[- ]agent|X-Robots|noindex|sitemap/i)
-        // A fail / unknown sentence follows "Not yet:" / "Couldn't check:", so it starts lower-case.
-        if (r.status !== 'pass') expect(r.sentence[0]).toBe(r.sentence[0].toLowerCase())
-        else expect(r.sentence[0]).toBe(r.sentence[0].toUpperCase())
+        // No jargon, codes or paths to files outside the details.
+        expect(shown(r)).not.toMatch(/crawler|HTTP|robots\.txt|canonical|user[- ]agent|X-Robots|noindex|sitemap|\berror \d|\bstatus\b|firewall|script/i)
+        // A fail / unknown / na sentence follows "Not yet:" / "Couldn't check:", so it starts
+        // lower-case, unless its first word is a name ("ChatGPT search is shown…").
+        const startsWithName = FOUND_NAMES.some((n) => r.sentence.startsWith(n))
+        if (r.status !== 'pass' && !startsWithName) expect(r.sentence[0]).toBe(r.sentence[0].toLowerCase())
+        if (r.status === 'pass') expect(r.sentence[0]).toBe(r.sentence[0].toUpperCase())
+        // Short enough to read at a glance.
+        expect(r.sentence.length).toBeLessThanOrEqual(180)
         for (const row of r.evidence) expect(row.value).not.toMatch(/<[a-z!/]/i)
       })
     }
@@ -88,7 +92,9 @@ describe('the six bot tests', () => {
         const r = run(test, { bots: { [main.key]: { '/about': { status: 403, html: null } } } })
         expect(r.status).toBe('fail')
         expect(r.sentence).toMatch(/blocked/)
-        expect(r.sentence).toMatch(/403/)
+        // The code is for the details, not the sentence (UI review, 2026-09-29).
+        expect(r.sentence).not.toMatch(/403/)
+        expect(ev(r)).toMatch(/\/about: .*403/)
         expect(r.sentence).toContain('/about')
         expect(r.value).toBe('1 of 2 pages')
       })
@@ -101,9 +107,14 @@ describe('the six bot tests', () => {
         expect(r.status).toBe('unknown')
         expect(r.sentence).toMatch(/even without a bot’s name/)
       })
-      it('a page missing for everyone (404) is a fail, not an unknown', () => {
+      it('a page missing for everyone (404) is a broken link, not the bot turned away: noted, left out of the count', () => {
         const r = run(test, { plain: { '/about': { status: 404, html: null } }, allBots: { '/about': { status: 404, html: null } } })
-        expect(r).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/not found/) })
+        expect(r).toMatchObject({ status: 'pass', value: '1 of 1 page' })
+        expect(ev(r)).toMatch(/\/about doesn’t open for anyone \(404\)/)
+      })
+      it('the HOME page missing for everyone is a fail', () => {
+        const r = run(test, { plain: { '/': { status: 404, html: null } }, allBots: { '/': { status: 404, html: null } } })
+        expect(r).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/doesn’t open for anyone \(not found\)/) })
       })
       it('no answer → unknown, never pass', () => {
         const r = run(test, { bots: { [main.key]: { '/': { status: null, html: null, error: 'timeout' } } } })
@@ -151,7 +162,8 @@ describe('the six bot tests', () => {
       })
       it('a different page for the bot than for people → fail', () => {
         const r = run(test, { bots: { [main.key]: { '/': { html: OTHER_PAGE } } } })
-        expect(r).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/different page/) })
+        // A different page is also one without the artist's words; either is the finding.
+        expect(r).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/different page|without some of your words/) })
       })
       it('the site sends the bot to another site → fail naming it', () => {
         const r = run(test, { bots: { [main.key]: { '/': { status: null, html: null, finalUrl: null, error: 'not-allowed: https://linktr.ee/someone' } } } })
@@ -168,7 +180,7 @@ describe('the six bot tests', () => {
         const robots = `User-agent: *\nAllow: /\n\nUser-agent: ${main.robotsToken}\nDisallow: /about\n`
         const r = run(test, { robots: { status: 200, body: robots } })
         expect(r.status).toBe('fail')
-        expect(r.sentence).toMatch(/settings file/)
+        expect(r.sentence).toMatch(/settings for search engines/)
         expect(ev(r)).toContain('Disallow: /about')
         expect(r.value).toBe('1 of 2 pages')
       })
@@ -176,7 +188,7 @@ describe('the six bot tests', () => {
         expect(run(test, { robots: { status: 200, body: 'User-agent: *\nDisallow: /\n' } })).toMatchObject({ status: 'fail', value: '0 of 2 pages' })
       })
       it('the settings file answers with a server error → fail (Google stops visiting)', () => {
-        expect(run(test, { robots: { status: 503, body: null } })).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/settings file is broken/) })
+        expect(run(test, { robots: { status: 503, body: null } })).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/gives an error when search engines ask for its settings/) })
       })
       it('the settings file refused to us (403) or no answer → unknown', () => {
         expect(run(test, { robots: { status: 403, body: null } }).status).toBe('unknown')
@@ -395,7 +407,8 @@ describe('words: your words are in the page itself', () => {
     const r = run('words', { pages: { '/': HOME, '/about': about } })
     expect(r.status).toBe('fail')
     expect(r.sentence).toMatch(/bio/)
-    expect(r.sentence).toMatch(/hidden/)
+    // In the hidden code (JSON-LD), in plain words (UI review, 2026-09-29).
+    expect(r.sentence).toMatch(/where people read it/)
   })
   it('the bio only in a meta description → fail', () => {
     const home = HOME.replace('Skeen is a Chicago house DJ and producer.', BIO)
@@ -434,16 +447,24 @@ describe('words: your words are in the page itself', () => {
   })
   it('text in the <title>, an attribute or a script does not count', () => {
     const home = doc('You Were There · OutWest · Hideaway', `<main><h1 title="OutWest">Skeen</h1><img alt="Hideaway"><script>var t = "You Were There OutWest Hideaway"</script></main>`)
-    const r = run('words', { pages: { '/': home }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: null } } })
+    const r = run('words', { pages: { '/': home }, sitemap: { ...SITEMAP_OK, urls: [`${O}/`], total: 1 }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: null } } })
     expect(r.status).toBe('fail')
   })
-  it('a short title does not match inside another word ("Up" is not in "update")', () => {
-    const r = run('words', { pages: { '/': doc('x', '<main><p>Tour update coming soon for everyone who asked.</p></main>') }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: null, tourDates: [], releases: [{ title: 'Up', releasedOn: null }] } } })
+  it('a title does not match inside another word ("Date" is not in "update")', () => {
+    const page = doc('Skeen', '<main><h1>Skeen</h1><p>Tour update coming soon for everyone who asked.</p></main>')
+    const r = run('words', { pages: { '/': page }, sitemap: { ...SITEMAP_OK, urls: [`${O}/`], total: 1 }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: null, tourDates: [], releases: [{ title: 'Date', releasedOn: null }] } } })
     expect(r.status).toBe('fail')
+  })
+  it('a title under 3 characters ("Up") is too short to prove anything: left out, and said so', () => {
+    const page = doc('Skeen', '<main><h1>Skeen</h1><p>Tour update coming soon for everyone who asked.</p></main>')
+    const r = run('words', { pages: { '/': page }, sitemap: { ...SITEMAP_OK, urls: [`${O}/`], total: 1 }, known: { ...KNOWN, published: { ...KNOWN.published!, bio: null, tourDates: [], releases: [{ title: 'Up', releasedOn: null }] } } })
+    expect(r.status).toBe('na')
+    expect(ev(r)).toMatch(/too short/)
   })
   it('nothing published → unknown; nothing to look for → unknown', () => {
     expect(run('words', { known: { ...KNOWN, published: null } }).status).toBe('unknown')
-    expect(run('words', { known: { ...KNOWN, published: { ...KNOWN.published!, bio: null, releases: [], tourDates: [] } } }).status).toBe('unknown')
+    // Nothing to look for does not apply (types.ts rule 4); it is not "couldn't check".
+    expect(run('words', { known: { ...KNOWN, published: { ...KNOWN.published!, bio: null, releases: [], tourDates: [] } } }).status).toBe('na')
   })
   it('a word missing while a page could not be read → unknown (it may be on that page)', () => {
     const about = ABOUT.replace(/<p>Skeen is a Chicago DJ[\s\S]*?<\/p>/, '')

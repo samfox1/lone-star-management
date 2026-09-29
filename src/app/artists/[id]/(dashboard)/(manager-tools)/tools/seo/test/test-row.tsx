@@ -7,7 +7,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import type { SeoTestHistory, SeoTestStatus } from '@/lib/seo-tests/types'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { dotText, editHref, leadOf, safeHttps, sentenceOf, STATUS_WORD, type TestRow } from './model'
+import { checkItYourself, dotText, editHref, leadOf, safeHttps, sentenceOf, STATUS_WORD, type TestRow } from './model'
 
 /**
  * ONE TEST: its row, and the DROPDOWN that opens under it (Sam, 2026-09-28: round 2's list, with
@@ -29,6 +29,8 @@ const rawId = (id: string) => `seo-test-raw-${id}`
 /** What a row needs from the tab around it. */
 export type RowContext = {
   artistId: string
+  /** The address the run tested, for "check it yourself" links under the details. */
+  site: string
   /** The run's start, for "Tested …"; '' until mounted (clock.ts). */
   testedWhen: string
   now: Date | null
@@ -42,11 +44,14 @@ export type RowContext = {
   onFix: (fix: 'apple-storefront') => void
 }
 
-/** The mark at the start of the row. */
-export function StatusMark({ status }: { status: SeoTestStatus | null }) {
+/** The mark at the start of the row. `untested`: a plain hollow ring, so a row that has not been
+ *  tested never reads as a statement of fact (review L3). */
+export function StatusMark({ status, untested = false }: { status: SeoTestStatus | null; untested?: boolean }) {
   return (
     <span aria-hidden="true" className="flex w-5 flex-none justify-center">
-      {status === 'pass' ? (
+      {untested ? (
+        <span data-mark="untested" className="h-[13px] w-[13px] rounded-full border-[1.6px] border-ink-faint" />
+      ) : status === 'pass' ? (
         <Icon name="check" size={17} className="text-ink" />
       ) : status === 'fail' ? (
         <Icon name="alert" size={17} className="text-accent-red" />
@@ -66,10 +71,10 @@ function Tags({ row }: { row: TestRow }) {
   return (
     <>
       {row.def.outside ? (
-        <span className="hidden whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint sm:inline">Outside Tapir</span>
+        <span className="whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">Outside Tapir</span>
       ) : null}
       {row.def.source ? (
-        <span className="hidden items-center gap-1.5 whitespace-nowrap font-space text-[12px] text-ink-faint sm:inline-flex">
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-space text-[12px] text-ink-faint">
           <Icon name={row.def.source === 'Tour' ? 'tour' : 'tracks'} size={14} />
           {row.def.source}
         </span>
@@ -80,18 +85,28 @@ function Tags({ row }: { row: TestRow }) {
 
 const VALUE_TONE: Record<SeoTestStatus, string> = { pass: 'text-ink-muted', fail: 'text-accent-red', unknown: 'text-ink-faint', na: 'text-ink-faint' }
 
-/** The inside of a row, shared by the clickable row and the quiet one. */
-function RowFace({ row, showValue, open }: { row: TestRow; showValue: boolean; open?: boolean }) {
+/**
+ * The inside of a row, shared by the clickable row and the quiet one. The NAME WRAPS, never
+ * truncates, at every width (review L6: on a phone six rows read "Nothing on your site tu…").
+ * On a phone the tags and the value drop under the name; from `sm` up they sit on the right.
+ */
+function RowFace({ row, showValue, open, untested = false }: { row: TestRow; showValue: boolean; open?: boolean; untested?: boolean }) {
   const r = row.result
   return (
     <>
-      <StatusMark status={showValue ? (r?.status ?? null) : null} />
-      <span className={cx('min-w-0 flex-1 truncate text-[15px] font-medium', r?.status === 'na' ? 'text-ink-muted' : 'text-ink')}>{row.def.name}</span>
-      {r && showValue ? <span className="sr-only">, {MARK_WORD[r.status]}</span> : null}
-      <Tags row={row} />
-      {r && showValue && r.value ? (
-        <span className={cx('max-w-[45%] truncate whitespace-nowrap font-space text-[12px] sm:max-w-[280px]', VALUE_TONE[r.status])}>{r.value}</span>
-      ) : null}
+      <StatusMark status={showValue ? (r?.status ?? null) : null} untested={untested} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
+        <span data-test-name="" className={cx('min-w-0 flex-1 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]', r?.status === 'na' ? 'text-ink-muted' : 'text-ink')}>
+          {row.def.name}
+        </span>
+        {r && showValue ? <span className="sr-only">, {MARK_WORD[r.status]}</span> : null}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 sm:flex-none sm:flex-nowrap sm:gap-3.5">
+          <Tags row={row} />
+          {r && showValue && r.value ? (
+            <span className={cx('min-w-0 max-w-full truncate whitespace-nowrap font-space text-[12px] sm:max-w-[280px]', VALUE_TONE[r.status])}>{r.value}</span>
+          ) : null}
+        </span>
+      </span>
       {open !== undefined ? (
         <Icon
           name="chevronRight"
@@ -104,12 +119,13 @@ function RowFace({ row, showValue, open }: { row: TestRow; showValue: boolean; o
   )
 }
 
-/** A row that opens nothing: before the first test, with no site, or while testing isn't on. */
+/** A row that opens nothing: before the first test, with no site, when the site didn't answer,
+ *  or while tests aren't on. A hollow ring says "not tested"; the name is a claim, not a fact. */
 export function QuietRow({ row, showValue = false }: { row: TestRow; showValue?: boolean }) {
   return (
     <div data-test-item={row.def.id} className="-mx-3 border-b border-hairline-soft last:border-b-transparent">
       <div className="flex items-center gap-3.5 px-3 py-[13px] opacity-60">
-        <RowFace row={row} showValue={showValue} />
+        <RowFace row={row} showValue={showValue} untested={!showValue} />
       </div>
     </div>
   )
@@ -128,7 +144,8 @@ export function TestRowItem({ row, open, onToggle, ctx }: { row: TestRow; open: 
         aria-expanded={open}
         aria-controls={detailId(id)}
         onClick={onToggle}
-        className={cx('group/trow flex w-full items-center gap-3.5 rounded-xl px-3 py-[13px] text-left transition-colors hover:bg-surface', FOCUS_RING, 'focus-visible:-outline-offset-2')}
+        // scroll-mt: a deep link (?open=) scrolls THIS button into view; the sticky header is 71px.
+        className={cx('group/trow flex w-full scroll-mt-28 items-center gap-3.5 rounded-xl px-3 py-[13px] text-left transition-colors hover:bg-surface', FOCUS_RING, 'focus-visible:-outline-offset-2')}
       >
         <RowFace row={row} showValue open={open} />
       </button>
@@ -147,11 +164,11 @@ function Dropdown({ row, ctx }: { row: TestRow; ctx: RowContext }) {
   const evidence = Array.isArray(r.evidence) ? r.evidence : []
   return (
     <div id={detailId(id)} role="region" aria-labelledby={rowButtonId(id)} className="pb-4 pl-4 pr-4 sm:pl-[46px]">
-      <p className="text-[17px] font-medium leading-[1.4] tracking-[-0.01em] text-ink">
+      <p className="max-w-[68ch] text-[16px] font-medium leading-[1.4] tracking-[-0.01em] text-ink sm:text-[17px]">
         {lead ? <b className={cx('font-bold', LEAD_TONE[r.status])}>{lead} </b> : null}
         {sentenceOf(r)}
       </p>
-      <p className="mt-[3px] text-[14px] leading-[1.45] text-ink-muted">{row.def.why}</p>
+      <p className="mt-[3px] max-w-[80ch] text-[14px] leading-[1.45] text-ink-muted">{row.def.why}</p>
       {r.good ? <Line label="Good looks like">{r.good}</Line> : null}
       {r.todo ? <Line label="What to do">{r.todo}</Line> : null}
 
@@ -193,6 +210,7 @@ function Dropdown({ row, ctx }: { row: TestRow; ctx: RowContext }) {
                 {r.limits}
               </p>
             ) : null}
+            <CheckYourself id={id} site={ctx.site} />
           </div>
         ) : null}
       </div>
@@ -200,9 +218,27 @@ function Dropdown({ row, ctx }: { row: TestRow; ctx: RowContext }) {
   )
 }
 
+/** Other sites' own checkers for this test (the old "Test with" menu), opened on the tested
+ *  address in a new tab. */
+function CheckYourself({ id, site }: { id: TestRow['def']['id']; site: string }) {
+  const links = checkItYourself(id, site)
+  if (!links.length) return null
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
+      <span className="font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">Check it yourself</span>
+      {links.map((l) => (
+        <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={cx('inline-flex items-center gap-1 rounded hover:text-accent', FOCUS_RING)}>
+          {l.label}
+          <Icon name="external" size={12} aria-hidden="true" />
+        </a>
+      ))}
+    </div>
+  )
+}
+
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <p className="mt-[3px] text-[14px] leading-[1.45] text-ink">
+    <p className="mt-[3px] max-w-[80ch] text-[14px] leading-[1.45] text-ink">
       <span className="mr-2 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">{label}</span>
       {children}
     </p>

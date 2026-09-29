@@ -63,9 +63,9 @@ export function EndSlot({ children }: { children?: ReactNode }) {
   return <span className="flex w-8 flex-none justify-center">{children}</span>
 }
 
-/** "37/70" — faint, red once over. */
+/** "37 of 70" — faint, red once over. */
 export function Count({ n, max, className }: { n: number; max: number; className?: string }) {
-  return <span className={cx('whitespace-nowrap font-space text-[11px]', n > max ? 'text-accent-red' : 'text-ink-faint', className)}>{`${n}/${max}`}</span>
+  return <span className={cx('whitespace-nowrap font-space text-[11px]', n > max ? 'text-accent-red' : 'text-ink-faint', className)}>{`${n} of ${max}`}</span>
 }
 
 /** A refusal, in the validator's own words, under the value. */
@@ -100,9 +100,10 @@ export const LineField = forwardRef<
     mono?: boolean
     tone?: Tone
     inputMode?: 'numeric' | 'text'
+    onFocus?: () => void
     onBlur?: () => void
   }
->(function LineField({ label, value, onChange, placeholder, className, invalid, mono, tone = 'ink', inputMode, onBlur }, ref) {
+>(function LineField({ label, value, onChange, placeholder, className, invalid, mono, tone = 'ink', inputMode, onFocus, onBlur }, ref) {
   return (
     <input
       ref={ref}
@@ -113,6 +114,7 @@ export const LineField = forwardRef<
       inputMode={inputMode}
       spellCheck={false}
       onChange={(e) => onChange(e.target.value)}
+      onFocus={onFocus}
       onBlur={onBlur}
       className={cx(FIELD, mono ? 'font-space text-[11px] leading-5' : 'text-[15px] leading-6', invalid ? 'text-accent-red' : TONE[tone], className)}
     />
@@ -125,7 +127,7 @@ export const AreaField = forwardRef<
   HTMLTextAreaElement,
   { label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string; rows?: number; tone?: Tone; small?: boolean } & Pick<
     TextareaHTMLAttributes<HTMLTextAreaElement>,
-    'onKeyDown' | 'onBlur' | 'autoFocus'
+    'onKeyDown' | 'onBlur' | 'onFocus' | 'autoFocus'
   >
 >(function AreaField({ label, value, onChange, placeholder, className, rows = 2, tone = 'ink', small = false, ...rest }, ref) {
   return (
@@ -198,7 +200,8 @@ export function Chips({
             type="button"
             aria-label={`Remove ${it}`}
             onClick={() => onChange(items.filter((_, j) => j !== i))}
-            className={cx('inline-flex rounded-full p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-accent-red focus-visible:opacity-100 group-hover/chip:opacity-100', FOCUS_RING)}
+            // Always visible: a touch screen has no hover to reveal it (review L7).
+            className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', FOCUS_RING)}
           >
             <Icon name="close" size={11} />
           </button>

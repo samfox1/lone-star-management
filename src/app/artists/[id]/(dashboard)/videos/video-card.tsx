@@ -7,7 +7,7 @@ import { metricLabel } from '@/lib/analytics'
 import { safeHref } from '@/lib/url'
 import { publicVideoSrc } from '@/lib/video-render'
 import { CardModal } from '../card-modal'
-import { KvField, MetaDot, ModalHeader } from '../modal-kit'
+import { HeaderIcon, KvField, MetaDot, ModalHeader } from '../modal-kit'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, renameVideoAction } from '../actions'
@@ -178,7 +178,8 @@ export function VideoCard({
         }
       >
         <ModalHeader
-          square={poster(20)}
+          art={video.poster ? poster(20) : null}
+          mark={<HeaderIcon name="videos" />}
           title={title}
           meta={
             <>

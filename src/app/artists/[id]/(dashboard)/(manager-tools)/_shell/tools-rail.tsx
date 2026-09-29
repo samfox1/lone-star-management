@@ -84,7 +84,9 @@ const railColumnTop = (count: number) => (count * RAIL_ITEM_H + (count - 1) * RA
 
 function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
   return (
-    <div className="hidden flex-none md:block" style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
+    // Collapsed (a tabbed tool), this in-flow slot lies exactly under the fixed rail and draws
+    // the SAME line the whole height of the page (see ToolsShell: FULL-HEIGHT LINES).
+    <div data-rail-slot="" className={cx('hidden flex-none md:block', collapsed && 'md:border-r md:border-hairline')} style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
       <nav
         aria-label="Manager tools"
         data-collapsed={collapsed ? 'true' : 'false'}
@@ -146,8 +148,11 @@ function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; t
     // paddings, same font, BOLD so the current tab's weight can never outgrow it). Both are
     // `w-max`, so they come to the same width and the page starts where the panel ends —
     // whichever tool, whichever labels. No number to keep in step with the copy.
-    <div className="hidden flex-none md:block">
-      <div aria-hidden="true" className={cx('invisible flex w-max flex-col border-r border-transparent px-2', SUB_RAIL_MIN)}>
+    // The slot's own 1px line stands in for the panel's border in the sizing sum (the sizer
+    // no longer carries a transparent one), so slot and panel are the same width, and the
+    // line runs the whole height of the page (see ToolsShell: FULL-HEIGHT LINES).
+    <div data-panel-slot="" className="hidden flex-none md:block md:border-r md:border-hairline">
+      <div aria-hidden="true" className={cx('invisible flex w-max flex-col px-2', SUB_RAIL_MIN)}>
         {tabs.map((t) => (
           <span key={t.seg} className="whitespace-nowrap px-2.5 font-space text-[13px] font-bold tracking-[0.02em]">
             {t.label}
@@ -246,7 +251,13 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
           and the shell's gap-8 ran twice. `md:-ml-7` pulls the pair back under their
           panels, with no gap between them; the shell's one gap-8 is then the whole gap.
           The test reads main's padding from layout.tsx, so the two cannot drift apart. */}
-      <div className="hidden flex-none md:-ml-7 md:flex">
+      {/* FULL-HEIGHT LINES (Sam, 2026-09-29: "the column stops partway down the page"). The
+          two panels are `fixed h-screen`, so they end one window-height down wherever the
+          page is captured whole (a full-page screenshot) or pulled past its end. The in-flow
+          slots under them now carry the same two lines, stretched the page's full height and,
+          with `md:-mb-8`, over <main>'s bottom padding too. Inside the window the fixed panels
+          (bg-paper) cover them, so there is only ever one line. */}
+      <div className="hidden flex-none md:-mb-8 md:-ml-7 md:flex">
         <ToolsRail artistId={artistId} active={tool.seg} collapsed tools={tools} />
         <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} />
       </div>

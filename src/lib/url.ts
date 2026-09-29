@@ -91,3 +91,15 @@ export function looksLikeEmail(url: string | null | undefined): boolean {
   if (typeof url !== 'string') return false
   return /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(url.trim())
 }
+
+/**
+ * `s` without its trailing slashes. The same as `s.replace(/\/+$/, '')`, which is QUADRATIC
+ * on a long run of slashes that does not end the string (the regex retries the run from every
+ * slash): a URL path of a million slashes read off a hostile page held the server for minutes
+ * (security review 2026-09-29). A loop from the end is linear.
+ */
+export function trimTrailingSlashes(s: string): string {
+  let end = s.length
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--
+  return end === s.length ? s : s.slice(0, end)
+}

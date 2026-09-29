@@ -15,9 +15,10 @@
  * `!raw` there (a whitespace-only value cleans to '' and has no error either way).
  */
 import { describe, expect, it } from 'vitest'
-import { FACT_CONTENT_KEYS, MAX_ALIASES, MAX_ALIAS_LENGTH, MAX_PLACE_PART_LENGTH, jsonLdGraph } from '@samfox1/site-bridge/seo'
+import { COUNTRIES, FACT_CONTENT_KEYS, MAX_ALIASES, MAX_ALIAS_LENGTH, MAX_PLACE_PART_LENGTH, jsonLdGraph } from '@samfox1/site-bridge/seo'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
-import { CITY_MAX_LENGTH, FACT_KEYS, cleanFactValue, factErrors, factTextError, isFactKey, joinAliases, readFacts, thisYearAt } from '@/lib/seo-facts'
+import { CITY_MAX_LENGTH, COUNTRY_NOT_LISTED, FACT_KEYS, cleanFactValue, factErrors, factTextError, isFactKey, joinAliases, readFacts, thisYearAt } from '@/lib/seo-facts'
+import { REGIONS } from '@/lib/seo-regions'
 
 const K = FACT_CONTENT_KEYS
 const ctx = { artistName: 'Skeen', thisYear: 2026 }
@@ -63,15 +64,33 @@ describe('cleanFactValue: region and country', () => {
     expect(cleanFactValue(K.region, '</script><script>alert(1)</script>', ctx)).toEqual({ error: 'Leave out < and >.' })
     expect(cleanFactValue(K.country, 'US\u0000', ctx)).toEqual({ error: 'That has hidden characters in it. Type it again.' })
   })
-  it('a known country is stored in the table spelling; an unknown one as typed', () => {
+  it('a known country is stored in the table spelling', () => {
     for (const s of ['USA', 'us', 'U.S.A.', 'United States of America', ' united states ']) expect(cleanFactValue(K.country, s, ctx), s).toEqual(ok('United States'))
     expect(cleanFactValue(K.country, 'uk', ctx)).toEqual(ok('United Kingdom'))
-    expect(cleanFactValue(K.country, 'Narnia', ctx)).toEqual(ok('Narnia'))
-    expect(cleanFactValue(K.country, 'England', ctx)).toEqual(ok('England'))
   })
-  it('a region is never rewritten, even when it looks like a code', () => {
-    expect(cleanFactValue(K.region, 'IL', ctx)).toEqual(ok('IL'))
-    expect(cleanFactValue(K.region, 'US', ctx)).toEqual(ok('US'))
+  it('CRITICAL: every country in the dropdown is accepted as itself, and nothing else is (Sam, 2026-09-29)', () => {
+    for (const c of COUNTRIES) expect(cleanFactValue(K.country, c.name, ctx), c.name).toEqual(ok(c.name))
+    for (const s of ['Narnia', 'England', 'Korea', 'America', 'ZZ']) expect(cleanFactValue(K.country, s, ctx), s).toEqual({ error: COUNTRY_NOT_LISTED })
+  })
+  it('with no country, or one without a list, a region is typed text, never rewritten', () => {
+    for (const country of [undefined, null, '', 'Germany', 'Japan']) {
+      expect(cleanFactValue(K.region, 'IL', { ...ctx, country }), String(country)).toEqual(ok('IL'))
+      expect(cleanFactValue(K.region, 'Bavaria', { ...ctx, country })).toEqual(ok('Bavaria'))
+    }
+  })
+  it('CRITICAL: where the country has a list, the region is exactly one of its names, in the list’s spelling', () => {
+    for (const [country, list] of [['United States', REGIONS.US], ['usa', REGIONS.US], ['Canada', REGIONS.CA], ['Australia', REGIONS.AU], ['United Kingdom', REGIONS.GB]] as const) {
+      for (const n of list.names) expect(cleanFactValue(K.region, n, { ...ctx, country }), `${country}/${n}`).toEqual(ok(n))
+      expect(cleanFactValue(K.region, 'Atlantis', { ...ctx, country })).toEqual({ error: `Pick a ${list.noun} from the list.` })
+    }
+    expect(cleanFactValue(K.region, '  illinois ', { ...ctx, country: 'United States' })).toEqual(ok('Illinois'))
+    expect(cleanFactValue(K.region, 'québec', { ...ctx, country: 'Canada' })).toEqual(ok('Quebec'))
+    // A code or a neighbour's name is not a name on the list.
+    expect(cleanFactValue(K.region, 'IL', { ...ctx, country: 'United States' })).toEqual({ error: 'Pick a state from the list.' })
+    expect(cleanFactValue(K.region, 'Ontario', { ...ctx, country: 'United States' })).toEqual({ error: 'Pick a state from the list.' })
+    expect(cleanFactValue(K.region, 'Scotland', { ...ctx, country: 'United Kingdom' })).toEqual(ok('Scotland'))
+    // The markup rule still comes first.
+    expect(cleanFactValue(K.region, '<b>Illinois</b>', { ...ctx, country: 'United States' })).toEqual({ error: 'Leave out < and >.' })
   })
 })
 
@@ -221,6 +240,11 @@ describe('factErrors: what is stored that the gate would refuse today', () => {
   })
   it('an alias that became the name after a rename is flagged (the card already drops it)', () => {
     expect(factErrors({ [K.aliases]: 'DJ Skeen' }, { name: 'DJ Skeen', location: null }, 2026)).toEqual({ aliases: '"DJ Skeen" is the artist\'s name already.' })
+  })
+  it('a stored region is judged against the stored country; a country off the list is flagged', () => {
+    expect(factErrors({ [K.region]: 'IL', [K.country]: 'United States' }, artist, 2026)).toEqual({ region: 'Pick a state from the list.' })
+    expect(factErrors({ [K.region]: 'IL', [K.country]: 'Germany' }, artist, 2026)).toStrictEqual({})
+    expect(factErrors({ [K.country]: 'Narnia' }, artist, 2026)).toEqual({ country: COUNTRY_NOT_LISTED })
   })
   it(`a city over ${CITY_MAX_LENGTH} characters is flagged`, () => {
     expect(factErrors({}, { name: 'S', location: 'x'.repeat(CITY_MAX_LENGTH + 1) }, 2026)).toEqual({ city: `Keep it under ${CITY_MAX_LENGTH} characters.` })

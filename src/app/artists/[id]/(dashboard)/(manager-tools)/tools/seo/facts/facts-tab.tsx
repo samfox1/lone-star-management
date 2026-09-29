@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { ABOUT_PLACEMENTS, FACT_CONTENT_KEYS, MAX_ALIASES, type AboutPlacement } from '@samfox1/site-bridge/seo'
+import { ABOUT_PLACEMENTS, COUNTRIES, FACT_CONTENT_KEYS, MAX_ALIASES, countryOf, type AboutPlacement } from '@samfox1/site-bridge/seo'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { CITY_MAX_LENGTH, cleanFactValue, factErrors, factTextError, joinAliases, readFacts, thisYearAt, type FactField } from '@/lib/seo-facts'
+import { regionIn, regionsFor } from '@/lib/seo-regions'
 import { isTooLong, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { TextLimitHint } from '../../../../editor/inspector-shared'
 import { saveArtistFactAction, saveEditorFieldAction, saveSeoFieldAction } from '../../../../actions'
 import { CardModal } from '../../../../card-modal'
-import { KvRow, MetaDot, ModalHeader, SelectMenu } from '../../../../modal-kit'
+import { HeaderIcon, KvRow, MetaDot, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
@@ -27,6 +28,10 @@ type SchemaType = (typeof TYPES)[number]['value']
 
 const PLACEMENT: Record<AboutPlacement, string> = { home: 'On the homepage', page: 'Its own page', hidden: 'Hidden from visitors' }
 
+/** The countries a manager picks from: exactly the bridge's table (the save gate accepts only
+ *  those), A to Z, with "—" to clear. */
+const COUNTRY_OPTIONS = [{ value: '', label: '—' }, ...[...COUNTRIES].map((c) => ({ value: c.name, label: c.name })).sort((a, b) => a.label.localeCompare(b.label, 'en'))]
+
 /** The genre column's cap (lib/artist-facts.ts `artistFactUpdate`). */
 const GENRE_MAX = 120
 
@@ -41,8 +46,9 @@ export type FactsTabProps = {
   /** The four fact keys as stored (fact_region, fact_country, fact_aliases, fact_active_since). */
   facts: Record<string, string>
   bio: string
-  /** Tapir's own bio goal (lib/seo-tests who.ts BIO_GOAL): the Test tab's number. */
-  bioGoal: number
+  /** Tapir's own floor for a bio, in WORDS (lib/seo-tests who.ts BIO_MIN_WORDS): the bio test
+   *  also asks that it name the genre, the city and a release or show. Shown while editing. */
+  bioMinWords: number
   about: { placement: string; heading: string }
   bookingEmail: string
   /** The artist's connected profiles, fact databases (MusicBrainz, Discogs, Wikidata) apart. */
@@ -170,13 +176,38 @@ export function FactsTab(p: FactsTabProps) {
     })
   }
 
+  /* ── where: the country and (for the countries that have one) the region are PICKS ── */
+  const country = facts[FACT_CONTENT_KEYS.country] ?? ''
+  const region = facts[FACT_CONTENT_KEYS.region] ?? ''
+  const regionList = regionsFor(country)
+  /** Country and region picks are written IN ORDER: the gate judges a region against the
+   *  country it reads back, so a region picked right after a country must not land first. */
+  const placeQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const writePlace = (field: 'country' | 'region', value: string) => {
+    const key = FACT_CONTENT_KEYS[field]
+    setFacts((f) => ({ ...f, [key]: value }))
+    refuse(field, null)
+    placeQueue.current = placeQueue.current.then(async () => {
+      const r = await saveSeoFieldAction(artistId, key, value).catch(() => ({ ok: false, error: 'Couldn’t save that.' }))
+      if (!r.ok) refuse(field, r.error ?? 'Couldn’t save that.')
+    })
+  }
+  const pickCountry = (next: string) => {
+    writePlace('country', next)
+    // A region that isn't on the new country's list goes with the old country; one typed for
+    // a country without a list stays (it may still be right, and it is text anyway).
+    const list = regionsFor(next)
+    if (region && list && !regionIn(list, region)) writePlace('region', '')
+  }
+  const pickRegion = (next: string) => writePlace('region', next)
+
   const person = type === 'Person'
 
   return (
     <div>
       <LedgerSection label="Who">
         <LedgerRow title="Type">
-          <TypeMenu value={type} onChange={changeType} />
+          <ChoiceMenu label="Type" value={type} options={TYPES} onChange={changeType} />
           <EndSlot />
         </LedgerRow>
         {errors.type ? <FieldError>{errors.type}</FieldError> : null}
@@ -194,7 +225,7 @@ export function FactsTab(p: FactsTabProps) {
           </div>
           <EndSlot />
         </LedgerRow>
-        <LedgerRow title="Active since" meta={person ? 'Not on your fact card for a visual artist' : undefined}>
+        <LedgerRow title="Active since" meta={person ? 'Not shown to search engines for a visual artist' : undefined}>
           <div className="flex min-w-0 flex-col items-end gap-1">
             <LineField
               label="Active since"
@@ -219,23 +250,22 @@ export function FactsTab(p: FactsTabProps) {
                 <LineField label="City" value={city} placeholder="—" invalid={!!errors.city} onChange={setCityValue} className="w-[120px]" />
               </Cell>
               <Cell label="Region">
-                <LineField label="Region" value={facts[FACT_CONTENT_KEYS.region] ?? ''} placeholder="—" invalid={!!errors.region} onChange={(v) => setFact('region', v)} className="w-[110px]" />
+                {regionList ? (
+                  <ChoiceMenu
+                    label="Region"
+                    value={region}
+                    options={[{ value: '', label: '—' }, ...regionList.names.map((n) => ({ value: n, label: n }))]}
+                    align="end"
+                    size="cell"
+                    onChange={pickRegion}
+                  />
+                ) : (
+                  <LineField label="Region" value={region} placeholder="—" invalid={!!errors.region} onChange={(v) => setFact('region', v)} className="w-[110px]" />
+                )}
               </Cell>
               <Cell label="Country">
-                <LineField
-                  label="Country"
-                  value={facts[FACT_CONTENT_KEYS.country] ?? ''}
-                  placeholder="—"
-                  invalid={!!errors.country}
-                  onChange={(v) => setFact('country', v)}
-                  onBlur={() => {
-                    const t = tidied.country
-                    if (!t) return
-                    setFacts((f) => ({ ...f, [FACT_CONTENT_KEYS.country]: t }))
-                    setTidied((x) => ({ ...x, country: undefined }))
-                  }}
-                  className="w-[130px]"
-                />
+                {/* A country stored in another spelling ("USA") is shown back as the table has it. */}
+                <ChoiceMenu label="Country" value={countryOf(country)?.name ?? country} options={COUNTRY_OPTIONS} align="end" size="cell" onChange={pickCountry} />
               </Cell>
             </div>
             {tidied.country ? <span className="font-space text-[11px] text-ink-faint">{`Saved as ${tidied.country}`}</span> : null}
@@ -248,17 +278,17 @@ export function FactsTab(p: FactsTabProps) {
       </LedgerSection>
 
       <LedgerSection label="About">
-        <BioRow artistId={artistId} bio={p.bio} goal={p.bioGoal} about={p.about} />
+        <BioRow artistId={artistId} bio={p.bio} minWords={p.bioMinWords} about={p.about} />
         <LedgerRow title="Booking">
           <span className="min-w-0 truncate font-space text-[12px] text-ink-muted">{`${p.bookingEmail || '—'} · from Settings`}</span>
           <EndSlot>
-            <IconLink icon="external" label="Settings" href={`/artists/${artistId}/settings`} align="end" />
+            <IconLink icon="settings" label="Change it in Settings" href={`/artists/${artistId}/settings`} align="end" />
           </EndSlot>
         </LedgerRow>
       </LedgerSection>
 
       <LedgerSection label="Profiles">
-        <LedgerRow title="Connected" meta={`${p.profiles.filter((l) => l.inFactCard).length} of ${p.profiles.length} in your fact card`}>
+        <LedgerRow title="Connected" meta={`${p.profiles.filter((l) => l.inFactCard).length} of ${p.profiles.length} shown to search engines`}>
           {p.profiles.length ? (
             <span className="flex flex-wrap items-center justify-end gap-2.5 text-ink" aria-label="Connected profiles">
               {p.profiles.map((l) => (
@@ -272,7 +302,7 @@ export function FactsTab(p: FactsTabProps) {
             <span className="font-space text-[12px] text-ink-faint">none yet</span>
           )}
           <EndSlot>
-            <IconLink icon="external" label="Connections" href={`/artists/${artistId}/connections`} align="end" />
+            <IconLink icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} align="end" />
           </EndSlot>
         </LedgerRow>
         <DatabaseRow
@@ -318,10 +348,31 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
   )
 }
 
-/** Musician / Visual artist: the value, and the up-down glyph that says it's a choice. */
-function TypeMenu({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+/** The site's own drop-down (the Type select's look): the value in plain ink and the up-down
+ *  glyph that says it's a choice. The empty choice reads as its own label ("Site default",
+ *  "—"); a stored value that isn't among the options reads as itself, never as another one.
+ *  Long lists (every country, every state) scroll inside the menu, open at the current
+ *  choice, and jump as letters are typed; ↑ ↓ move, Escape closes. */
+function ChoiceMenu({
+  label,
+  value,
+  options,
+  onChange,
+  align = 'end',
+  size = 'row',
+}: {
+  label: string
+  value: string
+  options: readonly { value: string; label: string }[]
+  onChange: (v: string) => void
+  align?: 'start' | 'end'
+  /** `cell`: the 15px value of a small labelled cell (city · region · country). */
+  size?: 'row' | 'cell'
+}) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const typed = useRef({ text: '', at: 0 })
   const listId = useId()
   useEffect(() => {
     if (!open) return
@@ -329,44 +380,88 @@ function TypeMenu({ value, onChange }: { value: string; onChange: (v: string) =>
       if (!box.current?.contains(e.target as Node)) setOpen(false)
     }
     const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      e.stopImmediatePropagation() // the menu closes; a window under it stays open
+      setOpen(false)
     }
     document.addEventListener('mousedown', away)
-    document.addEventListener('keydown', esc)
+    document.addEventListener('keydown', esc, true)
+    // Open at the current choice (or the top), with focus on it.
+    const current = list.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? list.current?.querySelector<HTMLElement>('[role="option"]')
+    current?.focus({ preventScroll: true })
+    current?.scrollIntoView?.({ block: 'nearest' })
     return () => {
       document.removeEventListener('mousedown', away)
-      document.removeEventListener('keydown', esc)
+      document.removeEventListener('keydown', esc, true)
     }
   }, [open])
-  const shown = TYPES.find((t) => t.value === value)?.label ?? 'Musician'
+  const match = options.find((o) => o.value === value)
+  const shown = match ? match.label : value || (options.find((o) => o.value === '')?.label ?? '')
+  // Only the bare "—" reads faint; a named empty choice ("Site default") is a real choice.
+  const faint = !value && shown === '—'
+
+  function onListKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    const items = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])
+    const at = items.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      items[Math.max(0, Math.min(items.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+      return
+    }
+    if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) return
+    // Type to jump: the letters typed within a moment, as the start of a name.
+    const now = Date.now()
+    typed.current = { text: (now - typed.current.at < 700 ? typed.current.text : '') + e.key.toLowerCase(), at: now }
+    const hit = items.find((el) => (el.dataset.label ?? '').toLowerCase().startsWith(typed.current.text))
+    if (hit) {
+      e.preventDefault()
+      hit.focus()
+      hit.scrollIntoView?.({ block: 'nearest' })
+    }
+  }
+
   return (
     <div ref={box} className="relative">
       <button
         type="button"
         role="combobox"
-        aria-label="Type"
+        aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((o) => !o)}
-        className={cx('flex items-center gap-2.5 rounded-md text-[15px] text-ink', FOCUS_RING, 'focus-visible:outline-offset-2')}
+        className={cx(
+          'flex max-w-full items-center rounded-md text-[15px]',
+          size === 'cell' ? 'gap-1.5 leading-6' : 'gap-2.5',
+          faint ? 'text-ink-faint' : 'text-ink',
+          FOCUS_RING,
+          'focus-visible:outline-offset-2',
+        )}
       >
-        {shown}
-        <Icon name="chevronsUpDown" size={18} className="text-ink-faint" />
+        <span className="min-w-0 truncate">{shown}</span>
+        <Icon name="chevronsUpDown" size={size === 'cell' ? 15 : 18} className="flex-none text-ink-faint" />
       </button>
       {open ? (
-        <div id={listId} role="listbox" aria-label="Type" className="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-xl border border-hairline bg-paper py-1 shadow-2xl">
-          {TYPES.map((t) => (
+        <div
+          ref={list}
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          onKeyDown={onListKey}
+          className={cx('absolute top-full z-20 mt-1 max-h-72 min-w-[200px] overflow-auto rounded-xl border border-hairline bg-paper py-1 shadow-2xl', align === 'end' ? 'right-0' : 'left-0')}
+        >
+          {options.map((t) => (
             <button
-              key={t.value}
+              key={t.value || '__default'}
               type="button"
               role="option"
+              data-label={t.label}
               aria-selected={t.value === value}
               onClick={() => {
                 setOpen(false)
                 if (t.value !== value) onChange(t.value)
               }}
-              className={cx('flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm hover:bg-surface', t.value === value ? 'text-ink' : 'text-ink-muted')}
+              className={cx('flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm outline-none hover:bg-surface focus:bg-surface', t.value === value ? 'text-ink' : 'text-ink-muted')}
             >
               {t.label}
               {t.value === value ? <Icon name="check" size={13} /> : null}
@@ -402,13 +497,14 @@ function DatabaseRow({
         <PlatformMark slug={slug} />
       </span>
       {shown ? <span className="min-w-0 truncate font-space text-[12px] text-ink-muted">{shown}</span> : missing}
-      <EndSlot>{shown ? <IconLink icon="external" label="Connections" href={`/artists/${artistId}/connections`} align="end" /> : add}</EndSlot>
+      <EndSlot>{shown ? <IconLink icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} align="end" /> : add}</EndSlot>
     </LedgerRow>
   )
 }
 
-/** The bio (`#bio`): its length against Tapir's goal, and the editor behind the pencil. */
-function BioRow({ artistId, bio: initialBio, goal, about }: { artistId: string; bio: string; goal: number; about: { placement: string; heading: string } }) {
+/** The bio (`#bio`): a calm row, its first words and the pencil; the counts live in the
+ *  editor, shown while it is being written (Sam, 2026-09-29: no bar, no count at rest). */
+function BioRow({ artistId, bio: initialBio, minWords, about }: { artistId: string; bio: string; minWords: number; about: { placement: string; heading: string } }) {
   const [bio, setBio] = useState(initialBio)
   const [open, setOpen] = useState(false)
   useOpenOnHash('bio', () => setOpen(true))
@@ -416,23 +512,22 @@ function BioRow({ artistId, bio: initialBio, goal, about }: { artistId: string; 
     setOpen(false)
     clearHash('bio')
   }
-  const n = bio.trim().length
+  const first = bio.trim().split(/\n+/)[0]?.trim() ?? ''
+  // The id sits on an empty anchor beside the row, not on a wrapper around it: wrapped, the row
+  // was its wrapper's last child and lost the hairline to Booking (review L10).
   return (
-    <div id="bio" className="scroll-mt-28">
+    <>
+      <span id="bio" aria-hidden="true" className="block scroll-mt-28" />
       <LedgerRow title="Bio" guide="Feeds About, Google and AI answers.">
-        <span aria-hidden="true" className="block h-1 w-28 flex-none overflow-hidden rounded-sm bg-hairline">
-          <i className="block h-full bg-ink" style={{ width: `${Math.min(100, (n / goal) * 100)}%` }} />
-        </span>
-        <span className="whitespace-nowrap font-space text-[12px] text-ink-muted">
-          <span className={n < goal ? 'text-accent-red' : undefined}>{n.toLocaleString('en-US')}</span>
-          {` / ${goal.toLocaleString('en-US')}`}
+        <span data-bio-preview="" className={cx('min-w-0 max-w-[46ch] truncate text-[14px]', first ? 'text-ink-muted' : 'text-ink-faint')}>
+          {first || 'No bio yet'}
         </span>
         <EndSlot>
           <RowIcon icon="edit" label="Edit the bio" onClick={() => setOpen(true)} />
         </EndSlot>
       </LedgerRow>
-      {open ? <BioModal artistId={artistId} bio={bio} goal={goal} about={about} onChange={setBio} onClose={close} /> : null}
-    </div>
+      {open ? <BioModal artistId={artistId} bio={bio} minWords={minWords} about={about} onChange={setBio} onClose={close} /> : null}
+    </>
   )
 }
 
@@ -445,14 +540,14 @@ function BioRow({ artistId, bio: initialBio, goal, about }: { artistId: string; 
 function BioModal({
   artistId,
   bio,
-  goal,
+  minWords,
   about,
   onChange,
   onClose,
 }: {
   artistId: string
   bio: string
-  goal: number
+  minWords: number
   about: { placement: string; heading: string }
   onChange: (b: string) => void
   onClose: () => void
@@ -473,16 +568,13 @@ function BioModal({
   return (
     <CardModal open onClose={onClose} label="Bio">
       <ModalHeader
-        square={<div className="flex h-full w-full items-center justify-center rounded-xl border border-hairline text-[15px] font-bold text-ink">Aa</div>}
+        mark={<HeaderIcon name="text" />}
         title="Bio"
         meta={
           <>
-            <span>
-              <span className={n < goal ? 'text-accent-red' : undefined}>{n.toLocaleString('en-US')}</span>
-              {` / ${goal.toLocaleString('en-US')} characters`}
-            </span>
+            {`${words} of ${minWords} words`}
             <MetaDot />
-            {`${words} ${words === 1 ? 'word' : 'words'}`}
+            {`${n.toLocaleString('en-US')} characters`}
           </>
         }
       />
@@ -500,20 +592,14 @@ function BioModal({
         />
         <TextLimitHint value={bio} max={TEXT_LIMITS.bio} />
         {bioSave.status === 'error' ? <FieldError>Couldn’t save the bio.</FieldError> : null}
-        <div className="mt-3 flex items-center gap-2.5">
-          <span aria-hidden="true" className="block h-1 flex-1 overflow-hidden rounded-sm bg-hairline">
-            <i className="block h-full bg-ink" style={{ width: `${Math.min(100, (n / goal) * 100)}%` }} />
-          </span>
-          <span className="font-space text-[11px] text-ink-faint">{`Tapir’s goal: ${goal.toLocaleString('en-US')}`}</span>
-        </div>
       </div>
       <div className="mt-4">
-        <KvRow label="Placement">
-          <SelectMenu
-            label="Placement"
+        <KvRow label="Where it shows">
+          <ChoiceMenu
+            label="Where it shows"
             value={placement}
-            placeholder="Site default"
-            options={placements.map((x) => ({ value: x, label: PLACEMENT[x] }))}
+            options={[{ value: '', label: 'Site default' }, ...placements.map((x) => ({ value: x, label: PLACEMENT[x] }))]}
+            align="start"
             onChange={(v) => {
               setPlacement(v)
               seoSave.save('about_placement', v)

@@ -76,11 +76,9 @@ describe('fetchOpenGraph', () => {
   const publicLookup = async () => ['93.184.216.34']
 
   it('fetches a public URL and parses its OG tags', async () => {
-    const fetchImpl = vi.fn(async () => ({
-      ok: true,
-      headers: { get: () => 'text/html; charset=utf-8' },
-      text: async () => '<meta property="og:title" content="Vinyl LP">',
-    })) as unknown as typeof fetch
+    const fetchImpl = vi.fn(async () =>
+      new Response('<meta property="og:title" content="Vinyl LP">', { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }),
+    ) as unknown as typeof fetch
     const og = await fetchOpenGraph('https://shop.example.com/lp', { fetchImpl, lookup: publicLookup })
     expect(og).toEqual({ title: 'Vinyl LP', image: null, price: null })
   })
@@ -104,11 +102,7 @@ describe('fetchOpenGraph', () => {
   })
 
   it('returns null for a non-HTML response', async () => {
-    const fetchImpl = vi.fn(async () => ({
-      ok: true,
-      headers: { get: () => 'application/json' },
-      text: async () => '{}',
-    })) as unknown as typeof fetch
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch
     expect(await fetchOpenGraph('https://api.example.com/x', { fetchImpl, lookup: publicLookup })).toBeNull()
   })
 
@@ -117,10 +111,10 @@ describe('fetchOpenGraph', () => {
     const fetchImpl = vi.fn(async (u: string) => {
       if (u.includes('169.254.169.254')) {
         hitInternal = true
-        return { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => '<meta property="og:title" content="secret">' } as unknown as Response
+        return new Response('<meta property="og:title" content="secret">', { status: 200, headers: { 'content-type': 'text/html' } })
       }
       // public URL 302s to the cloud-metadata endpoint
-      return { ok: false, status: 302, headers: { get: (k: string) => (k.toLowerCase() === 'location' ? 'http://169.254.169.254/latest/meta-data' : null) }, text: async () => '' } as unknown as Response
+      return new Response('', { status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data' } })
     })
     const og = await fetchOpenGraph('https://shop.example.com/item', {
       fetchImpl: fetchImpl as unknown as typeof fetch,

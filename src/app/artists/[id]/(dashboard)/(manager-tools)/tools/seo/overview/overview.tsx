@@ -9,11 +9,16 @@ import type { SeoTestId } from '@/lib/seo-tests/types'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { useMounted, useNow } from '../test/clock'
 import { rowButtonId, StatusMark } from '../test/test-row'
+import { whenText } from '../test/model'
 import { seoTabSeg } from '../sections'
 import { PlatformMark } from '../_ui/mark'
+import { TestAgain } from './test-again'
 import {
   CHANGE_WORD,
+  STALE_WORDS,
   TODO,
+  failedWords,
+  oldWords,
   changesShown,
   countText,
   eventLine,
@@ -38,8 +43,8 @@ import {
  * Every line is a read (overview/model.ts). There is no weekly test yet, so none is drawn.
  */
 
-/** Moments shown before "Show more": the list stays short (Sam: "I dont want the pages to be
- *  cluttered"). */
+/** Moments and to-dos shown before "Show more": the lists stay short (Sam: "I dont want the
+ *  pages to be cluttered"; the r2 mock shows five to-dos). */
 const FIRST = 5
 
 const testHref = (artistId: string) => `/artists/${artistId}/${seoTabSeg('test')}`
@@ -57,13 +62,23 @@ export function SeoOverview({ artistId, view }: { artistId: string; view: Overvi
   const nowMs = useNow(false)
   const now = mounted && nowMs != null ? new Date(nowMs) : null
   const [all, setAll] = useState(false)
+  const [allTodo, setAllTodo] = useState(false)
 
   const h = view.headline
   const sub = headlineSub(h)
-  const dot: Dot = h.kind === 'needs' ? 'red' : h.kind === 'clear' ? 'ink' : 'hollow'
+  const dot: Dot = h.kind !== 'run' ? 'hollow' : (h.run.kind === 'score' && h.fail) || h.run.kind === 'unreachable' ? 'red' : h.run.kind === 'score' ? 'ink' : 'hollow'
   const events = view.events ?? []
   const shown = all ? events : events.slice(0, FIRST)
-  const latestTest = events.find((e) => e.kind === 'test')
+  const latestTest = shown.find((e) => e.kind === 'test')
+  // "See the tests · Test again" sit under the newest test on the line (r2); with none there
+  // (never tested, an old run, the site moved), under Now.
+  const actions = (
+    <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
+      {h.kind === 'never' ? null : <GoLink href={testHref(artistId)} label="See the tests" />}
+      <TestAgain artistId={artistId} can={view.test.can} cooldownEnd={view.test.cooldownEnd} label={h.kind === 'never' ? 'Test now' : 'Test again'} />
+    </span>
+  )
+  const actionsUnderNow = h.kind !== 'off' && h.kind !== 'noSite' && h.kind !== 'error' && !latestTest
 
   return (
     <div className="mx-auto max-w-[780px] pt-1">
@@ -77,21 +92,33 @@ export function SeoOverview({ artistId, view }: { artistId: string; view: Overvi
               A test is running now.
             </div>
           ) : null}
-          {view.stale ? <div className="mt-[3px] text-[14px] text-ink-muted">Your site may not have caught up with your last publish.</div> : null}
+          {view.stale ? <div className="mt-[3px] text-[14px] text-ink-muted">{STALE_WORDS}</div> : null}
+          {view.oldRun ? <div className="mt-[3px] text-[14px] text-ink-muted">{oldWords(view.oldRun)}</div> : null}
+          {view.failedAt ? <div className="mt-[3px] text-[14px] text-accent-red">{failedWords(now ? whenText(view.failedAt, now) : '')}</div> : null}
           {view.todo.length ? (
             <ul className="mt-2" aria-label="What needs you">
-              {view.todo.map((t) => (
+              {(allTodo ? view.todo : view.todo.slice(0, FIRST)).map((t) => (
                 <li key={t.id}>
                   <TodoRow artistId={artistId} id={t.id} value={t.value} />
                 </li>
               ))}
             </ul>
           ) : null}
-          {h.kind === 'never' ? (
-            <div className="mt-2">
-              <GoLink href={testHref(artistId)} label="Go to the tests" />
-            </div>
+          {!allTodo && view.todo.length > FIRST ? (
+            <button type="button" onClick={() => setAllTodo(true)} className={cx('mt-1 w-max py-1 font-space text-[12px] text-ink-muted hover:text-ink', FOCUS_RING)}>
+              {`Show ${view.todo.length - FIRST} more`}
+            </button>
           ) : null}
+          {view.unknown.length ? (
+            <ul className="mt-2" aria-label="Couldn’t check">
+              {view.unknown.map((t) => (
+                <li key={t.id}>
+                  <UnknownRow artistId={artistId} id={t.id} why={t.why} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {actionsUnderNow ? <div className="mt-2">{actions}</div> : null}
         </Moment>
 
         {view.events === null && view.lastPublishedAt ? (
@@ -107,7 +134,7 @@ export function SeoOverview({ artistId, view }: { artistId: string; view: Overvi
 
         {shown.map((e) => (
           <Moment key={`${e.kind}-${e.at}`} when={<When iso={e.at} now={now} />} dot={regressed(e) ? 'red' : 'ink'} testid={e.kind}>
-            <EventBody artistId={artistId} e={e} latest={e === latestTest} />
+            <EventBody e={e} actions={e === latestTest ? actions : null} />
           </Moment>
         ))}
         {!all && events.length > FIRST ? (
@@ -197,24 +224,45 @@ function TodoRow({ artistId, id, value }: { artistId: string; id: SeoTestId; val
       <span aria-hidden="true" className="flex w-5 flex-none justify-center text-ink">
         <Mark mark={todo.mark} />
       </span>
-      <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{todo.title}</span>
-      {value ? <span className="hidden max-w-[220px] truncate font-space text-[12px] text-ink-faint sm:inline">{value}</span> : null}
-      {def?.outside ? (
-        <span className="hidden whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint sm:inline">Outside Tapir</span>
-      ) : null}
+      {/* On a phone the value and the tag wrap under the title rather than vanish. */}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-0.5">
+        <span className="min-w-0 flex-1 basis-full text-[14px] font-medium sm:basis-auto sm:truncate">{todo.title}</span>
+        {value ? <span className="max-w-[220px] truncate font-space text-[12px] text-ink-faint">{value}</span> : null}
+        {def?.outside ? <span className="whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">Outside Tapir</span> : null}
+      </span>
+      <Icon name="chevronRight" size={14} aria-hidden="true" className="flex-none text-ink-faint opacity-60 group-hover/todo:text-ink group-hover/todo:opacity-100" />
+    </Link>
+  )
+}
+
+/** A test that couldn't be checked: said as such, with WHY in its own words (one line; the
+ *  whole of it on its row, where this links). It blames nobody, so it is never a to-do. */
+function UnknownRow({ artistId, id, why }: { artistId: string; id: SeoTestId; why: string }) {
+  return (
+    <Link
+      href={todoHref(artistId, id)}
+      className={cx('group/todo -mx-3 flex items-center gap-4 rounded-xl px-3 py-[7px] text-ink-muted transition-colors duration-150 hover:bg-surface hover:text-ink', FOCUS_RING)}
+    >
+      <StatusMark status="unknown" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-0.5">
+          <span className="min-w-0 flex-1 basis-full text-[14px] sm:basis-auto sm:truncate">{NAME[id]}</span>
+          <span className="font-space text-[12px] text-ink-faint">couldn’t check</span>
+        </span>
+        {why ? <span className="truncate text-[13px] text-ink-faint">{why}</span> : null}
+      </span>
       <Icon name="chevronRight" size={14} aria-hidden="true" className="flex-none text-ink-faint opacity-60 group-hover/todo:text-ink group-hover/todo:opacity-100" />
     </Link>
   )
 }
 
 /** A publish, a test, or both as one moment, and what changed. */
-function EventBody({ artistId, e, latest }: { artistId: string; e: OverviewEvent; latest: boolean }) {
+function EventBody({ e, actions }: { e: OverviewEvent; actions: ReactNode }) {
   const changes = e.kind === 'test' ? changesShown(e.test.changes) : null
   return (
     <>
       <h3 className="text-[16px] font-semibold text-ink">{eventTitle(e)}</h3>
       <div className="mt-[3px] text-[14px] text-ink-muted">{eventLine(e)}</div>
-      {e.kind === 'test' && e.test.siteFresh === false ? <div className="text-[14px] text-ink-muted">Your site hadn’t caught up with the publish yet.</div> : null}
       {changes && changes.shown.length ? (
         <ul className="mt-1.5 flex flex-col gap-1" aria-label="What changed">
           {changes.shown.map((c) => (
@@ -229,11 +277,7 @@ function EventBody({ artistId, e, latest }: { artistId: string; e: OverviewEvent
       ) : changes ? (
         <div className="text-[14px] text-ink-muted">Nothing changed since the test before.</div>
       ) : null}
-      {latest ? (
-        <div className="mt-1.5">
-          <GoLink href={testHref(artistId)} label="See the tests" />
-        </div>
-      ) : null}
+      {actions ? <div className="mt-1.5">{actions}</div> : null}
     </>
   )
 }

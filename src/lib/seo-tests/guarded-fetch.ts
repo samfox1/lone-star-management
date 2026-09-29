@@ -57,8 +57,9 @@ export type GuardedOptions = {
   deadlineMs?: number
   maxBytes?: number
   as?: 'text' | 'bytes'
-  /** A further rule every hop must pass (the first address included). */
-  allow?: (url: string) => boolean
+  /** A further rule every hop must pass (the first address included). May be async (a DNS
+   *  pre-check, say); it runs before anything is sent. */
+  allow?: (url: string) => boolean | Promise<boolean>
 }
 
 export const TAPIR_CHECK_UA = 'TapirSiteCheck/1.0 (+https://digitaltapir.com)'
@@ -79,18 +80,40 @@ function headersOf(r: Response): Record<string, string> {
   return out
 }
 
-/** The body's first `max` bytes. Streams when it can, so a huge answer is never held whole. */
-async function readCapped(r: Response, max: number): Promise<{ bytes: Uint8Array; truncated: boolean }> {
+/** Rejects when `signal` aborts, with its reason. Never settles otherwise. */
+function whenAborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    const fail = () => reject(signal.reason instanceof Error ? signal.reason : Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    if (signal.aborted) fail()
+    else signal.addEventListener('abort', fail, { once: true })
+  })
+}
+
+/**
+ * The body's first `max` bytes. Streams when it can, so a huge answer is never held whole.
+ * Every read RACES the request's signal: a transport that does not tie its body to the signal
+ * must not let a body that drips a byte at a time hold the read open past the timeout.
+ */
+async function readCapped(r: Response, max: number, signal: AbortSignal): Promise<{ bytes: Uint8Array; truncated: boolean }> {
+  const aborted = whenAborted(signal)
+  aborted.catch(() => {})
   const reader = r.body?.getReader?.()
   if (!reader) {
-    const all = new Uint8Array(await r.arrayBuffer())
+    const all = new Uint8Array(await Promise.race([r.arrayBuffer(), aborted]))
     return all.length > max ? { bytes: all.slice(0, max), truncated: true } : { bytes: all, truncated: false }
   }
   const chunks: Uint8Array[] = []
   let size = 0
   let truncated = false
   for (;;) {
-    const { done, value } = await reader.read()
+    let step: ReadableStreamReadResult<Uint8Array>
+    try {
+      step = await Promise.race([reader.read(), aborted])
+    } catch (e) {
+      reader.cancel().catch(() => {})
+      throw e
+    }
+    const { done, value } = step
     if (done) break
     if (!value) continue
     if (size + value.length > max) {
@@ -140,16 +163,17 @@ export async function guardedFetch(url: string, opts: GuardedOptions = {}): Prom
   let target = url
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (!isPublicSiteUrl(target)) return none('not-public', hop)
-    if (opts.allow && !opts.allow(target)) return none('not-allowed', hop)
+    if (opts.allow && !(await opts.allow(target))) return none('not-allowed', hop)
     if (Date.now() >= endsAt) return none('timeout', hop)
     const perHop = AbortSignal.timeout(timeoutMs)
+    const signal = deadline ? AbortSignal.any([perHop, deadline]) : perHop
     let r: Response
     try {
       r = await fetcher(target, {
         headers: { 'user-agent': opts.userAgent ?? TAPIR_CHECK_UA, accept: opts.as === 'bytes' ? '*/*' : 'text/html,application/xhtml+xml,*/*;q=0.8' },
         cache: 'no-store',
         redirect: 'manual',
-        signal: deadline ? AbortSignal.any([perHop, deadline]) : perHop,
+        signal,
       })
     } catch (e) {
       return none(failure(e), hop)
@@ -169,7 +193,7 @@ export async function guardedFetch(url: string, opts: GuardedOptions = {}): Prom
       continue
     }
     try {
-      const { bytes, truncated } = await readCapped(r, maxBytes)
+      const { bytes, truncated } = await readCapped(r, maxBytes, signal)
       return {
         status,
         finalUrl: target,

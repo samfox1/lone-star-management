@@ -8,7 +8,7 @@ import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
 import { coverThumbUrl } from '@/lib/cover-url'
 import { CardModal } from '../card-modal'
-import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
+import { HeaderIcon, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { SONG_PLATFORMS } from '../music/platforms'
 import { mergeTwins } from '@/lib/song-merge'
@@ -263,16 +263,13 @@ export function SongModal({
         }
       >
         <ModalHeader
-          square={
+          art={
             track.cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverThumbUrl(track.cover_url, 112) ?? undefined} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-xl bg-surface">
-                <span className="h-5 w-5 rounded-full bg-ink" />
-              </div>
-            )
+            ) : null
           }
+          mark={<HeaderIcon name="tracks" />}
           title={track.title}
           meta={
             // Kind · year, like a release's meta — no platform names (Sam, 2026-09-11):

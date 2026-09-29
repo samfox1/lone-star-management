@@ -4,7 +4,7 @@ import { useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass } from '@/components/ui/ui'
 import { CardModal } from '../../card-modal'
-import { KvField, KvRow, ModalHeader } from '../../modal-kit'
+import { HeaderIcon, KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
 import {
   addEnquiryKindAction,
@@ -195,7 +195,7 @@ function KindModal({
       }
     >
       <ModalHeader
-        square={<span aria-hidden className="grid size-14 place-items-center rounded-xl bg-ink/[0.06]"><Icon name="note" size={22} /></span>}
+        mark={<HeaderIcon name="note" />}
         title={kind.label}
         // The SLUG, because it is the one thing here that cannot be changed and the one
         // thing the artist's website has to match.

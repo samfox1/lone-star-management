@@ -129,7 +129,10 @@ export async function pingIndexNow(
     if (!origin) return { sent: false, reason: 'no-site' }
     if (!isIndexNowKey(key)) return { sent: false, reason: 'no-key' }
     const base = pickTransport(fetcher)
-    const timed: typeof fetch = (input, init) => base(input, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    // Adds a timeout to the caller's signal, never replaces it: the guarded read's own
+    // deadline must still reach the socket.
+    const timed: typeof fetch = (input, init) =>
+      base(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) })
 
     // The key file first: the same check IndexNow will make. Through the SSRF-guarded fetch
     // (every redirect hop re-checked), and judged where it really answered: apex → www is

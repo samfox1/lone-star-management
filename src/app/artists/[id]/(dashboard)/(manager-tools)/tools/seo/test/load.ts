@@ -20,6 +20,9 @@ export type TestTabData =
       latest: StoredSeoRun | null
       history: Record<SeoTestId, SeoTestHistory>
       running: { ranAt: string; trigger: SeoRunTrigger } | null
+      /** The newest attempt FAILED (after the latest finished run): said after a reload too
+       *  (review N11: store.ts reads only finished runs, so a failure left no trace). */
+      lastFailed?: { ranAt: string; note: string | null } | null
     }
 
 /** PostgREST's "no such table" (PGRST205, and PGRST202's cousin for relations) and
@@ -36,11 +39,33 @@ export async function loadTestTab(supabase: SupabaseClient, artistId: string): P
     // HEAD request: a HEAD answer has no body, so it would carry no error code to tell by.
     const probe = await supabase.from('seo_test_runs').select('id').eq('artist_id', artistId).limit(1)
     if (probe.error) return isMissingTable(probe.error) ? { state: 'off' } : { state: 'error' }
-    const [latest, history, running] = await Promise.all([latestRun(supabase, artistId), historyFor(supabase, artistId), currentRun(supabase, artistId)])
-    return { state: 'ready', latest, history, running }
+    const [latest, history, running, lastFailed] = await Promise.all([
+      latestRun(supabase, artistId),
+      historyFor(supabase, artistId),
+      currentRun(supabase, artistId),
+      newestFailure(supabase, artistId),
+    ])
+    return { state: 'ready', latest, history, running, lastFailed }
   } catch (e) {
     // latestRun / historyFor throw "seo_test_runs: <message>"; a table dropped between the
     // probe and the read is still "not on", anything else is a failed read.
     return isMissingTable({ message: e instanceof Error ? e.message : String(e) }) ? { state: 'off' } : { state: 'error' }
   }
+}
+
+/** The newest ENDED attempt, if it failed. A local reader until the store has one (the report
+ *  asks); a read that fails says nothing rather than something false. */
+async function newestFailure(supabase: SupabaseClient, artistId: string): Promise<{ ranAt: string; note: string | null } | null> {
+  const { data, error } = await supabase
+    .from('seo_test_runs')
+    .select('ran_at, status, note')
+    .eq('artist_id', artistId)
+    .in('status', ['done', 'failed'])
+    .order('ran_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  const row = data as { ran_at?: unknown; status?: unknown; note?: unknown }
+  if (row.status !== 'failed' || typeof row.ran_at !== 'string') return null
+  return { ranAt: row.ran_at, note: typeof row.note === 'string' ? row.note : null }
 }

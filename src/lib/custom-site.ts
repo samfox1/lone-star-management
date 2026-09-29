@@ -6,6 +6,7 @@
  * published snapshot (get_public_site) or ARTIST_SNAPSHOT.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { trimTrailingSlashes } from './url'
 
 // Written via RegExp so the control-char range stays legible as escapes.
 const CONTROL_CHAR = new RegExp('[\\u0000-\\u001f\\u007f]')
@@ -213,7 +214,7 @@ export function publicSiteOrigin(
   row: { slug?: string | null; site_kind?: string | null; custom_site_url?: string | null } | null,
 ): string | null {
   if (!row) return null
-  if (isCustom(row)) return redirectTarget(row.custom_site_url)!.replace(/\/+$/, '')
-  const app = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+  if (isCustom(row)) return trimTrailingSlashes(redirectTarget(row.custom_site_url)!)
+  const app = trimTrailingSlashes(process.env.NEXT_PUBLIC_APP_URL ?? '')
   return app && row.slug ? `${app}/${row.slug}` : null
 }

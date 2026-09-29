@@ -4,11 +4,18 @@
  * The SEO / GEO page's Test tab: run the tests, apply a fix, read the stored runs.
  *
  * Every action checks, FIRST: a signed-in user, then `callerOwns` (an RLS-scoped read of the
- * artist). RLS and the claim trigger check again underneath, but a row-filtered read or write
- * answers "nothing" rather than "no", so without this a stranger would get an empty page instead
- * of a refusal. Errors come back as one plain sentence; nothing here throws to the client.
+ * artist). Reads then go through the manager's own session (RLS: their artists only).
+ *
+ * WRITING A RUN: a manager's session cannot write `seo_test_runs` at all (select only; the two
+ * write functions are service-role only). `runSeoTestsAction` therefore hands the run the
+ * service-role client, AFTER the checks above, with the signed-in manager's id, which the
+ * database checks again (a manager of this artist, or an admin) and counts for the per-person
+ * limits. The results it stores are computed here on the server; nothing from the request is.
+ *
+ * Errors come back as one plain sentence; nothing here throws to the client.
  */
 import { revalidatePath } from 'next/cache'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { readSeoOverview, type SeoOverview } from '@/lib/seo-tests/overview'
 import { loadEngine, runSeoTests } from '@/lib/seo-tests/run'
@@ -18,21 +25,23 @@ import { callerOwns } from '../../../_owns'
 
 type Fail = { ok: false; error: string }
 
-/** Signed in, and a manager of this artist. The client to use, or the one-line refusal. */
-async function owned(artistId: string): Promise<{ ok: true; supabase: Awaited<ReturnType<typeof createClient>> } | Fail> {
+/** Signed in, and a manager of this artist. The client to use and who they are, or the one-line refusal. */
+async function owned(artistId: string): Promise<{ ok: true; supabase: Awaited<ReturnType<typeof createClient>>; userId: string } | Fail> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not signed in.' }
   if (!(await callerOwns(supabase, artistId))) return { ok: false, error: 'Artist not found.' }
-  return { ok: true, supabase }
+  return { ok: true, supabase, userId: user.id }
 }
 
 /** Why "Test again" did not run, for the page to act on without reading the sentence:
  *  `busy` a run is going, `cooldown` tested inside the last minute (`retryInS` = seconds left),
- *  `denied` not this artist's manager, `error` anything else. */
-export type SeoRunRefusal = 'busy' | 'cooldown' | 'denied' | 'error'
+ *  `limit` this manager started too many runs lately (`retryInS` = seconds left), `denied` not
+ *  this artist's manager, `coalesced` (publish runs only; never from "Test again"), `error`
+ *  anything else. */
+export type SeoRunRefusal = 'busy' | 'cooldown' | 'limit' | 'coalesced' | 'denied' | 'error'
 
 /**
  * "Test again". Runs all 24 tests now and stores the run. Refused (plainly) while a run is going
@@ -43,7 +52,7 @@ export async function runSeoTestsAction(
 ): Promise<{ ok: true; run: StoredSeoRun | null } | (Fail & { reason?: SeoRunRefusal; retryInS?: number | null })> {
   const gate = await owned(artistId)
   if (!gate.ok) return gate
-  const out = await runSeoTests(gate.supabase, artistId, 'manual')
+  const out = await runSeoTests(gate.supabase, artistId, 'manual', { writer: createAdminClient(), userId: gate.userId })
   if (!out.ok) return { ok: false, reason: out.reason, error: out.error, retryInS: out.retryInS ?? null }
   revalidatePath(`/artists/${artistId}`, 'layout')
   let run: StoredSeoRun | null = null

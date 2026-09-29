@@ -87,6 +87,13 @@ export async function GET(request: NextRequest) {
   if (!choice.ok) return back(url, state.artistId, choice.reason)
   const { organizer } = choice
 
+  // What is stored NOW, read before the new token replaces it. connect_eventbrite renews the
+  // secret IN PLACE, so if the connection cannot be completed below, the previous sign-in is
+  // put back: deleting it (the old behaviour) destroyed a sign-in that was working (security
+  // review 2026-09-29, L6). Read through the owner-gated door, held for this request only,
+  // never logged.
+  const previous = await storedSignIn(supabase, state.artistId)
+
   // Into Vault. The only place the token is ever written.
   const { error: vaultError } = await supabase.rpc('connect_eventbrite', {
     p_artist_id: state.artistId,
@@ -103,12 +110,12 @@ export async function GET(request: NextRequest) {
   try {
     const saved = await connectOneAction(state.artistId, EVENTBRITE_KEY, { url: organizer.url })
     if (!saved.ok) {
-      await forget(supabase, state.artistId)
+      await undo(supabase, state.artistId, previous)
       warn('connect', 'The save door refused the organizer link.')
       return back(url, state.artistId, 'connect')
     }
   } catch (e) {
-    await forget(supabase, state.artistId)
+    await undo(supabase, state.artistId, previous)
     warn('connect', e)
     return back(url, state.artistId, 'connect')
   }
@@ -127,9 +134,50 @@ export async function GET(request: NextRequest) {
   return done(new URL(returnPath(state.artistId, { ok: true }), url))
 }
 
-/** Undo the Vault write when the connection could not be completed. Best effort: a failure
- *  here leaves a token the next Connect overwrites or Remove deletes. */
-async function forget(supabase: Awaited<ReturnType<typeof createClient>>, artistId: string) {
+type Client = Awaited<ReturnType<typeof createClient>>
+
+/** The sign-in stored before this trip: none, one (its ids and token), or unknown (the read
+ *  failed or answered oddly). Unknown is never treated as none: that would delete a sign-in. */
+type Stored = { kind: 'none' } | { kind: 'unknown' } | { kind: 'some'; organizationId: string; organizerId: string; token: string }
+
+async function storedSignIn(supabase: Client, artistId: string): Promise<Stored> {
+  try {
+    const { data, error } = await supabase.rpc('eventbrite_credentials', { p_artist_id: artistId })
+    if (error) return { kind: 'unknown' }
+    if (data === null || (Array.isArray(data) && data.length === 0)) return { kind: 'none' }
+    const row = (Array.isArray(data) ? data[0] : null) as { organization_id?: unknown; organizer_id?: unknown; token?: unknown } | null
+    const ok = row && typeof row.token === 'string' && row.token && typeof row.organization_id === 'string' && typeof row.organizer_id === 'string'
+    return ok ? { kind: 'some', organizationId: row.organization_id as string, organizerId: row.organizer_id as string, token: row.token as string } : { kind: 'unknown' }
+  } catch {
+    return { kind: 'unknown' }
+  }
+}
+
+/** Undo the Vault write when the connection could not be completed: forget a FIRST sign-in,
+ *  put a previous one back, and when what was there is unknown, delete nothing (the new token
+ *  is a working sign-in too). Best effort; a failure is logged by step and code only. */
+async function undo(supabase: Client, artistId: string, previous: Stored) {
+  if (previous.kind === 'none') return forget(supabase, artistId)
+  if (previous.kind === 'unknown') {
+    warn('restore', 'The previous sign-in could not be read, so the new one is kept.')
+    return
+  }
+  try {
+    const { error } = await supabase.rpc('connect_eventbrite', {
+      p_artist_id: artistId,
+      p_organization_id: previous.organizationId,
+      p_organizer_id: previous.organizerId,
+      p_token: previous.token,
+    })
+    if (error) warn('restore', `The previous sign-in could not be put back (${sanitize(error.code ?? '')}); the new one is kept.`)
+  } catch (e) {
+    warn('restore', e)
+  }
+}
+
+/** Forget a FIRST sign-in that could not be completed. Best effort: a failure here leaves a
+ *  token the next Connect overwrites or Remove deletes. */
+async function forget(supabase: Client, artistId: string) {
   try {
     const { error } = await supabase.rpc('disconnect_eventbrite', { p_artist_id: artistId })
     if (error) warn('forget', `The stored sign-in could not be removed (${sanitize(error.code ?? '')}).`)

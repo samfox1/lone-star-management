@@ -54,7 +54,37 @@ function parse(url: string): { u: URL; store: string } | null {
   const m = ARTIST_PATH.exec(u.pathname)
   if (!m) return null
   const store = m[1].toLowerCase()
-  return isCountry(store.toUpperCase()) ? { u, store } : null
+  return isStore(store) ? { u, store } : null
+}
+
+/** Two letters Apple does not use as a store though Intl names them: the UK store is /gb/, and
+ *  Apple sends /uk/ on to the US store (checked 2026-09-29, verify-content.md AP7). */
+const NOT_STORES = new Set(['uk'])
+/** A store code Apple could have: a real ISO country, not one of the codes Apple doesn't use. */
+const isStore = (code: string) => !NOT_STORES.has(code.toLowerCase()) && isCountry(code.toUpperCase())
+
+/** Apple Music pages whose address carries a store: an artist, and each kind of release. */
+const STORE_PATH = /^\/([A-Za-z]{2})\/(artist|album|song|playlist|music-video)\/(?:[^/]+\/)?(?:id)?([\w.-]+)\/?$/
+
+/**
+ * Any Apple Music link on `music.apple.com` that names a store in its path (an artist, album,
+ * song, playlist or music video page; a pinned album opens that store too, checked 2026-09-29):
+ * the store, whether Apple has it (`known` false for /uk/), the kind of page and its id. Null for
+ * a link with no store, a geo link (Apple ignores the store in those), another site, or junk.
+ */
+export function appleLinkOf(url: string): { store: string; known: boolean; kind: string; id: string } | null {
+  if (typeof url !== 'string') return null
+  let u: URL
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return null
+  }
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.hostname.toLowerCase() !== HOST) return null
+  const m = STORE_PATH.exec(u.pathname)
+  if (!m) return null
+  const store = m[1].toLowerCase()
+  return { store, known: isStore(store), kind: m[2].toLowerCase(), id: m[3] }
 }
 
 /** The store an Apple Music ARTIST link is tied to ("no"), or null: no store in it, a geo
@@ -85,7 +115,12 @@ const ALIASES: Record<string, string> = {
   usa: 'US', 'u.s.': 'US', 'u.s.a.': 'US', 'united states of america': 'US', america: 'US',
   uk: 'GB', 'u.k.': 'GB', 'great britain': 'GB', britain: 'GB', england: 'GB', scotland: 'GB', wales: 'GB', 'northern ireland': 'GB',
   holland: 'NL', 'south korea': 'KR', korea: 'KR', russia: 'RU',
+  // Names Intl spells another way (verify-content.md AP9).
+  turkey: 'TR', 'czech republic': 'CZ', 'hong kong': 'HK', macau: 'MO', macao: 'MO', 'ivory coast': 'CI', burma: 'MM',
+  swaziland: 'SZ', 'cape verde': 'CV', 'east timor': 'TL', 'vatican city': 'VA', 'the gambia': 'GM', 'north macedonia': 'MK', macedonia: 'MK',
 }
+/** Case, accents and a leading "the" don't change the country: "México", "The Netherlands". */
+const countryKey = (s: string) => s.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim().replace(/^the /, '')
 let byName: Map<string, string> | null = null
 function nameIndex(): Map<string, string> {
   if (byName) return byName
@@ -95,7 +130,7 @@ function nameIndex(): Map<string, string> {
     for (let a = 65; a <= 90; a++) {
       for (let b = 65; b <= 90; b++) {
         const code = String.fromCharCode(a, b)
-        if (isCountry(code)) byName.set(dn.of(code)!.toLowerCase(), code)
+        if (isCountry(code)) byName.set(countryKey(dn.of(code)!), code)
       }
     }
   }
@@ -107,16 +142,19 @@ function nameIndex(): Map<string, string> {
 export function countryCode(v: unknown): string | null {
   if (typeof v !== 'string') return null
   const s = v.replace(/\s+/g, ' ').trim()
-  const lower = s.toLowerCase()
+  const key = countryKey(s)
   // Aliases first: "UK" is two letters but not the ISO code (GB), though Intl names it.
-  if (ALIASES[lower]) return ALIASES[lower]
+  if (ALIASES[key]) return ALIASES[key]
   if (/^[A-Za-z]{2}$/.test(s)) return isCountry(s.toUpperCase()) ? s.toUpperCase() : null
-  return nameIndex().get(lower) ?? null
+  return nameIndex().get(key) ?? null
 }
 
 /** "Norway", "the United States": a country's English name, for a sentence. */
 export function countryName(code: string): string {
   const up = code.toUpperCase()
   const n = isCountry(up) ? regionNames()!.of(up)! : up
-  return /^(United|Netherlands|Philippines|Bahamas|Gambia|Czech|Dominican|Central African|Maldives|Marshall|Solomon)/.test(n) ? `the ${n}` : n
+  return /^(?:United |Netherlands$|Philippines$|Bahamas$|Gambia$|Czech Republic$|Dominican Republic$|Central African Republic$|Maldives$|Marshall Islands$|Solomon Islands$)/.test(n) ? `the ${n}` : n
 }
+
+/** A store's country for "the ___ store": "Norway", "United States" (never "the the"). */
+export const storeName = (code: string): string => countryName(code).replace(/^the /, '')

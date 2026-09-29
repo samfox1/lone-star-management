@@ -10,7 +10,7 @@
  */
 import net from 'node:net'
 import { lookup as dnsLookup } from 'node:dns/promises'
-import { pickTransport } from './net-guard'
+import { guardedFetch } from './seo-tests/guarded-fetch'
 
 /** Minimal HTML entity decode for meta content (the few that actually show up). */
 function decodeEntities(s: string): string {
@@ -133,51 +133,29 @@ const defaultLookup: HostLookup = async (host) => (await dnsLookup(host, { all: 
 type FetchOpts = { fetchImpl?: typeof fetch; maxBytes?: number; timeoutMs?: number; lookup?: HostLookup }
 
 /**
- * Fetch a public URL's HTML and parse its Open-Graph tags. Returns null when the
- * URL is blocked, the request fails, or the response isn't HTML. Caps the body size
- * and time so a hostile/huge page can't hang or blow up memory.
+ * Fetch a public URL's HTML and parse its Open-Graph tags. Returns null when the URL is
+ * blocked, the request fails, or the response isn't HTML.
  *
- * Redirects are followed MANUALLY (`redirect: 'manual'`) and every hop is re-checked
- * with isPublicHttpUrl — otherwise a public URL that 302s to an internal host
- * (localhost, a private IP, the cloud-metadata endpoint) would slip past the initial
- * guard. Capped at a few hops so a redirect loop can't spin.
+ * A thin wrapper over the SEO tests' `guardedFetch` (lib/seo-tests/guarded-fetch): redirects
+ * are walked by hand and every hop is re-checked, here against isPublicHttpUrl AND a DNS
+ * pre-check (the `allow` rule), then by net-guard's transport at connect; the body is read
+ * only up to `maxBytes` and only until the timeout. The old version read the WHOLE body and
+ * then cut it: the transport inflates gzip, so a 400 MB bomb grew memory ~850 MB (security
+ * review 2026-09-29, F3).
  */
 export async function fetchOpenGraph(url: string, opts: FetchOpts = {}): Promise<OpenGraph | null> {
-  // net-guard's transport, not the global fetch: hostResolvesPublic below checks the name,
-  // but a second lookup at connect could answer differently (DNS rebinding). The transport
-  // judges the answer the socket actually uses.
-  const doFetch = pickTransport(opts.fetchImpl)
   const lookup = opts.lookup ?? defaultLookup
-  const maxBytes = opts.maxBytes ?? 512_000
-  let current = url
-
-  for (let hop = 0; hop < 4; hop++) {
+  const timeoutMs = opts.timeoutMs ?? 6000
+  const r = await guardedFetch(url, {
+    fetcher: opts.fetchImpl,
+    userAgent: 'LoneStarBot/1.0 (+link preview)',
+    timeoutMs,
+    deadlineMs: timeoutMs * 2,
+    maxBytes: opts.maxBytes ?? 512_000,
     // Gate the initial URL AND every redirect hop: sync literal/scheme check + host resolution.
-    if (!isPublicHttpUrl(current)) return null
-    if (!(await hostResolvesPublic(new URL(current).hostname, lookup))) return null
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 6000)
-    try {
-      const res = await doFetch(current, {
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': 'LoneStarBot/1.0 (+link preview)' },
-      })
-      if (res.status >= 300 && res.status < 400) {
-        const loc = res.headers.get('location')
-        if (!loc) return null
-        current = new URL(loc, current).toString() // resolve relative → re-validated next loop
-        continue
-      }
-      if (!res.ok) return null
-      const type = res.headers.get('content-type') ?? ''
-      if (!type.includes('html')) return null
-      return parseOpenGraph((await res.text()).slice(0, maxBytes))
-    } catch {
-      return null
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-  return null // too many redirects
+    allow: async (next) => isPublicHttpUrl(next) && (await hostResolvesPublic(new URL(next).hostname, lookup)),
+  })
+  if (r.status === null || r.status < 200 || r.status >= 300 || r.error || r.text === null) return null
+  if (!(r.headers['content-type'] ?? '').includes('html')) return null
+  return parseOpenGraph(r.text)
 }

@@ -2,24 +2,29 @@
  * "Says who you are": six tests read off the LIVE site (evidence.plain), each as strict as
  * its words in defs.ts and no stricter. Pure, synchronous, never throws (types.ts).
  *
- *   title   the home page's `<title>`: exists, names the artist, isn't only the name, ≤ 70
- *   desc    the meta description: exists, isn't the name-only fallback, 50–160 characters
- *   bio     how much of the bio SHOWS AS WORDS on a page, against Tapir's 2,500 goal
- *   genre   the fact card's artist node names a style
- *   place   the fact card's place has a city, a region and a country
- *   mb      MusicBrainz's answer (gathered by musicbrainz.ts)
+ *   title   the home page's `<title>`: exists, names the artist, isn't only the name or an error
+ *           page's, says the city or sound Tapir has, ≤ 70 characters
+ *   desc    the meta description: exists, names the artist (or their city or sound), isn't
+ *           filler, 50–160 characters
+ *   bio     the bio as WORDS on the pages read: at least 100 words (Tapir's own floor), naming
+ *           the genre, the city and one release or show from what Tapir published
+ *   genre   the artist's OWN fact card node names a style, the one Tapir has
+ *   place   that node's place has a city, a region and a country, the ones Tapir has
+ *   mb      MusicBrainz's answer (gathered by musicbrainz.ts), under this artist's name
  *
  * Evidence rows that state what TAPIR holds are labelled "in Tapir: …" (types.ts rule 3).
- * `na` (does not apply), decided from what Tapir PUBLISHED, so it needs no look at the site:
- * `genre` and `mb` for an artist published as a visual artist (a Person card has no music
- * style, and MusicBrainz lists people who make music).
+ * `na` (does not apply), decided from what Tapir PUBLISHED: `genre` and `mb` for a visual artist.
+ * A home page read only in part (over the read cap) is "couldn't check" wherever the missing
+ * part could change the answer (verify-content.md H1).
  */
 import { MAX_TITLE, defaultSeoTitle } from '@samfox1/site-bridge/seo'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
+import { countryCode, countryName } from './apple-storefront'
 import {
-  artistNodeOf, clip, collapse, fold, hasType, homeOf, isBareName, isObj, metaOf, namesArtist, num, pagesOf,
-  shortUrl, squash, strings, textOf, type LdNode, type PageState,
+  clip, collapse, fold, hasType, homeOf, isBareName, isObj, metaOf, namesArtist, num, pagesOf, plural, shortUrl, strings, textOf, wordsOf,
+  type LdNode, type PageState,
 } from './html'
+import { distinctiveTitle, matchFold, matchSquash, namesPhrase, ownArtistNode, sentencesOf, wordCount } from './match'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
 
 /** Published in Tapir as a visual artist (Facts "Artist type"). Unknown when nothing is
@@ -28,6 +33,7 @@ const visualArtist = (e: SeoEvidence) => e.known.published?.artistType === 'Pers
 
 type Id = Extract<SeoTestId, 'title' | 'desc' | 'bio' | 'genre' | 'place' | 'mb'>
 type Result = Omit<SeoTestResult, 'id'>
+type Readable = Extract<PageState, { ok: true }>
 
 const make = (id: Id, test: (e: SeoEvidence) => Result): SeoTest => (e) => {
   try {
@@ -38,55 +44,95 @@ const make = (id: Id, test: (e: SeoEvidence) => Result): SeoTest => (e) => {
   }
 }
 
+const OPEN_LIMITS = 'We only judge what your site sent us; when a page doesn’t answer, we say so instead of guessing.'
+
 /** The home page could not be read: say why, and what we therefore could not do. */
 function unreadable(state: Extract<PageState, { ok: false }>, what: string): Result {
-  return { status: 'unknown', value: 'couldn’t open', sentence: `${state.why}, so we couldn’t ${what}.`, evidence: [{ label: 'home page', value: state.why }] }
+  return { status: 'unknown', value: 'couldn’t open', sentence: `${state.why}, so we couldn’t ${what}.`, evidence: [{ label: 'home page', value: state.why }], limits: OPEN_LIMITS }
+}
+
+/** The home page arrived, but longer than we read: whatever wasn't found may be past the cut. */
+function tooBig(what: string, evidence: { label: string; value: string }[] = []): Result {
+  return {
+    status: 'unknown', value: 'page too big',
+    sentence: `your home page is too big for us to read in full, and ${what} isn’t in the part we read.`,
+    evidence: [...evidence, { label: 'home page', value: 'only the first 1 MB was read' }],
+    limits: 'We read the first 1 MB of each page; anything after that isn’t checked.',
+  }
+}
+
+const chars = (s: string) => Array.from(s).length
+const listing = (label: string) => ({ kind: 'edit', target: 'listing', label }) as const
+
+/** Tapir's city (the first part of "Chicago, IL") and each genre, as words to look for. */
+function tapirWho(e: SeoEvidence): { city: string; genres: string[] } {
+  const pub = e.known.published
+  const city = collapse((pub?.location ?? '').split(',')[0] ?? '')
+  const genres = (pub?.genre ?? '').split(',').map(collapse).filter(Boolean)
+  return { city, genres }
+}
+/** Does `text` hold `phrase` as whole words (typography folded)? */
+const hasWords = (text: string, phrase: string) => {
+  const want = wordsOf(matchFold(phrase)).join(' ')
+  return !!want && ` ${wordsOf(matchFold(text)).join(' ')} `.includes(` ${want} `)
 }
 
 /* ── title ──────────────────────────────────────────────────────────────────────────── */
+
+/** Words that make a title an error page's, a builder's default or a placeholder. */
+const JUNK_TITLE = /\b(?:page not found|not found|404|coming soon|under construction|just another wordpress site|untitled(?: document)?|index of|site not found|error)\b/i
 
 const title = make('title', (e) => {
   const home = homeOf(e)
   if (!home.ok) return unreadable(home, 'read your title')
   const name = e.known.artistName.trim()
   const t = home.page.title
-  const listing = { kind: 'edit', target: 'listing', label: 'Change the title' } as const
-  const limits = 'We read your home page’s title. Google can still show a different one if it thinks it fits a search better.'
+  const action = listing('Change the title')
+  const who = tapirWho(e)
+  const limits = `We read your home page’s title${who.city || who.genres.length ? ' and look for your name and the city or sound you gave Tapir' : ' and look for your name; with no city or sound in Tapir we can’t check more than that'}. Google can still show a different title.`
   if (!t) {
-    return {
-      status: 'fail', value: 'no title', sentence: 'your home page has no title, so Google makes one up.',
-      todo: 'Write a title on the SEO page, then publish.', action: listing, evidence: [{ label: 'title', value: 'none on the page' }], limits,
-    }
+    if (home.truncated) return tooBig('a title')
+    return { status: 'fail', value: 'no title', sentence: 'your home page has no title, so Google makes one up.', todo: 'Write a title on the Listing tab, then publish.', action, evidence: [{ label: 'title', value: 'none on the page' }], limits }
   }
-  const evidence = [{ label: 'title', value: clip(t, 120) }, { label: 'length', value: `${t.length} of ${MAX_TITLE}` }]
+  const evidence = [{ label: 'title', value: clip(t, 120) }, { label: 'length', value: `${chars(t)} of ${MAX_TITLE}` }]
   if (home.page.titleCount > 1) evidence.push({ label: 'titles on the page', value: String(home.page.titleCount) })
-  const source = titleSource(t, e)
-  if (source) evidence.push({ label: 'source', value: source })
-  const written = collapse(e.known.published?.seoTitle ?? '')
-  if (written && source !== 'written on the SEO page') evidence.push({ label: 'in Tapir: title', value: clip(written, 120) })
+  evidence.push(...titleSource(t, e))
   const good = goodTitle(e)
   if (name && isBareName(t, name)) {
-    return { status: 'fail', value: clip(t, 28), sentence: `your title is just “${clip(t, 60)}”. Add your city and sound so Google can tell you apart.`, good, todo: 'Write a title with your name, city and sound, then publish.', action: listing, evidence, limits }
+    return { status: 'fail', value: clip(t, 28), sentence: `your title is just “${clip(t, 60)}”. Add your city and sound so Google can tell you apart.`, good, todo: 'Write a title with your name, city and sound on the Listing tab, then publish.', action, evidence, limits }
+  }
+  if (JUNK_TITLE.test(t)) {
+    return { status: 'fail', value: 'error page title', sentence: `your title is “${clip(t, 60)}”, which reads like an error or placeholder page.`, good, todo: 'Write a title with your name, city and sound on the Listing tab, then publish.', action, evidence, limits }
   }
   if (name && !namesArtist(t, name)) {
-    return { status: 'fail', value: 'your name is missing', sentence: `your title doesn’t say your name, “${name}”.`, good, todo: 'Put your name first in the title, then publish.', action: listing, evidence, limits }
+    return { status: 'fail', value: 'your name is missing', sentence: `your title doesn’t say your name, “${name}”.`, good, todo: 'Put your name first in the title on the Listing tab, then publish.', action, evidence, limits }
   }
   if (!name) return { status: 'unknown', value: 'no artist name', sentence: 'we don’t know your artist name, so we couldn’t check the title names you.', evidence, limits }
-  if (t.length > MAX_TITLE) {
-    return { status: 'fail', lead: 'Almost', value: `${t.length} of ${MAX_TITLE}`, sentence: `your title is ${t.length} characters. Long titles get cut off in search results; keep it to ${MAX_TITLE}.`, todo: 'Shorten the title, then publish.', action: listing, evidence, limits }
+  if ((who.city || who.genres.length) && !(who.city && hasWords(t, who.city)) && !who.genres.some((g) => hasWords(t, g))) {
+    return { status: 'fail', lead: 'Almost', value: 'no city or sound', sentence: 'your title has your name but not your city or your sound.', good, todo: 'Add your city or sound to the title on the Listing tab, then publish.', action, evidence, limits }
+  }
+  if (chars(t) > MAX_TITLE) {
+    return { status: 'fail', lead: 'Almost', value: `${chars(t)} of ${MAX_TITLE}`, sentence: `your title is ${chars(t)} characters. Long titles get cut off in search results; keep it to ${MAX_TITLE}.`, todo: 'Shorten the title on the Listing tab, then publish.', action, evidence, limits }
   }
   return { status: 'pass', value: clip(t, 28), sentence: `Your site’s title is “${t}”.`, evidence, limits }
 })
 
-/** Where the live title came from, as far as the evidence shows. */
-function titleSource(live: string, e: SeoEvidence): string | null {
+/**
+ * What Tapir holds for the title, labelled as Tapir's. `seoTitle` is the title Tapir resolved
+ * (known.ts: the one written on the Listing tab, else the one built from the facts), so it is
+ * never empty for a named artist; "written" vs "built" is told by comparing it to the built one.
+ */
+function titleSource(live: string, e: SeoEvidence): { label: string; value: string }[] {
   const pub = e.known.published
-  if (!pub) return null
-  const written = collapse(pub.seoTitle ?? '')
-  if (written) return fold(written) === fold(live) ? 'written on the SEO page' : 'not the title you published'
-  const facts = { name: e.known.artistName, genre: pub.genre, location: pub.location }
-  const built = (['MusicGroup', 'Person', null] as const).map((schema_type) => defaultSeoTitle({ ...facts, schema_type }))
-  return built.some((b) => b && fold(b) === fold(live)) ? 'built from your facts (no title written)' : 'not written in Tapir'
+  if (!pub) return []
+  const built = defaultSeoTitle({ name: e.known.artistName, genre: pub.genre, location: pub.location, schema_type: pub.artistType })
+  const tapir = collapse(pub.seoTitle ?? '') || built
+  if (!tapir) return []
+  const how = built && fold(tapir) === fold(built) ? 'built from your facts' : 'written on the Listing tab'
+  return [
+    { label: 'in Tapir: title', value: `${clip(tapir, 100)} (${how})` },
+    { label: 'same as your site', value: fold(tapir) === fold(live) ? 'yes' : 'no' },
+  ]
 }
 
 /** "Skeen · Chicago house", from the facts Tapir has, or nothing (never invented). */
@@ -102,166 +148,248 @@ function goodTitle(e: SeoEvidence): string | undefined {
  *  Both are the common guideline, not a published Google rule (said in `limits`). */
 const DESC_MIN = 50
 const DESC_MAX = 160
+const FILLER_TEXT = /\blorem ipsum\b|\bdolor sit amet\b/i
+
+/** One word said over and over: fewer than 4 in 10 words are different. */
+function repetitive(text: string): boolean {
+  const words = wordsOf(text)
+  return words.length >= 5 && new Set(words).size / words.length < 0.4
+}
 
 const desc = make('desc', (e) => {
   const home = homeOf(e)
-  if (!home.ok) return unreadable(home, 'read your summary')
+  if (!home.ok) return unreadable(home, 'read your description')
   const d = metaOf(home.page, 'description')
   const name = e.known.artistName.trim()
-  const listing = { kind: 'edit', target: 'listing', label: 'Change the summary' } as const
-  const limits = 'Google often writes its own summary from your page instead. The 50 to 160 character range is a common guideline, not a Google rule.'
+  const action = listing('Change the description')
+  const who = tapirWho(e)
+  const limits = 'Google often writes its own description from your page instead. We check it’s there, a good length and mentions you, your city or your sound; we don’t judge how well it reads. The 50 to 160 character range is a common guideline, not a Google rule.'
   if (!d) {
-    return { status: 'fail', value: 'no summary', sentence: 'your site has no summary for Google, so it picks words from your page.', todo: 'Write a one- or two-sentence summary on the SEO page, then publish.', action: listing, evidence: [{ label: 'summary', value: 'none on the page' }], limits }
+    if (home.truncated) return tooBig('a description')
+    return { status: 'fail', value: 'no description', sentence: 'your site has no description for Google, so it picks words from your page.', todo: 'Write a one- or two-sentence description on the Listing tab, then publish.', action, evidence: [{ label: 'description', value: 'none on the page' }], limits }
   }
-  const evidence = [{ label: 'summary', value: clip(d, 200) }, { label: 'length', value: `${d.length} of ${DESC_MAX}` }]
+  const n = chars(d)
+  const evidence = [{ label: 'description', value: clip(d, 200) }, { label: 'length', value: `${n} of ${DESC_MAX}` }]
   const count = home.page.meta.description?.length ?? 0
-  if (count > 1) evidence.push({ label: 'summaries on the page', value: String(count) })
+  if (count > 1) evidence.push({ label: 'descriptions on the page', value: String(count) })
+  const write = 'Write a sentence about who you are and your sound on the Listing tab, then publish.'
   if (name && isBareName(d, name)) {
-    return { status: 'fail', value: 'just your name', sentence: `your summary just says “${clip(d, 60)}”.`, todo: 'Write a sentence about who you are and your sound, then publish.', action: listing, evidence, limits }
+    return { status: 'fail', value: 'just your name', sentence: `your description just says “${clip(d, 60)}”.`, todo: write, action, evidence, limits }
   }
-  if (d.length < DESC_MIN) {
-    return { status: 'fail', lead: 'Almost', value: `${d.length} of ${DESC_MAX}`, sentence: `your summary is only ${d.length} characters.`, todo: 'Add a sentence about who you are and your sound, then publish.', action: listing, evidence, limits }
+  if (FILLER_TEXT.test(d) || repetitive(d)) {
+    return { status: 'fail', value: 'filler text', sentence: 'your description is filler text, not words about you.', todo: write, action, evidence, limits }
   }
-  if (d.length > DESC_MAX) {
-    return { status: 'fail', lead: 'Almost', value: `${d.length} of ${DESC_MAX}`, sentence: `your summary is ${d.length} characters, so Google will cut off the end.`, todo: `Shorten it to ${DESC_MAX} characters, then publish.`, action: listing, evidence, limits }
+  const aboutYou = (name && namesArtist(d, name)) || (who.city && hasWords(d, who.city)) || who.genres.some((g) => hasWords(d, g))
+  if (!aboutYou) {
+    return { status: 'fail', value: 'not about you', sentence: `your description doesn’t mention ${name ? `“${name}”` : 'you'}, your city or your sound.`, todo: write, action, evidence, limits }
   }
-  return { status: 'pass', value: `${d.length} of ${DESC_MAX}`, sentence: `Your summary is ${d.length} characters, a good length.`, evidence, limits }
+  if (n < DESC_MIN) {
+    return { status: 'fail', lead: 'Almost', value: `${n} of ${DESC_MAX}`, sentence: `your description is only ${n} characters.`, todo: 'Add a sentence about who you are and your sound on the Listing tab, then publish.', action, evidence, limits }
+  }
+  if (n > DESC_MAX) {
+    return { status: 'fail', lead: 'Almost', value: `${n} of ${DESC_MAX}`, sentence: `your description is ${n} characters, so Google may cut off the end.`, todo: `Shorten it to ${DESC_MAX} characters on the Listing tab, then publish.`, action, evidence, limits }
+  }
+  return { status: 'pass', value: `${n} of ${DESC_MAX}`, sentence: `Your description is ${n} characters and mentions you.`, evidence, limits }
 })
 
 /* ── bio ────────────────────────────────────────────────────────────────────────────── */
 
-/** SEO_GEO_PLAN.md 3.2: Tapir's own target (first set for a page's visible text), not a
- *  number from Google or any AI company. Said plainly in `limits`, and no `good` line. */
-export const BIO_GOAL = 2500
+/** Tapir's own floor for a bio, in words (Sam, 2026-09-29: "a small minimum of about 100
+ *  words"): not a number from Google or any AI company, and said so in `limits`. */
+export const BIO_MIN_WORDS = 100
 /** A sentence shorter than this (squashed) is too common to prove the bio is on the page. */
 const MIN_SENTENCE = 20
 
-/** How many of the bio's characters show as words on one page: the whole bio when it is
- *  there in one piece, else the sentences that are. */
-function shownChars(bio: string, pageText: string): number {
-  const hay = squash(pageText)
-  if (!hay) return 0
-  if (hay.includes(squash(bio))) return bio.length
-  const sentences = bio.split(/(?<=[.!?…])\s+/)
-  let shown = 0
-  let count = 0
-  for (const s of sentences) {
-    const sq = squash(s)
-    if (sq.length >= MIN_SENTENCE && hay.includes(sq)) {
-      shown += s.length
-      count++
-    }
+/** The part of the bio that shows as words on one page: the whole bio when it is there in one
+ *  piece, else each DIFFERENT sentence that is (a sentence pasted twice counts once).
+ *  Typography is folded on both sides: curly quotes, dashes, soft hyphens. */
+function shownText(bio: string, pageText: string): string {
+  const hay = matchSquash(pageText)
+  if (!hay) return ''
+  if (hay.includes(matchSquash(bio))) return bio
+  const seen = new Set<string>()
+  const shown: string[] = []
+  for (const s of sentencesOf(bio)) {
+    const sq = matchSquash(s)
+    if (seen.has(sq)) continue
+    seen.add(sq)
+    if (chars(sq) >= MIN_SENTENCE && hay.includes(sq)) shown.push(s)
   }
-  return shown + Math.max(0, count - 1)
+  return shown.join(' ')
 }
+
+/** "a, b or c" / "a and b". */
+const listWords = (xs: string[], joiner: 'or' | 'and') => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${joiner} ${xs[xs.length - 1]}`)
 
 const bio = make('bio', (e) => {
   const pages = pagesOf(e)
   const home = homeOf(e)
-  const readable = pages.filter((p): p is Extract<PageState, { ok: true }> => p.ok)
+  const readable = pages.filter((p): p is Readable => p.ok)
   if (!readable.length) return unreadable(home.ok ? { ok: false, path: '/', why: 'no page could be read', noAnswer: true } : home, 'look for your bio')
   const pub = e.known.published
-  const card = home.ok ? artistNodeOf(home.page, e.known.artistName) : null
+  const card = home.ok ? ownArtistNode(home.page, e.known.artistName, e.origin).node : null
   const cardDesc = collapse(textOf(card?.description) ?? '')
   const metaDesc = home.ok ? metaOf(home.page, 'description') ?? '' : ''
-  // The fact card's description is the bio, unless the bridge fell back to the summary.
+  // The fact card's description is the bio, unless the bridge fell back to the description.
   const fromCard = cardDesc && fold(cardDesc) !== fold(metaDesc) ? cardDesc : ''
   const fromTapir = collapse(pub?.bio ?? '')
   const candidates = [...new Set([fromCard, fromTapir].filter(Boolean))]
   const action = { kind: 'edit', target: 'bio', label: 'Open the bio editor' } as const
-  const limits = `The ${num(BIO_GOAL)} goal is Tapir’s own target, not a rule from Google or any AI company. We find your bio by matching the one you published; words typed straight into the site’s code aren’t counted, and text hidden by the site’s design still is.`
-  const cardRow = fromCard ? [{ label: 'fact card', value: `description · ${num(fromCard.length)} characters` }] : []
+  const n = readable.length
+  const where = `the ${n === 1 ? 'page' : `${n} pages`} we read`
+  const limits = `The ${BIO_MIN_WORDS}-word floor is Tapir’s own, not a rule from Google or any AI company. We read your bio as words on your home page and the first pages your sitemap lists (5 at most), and look for your genre, city and releases or shows by their exact words from Tapir; a nickname like “the Windy City” isn’t counted, and text hidden by the site’s design still is.`
+  const cardRow = fromCard ? [{ label: 'fact card', value: `description · ${num(wordCount(fromCard))} words` }] : []
+  const pagesRow = { label: 'pages read', value: readable.map((p) => p.path).join(' · ') }
+  // Without anything published there are no facts to look for.
+  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Tapir yet, so we have no genre, city or releases to look for in your bio.', evidence: [...cardRow, pagesRow], limits }
   if (!candidates.length) {
-    if (!pub) return { status: 'unknown', value: 'couldn’t check', sentence: 'we couldn’t find a bio to look for on your site.', evidence: cardRow, limits }
     return {
-      status: 'fail', value: `0 of ${num(BIO_GOAL)}`, sentence: 'you haven’t written a bio yet.', todo: 'Write your bio: who you are, your sound, your big shows and releases.', action,
-      evidence: [{ label: 'in Tapir: bio', value: 'none published' }, { label: 'fact card', value: cardDesc ? 'no bio in it (only your summary)' : 'no bio in it' }], limits,
+      status: 'fail', value: 'no bio', sentence: 'you haven’t written a bio in Tapir.', todo: 'Write your bio: who you are, your genre, your city, your big shows and releases.', action,
+      evidence: [{ label: 'in Tapir: bio', value: 'none published' }, { label: 'fact card', value: cardDesc ? 'no bio in it (only your description)' : 'no bio in it' }, pagesRow], limits,
     }
   }
-  let best = { chars: 0, path: '' }
+  let best = { text: '', words: 0, path: '' }
   for (const p of readable) {
     for (const c of candidates) {
-      const chars = shownChars(c, p.page.text)
-      if (chars > best.chars) best = { chars, path: p.path }
+      const text = shownText(c, p.page.text)
+      const w = wordCount(text)
+      if (w > best.words) best = { text, words: w, path: p.path }
     }
   }
-  const whole = Math.max(...candidates.map((c) => c.length))
-  const blind = pages.filter((p) => (!p.ok && p.noAnswer) || (p.ok && p.truncated)).map((p) => p.path)
-  const evidence = [
-    { label: 'bio on your site', value: `${num(best.chars)} characters as words on a page` },
-    ...(best.path ? [{ label: 'shown on', value: best.path }] : []),
-    { label: 'goal', value: `${num(BIO_GOAL)} characters (Tapir’s own goal)` },
-    ...cardRow,
-  ]
-  if (blind.length && best.chars < whole) {
-    return { status: 'unknown', value: 'couldn’t check', sentence: `we couldn’t read all of ${blind.join(', ')}, and your full bio wasn’t on the pages we could read.`, evidence: [...evidence, { label: 'not read', value: blind.join(', ') }], limits }
+  const whole = Math.max(...candidates.map(wordCount))
+  const blind = pages.filter((p) => (!p.ok && p.noAnswer) || (p.ok && p.truncated)).map((p) => (p.ok ? `${p.path} (too big to read in full)` : p.path))
+  if (blind.length && best.words < whole) {
+    return { status: 'unknown', value: 'couldn’t check', sentence: `we couldn’t read all of ${blind.join(', ')}, and your full bio wasn’t on the pages we could read.`, evidence: [...cardRow, pagesRow, { label: 'not read', value: blind.join(', ') }], limits }
   }
-  if (best.chars === 0) {
+  if (!best.words) {
     return {
-      status: 'fail', value: `0 of ${num(BIO_GOAL)}`,
-      sentence: fromCard ? 'your bio isn’t shown as words on any page, only behind the scenes for search engines.' : 'your bio isn’t shown as words on any page of your site.',
-      todo: 'Show your bio on your home page or an About page, then publish.', action, evidence, limits,
+      status: 'fail', value: 'not on your pages',
+      sentence: fromCard ? `your bio isn’t shown as words on ${where}, only behind the scenes for search engines.` : `your bio isn’t shown as words on ${where}.`,
+      todo: 'Show your bio on your home page or an About page, then publish.', action, evidence: [...cardRow, pagesRow], limits,
     }
   }
-  if (best.chars < BIO_GOAL) {
-    return { status: 'fail', value: `${num(best.chars)} of ${num(BIO_GOAL)}`, sentence: `your bio shows ${num(best.chars)} characters on your site. Tapir’s goal is ${num(BIO_GOAL)}.`, todo: 'Add your big moments: shows you played, releases, press.', action, evidence, limits }
+
+  // The three facts, from what Tapir published; a fact Tapir doesn't have is skipped, never
+  // held against the bio.
+  const { city, genres } = tapirWho(e)
+  const home_ = matchFold(city)
+  const highlights = [
+    ...pub.releases.map((r) => ({ what: `“${collapse(r.title)}”`, text: collapse(r.title), kind: 'release' as const })),
+    ...pub.tourDates.flatMap((t) => [
+      ...(t.venue ? [{ what: collapse(t.venue), text: collapse(t.venue), kind: 'show' as const }] : []),
+      // A show's city counts only when it isn't home: "Chicago" is already the city fact.
+      ...(t.city && matchFold(t.city) !== home_ ? [{ what: collapse(t.city), text: collapse(t.city), kind: 'show' as const }] : []),
+    ]),
+  ].filter((h) => distinctiveTitle(h.text))
+  const shown = best.text
+  const genreHit = genres.find((g) => namesPhrase(shown, g)) ?? null
+  const cityHit = city && namesPhrase(shown, city) ? city : null
+  const highlightHit = highlights.find((h) => namesPhrase(shown, h.text)) ?? null
+  const facts = [
+    { key: 'genre', say: 'your genre', has: genres.length > 0, hit: genreHit, row: genreHit ?? 'not found' },
+    { key: 'city', say: 'your city', has: !!city, hit: cityHit, row: cityHit ?? 'not found' },
+    { key: 'highlight', say: 'a release or show', has: highlights.length > 0, hit: highlightHit?.what ?? null, row: highlightHit?.what ?? 'not found' },
+  ]
+  const checked = facts.filter((f) => f.has)
+  const lacking = checked.filter((f) => !f.hit)
+  const short = best.words < BIO_MIN_WORDS
+  const evidence = [
+    { label: 'bio on your site', value: `${num(best.words)} words` },
+    { label: 'shown on', value: best.path },
+    { label: 'genre in your bio', value: genres.length ? facts[0].row : 'not set in Tapir, so not checked' },
+    { label: 'city in your bio', value: city ? facts[1].row : 'not set in Tapir, so not checked' },
+    { label: 'highlight in your bio', value: highlights.length ? facts[2].row : 'no release or show in Tapir we can look for, so not checked' },
+    ...(genres.length ? [{ label: 'in Tapir: genre', value: clip(genres.join(', '), 80) }] : []),
+    ...(city ? [{ label: 'in Tapir: city', value: city }] : []),
+    { label: 'floor', value: `${BIO_MIN_WORDS} words (Tapir’s own)` },
+    ...cardRow,
+    pagesRow,
+  ]
+  const value = checked.length ? `${num(best.words)} words · ${checked.length - lacking.length} of ${checked.length} ${plural(checked.length, 'fact')}` : `${num(best.words)} words`
+  if (!short && !lacking.length) {
+    const said = checked.map((f) => f.hit!)
+    return { status: 'pass', value, sentence: said.length ? `Your bio has ${num(best.words)} words and names ${listWords(said, 'and')}.` : `Your bio has ${num(best.words)} words.`, evidence, limits }
   }
-  return { status: 'pass', value: `${num(best.chars)} of ${num(BIO_GOAL)}`, sentence: `Your bio shows ${num(best.chars)} characters on your site.`, evidence, limits }
+  // One line from their OWN data: what to mention.
+  const example = [
+    city || null,
+    genres[0] ?? null,
+    highlights[0] ? (highlights[0].kind === 'show' ? `a show like ${highlights[0].what}` : `a release like ${highlights[0].what}`) : null,
+  ].filter((x): x is string => !!x)
+  const good = example.length ? `e.g. mention ${listWords(example, 'and')}.` : undefined
+  const missing = listWords(lacking.map((f) => f.say), 'or')
+  const sentence = short && lacking.length
+    ? `your bio has ${num(best.words)} words, under Tapir’s ${BIO_MIN_WORDS}-word floor, and doesn’t name ${missing}.`
+    : short
+      ? `your bio has ${num(best.words)} words, under Tapir’s ${BIO_MIN_WORDS}-word floor.`
+      : `your bio doesn’t name ${missing}.`
+  const add = listWords(lacking.map((f) => (f.key === 'highlight' ? 'a big show or release' : f.say)), 'and')
+  const todo = lacking.length ? `Add ${add} to your bio${short ? `, and write at least ${BIO_MIN_WORDS} words` : ''}.` : `Write at least ${BIO_MIN_WORDS} words: who you are, your big shows, your releases.`
+  return { status: 'fail', value, sentence, good, todo, action, evidence, limits }
 })
 
-/* ── genre ──────────────────────────────────────────────────────────────────────────── */
+/* ── genre / place: the artist's own card node ─────────────────────────────────────── */
 
-/** The fact card's artist node, or why there is none to read. */
-function cardArtist(e: SeoEvidence): { node: LdNode } | { none: string } | { home: Extract<PageState, { ok: false }> } {
+/** The artist's OWN node on the home page's fact card, or why there is none to read. */
+function cardArtist(e: SeoEvidence): { node: LdNode } | { none: string; row: string } | { home: Extract<PageState, { ok: false }> } | { cut: true } {
   const home = homeOf(e)
   if (!home.ok) return { home }
-  const node = artistNodeOf(home.page, e.known.artistName)
+  const { node, others } = ownArtistNode(home.page, e.known.artistName, e.origin)
   if (node) return { node }
-  if (!home.page.ld.length) return { none: 'no fact card on your home page' }
-  if (home.page.ld.every((b) => b.error !== null)) return { none: 'your fact card can’t be read' }
-  return { none: 'no artist in your fact card' }
+  if (home.truncated) return { cut: true }
+  if (others.length) return { none: `your fact card describes “${clip(others[0], 40)}”, not you`, row: `describes ${others.map((o) => `“${clip(o, 40)}”`).join(', ')}, not you` }
+  if (!home.page.ld.length) return { none: 'your home page has no fact card', row: 'none on the home page' }
+  if (home.page.ld.every((b) => b.error !== null)) return { none: 'your fact card can’t be read', row: 'can’t be read' }
+  return { none: 'your fact card doesn’t describe you', row: 'no artist in it' }
 }
 
+/** Values that fill a field without saying anything. */
+const EMPTY_VALUE = /^(?:n\/?a|na|none|null|undefined|unknown|tbd|tba|other|-+|\.+|\?+)$/i
+const meaningful = (v: string) => !!v && !EMPTY_VALUE.test(v.trim()) && !/^https?:\/\//i.test(v.trim())
+
 const genre = make('genre', (e) => {
-  const limits = 'We read the facts your site gives search engines; words about your sound elsewhere on the page aren’t counted.'
+  const limits = 'We read the facts your home page gives search engines (top-level only); words about your sound elsewhere on the page aren’t counted.'
   // Decided from Tapir alone: a visual artist has no music style, whatever the site shows.
   if (visualArtist(e)) {
-    return { status: 'na', value: 'visual artist', sentence: 'you’re listed in Tapir as a visual artist, so a music style doesn’t apply.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
+    return { status: 'na', value: 'visual artist', sentence: 'you’re listed in Tapir as a visual artist, and a music style is for musicians.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
   }
   const a = cardArtist(e)
   if ('home' in a) return unreadable(a.home, 'read your fact card')
-  const facts = { kind: 'edit', target: 'facts', label: 'Change your sound' } as const
-  const saved = collapse(e.known.published?.genre ?? '')
-  const todo = saved ? 'Your sound is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your sound on the Facts tab, then publish.'
-  const tapirRow = saved ? [{ label: 'in Tapir: genre', value: clip(saved, 120) }] : []
+  if ('cut' in a) return tooBig('the fact card about you')
+  const facts = { kind: 'edit', target: 'facts', label: 'Change your genre' } as const
+  const saved = (e.known.published?.genre ?? '').split(',').map(collapse).filter(Boolean)
+  const todo = saved.length ? 'Your genre is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your genre on the Facts tab, then publish.'
+  const tapirRow = saved.length ? [{ label: 'in Tapir: genre', value: clip(saved.join(', '), 120) }] : []
   if ('none' in a) {
-    return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your sound for search engines (${a.none}).`, todo, action: facts, evidence: [{ label: 'fact card', value: a.none }, ...tapirRow], limits }
+    return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your genre for search engines: ${a.none}.`, todo, action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
   }
   if (hasType(a.node, 'Person') && !hasType(a.node, 'MusicGroup')) {
     // Tapir says musician (or published nothing): the card is the one that is off.
     if (!e.known.published) {
       return {
         status: 'unknown', value: 'not for a person card',
-        sentence: 'your fact card describes you as a person, which has no place for a music style, and we couldn’t read what you published in Tapir to know if that’s right.',
+        sentence: 'your site tells search engines you’re a person, which has no place for a genre, and you haven’t published from Tapir to say otherwise.',
         evidence: [{ label: 'artist type', value: 'Person' }],
-        limits: 'Search engines only read a music style from a musician’s card, and without what you published we can’t tell whether you are one.',
+        limits: 'Search engines only read a genre from a musician’s card, and without what you published we can’t tell whether you are one.',
       }
     }
     return {
       status: 'fail', value: 'not named',
-      sentence: 'your fact card describes you as a visual artist, so it has no place for your sound, but in Tapir you’re a musician.',
+      sentence: 'your site tells search engines you’re a visual artist, but in Tapir you’re a musician.',
       todo: 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.',
       action: facts, evidence: [{ label: 'artist type', value: 'Person' }, { label: 'in Tapir: artist type', value: 'Musician' }, ...tapirRow], limits,
     }
   }
-  const genres = strings(a.node.genre)
-  const evidence = [{ label: 'genre', value: genres.length ? genres.join(', ') : 'not set' }]
-  if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your sound for search engines.', todo, action: facts, evidence: [...evidence, ...tapirRow], limits }
+  const all = strings(a.node.genre)
+  const genres = all.filter(meaningful)
+  const evidence = [{ label: 'genre', value: all.length ? all.join(', ') : 'not set' }, ...tapirRow]
+  if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your genre for search engines.', todo, action: facts, evidence, limits }
   const said = genres.length === 1 ? genres[0] : `${genres.slice(0, -1).join(', ')} and ${genres[genres.length - 1]}`
-  return { status: 'pass', value: clip(genres.join(', '), 28), sentence: `Your site says your sound is ${said}.`, evidence, limits }
+  if (saved.length && !genres.some((g) => saved.some((s) => matchFold(s) === matchFold(g)))) {
+    return { status: 'fail', lead: 'Almost', value: 'not your genre', sentence: `your site says your genre is ${clip(said, 60)}, but in Tapir it’s ${clip(saved.join(', '), 60)}.`, todo: 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.', action: facts, evidence, limits }
+  }
+  return { status: 'pass', value: clip(genres.join(', '), 28), sentence: `Your site says your genre is ${said}.`, evidence, limits }
 })
-
-/* ── place ──────────────────────────────────────────────────────────────────────────── */
 
 /** The artist's place: foundingLocation (MusicGroup), homeLocation (Person), or location. */
 function placeOf(node: LdNode): unknown {
@@ -275,23 +403,53 @@ function placeOf(node: LdNode): unknown {
 const place = make('place', (e) => {
   const a = cardArtist(e)
   if ('home' in a) return unreadable(a.home, 'read your fact card')
+  if ('cut' in a) return tooBig('the fact card about you')
   const facts = { kind: 'edit', target: 'facts', label: 'Add your state and country' } as const
-  const limits = 'We read the place in the facts your site gives search engines, not the words on your page or what articles say about you. A place with no states or regions can’t pass yet.'
+  const limits = 'We read the place in the facts your home page gives search engines, not the words on your page or what articles say about you. A place with no states or regions can’t pass yet.'
+  const pub = e.known.published
+  const part = (v: string | null | undefined) => collapse(v ?? '') || 'not set'
+  const tapirRow = pub ? [{ label: 'in Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : []
   if ('none' in a) {
-    return { status: 'fail', value: 'not said', sentence: `your site doesn’t say where you’re based (${a.none}).`, todo: 'Add your city, state and country on the Facts tab, then publish.', action: facts, evidence: [{ label: 'fact card', value: a.none }], limits }
+    return { status: 'fail', value: 'not said', sentence: `your site doesn’t say where you’re based: ${a.none}.`, todo: 'Add your city, state and country on the Facts tab, then publish.', action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
   }
   const p = placeOf(a.node)
   const address = isObj(p) ? (isObj(p.address) ? p.address : null) : null
-  const city = (address && textOf(address.addressLocality)) || (typeof p === 'string' ? collapse(p) || null : isObj(p) ? textOf(p.name) : null)
+  // A place with no address is one line of text: a bare city ("Chicago") is just a city, but
+  // "Chicago, IL" holds several facts in one line, which search engines don't read apart.
+  const text = typeof p === 'string' ? collapse(p) || null : isObj(p) && !address ? textOf(p.name) : null
+  const line = text && text.includes(',') ? text : null
+  const city = address ? textOf(address.addressLocality) ?? (isObj(p) ? textOf(p.name) : null) : line ? null : text
   const region = address ? textOf(address.addressRegion) : null
   const country = address ? textOf(address.addressCountry) : null
   const evidence = [
     { label: 'place', value: p === null ? 'not set' : clip(typeof p === 'string' ? p : JSON.stringify(p), 160) },
-    { label: 'city', value: city ?? 'missing' },
+    { label: 'city', value: city ?? (line ? `one line: ${line}` : 'missing') },
     { label: 'state or region', value: region ?? 'missing' },
     { label: 'country', value: country ?? 'missing' },
+    ...tapirRow,
   ]
+  const publish = 'It’s published in Tapir but your site doesn’t state it yet. Publish, then test again; if it stays, your site needs an update from whoever built it.'
+  // One line ("Chicago, IL"): the words may all be there, but not as the separate facts
+  // search engines read. Said as such, never as "says Chicago, IL, but not the state".
+  if (line && !address) {
+    return { status: 'fail', lead: 'Almost', value: 'one line', sentence: `your site gives your place as one line (“${clip(line, 40)}”). Search engines want the city, state and country as separate facts.`, todo: pub?.region && pub?.country ? publish : 'Add your city, state and country on the Facts tab, then publish.', action: facts, evidence, limits }
+  }
+  const bad = [region && !meaningful(region) && 'the state or region', country && !countryCode(country) && 'the country'].filter((x): x is string => !!x)
+  if (bad.length) {
+    return { status: 'fail', value: 'not a real place', sentence: `your site gives ${bad.join(' and ')} as “${clip([region, country].filter(Boolean).join(', '), 40)}”, which isn’t a real place.`, todo: 'Set your state and country on the Facts tab, then publish.', action: facts, evidence, limits }
+  }
   if (city && region && country) {
+    // Compared with what Tapir published: a site that says Austin when Tapir says Chicago is
+    // stale or wrong, not a pass. City and country only: a region may be spelled "IL" or
+    // "Illinois" and both are right.
+    const tapirCity = collapse((pub?.location ?? '').split(',')[0] ?? '')
+    const tapirCountry = pub ? pub.countryCode ?? countryCode(pub.country) : null
+    const cityOff = tapirCity && matchFold(tapirCity) !== matchFold(city)
+    const countryOff = tapirCountry && countryCode(country) !== tapirCountry
+    if (cityOff || countryOff) {
+      const tapirSays = [tapirCity, pub?.region, tapirCountry ? countryName(tapirCountry) : pub?.country].filter(Boolean).join(', ')
+      return { status: 'fail', lead: 'Almost', value: 'not your place', sentence: `your site says you’re based in ${clip(`${city}, ${region}, ${country}`, 50)}, but in Tapir it’s ${clip(tapirSays, 50)}.`, todo: publish, action: facts, evidence, limits }
+    }
     return { status: 'pass', value: clip(`${city}, ${region}, ${country}`, 28), sentence: `Your site says you’re based in ${city}, ${region}, ${country}.`, evidence, limits }
   }
   if (!city && !region && !country) {
@@ -302,56 +460,64 @@ const place = make('place', (e) => {
   const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')}, or ${missing[missing.length - 1]}`
   // What Tapir published decides the to-do: a part it HAS that the card lacks is a site that
   // hasn't caught up (a bridge before 0.43.0 states no region or country), not a missing fact.
-  const pub = e.known.published
   const saved = { city: !!collapse(pub?.location ?? ''), region: !!pub?.region, country: !!pub?.country }
   const lacks = [!city && !saved.city && 'the city', !region && !saved.region && 'the state or region', !country && !saved.country && 'the country'].filter((x): x is string => !!x)
-  const part = (v: string | null | undefined) => collapse(v ?? '') || 'not set'
-  const rows = pub ? [...evidence, { label: 'in Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : evidence
-  const todo = lacks.length
-    ? `Add ${lacks.join(' and ')} on the Facts tab, then publish.`
-    : 'It’s published in Tapir but your site doesn’t state it yet. Publish, then test again; if it stays, your site needs an update from whoever built it.'
   return {
     status: 'fail', lead: 'Almost', value: city && !region && !country ? 'city only' : `missing ${missing.length}`,
     sentence: `your site says ${has}, but not ${list}.`,
-    todo, action: facts, evidence: rows, limits,
+    todo: lacks.length ? `Add ${lacks.join(' and ')} on the Facts tab, then publish.` : publish, action: facts, evidence, limits,
   }
 })
 
 /* ── mb ─────────────────────────────────────────────────────────────────────────────── */
 
 const mb = make('mb', (e) => {
+  const limits = 'We asked which artist on MusicBrainz links to your site and your strongest profiles, and checked that artist has your name. A MusicBrainz page that links to none of them is missed.'
   // Decided from Tapir alone: MusicBrainz lists people who make music, and its editors remove
   // an entry for someone who doesn't, so "Create the page" would be wrong advice here.
   if (visualArtist(e)) {
-    return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Tapir as a visual artist, so this doesn’t apply.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }] }
+    return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Tapir as a visual artist.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
   }
   const m = e.musicbrainz
   const asked = m.asked?.length ? [{ label: 'asked about', value: m.asked.map((u) => shortUrl(u, 50)).join(' · ') }] : []
-  const baseLimits = 'We asked which artist on MusicBrainz links to your site and your strongest profiles. A MusicBrainz page that links to none of them is missed.'
   if (!m.looked) {
-    return { status: 'unknown', value: 'couldn’t ask', sentence: `we couldn’t ask MusicBrainz this time${m.error ? ` (${m.error})` : ''}.`, evidence: [...asked, ...(m.error ? [{ label: 'why', value: m.error }] : [])], limits: baseLimits }
+    return { status: 'unknown', value: 'couldn’t ask', sentence: `we couldn’t ask MusicBrainz this time${m.error ? ` (${m.error})` : ''}.`, evidence: [...asked, ...(m.error ? [{ label: 'why', value: m.error }] : [])], limits }
   }
-  if (m.artistUrl) {
-    const fromConnections = /connections/i.test(m.matchedOn ?? '')
+  const fromConnections = m.fromConnections === true || /connections/i.test(m.matchedOn ?? '')
+  const found = [
+    ...(m.artistUrl ? [{ label: 'MusicBrainz page', value: m.artistUrl }] : []),
+    ...(m.artistName ? [{ label: 'name there', value: m.artistName }] : []),
+    ...(m.matchedOn ? [fromConnections ? { label: 'in Tapir: found by', value: 'your MusicBrainz link in Connections' } : { label: 'found by', value: shortUrl(m.matchedOn, 60) }] : []),
+    ...asked,
+  ]
+  const name = e.known.artistName.trim()
+  if (!m.artistUrl && fromConnections) {
     return {
-      status: 'pass', value: 'page found', sentence: 'MusicBrainz has a page for you.',
-      evidence: [
-        { label: 'MusicBrainz page', value: m.artistUrl },
-        ...(m.artistName ? [{ label: 'name there', value: m.artistName }] : []),
-        ...(m.matchedOn ? [{ label: 'found by', value: fromConnections ? m.matchedOn : shortUrl(m.matchedOn, 60) }] : []),
-        ...asked,
-      ],
-      limits: fromConnections ? 'We took the MusicBrainz link from your Connections as given; we didn’t open it to check it’s you.' : baseLimits,
+      status: 'fail', value: 'link goes nowhere', sentence: 'the MusicBrainz link in your Connections goes to a page MusicBrainz doesn’t have.',
+      todo: 'Open Connections and paste the link to your MusicBrainz artist page.', action: { kind: 'edit', target: 'connections', label: 'Open Connections' }, evidence: found, limits,
     }
   }
+  if (m.artistUrl) {
+    // MusicBrainz linked one of your addresses to an artist of ANOTHER name: that page is not
+    // "a page for you" (a mixed-up profile link, or someone else's page).
+    if (m.artistName && name && matchFold(m.artistName) !== matchFold(name)) {
+      return {
+        status: 'fail', lead: 'Almost', value: 'another name there',
+        sentence: `MusicBrainz links your ${fromConnections ? 'Connections link' : 'site or profiles'} to “${clip(m.artistName, 40)}”, not to an artist named “${clip(name, 40)}”.`,
+        todo: 'Check that page on MusicBrainz. If it’s you under another name, add your name as an alias there; if not, the link is mixed up.',
+        action: { kind: 'outside', href: m.artistUrl.startsWith('https://') ? m.artistUrl : 'https://musicbrainz.org/', label: 'Open the MusicBrainz page' }, evidence: found, limits,
+      }
+    }
+    return { status: 'pass', value: 'page found', sentence: 'MusicBrainz has a page for you.', evidence: found, limits }
+  }
   const pub = e.known.published
-  const href = musicBrainzCreateUrl({ name: e.known.artistName, area: pub?.location ?? null, homepage: e.known.siteUrl, links: pub?.links ?? [] })
+  const href = musicBrainzCreateUrl({ name, area: pub?.location ?? null, homepage: e.known.siteUrl, links: pub?.links ?? [] })
   return {
     status: 'fail', value: 'no page yet', sentence: 'MusicBrainz has no page linked to your site or profiles.',
     todo: 'This happens on MusicBrainz, outside Tapir. We fill in what we know; you sign in and save. About 10 minutes.',
     action: { kind: 'outside', href, label: 'Create the page' },
     evidence: [{ label: 'musicbrainz.org', value: 'no artist links to these addresses' }, ...asked],
-    limits: baseLimits,
+    limits,
   }
 })
 

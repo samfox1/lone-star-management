@@ -88,6 +88,13 @@ describe('ogBackgroundHex', () => {
     expect(ogBackgroundHex(undefined)).toBe('#ffffff')
   })
 
+  it('CRITICAL: a picked colour (a Brand colour, or one mixed in the picker) fills as itself, opaque', () => {
+    expect(ogBackgroundHex('#1A2B3C')).toBe('#1a2b3c')
+    expect(ogBackgroundHex('#abc')).toBe('#aabbcc')
+    // An alpha channel would bring the transparency back: not a colour here, so white.
+    for (const v of ['#1a2b3c80', '#abcd', 'rgba(0,0,0,0)', 'transparent', '#12345g', 'url(x)']) expect(ogBackgroundHex(v), v).toBe('#ffffff')
+  })
+
   it('offers both light and dark, because a logo is one or the other', () => {
     // A white logo needs a dark card and a black logo needs a light one; offering only
     // one guarantees half of all artists get an invisible image.

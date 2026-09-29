@@ -243,6 +243,9 @@ describe('robotsVerdict: what the answer to /robots.txt means', () => {
       expect(robotsVerdict({ status, body: null }, 'x', '/')).toMatchObject({ verdict: 'blocked', why: 'server-error' })
     }
   })
+  it('a 2xx we hold no body for: not read, so not "no rules"', () => {
+    expect(robotsVerdict({ status: 200, body: null }, 'x', '/').verdict).toBe('unknown')
+  })
   it('401 / 403 / 429 / no answer: we could not read it, so we cannot say', () => {
     for (const status of [401, 403, 429, null]) {
       expect(robotsVerdict({ status, body: null }, 'x', '/').verdict).toBe('unknown')

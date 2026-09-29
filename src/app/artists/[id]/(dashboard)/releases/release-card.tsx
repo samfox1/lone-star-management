@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/icons'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
-import { KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
+import { HeaderIcon, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { mergeTwins } from '@/lib/song-merge'
 import { STREAMING_PLATFORMS } from '../music/platforms'
@@ -272,7 +272,8 @@ export function ReleaseCard({
         }
       >
         <ModalHeader
-          square={cover(112)}
+          art={release.cover_url ? cover(112) : null}
+          mark={<HeaderIcon name="releases" />}
           title={title}
           meta={
             <>

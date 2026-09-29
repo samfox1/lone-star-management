@@ -8,7 +8,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { FAQ_EXTRA, FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import { SEO_LIMITS, saveSeoField, seoValueError } from '@/lib/site-editor/save'
-import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
+import { ABOUT_PLACEMENTS, FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 
 /** Fake site_content table: records what the gate actually decided to store. No DB. */
 function fake() {
@@ -16,6 +16,11 @@ function fake() {
   const deletes: string[] = []
   const client = {
     from: () => ({
+      // The region rule reads the stored country (none here: the region is typed text).
+      select: () => {
+        const chain = { eq: () => chain, maybeSingle: () => Promise.resolve({ data: null, error: null }) }
+        return chain
+      },
       upsert: (row: { key: string; value: string }) => {
         upserts.push({ key: row.key, value: row.value })
         return Promise.resolve({ error: null })
@@ -53,8 +58,11 @@ describe('seoValueError', () => {
   })
   it('strings are capped by SEO_LIMITS', () => {
     for (const [key, max] of Object.entries(SEO_LIMITS)) {
-      expect(seoValueError(key, 'x'.repeat(max)), key).toBeNull()
       expect(seoValueError(key, 'x'.repeat(max + 1)), key).toBeTruthy()
+      // The country is a pick from the bridge's table, not free text (seo-facts.test.ts pins
+      // it): any string at the cap is refused for that, not for its length.
+      if (key === FACT_CONTENT_KEYS.country) continue
+      expect(seoValueError(key, 'x'.repeat(max)), key).toBeNull()
     }
   })
   it('FAQ answers are SEO keys too: gated, capped, five of them in order', () => {
@@ -83,7 +91,8 @@ describe('saveSeoField keeps prose readable and <head> on one line', () => {
   const PROSE = [...FAQ_KEYS, ...FAQ_EXTRA.map((e) => e.a)]
   /** Every other length-capped SEO string. og_image / about_placement are shape-validated
    *  rather than length-capped, so they are not in SEO_LIMITS and not in this loop. */
-  const ONE_LINE = Object.keys(SEO_LIMITS).filter((k) => !PROSE.includes(k))
+  // The country is a pick from a list (no free text to collapse): it has its own tests.
+  const ONE_LINE = Object.keys(SEO_LIMITS).filter((k) => !PROSE.includes(k) && k !== FACT_CONTENT_KEYS.country)
 
   it('CRITICAL: a prose answer keeps its paragraph break', async () => {
     for (const key of PROSE) {

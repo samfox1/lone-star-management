@@ -24,6 +24,9 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
+// The service-role client: a marker, so a test can see WHICH client a write was handed.
+const ADMIN = { role: 'service' }
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ADMIN }))
 
 let fake = fakeClient()
 vi.mock('@/lib/supabase/server', () => ({
@@ -107,11 +110,22 @@ describe('every action checks who is asking FIRST', () => {
 })
 
 describe('Test again', () => {
-  it('runs a MANUAL run for this artist', async () => {
+  it('CRITICAL: runs a MANUAL run for this artist, written by the SERVICE ROLE in the signed-in manager\'s name', async () => {
     const m = await actions()
     expect(await m.runSeoTestsAction(A)).toMatchObject({ ok: true })
     expect(h.runs).toHaveLength(1)
-    expect(h.runs[0].slice(1)).toEqual([A, 'manual'])
+    expect(h.runs[0].slice(1, 3)).toEqual([A, 'manual'])
+    const who = h.runs[0][3] as { writer: unknown; userId: string }
+    expect(who.writer).toBe(ADMIN)
+    expect(who.userId).toBe('u1')
+    // The reader stays the manager's own session.
+    expect(h.runs[0][0]).not.toBe(ADMIN)
+  })
+
+  it('the per-person limit comes back as reason "limit" with its seconds', async () => {
+    h.runResult = { ok: false, reason: 'limit', error: 'You’ve started a lot of tests lately. Try again in 30 minutes.', retryInS: 1800 }
+    const m = await actions()
+    expect(await m.runSeoTestsAction(A)).toEqual({ ok: false, reason: 'limit', error: 'You’ve started a lot of tests lately. Try again in 30 minutes.', retryInS: 1800 })
   })
 
   it('CRITICAL: a cool-down comes back machine-readable: reason + seconds, beside the plain sentence', async () => {

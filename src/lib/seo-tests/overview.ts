@@ -16,7 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
 import { analyticsWindow } from '@/lib/analytics'
 import { currentRun, latestRun, recentRuns, type SeoRunSummary, type StoredSeoRun } from './store'
-import type { SeoRunTrigger, SeoTestId, SeoTestResult, SeoTestStatus } from './types'
+import type { SeoRunReach, SeoRunTrigger, SeoTestId, SeoTestResult, SeoTestStatus } from './types'
 
 /**
  * Most important first. A `Record` over the union, so a new test id is a compile error until it
@@ -32,11 +32,24 @@ export const SEO_TEST_PRIORITY: Record<SeoTestId, number> = {
   mb: 22, bingwm: 23,
 }
 
+/** The tests whose answer does not come from reading the artist's site: `mb` asks MusicBrainz.
+ *  Every other test reads the site's pages, robots.txt, sitemap or files. */
+export const SITE_FREE_TESTS: ReadonlySet<SeoTestId> = new Set<SeoTestId>(['mb'])
+
+/** The site answered, or the run does not say (an older run, no site): its results stand. */
+export const siteAnswered = (reach: SeoRunReach | null | undefined): boolean => !reach || reach.state === 'answered'
+
 /** Fails first, then couldn't-checks, each in priority order. Passes and tests that do not
- *  apply (`na`) are left out: neither is something to fix. */
-export function failingInPriority(results: readonly SeoTestResult[]): SeoTestResult[] {
+ *  apply (`na`) are left out: neither is something to fix. When the site did NOT answer
+ *  (`reach`), only the tests that never read it are listed: "we couldn't reach your site" is said
+ *  once by the page, not turned into twenty to-dos. */
+export function failingInPriority(results: readonly SeoTestResult[], reach: SeoRunReach | null = null): SeoTestResult[] {
   const rank = (r: SeoTestResult) => (r.status === 'fail' ? 0 : 1) * 100 + (SEO_TEST_PRIORITY[r.id] ?? 99)
-  return results.filter((r) => r.status === 'fail' || r.status === 'unknown').sort((a, b) => rank(a) - rank(b))
+  const answered = siteAnswered(reach)
+  return results
+    .filter((r) => r.status === 'fail' || r.status === 'unknown')
+    .filter((r) => answered || SITE_FREE_TESTS.has(r.id))
+    .sort((a, b) => rank(a) - rank(b))
 }
 
 export type SeoTestChange = { id: SeoTestId; from: SeoTestStatus; to: SeoTestStatus }
@@ -62,7 +75,12 @@ export type SeoTimelineEvent =
       passed: number
       total: number
       siteFresh: boolean | null
-      /** Since the run before it. null = the first run we have, so nothing to compare. */
+      /** Did the site answer? Anything but `answered` (or null): the page says "We couldn't reach
+       *  your site" for this run, and `changes` is [] (nothing it could read changed). Always set
+       *  by buildTimeline; optional only so events built elsewhere stay valid. */
+      reach?: SeoRunReach | null
+      /** Since the last earlier run that reached the site. null = the first run we have, so
+       *  nothing to compare. */
       changes: SeoTestChange[] | null
     }
 
@@ -77,10 +95,13 @@ export function buildTimeline(runs: readonly SeoRunSummary[], moments: readonly 
   for (let i = 0; i < runs.length; i++) {
     const run = runs[i]
     if (!(Date.parse(run.ranAt) >= sinceMs)) continue
-    const prev = runs[i + 1]
+    const reach = run.reach ?? null
+    // A run that did not reach the site changed nothing it could read; the next one is compared
+    // with the last run that DID reach it, so an outage is not reported as twenty changes twice.
+    const prev = runs.slice(i + 1).find((r) => siteAnswered(r.reach))
     events.push({
-      kind: 'test', at: run.ranAt, runId: run.id, trigger: run.trigger, passed: run.passed, total: run.total, siteFresh: run.siteFresh,
-      changes: prev ? runChanges(prev, run) : null,
+      kind: 'test', at: run.ranAt, runId: run.id, trigger: run.trigger, passed: run.passed, total: run.total, siteFresh: run.siteFresh, reach,
+      changes: !siteAnswered(reach) ? [] : prev ? runChanges(prev, run) : null,
     })
   }
   for (const m of moments) {
@@ -151,7 +172,7 @@ export async function readSeoOverview(supabase: SupabaseClient, artistId: string
     if (latestRes.v) {
       const { results, ...rest } = latestRes.v
       latest = rest
-      failing = failingInPriority(results)
+      failing = failingInPriority(results, latestRes.v.reach ?? null)
     } else {
       failing = []
     }

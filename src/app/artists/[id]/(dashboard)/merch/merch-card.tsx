@@ -5,7 +5,7 @@ import { safeHref } from '@/lib/url'
 import { GridCard } from '../grid-card'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
-import { KvField, MetaDot, ModalHeader } from '../modal-kit'
+import { HeaderIcon, KvField, MetaDot, ModalHeader } from '../modal-kit'
 import { deleteContentAction, updateContentAction } from '../actions'
 import { toast } from '../toast'
 
@@ -113,7 +113,8 @@ export function MerchCard({
       }
     >
       <ModalHeader
-        square={image('square')}
+        art={item.image_url ? image('square') : null}
+        mark={<HeaderIcon name="merch" />}
         title={item.title}
         meta={
           <>

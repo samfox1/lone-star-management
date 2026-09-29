@@ -9,7 +9,7 @@ import { SHOPIFY_KEY, idFromProfileUrl, methodOf, profileLink, type ConnectionRo
 import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
-import { KvField, KvRow, ModalHeader } from '../../modal-kit'
+import { HEADER_LOGO, KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
 import { ConnectionMark } from './connection-mark'
 import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
@@ -177,11 +177,7 @@ export function ConnectionModal({
       confirmText={`Remove ${row.label}? Its link comes off the site and nothing more is pulled from it.`}
     >
       <ModalHeader
-        square={
-          <div className="flex h-14 w-14 flex-none items-center justify-center rounded-xl border border-hairline text-ink">
-            <ConnectionMark def={row.def} size={26} />
-          </div>
-        }
+        mark={<ConnectionMark def={row.def} size={HEADER_LOGO} />}
         title={row.label}
         meta={meta ? <span className={cx(row.state === 'failed' && 'text-accent-red')}>{meta}</span> : undefined}
       />

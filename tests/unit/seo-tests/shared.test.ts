@@ -46,6 +46,15 @@ describe('share', () => {
     expect(withImg({ width: 1200, height: 600 }).status).toBe('pass')
     expect(withImg({ width: 1600, height: 800 }).status).toBe('pass')
   })
+  it('calls it the "preview picture" in every word a manager reads (Sam, 2026-09-29)', () => {
+    const cases: Partial<Img>[] = [{}, { status: 404 }, { status: 403 }, { status: null, error: 'not-https' }, { width: 600, height: 315 }, { contentType: 'text/html', format: null }]
+    const results = [...cases.map((c) => withImg(c)), s(evidence({ home: homeHtml({ og: { 'og:image': null } }), shareImage: null }))]
+    for (const r of results) {
+      const shown = [r.value, r.sentence, r.todo, r.good, r.limits, r.action?.label].filter(Boolean).join(' | ')
+      expect(shown).not.toMatch(/share (picture|image)/i)
+    }
+    expect(results[1].sentence).toMatch(/preview picture/)
+  })
   it('fails when the page names no share picture', () => {
     const r = s(evidence({ home: homeHtml({ og: { 'og:image': null } }), shareImage: null }))
     expect(r.status).toBe('fail')
@@ -150,12 +159,12 @@ describe('preview', () => {
   it('names every problem at once', () => {
     const r = withOg({ 'og:title': null, 'og:description': null })
     expect(r.sentence).toMatch(/title/)
-    expect(r.sentence).toMatch(/summary/)
+    expect(r.sentence).toMatch(/description/)
     expect(r.lead).toBeUndefined()
   })
   it('decodes entities', () => {
     const r = withOg({ 'og:description': 'Skeen & friends: Chicago house, every weekend.' })
-    expect(ev(r, 'shared summary')).toBe('Skeen & friends: Chicago house, every weekend.')
+    expect(ev(r, 'shared description')).toBe('Skeen & friends: Chicago house, every weekend.')
   })
 })
 
@@ -203,7 +212,8 @@ describe('alt', () => {
     const r = a(evidence({ home: '<html><head><title>Skeen</title></head><body>hi</body></html>', about: null }))
     expect(r.status).toBe('na')
     expect(r.value).toBe('no photos')
-    expect(r.sentence).toMatch(/doesn’t apply/)
+    // The page writes "Doesn't apply:" in front; the sentence gives the reason, not an echo.
+    expect(r.sentence).toMatch(/no photos/)
   })
   it('CRITICAL: is unknown with no photos in the pages while Tapir has published some (a script may add them)', () => {
     const k = known({}, { photos: [{ url: 'https://cdn.example/p.jpg', alt: null }, { url: 'https://cdn.example/g.jpg', alt: 'On stage' }] })

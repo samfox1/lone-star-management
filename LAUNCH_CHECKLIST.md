@@ -50,14 +50,16 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
 ## SEO/GEO tests
 
 - [ ] The run after each Publish lives in the publish request's `after()` (lib/seo-tests/after-publish.ts):
-      it waits up to ~90 s for the site to show the publish, then runs with a 90 s budget. On Vercel that
-      must fit the publishing route's `maxDuration` (set ≥ 240 s on the dashboard routes that publish), or
-      move it to a queue/background job. Killed mid-run, the run stays "running" until the next claim marks
-      it failed after 5 minutes; nothing else is lost. "Test again" (a server action) also needs ~90 s.
+      a 10 s settle, up to ~90 s waiting for the site to show the publish, up to 150 s of retries if a run
+      is already going, then the run's 90 s budget (~340 s worst case). On Vercel that must fit the
+      publishing routes' `maxDuration`, or move it to a queue/background job. Killed mid-run, the run stays
+      "running" until the next claim marks it failed after 5 minutes. "Test again" needs ~90 s too.
+- [ ] Runs are WRITTEN with the service key (`SUPABASE_SERVICE_ROLE_KEY`, lib/supabase/admin) from the
+      server: the dashboard host needs it set (Sensitive, server-only), or no run can be stored.
 - [ ] The scheduled (weekly) run: nothing schedules one yet, and the Overview shows no weekly events
       until something does. Add a cron (Vercel Cron or Supabase `pg_cron` + an Edge Function) that runs
-      `runSeoTests(service client, artistId, 'scheduled')` per custom-site artist; the table already
-      accepts `trigger = 'scheduled'` from the service role.
+      `runSeoTests(service client, artistId, 'scheduled', { writer: service client, userId: null })` per
+      custom-site artist; `seo_test_claim` already accepts `trigger = 'scheduled'` with no person.
 - [ ] MusicBrainz's 1 request a second is kept PER PROCESS only (the gate in lib/seo-tests/musicbrainz.ts
       is module memory). Several server instances (Vercel functions, or a weekly run fanned out per
       artist) share one outbound IP but not that gate, so together they can exceed the limit and get

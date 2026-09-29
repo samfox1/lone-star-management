@@ -14,12 +14,13 @@ import { SeoOverview } from './overview/overview'
  * Two reads, side by side, after the ownership gate: the Test tab's own (`loadTestTab`, the one
  * that tells "testing isn't switched on" from "couldn't read") for the headline and the to-do
  * list, and the overview reader for the timeline and the visits. A part that couldn't be read
- * is null and shows as "—" or a plain sentence, never as 0 (overview/model.ts).
+ * is null and shows as "—" or a plain sentence, never as 0 (overview/model.ts). The site's
+ * address NOW is passed too: the run's may be an old one.
  */
 export default async function SeoOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const artist = await requireArtist(id)
   const [tab, res] = await Promise.all([loadTestTab(await createClient(), id), readSeoOverviewAction(id)])
-  const view = buildOverview({ tab, overview: res.ok ? res.overview : null, siteConnected: !!seoSiteOrigin(artist) })
+  const view = buildOverview({ tab, overview: res.ok ? res.overview : null, siteUrl: seoSiteOrigin(artist) })
   return <SeoOverview artistId={id} view={view} />
 }

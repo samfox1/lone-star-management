@@ -1,16 +1,18 @@
 'use client'
 
 import { useRef, useState, type FocusEvent } from 'react'
+import Link from 'next/link'
 import { FAQ_AUTO_ONLY, probePrompts } from '@samfox1/site-bridge/seo'
 import { FAQ_EXTRA, FAQ_KEYS } from '@/lib/site-content-schema'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction } from '../../../../actions'
+import { useConfirm } from '../../../../confirm-dialog'
 import { LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { AreaField, EndSlot, FieldError, IconLink, LineField } from '../_ui/parts'
+import { AreaField, EndSlot, FieldError, LineField } from '../_ui/parts'
 
 /** Where an automatic-only answer comes from, and the tool that holds it. */
 const FROM = {
@@ -62,6 +64,17 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
       })
   }
 
+  // Both wipe the manager's own words, so both ask first (Sam, 2026-09-28: "are you sure" on
+  // deletes and reverts).
+  const { ask, dialog } = useConfirm()
+  const clear = async (r: Row) => {
+    const ok =
+      r.kind === 'extra'
+        ? await ask(`Remove “${r.question.trim()}” and its answer?`, { action: 'Remove' })
+        : await ask('Replace your answer with the automatic one? Your words will be deleted.', { action: 'Use automatic' })
+    if (ok) setNow(r.kind === 'extra' ? [[r.qKey, ''], [r.key, '']] : [[r.key, '']])
+  }
+
   const prompts = probePrompts(name, schemaType)
   const rows: Row[] = [
     ...prompts.map((question, i): Row => {
@@ -90,7 +103,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
             onDone={() => setEditing((e) => (e === r.key ? null : e))}
             onAnswer={(v) => set(r.key, v)}
             onQuestion={r.kind === 'extra' ? (v) => set(r.qKey, v) : undefined}
-            onClear={() => setNow(r.kind === 'extra' ? [[r.qKey, ''], [r.key, '']] : [[r.key, '']])}
+            onClear={() => void clear(r)}
           />
         ))}
         {adding && freeSlot ? (
@@ -119,6 +132,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
         ) : null}
         {error ? <FieldError>{error}</FieldError> : null}
       </LedgerSection>
+      {dialog}
     </div>
   )
 }
@@ -186,16 +200,20 @@ function AnswerRow({
     <div data-answer-row={row.key} className={cx(ROW, 'items-start')}>
       <div className="text-[15px] font-medium text-ink">{row.question}</div>
       <div className="flex min-w-0 items-start gap-2.5">
-        <span className={cx('line-clamp-3 min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
+        {/* An automatic-only answer has no editor to open, so it is never cut short. */}
+        <span className={cx('min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', !from && 'line-clamp-3', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
         {from ? (
           <>
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap pt-[3px] font-space text-[12px] text-ink-faint">
+            {/* r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow
+                means "leaves Tapir" elsewhere on these tabs). */}
+            <Link
+              href={`/artists/${artistId}/${from.seg}`}
+              className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded pt-[3px] font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
+            >
               <Icon name={from.icon} size={14} aria-hidden="true" />
               {`comes from ${from.label}`}
-            </span>
-            <EndSlot>
-              <IconLink icon="external" label={`Open ${from.label}`} href={`/artists/${artistId}/${from.seg}`} align="end" />
-            </EndSlot>
+            </Link>
+            <EndSlot />
           </>
         ) : (
           <>

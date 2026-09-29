@@ -10,7 +10,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ABOUT_PLACEMENTS, FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
+import { ABOUT_PLACEMENTS, COUNTRIES, FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
+import { REGIONS } from '@/lib/seo-regions'
 import { cleanFactValue, thisYearAt } from '@/lib/seo-facts'
 import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { FactsTab, type FactsTabProps } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/facts/facts-tab'
@@ -43,7 +44,7 @@ const props = (over: Partial<FactsTabProps> = {}): FactsTabProps => ({
   city: 'Chicago',
   facts: EMPTY_FACTS,
   bio: 'Old',
-  bioGoal: 2500,
+  bioMinWords: 100,
   about: { placement: '', heading: '' },
   bookingEmail: '',
   profiles: [{ slug: 'spotify', label: 'Spotify', display: 'open.spotify.com/artist/x', inFactCard: true }],
@@ -79,16 +80,56 @@ describe('where', () => {
     expect(seoMock).not.toHaveBeenCalled()
     expect(factMock).not.toHaveBeenCalled()
   })
-  it('CRITICAL: a country the gate tidies is shown back as saved ("usa" → the table’s name)', async () => {
+  it('CRITICAL: the country is a pick from exactly the table the gate accepts', () => {
     show()
-    const country = screen.getByRole('textbox', { name: 'Country' }) as HTMLInputElement
-    fireEvent.change(country, { target: { value: 'usa' } })
-    const stored = cleanFactValue(FACT_CONTENT_KEYS.country, 'usa', ctx())
-    if (!('value' in stored)) throw new Error('usa refused')
-    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FACT_CONTENT_KEYS.country, 'usa'))
-    expect(await screen.findByText(`Saved as ${stored.value}`)).toBeTruthy()
-    fireEvent.blur(country)
-    expect(country.value).toBe(stored.value)
+    fireEvent.click(screen.getByRole('combobox', { name: 'Country' }))
+    const offered = within(screen.getByRole('listbox', { name: 'Country' })).getAllByRole('option').map((o) => o.textContent)
+    expect(offered.filter((o) => o !== '—').sort()).toEqual(COUNTRIES.map((c) => c.name).sort())
+    // Every one of them is a value the gate stores as itself.
+    for (const name of offered.filter((o): o is string => !!o && o !== '—')) expect(cleanFactValue(FACT_CONTENT_KEYS.country, name, ctx())).toEqual({ value: name })
+  })
+  it('CRITICAL: picking a country with regions turns Region into its list; the region is saved AFTER the country', async () => {
+    show()
+    expect(screen.getByRole('textbox', { name: 'Region' })).toBeTruthy() // no country: typed
+    fireEvent.click(screen.getByRole('combobox', { name: 'Country' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Canada' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Region' }))
+    const offered = within(screen.getByRole('listbox', { name: 'Region' })).getAllByRole('option').map((o) => o.textContent)
+    expect(offered.filter((o) => o !== '—')).toEqual([...REGIONS.CA.names])
+    fireEvent.click(screen.getByRole('option', { name: 'Ontario' }))
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FACT_CONTENT_KEYS.region, 'Ontario'))
+    expect(seoMock.mock.calls.map((c) => c[1])).toEqual([FACT_CONTENT_KEYS.country, FACT_CONTENT_KEYS.region])
+    expect(seoMock.mock.calls[0][2]).toBe('Canada')
+  })
+  it('CRITICAL: a region picked while the country is still saving waits for it (the gate reads the country back)', async () => {
+    let finishCountry: (v: { ok: boolean }) => void = () => {}
+    seoMock.mockImplementationOnce(() => new Promise((res) => (finishCountry = res)))
+    show()
+    fireEvent.click(screen.getByRole('combobox', { name: 'Country' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Australia' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Region' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Victoria' }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(seoMock.mock.calls.map((c) => c[1])).toEqual([FACT_CONTENT_KEYS.country]) // not yet
+    await act(async () => finishCountry({ ok: true }))
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FACT_CONTENT_KEYS.region, 'Victoria'))
+  })
+  it('CRITICAL: a new country drops a region that isn’t on its list (and saves the clear)', async () => {
+    show({ facts: { ...EMPTY_FACTS, [FACT_CONTENT_KEYS.country]: 'United States', [FACT_CONTENT_KEYS.region]: 'Illinois' } })
+    expect(screen.getByRole('combobox', { name: 'Region' }).textContent).toContain('Illinois')
+    fireEvent.click(screen.getByRole('combobox', { name: 'Country' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Canada' }))
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FACT_CONTENT_KEYS.region, ''))
+    expect(seoMock.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      [FACT_CONTENT_KEYS.country, 'Canada'],
+      [FACT_CONTENT_KEYS.region, ''],
+    ])
+  })
+  it('a country stored in another spelling is shown back in the table’s ("USA" → United States)', () => {
+    show({ facts: { ...EMPTY_FACTS, [FACT_CONTENT_KEYS.country]: 'USA' } })
+    expect(screen.getByRole('combobox', { name: 'Country' }).textContent).toContain('United States')
+    // …and its region is the US list.
+    expect(screen.getByRole('combobox', { name: 'Region' })).toBeTruthy()
   })
 })
 
@@ -112,10 +153,10 @@ describe('who', () => {
   })
   it('for a visual artist the year is kept but not on the fact card, and it says so', () => {
     show({ schemaType: 'Person' })
-    expect(screen.getByText('Not on your fact card for a visual artist')).toBeTruthy()
+    expect(screen.getByText('Not shown to search engines for a visual artist')).toBeTruthy()
     cleanup()
     show()
-    expect(screen.queryByText('Not on your fact card for a visual artist')).toBeNull()
+    expect(screen.queryByText('Not shown to search engines for a visual artist')).toBeNull()
   })
   it('CRITICAL: another name that is the artist’s own is refused in the validator’s words', () => {
     show()
@@ -145,10 +186,22 @@ describe('who', () => {
 })
 
 describe('the bio', () => {
+  it('a calm row: its first words, no bar, no count; the counts are in the editor, and no 2,500 anywhere', () => {
+    show({ bio: 'I am a Chicago DJ.\n\nMore about me.' })
+    expect(document.querySelector('[data-bio-preview]')?.textContent).toBe('I am a Chicago DJ.')
+    expect(document.body.textContent).not.toMatch(/2,500|2500/)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the bio' }))
+    const dialog = screen.getByRole('dialog', { name: 'Bio' })
+    expect(dialog.textContent).toMatch(/8 of 100 words/)
+    expect(document.body.textContent).not.toMatch(/2,500|2500/)
+  })
   it('CRITICAL: the row carries the id a test’s pencil lands on, and landing there opens the editor', async () => {
     window.history.replaceState(null, '', `/artists/a1/${SEO_EDIT_TARGETS.bio}`)
     show()
-    expect(document.getElementById(SEO_EDIT_TARGETS.bio.split('#')[1])).toBeTruthy()
+    const anchor = document.getElementById(SEO_EDIT_TARGETS.bio.split('#')[1])!
+    expect(anchor).toBeTruthy()
+    // The id is beside the Bio row, not a wrapper around it (a wrapped row lost its hairline).
+    expect(anchor.nextElementSibling?.hasAttribute('data-ledger-row')).toBe(true)
     expect(await screen.findByRole('dialog', { name: 'Bio' })).toBeTruthy()
   })
   it('CRITICAL: the bio saves to artists.bio (the one bio); over the cap it counts, refuses and is never sent', async () => {
@@ -167,10 +220,10 @@ describe('the bio', () => {
     })
     expect(fieldMock).not.toHaveBeenCalled()
   })
-  it('CRITICAL: Placement offers only what can take effect here (no site declaration on this page)', () => {
+  it('CRITICAL: "Where it shows" offers only what can take effect here (no site declaration on this page)', () => {
     show()
     fireEvent.click(screen.getByRole('button', { name: 'Edit the bio' }))
-    fireEvent.click(screen.getByRole('combobox', { name: 'Placement' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Where it shows' }))
     const offered = screen.getAllByRole('option').map((o) => o.textContent)
     expect(offered).toEqual(['Site default', 'Hidden from visitors'])
     expect(ABOUT_PLACEMENTS).toContain('page')
@@ -185,7 +238,7 @@ describe('profiles', () => {
         { slug: 'cash app', label: 'Cash App', display: 'y', inFactCard: false },
       ],
     })
-    expect(screen.getByText('1 of 2 in your fact card')).toBeTruthy()
+    expect(screen.getByText('1 of 2 shown to search engines')).toBeTruthy()
     const create = screen.getByRole('link', { name: 'Create the page' })
     expect(create.getAttribute('href')).toBe('https://musicbrainz.org/artist/create?edit-artist.name=Skeen')
     expect(create.getAttribute('target')).toBe('_blank')

@@ -15,7 +15,8 @@
  *     cookie, not the link save, not the pull's arguments, not the redirect, not a log line;
  *     the organizer link is saved through `connectOneAction(artist, 'eventbrite', …)`, the
  *     paste path; then the shows are pulled;
- *   - a save that fails after the token was stored forgets the token again.
+ *   - a save that fails after the token was stored forgets the token again on a FIRST connect,
+ *     and puts the previous sign-in back on a RE-connect (never deletes a working one).
  *
  * Supabase, the save door and the pull are faked; Eventbrite is a stubbed global fetch.
  */
@@ -39,6 +40,10 @@ const w = vi.hoisted(() => ({
   tables: [] as string[],
   rpc: [] as { fn: string; args: Record<string, unknown> }[],
   rpcError: {} as Record<string, { code: string; message: string } | undefined>,
+  /** What an RPC answers (the sign-in already stored, for eventbrite_credentials). */
+  rpcData: {} as Record<string, unknown>,
+  /** Fail one particular call, by what it was sent. */
+  rpcFailWhen: null as ((fn: string, args: Record<string, unknown>) => boolean) | null,
   /** The RPCs made before the pull ran: the token must already be in Vault by then. */
   rpcBeforePull: null as string[] | null,
 }))
@@ -56,7 +61,8 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     rpc: async (fn: string, args: Record<string, unknown>) => {
       w.rpc.push({ fn, args })
-      return { data: null, error: w.rpcError[fn] ?? null }
+      if (w.rpcFailWhen?.(fn, args)) return { data: null, error: { code: 'XX000', message: 'refused' } }
+      return { data: w.rpcData[fn] ?? null, error: w.rpcError[fn] ?? null }
     },
   }),
 }))
@@ -109,6 +115,8 @@ beforeEach(() => {
   w.tables = []
   w.rpc = []
   w.rpcError = {}
+  w.rpcData = {}
+  w.rpcFailWhen = null
   w.rpcBeforePull = null
   eventbrite = { ...HAPPY }
   vi.stubGlobal('fetch', fetchMock)
@@ -269,7 +277,7 @@ describe('callback — the happy path', () => {
     expect(connectOneAction).toHaveBeenCalledWith(ARTIST, 'eventbrite', { url: ORGANIZER_URL })
     expect(syncEventbriteAction).toHaveBeenCalledWith(ARTIST)
     // In that order: the token is stored, the link saved, then the pull that reads both.
-    expect(w.rpcBeforePull).toEqual(['connect_eventbrite'])
+    expect(w.rpcBeforePull).toEqual(['eventbrite_credentials', 'connect_eventbrite'])
     expect(vi.mocked(connectOneAction).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(syncEventbriteAction).mock.invocationCallOrder[0])
     expect(location(res)).toBe(`${ORIGIN}/artists/${ARTIST}/connections?eventbrite=connected`)
 
@@ -467,6 +475,57 @@ describe('callback — Eventbrite says no partway', () => {
     const t2 = trip()
     expect(location(await callback(callbackReq(returnFor(t2), t2.cookie)))).toBe(back('connect'))
     expect(rpcs('disconnect_eventbrite')).toHaveLength(1)
+  })
+
+  const PREVIOUS = { organization_id: '70', organizer_id: '71', token: 'EB-PREVIOUS-token-still-good' }
+
+  it('CRITICAL: on a RE-connect, a refused (or thrown) link save puts the previous sign-in back and never deletes it', async () => {
+    // connect_eventbrite renews the secret IN PLACE, so forgetting after a failed re-connect
+    // would destroy the sign-in that was working before (security review 2026-09-29, L6).
+    for (const fail of [() => vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' }), () => vi.mocked(connectOneAction).mockRejectedValueOnce(new Error('db down'))]) {
+      w.rpc = []
+      w.rpcData = { eventbrite_credentials: [PREVIOUS] }
+      fail()
+      const t = trip()
+      const res = await callback(callbackReq(returnFor(t), t.cookie))
+      expect(location(res)).toBe(back('connect'))
+      expect(rpcs('disconnect_eventbrite')).toEqual([])
+      const connects = rpcs('connect_eventbrite').map((r) => r.args)
+      expect(connects).toHaveLength(2)
+      expect(connects[0]).toMatchObject({ p_artist_id: ARTIST, p_token: TOKEN })
+      expect(connects[1]).toEqual({ p_artist_id: ARTIST, p_organization_id: '70', p_organizer_id: '71', p_token: PREVIOUS.token })
+      expect(syncEventbriteAction).not.toHaveBeenCalled()
+      expect(logged()).not.toContain(PREVIOUS.token)
+      expect(setCookie(res) + location(res)).not.toContain(PREVIOUS.token)
+    }
+  })
+
+  it('CRITICAL: the previous sign-in is read BEFORE the new token is stored', async () => {
+    w.rpcData = { eventbrite_credentials: [PREVIOUS] }
+    vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
+    const t = trip()
+    await callback(callbackReq(returnFor(t), t.cookie))
+    const order = w.rpc.map((r) => r.fn)
+    expect(order.indexOf('eventbrite_credentials')).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf('eventbrite_credentials')).toBeLessThan(order.indexOf('connect_eventbrite'))
+  })
+
+  it('a restore that fails still deletes nothing: the new token stays, a working sign-in all the same', async () => {
+    w.rpcData = { eventbrite_credentials: [PREVIOUS] }
+    w.rpcFailWhen = (fn, args) => fn === 'connect_eventbrite' && args.p_token === PREVIOUS.token
+    vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
+    const t = trip()
+    expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('connect'))
+    expect(rpcs('disconnect_eventbrite')).toEqual([])
+    expect(logged()).not.toContain(PREVIOUS.token)
+  })
+
+  it('when the previous sign-in cannot be READ, a failed save deletes nothing either (unknown is not "none")', async () => {
+    w.rpcError.eventbrite_credentials = { code: 'XX000', message: 'down' }
+    vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'boom' })
+    const t = trip()
+    expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('connect'))
+    expect(rpcs('disconnect_eventbrite')).toEqual([])
   })
 
   it('the first pull fails → sync; the connection stays (Pull now can retry)', async () => {

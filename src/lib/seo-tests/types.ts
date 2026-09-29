@@ -75,10 +75,10 @@ export type SeoTestAction =
 export type SeoTestResult = {
   id: SeoTestId
   status: SeoTestStatus
-  /** The short value on the right of the row: "3 of 3 pages", "288 of 2,500". Under ~28 chars. */
+  /** The short value on the right of the row: "3 of 3 pages", "58 words · 1 of 3 facts". Under ~28 chars. */
   value: string
   /** One plain sentence. For a fail the page puts "Not yet:" (or `lead`) in front of it, so
-   *  it starts lower-case: "your bio has 288 characters. Aim for 2,500." */
+   *  it starts lower-case: "your bio doesn't name your genre." */
   sentence: string
   /** A softer opener for a near miss ("Almost:"). */
   lead?: 'Almost'
@@ -189,7 +189,13 @@ export type SeoEvidence = {
   plain: SeoPageFetch[]
   /** Each fetching bot's visit to each path, keyed by SeoBot.key. */
   byBot: Record<string, SeoPageFetch[]>
-  robots: { status: number | null; body: string | null }
+  robots: {
+    status: number | null
+    body: string | null
+    /** Why there is no answer, when status is null: guardedFetch's error, with the address a
+     *  refused redirect pointed at ("not-allowed: https://cdn.example.net/robots.txt"). */
+    error?: string
+  }
   sitemap: {
     status: number | null
     urls: string[]
@@ -210,7 +216,25 @@ export type SeoEvidence = {
     children?: { url: string; status: number | null }[]
     /** Why the list could not be read, when status is null. */
     error?: string
+    /** What the file was: an xml sitemap, a text list (one address per line), an RSS / Atom
+     *  feed, an html page, or something else. Gzip is unpacked first. */
+    format?: 'xml' | 'text' | 'feed' | 'html' | 'other'
+    /** Entries that are not full web addresses ("/about"), with up to 3 examples. */
+    badLocs?: { count: number; examples: string[] }
+    /** Same-site addresses spelled another way than the site answers on (http://, or the bare
+     *  domain for a www site). */
+    otherSpelling?: number
+    /** Every list we tried, in order, when robots.txt named more than one (or none worked). */
+    tried?: { url: string; status: number | null }[]
+    /** Lists robots.txt names on another site: never opened. */
+    namedElsewhere?: string[]
+    /** A sitemap index: how many lists it names on this site (we open at most 3). */
+    childTotal?: number
   } | null
+  /** Did the site answer at all? The home page's plain visit, as one fact for the page to say
+   *  ONCE ("We couldn't reach your site") instead of every row saying it. `answered` includes a
+   *  redirect to another site (the site did answer). Optional: absent = not gathered. */
+  reach?: { state: 'answered' | 'server-error' | 'refused' | 'no-answer'; status: number | null; error?: string }
   /** Signs of Bing Webmaster Tools the site carries (/BingSiteAuth.xml). The meta tag is read
    *  from the home page html. Optional: absent = not gathered. */
   bing?: { siteAuth: { status: number | null; hasUser: boolean } }
@@ -236,6 +260,9 @@ export type SeoEvidence = {
     artistName?: string | null
     /** The addresses we asked MusicBrainz about, in order. */
     asked?: string[]
+    /** The answer is about the MusicBrainz link in Connections, which we opened: with
+     *  `artistUrl` null, MusicBrainz has no artist at that link. */
+    fromConnections?: boolean
   }
   known: SeoKnown
 }
@@ -247,6 +274,9 @@ export type SeoTest = (evidence: SeoEvidence) => SeoTestResult
 
 export type SeoRunTrigger = 'manual' | 'publish' | 'scheduled'
 
+/** Did the site answer at all, as ONE run-level fact (SeoEvidence.reach, stored with the run). */
+export type SeoRunReach = NonNullable<SeoEvidence['reach']>
+
 export type SeoTestRun = {
   id: string
   artistId: string
@@ -255,6 +285,10 @@ export type SeoTestRun = {
   siteUrl: string
   /** One per SeoTestId, in SEO_TEST_IDS order. */
   results: SeoTestResult[]
+  /** Did the site answer when the run looked? `state` other than `answered` = the page says
+   *  "We couldn't reach your site" once. null = no site connected, a run from before this field,
+   *  or a run whose own code broke before it could look. */
+  reach?: SeoRunReach | null
 }
 
 /** The last results of one test, oldest first, for the history dots. */

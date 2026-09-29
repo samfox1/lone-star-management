@@ -14,7 +14,7 @@
  *   • a failure after the claim marks the run failed and returns a plain error, never throws.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runAllTests, runSeoTests, type SeoEngine, type SitePages } from '@/lib/seo-tests/run'
+import { runAllTests, runSeoTests, type RunWho, type SeoEngine, type SitePages } from '@/lib/seo-tests/run'
 import { SEO_TEST_IDS, type SeoEvidence, type SeoKnown, type SeoTest, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
 import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
 
@@ -61,19 +61,28 @@ function engine(over: Partial<SeoEngine> = {}): SeoEngine & { calls: string[] } 
   }
 }
 
-type World = { claimError?: { code?: string; message: string }; finishRow?: boolean; moments?: string[] }
+type World = { claim?: { outcome: string; retry_in_s?: number | null }; finishRow?: boolean; finishError?: boolean; moments?: string[] }
 
-function world({ claimError, finishRow = true, moments = [PUBLISHED_AT] }: World = {}) {
+/** ONE fake for the reader (the manager's session) and the writer (service role); `writerOf`
+ *  below splits them when a test needs to see which client did what. */
+function world({ claim = { outcome: 'claimed' }, finishRow = true, finishError = false, moments = [PUBLISHED_AT] }: World = {}) {
   return fakeClient((c: Call): Reply => {
-    if (c.table === 'seo_test_runs' && c.op === 'insert') return claimError ? { error: claimError } : { data: { id: 'run-1', ran_at: '2026-09-28T21:20:00Z' } }
-    if (c.table === 'seo_test_runs' && c.op === 'update') return { data: finishRow ? { id: 'run-1' } : null }
+    if (c.op === 'rpc' && c.table === 'seo_test_claim') return { data: [{ run_id: claim.outcome === 'claimed' ? 'run-1' : null, ran_at: '2026-09-28T21:20:00Z', retry_in_s: null, ...claim }] }
+    if (c.op === 'rpc' && c.table === 'seo_test_finish') return finishError ? { error: { code: '23514', message: 'seo_test_runs_results_size' } } : { data: finishRow }
     if (c.op === 'rpc' && c.table === 'publish_moments') return { data: moments.map((m) => ({ published_at: m, entities: 1 })) }
     return { data: null }
   })
 }
 
-const finishCall = (f: ReturnType<typeof world>) => f.calls.find((c) => c.table === 'seo_test_runs' && c.op === 'update' && (c.payload as { status?: string }).status === 'done')
-const stored = (f: ReturnType<typeof world>) => (finishCall(f)?.payload as { results: SeoTestResult[]; site_fresh: boolean | null; site_url: string | null; note: string | null; published_at: string | null })
+const WHO = (f: ReturnType<typeof world>, over: Partial<RunWho> = {}): RunWho => ({ writer: f.client, userId: 'user-1', ...over })
+const finishArgs = (f: ReturnType<typeof world>, status: 'done' | 'failed') =>
+  f.calls.find((c) => c.op === 'rpc' && c.table === 'seo_test_finish' && (c.args as { p_status?: string }).p_status === status)
+const finishCall = (f: ReturnType<typeof world>) => finishArgs(f, 'done')
+type Stored = { results: SeoTestResult[]; site_fresh: boolean | null; site_url: string | null; note: string | null; published_at: string | null; reach: unknown }
+const stored = (f: ReturnType<typeof world>): Stored => {
+  const a = finishCall(f)?.args as { p_results: SeoTestResult[]; p_site_fresh: boolean | null; p_site_url: string | null; p_note: string | null; p_published_at: string | null; p_reach: unknown }
+  return { results: a.p_results, site_fresh: a.p_site_fresh, site_url: a.p_site_url, note: a.p_note, published_at: a.p_published_at, reach: a.p_reach }
+}
 
 afterEach(() => vi.useRealTimers())
 
@@ -81,7 +90,7 @@ describe('order and completeness', () => {
   it('CRITICAL: results come out in SEO_TEST_IDS order, one per id, whatever order the engine lists them', async () => {
     const reversed = Object.fromEntries([...SEO_TEST_IDS].reverse().map((id) => [id, () => pass(id)]))
     const f = world()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: engine({ tests: reversed }), readKnown: async () => known() })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests: reversed }), readKnown: async () => known() })
     expect(out.ok).toBe(true)
     expect(stored(f).results.map((r) => r.id)).toEqual([...SEO_TEST_IDS])
   })
@@ -102,7 +111,7 @@ describe('one broken test never sinks the run', () => {
       throw new Error('boom')
     }
     const f = world()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: engine({ tests }), readKnown: async () => known() })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests }), readKnown: async () => known() })
     expect(out.ok).toBe(true)
     const results = stored(f).results
     const title = results.find((r) => r.id === 'title')!
@@ -127,7 +136,7 @@ describe('the time budget', () => {
     const f = world()
     const hang = engine({ gatherSiteEvidence: () => new Promise<SitePages>(() => {}) })
     const t0 = Date.now()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: hang, readKnown: async () => known(), budgetMs: 40 })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: hang, readKnown: async () => known(), budgetMs: 40 })
     expect(Date.now() - t0).toBeLessThan(2_000)
     expect(out.ok).toBe(true)
     const results = stored(f).results
@@ -142,7 +151,7 @@ describe('the time budget', () => {
     tests.share = (e) => (e.shareImage ? pass('share') : { id: 'share', status: 'fail', value: 'None', sentence: 'no picture.', evidence: [] })
     const f = world()
     const slow = engine({ tests, fetchShareImage: () => new Promise(() => {}) })
-    const out = await runSeoTests(f.client, A, 'manual', { engine: slow, readKnown: async () => known(), budgetMs: 40 })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: slow, readKnown: async () => known(), budgetMs: 40 })
     expect(out.ok).toBe(true)
     const results = stored(f).results
     expect(results.find((r) => r.id === 'share')?.status).toBe('unknown')
@@ -154,7 +163,7 @@ describe('the time budget', () => {
     const tests = allPass()
     tests.mb = (e) => ((seen = e.musicbrainz), pass('mb'))
     const f = world()
-    await runSeoTests(f.client, A, 'manual', { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('503') } }), readKnown: async () => known() })
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('503') } }), readKnown: async () => known() })
     expect(seen).toMatchObject({ looked: false })
     expect(stored(f).results.find((r) => r.id === 'mb')?.status).toBe('unknown')
   })
@@ -162,10 +171,10 @@ describe('the time budget', () => {
 
 describe('the database decides whether a run may start', () => {
   it('CRITICAL: a cool-down refusal fetches NOTHING and says when to try again', async () => {
-    const f = world({ claimError: { code: '23514', message: 'seo_test_cooldown: try again in 42 s' } })
+    const f = world({ claim: { outcome: 'cooldown', retry_in_s: 42 } })
     const e = engine()
     const read = vi.fn(async () => known())
-    const out = await runSeoTests(f.client, A, 'manual', { engine: e, readKnown: read })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: read })
     expect(out).toMatchObject({ ok: false, reason: 'cooldown', retryInS: 42 })
     expect(e.calls).toEqual([])
     expect(read).not.toHaveBeenCalled()
@@ -173,17 +182,20 @@ describe('the database decides whether a run may start', () => {
   })
 
   it('a busy refusal (a run already going) fetches nothing either', async () => {
-    const f = world({ claimError: { code: '23514', message: 'seo_test_busy: a test is already running for this artist' } })
+    const f = world({ claim: { outcome: 'busy', retry_in_s: 10 } })
     const e = engine()
-    expect(await runSeoTests(f.client, A, 'manual', { engine: e, readKnown: async () => known() })).toMatchObject({ ok: false, reason: 'busy' })
+    expect(await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known() })).toMatchObject({ ok: false, reason: 'busy' })
     expect(e.calls).toEqual([])
   })
 
-  it('the claim is an insert of the artist and the trigger only: the database stamps the time', async () => {
-    const f = world()
-    await runSeoTests(f.client, A, 'publish', { engine: engine(), readKnown: async () => known() })
-    const claim = f.calls.find((c) => c.table === 'seo_test_runs' && c.op === 'insert')!
-    expect(claim.payload).toEqual({ artist_id: A, trigger: 'publish' })
+  it('CRITICAL: every write goes through the WRITER (service role); the manager\'s session only reads', async () => {
+    const reader = world()
+    const writer = world()
+    await runSeoTests(reader.client, A, 'publish', { writer: writer.client, userId: 'user-1', publishedAt: PUBLISHED_AT }, { engine: engine(), readKnown: async () => known() })
+    const writes = (f: ReturnType<typeof world>) => f.calls.filter((c) => (c.op === 'rpc' && c.table.startsWith('seo_test_')) || (c.table === 'seo_test_runs' && c.op !== 'select'))
+    expect(writes(reader)).toEqual([])
+    expect(writes(writer).map((c) => c.table)).toEqual(['seo_test_claim', 'seo_test_finish'])
+    expect(writes(writer)[0].args).toEqual({ p_artist_id: A, p_trigger: 'publish', p_user_id: 'user-1', p_published_at: PUBLISHED_AT })
   })
 })
 
@@ -191,7 +203,7 @@ describe('no site connected', () => {
   it('CRITICAL: 24 × unknown "no site", stored, and nothing fetched', async () => {
     const f = world()
     const e = engine()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: e, readKnown: async () => known({ siteUrl: null }) })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known({ siteUrl: null }) })
     expect(out.ok).toBe(true)
     const s = stored(f)
     expect(s.results).toHaveLength(SEO_TEST_IDS.length)
@@ -204,7 +216,7 @@ describe('no site connected', () => {
 describe('the stale-site verdict is stored with the run', () => {
   it('fresh when the sitemap names the latest publish', async () => {
     const f = world()
-    await runSeoTests(f.client, A, 'manual', { engine: engine(), readKnown: async () => known() })
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => known() })
     expect(stored(f).site_fresh).toBe(true)
     expect(stored(f).published_at).toBe(PUBLISHED_AT)
   })
@@ -213,7 +225,7 @@ describe('the stale-site verdict is stored with the run', () => {
     const older = '2026-09-20T10:00:00.000001+00:00'
     const f = world({ moments: [PUBLISHED_AT, older] })
     const e = engine({ gatherSiteEvidence: async () => pages({ sitemap: { status: 200, urls: [`${ORIGIN}/`], lastmods: ['2026-09-20T10:00:00.000Z'] } }) })
-    await runSeoTests(f.client, A, 'manual', { engine: e, readKnown: async () => known() })
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known() })
     expect(stored(f).site_fresh).toBe(false)
     expect(stored(f).note).toMatch(/older publish/)
   })
@@ -221,28 +233,58 @@ describe('the stale-site verdict is stored with the run', () => {
   it('couldn\'t tell (no timed lastmod) is null, never true; the publish hook\'s own look fills in', async () => {
     const f = world()
     const e = engine({ gatherSiteEvidence: async () => pages({ sitemap: null }) })
-    await runSeoTests(f.client, A, 'manual', { engine: e, readKnown: async () => known() })
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known() })
     expect(stored(f).site_fresh).toBeNull()
     const g = world()
-    await runSeoTests(g.client, A, 'publish', { engine: e, readKnown: async () => known(), freshness: { fresh: true } })
+    await runSeoTests(g.client, A, 'publish', WHO(g), { engine: e, readKnown: async () => known(), freshness: { fresh: true } })
     expect(stored(g).site_fresh).toBe(true)
+  })
+})
+
+describe('the run-level `reach`: did the site answer at all?', () => {
+  it('CRITICAL: the gather\'s own `reach` is stored with the run', async () => {
+    const f = world()
+    const e = engine({ gatherSiteEvidence: async () => ({ ...pages(), reach: { state: 'server-error', status: 503 } }) })
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known() })
+    expect(stored(f).reach).toEqual({ state: 'server-error', status: 503 })
+  })
+
+  it('CRITICAL: no site connected has NO reach (null), not "no answer"', async () => {
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => known({ siteUrl: null }) })
+    expect(stored(f).reach).toBeNull()
+  })
+
+  it('a site that never answered inside the budget is "no-answer"; a gatherer that BROKE says nothing about the site (null)', async () => {
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: () => new Promise<SitePages>(() => {}) }), readKnown: async () => known(), budgetMs: 40 })
+    expect(stored(f).reach).toMatchObject({ state: 'no-answer', status: null })
+    const g = world()
+    await runSeoTests(g.client, A, 'manual', WHO(g), { engine: engine({ gatherSiteEvidence: async () => { throw new Error('bug') } }), readKnown: async () => known() })
+    expect(stored(g).reach).toBeNull()
   })
 })
 
 describe('failures after the claim', () => {
   it('CRITICAL: reading what Tapir knows failing marks the run FAILED and returns a plain error', async () => {
     const f = world()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: engine(), readKnown: async () => { throw new Error('get_public_site: boom') } })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => { throw new Error('get_public_site: boom') } })
     expect(out).toMatchObject({ ok: false, reason: 'error' })
     if (!out.ok) expect(out.error).not.toMatch(/boom/)
-    const failed = f.calls.find((c) => c.table === 'seo_test_runs' && c.op === 'update' && (c.payload as { status?: string }).status === 'failed')
-    expect(failed).toBeDefined()
+    expect(finishArgs(f, 'failed')).toBeDefined()
   })
 
-  it('a finish that matched no running row is NOT reported as saved (row-filtered writes lie)', async () => {
+  it('a finish that matched no running row is NOT reported as saved', async () => {
     const f = world({ finishRow: false })
-    const out = await runSeoTests(f.client, A, 'manual', { engine: engine(), readKnown: async () => known() })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => known() })
     expect(out).toMatchObject({ ok: false, reason: 'error' })
+  })
+
+  it('CRITICAL: a finish the database REFUSES (e.g. the size check) marks the run failed, so the artist is not "busy" for 5 minutes', async () => {
+    const f = world({ finishError: true })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => known() })
+    expect(out).toMatchObject({ ok: false, reason: 'error' })
+    expect(finishArgs(f, 'failed')).toBeDefined()
   })
 })
 
@@ -260,7 +302,7 @@ describe('`na` (does not apply) is a verdict the run keeps', () => {
     const tests = allPass()
     tests.mb = () => na('mb')
     const f = world()
-    const out = await runSeoTests(f.client, A, 'manual', { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('down') } }), readKnown: async () => known() })
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('down') } }), readKnown: async () => known() })
     expect(out.ok).toBe(true)
     expect(stored(f).results.find((r) => r.id === 'mb')?.status).toBe('na')
   })
