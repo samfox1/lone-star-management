@@ -42,7 +42,7 @@ import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } fr
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-const MIGRATION_PUSHED = false
+const MIGRATION_PUSHED = true
 
 const results = (fails: number): SeoTestResult[] =>
   SEO_TEST_IDS.map((id, i) => ({ id, status: i < fails ? 'fail' : 'pass', value: 'v', sentence: 's.', evidence: [{ label: 'seen', value: id }] }))
