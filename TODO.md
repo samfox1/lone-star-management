@@ -1,5 +1,13 @@
 # TODO
 
+## "AI visibility" button — STASHED, after the SEO/GEO page redesign (added 2026-09-28)
+
+Sam: "stash that for after (the ai visibility button)." The idea (AI_VISIBILITY_AUDIT.md +
+memory ai-discovery-vision): one page/button that plants an artist's identity across the web.
+Automatic (fact card, titles, IndexNow, bot checks, AI-referral numbers), one-click
+(MusicBrainz seeded create, Search Console / Bing connect, claim checklists), and a list of
+what the artist must earn (press, Wikidata). Write the plan when Sam picks it back up.
+
 ## Developer accounts for "Connect with…" logins — Sam, AFTER the SEO/GEO batch (added 2026-09-28)
 
 Sam: "lets address this seo/geo thing and then I will create the developer accounts for
@@ -10,6 +18,34 @@ app on that company's site; the client ID/secret go in Vercel.
 - [ ] **YouTube:** a Google Cloud project with an OAuth client (YouTube read-only scope),
       in "testing" mode first (up to 100 test users, no Google review).
 - [ ] **Eventbrite:** an Eventbrite API app (OAuth); could pull the artist's show dates.
+
+The dashboard runs locally (http://localhost:3000; no Vercel project yet), so the keys go in
+`.env.local`. When it gets a real address, add that address's callback beside the localhost one.
+The login buttons themselves are NOT built yet: Sam makes the apps, then Claude builds them.
+
+**YouTube (Google), ~10 min, free.** Use the Google Cloud project that already holds
+`YOUTUBE_API_KEY` (console.cloud.google.com, pick it top-left).
+1. Google Auth Platform → **Branding**: app name `Tapir`, a Tapir support email, your
+   developer email. Save.
+2. **Audience**: External, keep **Testing**. Test users → add the Google account(s) that own
+   the artists' YouTube channels (Skeen's). Up to 100.
+3. **Data Access** → Add or remove scopes → tick `.../auth/youtube.readonly`. Save.
+4. **Clients** → Create client → Web application, name `Tapir dashboard` → Authorized
+   redirect URI `http://localhost:3000/api/youtube/callback` → Create.
+5. Copy the Client ID and Client secret into `.env.local`:
+   `GOOGLE_OAUTH_CLIENT_ID=…` and `GOOGLE_OAUTH_CLIENT_SECRET=…`
+6. Optional, same project, unblocks the Drive import: APIs & Services → Library → enable
+   **Google Drive API** → Credentials → Create credentials → API key → `GOOGLE_API_KEY=…`.
+
+**Eventbrite, ~5 min, free.** Signed in to Eventbrite with a Tapir email:
+1. Account settings → Developer links → **API keys** → Create API key.
+2. Name `Tapir`, application URL (tapirwebsites.com), a one-line description, OAuth
+   redirect URI `http://localhost:3000/api/eventbrite/callback`. Submit.
+3. Copy the API key and Client secret into `.env.local`:
+   `EVENTBRITE_CLIENT_ID=…` (the "API key") and `EVENTBRITE_CLIENT_SECRET=…`.
+   Never paste the Private token anywhere.
+
+Then tell Claude "keys are in" (never paste the values into chat).
 - [ ] Optional, only saves typing a handle: Twitch, Patreon, Vimeo, Mixcloud, Bluesky.
       Sam hasn't picked 2 vs 7 yet (recommended: just the two above).
 - One app per service, owned by Tapir, serves every artist; artists only sign in with their
