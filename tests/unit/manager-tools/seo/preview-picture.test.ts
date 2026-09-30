@@ -17,7 +17,7 @@
  *           • every offered background, and a picked colour, fills as an opaque hex; anything
  *             else (unknown, alpha, transparent) falls back to WHITE, never to transparent
  *           • light and dark are both offered
- * Not here: the picture editor on the page (tests/components/manager-tools/seo/listing-tab.test.tsx).
+ * Not here: the picture editor on the page (tests/components/manager-tools/seo/details-tab.test.tsx).
  * Fixtures: none: pure functions over made-up image sizes and colour strings.
  */
 import { describe, expect, it } from 'vitest'

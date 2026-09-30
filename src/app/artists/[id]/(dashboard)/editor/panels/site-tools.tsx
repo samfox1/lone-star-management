@@ -169,7 +169,7 @@ export function SiteTools({
             input in a wider panel would move the clipping, not end it. */}
         <SeoEditRow store="seo" fieldKey="seo_description" label="Description" value={seo.seo_description ?? ''} multiline onEdit={onEditText} />
         <ControlRow label="Social card">
-          <a href={`/artists/${artistId}/tools/seo`} className={`${EYEBROW} text-ink underline underline-offset-2`}>
+          <a href={`/artists/${artistId}/tools/seo#share`} className={`${EYEBROW} text-ink underline underline-offset-2`}>
             Open
           </a>
         </ControlRow>

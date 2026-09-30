@@ -16,12 +16,17 @@
  *           • titles match whole words (not "Summers", "Up" in "upcoming", "Number 12"), any
  *             case, spacing or apostrophe; a menu word or a title with no letters is "can't tell"
  *           • no releases anywhere fails, or is `na` for a visual artist
+ *           • "What we saw" names the releases the card lists: newest first, undated last, a
+ *             name listed twice once, "none" for none, 8 at most then "and N more", long
+ *             titles shortened so the whole row survives being stored
  * Not here: nothing published, a home page cut at the read cap, or unreachable (../honesty.test.ts).
  * Fixtures: _page-fixture.ts (a healthy site whose card and music section list the same 3
- *           releases Music has); `one` builds a page with one release. Nothing is fetched.
+ *           releases Music has, newest first); `one` builds a page with one release. Nothing
+ *           is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
+import { capResult } from '@/lib/seo-tests/store'
 import { ORIGIN, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, page, rowOf, type Graph } from '@tests/unit/seo-tests/_page-fixture'
 
 const r = FACTS_TESTS.releases
@@ -34,6 +39,11 @@ const one = (title: string, body: string, releasedOn: string | null = '2026-02-1
   evidence({ home: homeHtml({ ld: [graphBlock([artistNode(), album(title)])], body }), about: null, known: known({}, { releases: [{ title, releasedOn }] }) })
 /** Music's 3 releases plus "Home Again". */
 const plusHomeAgain = () => known({}, { releases: [...known().published!.releases, { title: 'Home Again', releasedOn: '2025-04-18' }] })
+/** The healthy card's release nodes, as the fixture lists them (newest first). */
+const albumNodes = () => healthyGraph().filter((n) => n['@type'] === 'MusicAlbum')
+/** A card of `count` dated releases, OLDEST first, named from the fixture's first release. */
+const manyAlbums = (count: number, title = (i: number) => `${albumNodes()[0].name} ${i + 1}`) =>
+  Array.from({ length: count }, (_, i) => album(title(i), { datePublished: `20${10 + i}-06-01` }))
 
 describe('every release listed and shown passes', () => {
   // The one exact-wording check: the pass sentence counts the releases and names the newest.
@@ -179,5 +189,48 @@ describe('no releases anywhere', () => {
     const out = r(evidence({ known: known({}, { releases: [], artistType: 'Person' }) }))
     expect(out.status).toBe('fail')
     expect(rowOf(out, 'not in Music')).toMatch(/You Were There/)
+  })
+})
+
+describe('"What we saw" names the releases the card lists', () => {
+  const names = () => albumNodes().map((a) => String(a.name))
+
+  // Sam, 2026-09-29 ("list what it sees"): each release the card lists is named, newest first whatever the card's order, one with no date last.
+  it('names each release on the card, newest first, undated last', () => {
+    const days = albumNodes().map((a) => String(a.datePublished))
+    expect(days).toEqual([...days].sort().reverse()) // premise: the fixture lists them newest first
+    const shuffled = [...healthyGraph().filter((n) => n['@type'] !== 'MusicAlbum'), album('Home Again'), ...albumNodes().reverse()]
+    const out = r(withGraph(shuffled, { known: plusHomeAgain() }))
+    expect(rowOf(out, 'on your site')).toBe([...names(), 'Home Again'].join(' · '))
+    expectPlainWords(out)
+  })
+
+  // A release the card lists twice (in another case, with spaces) is named once; "not in Music" still names the extra one.
+  it('names a release listed twice once', () => {
+    const last = albumNodes()[2]
+    const out = r(withGraph([...healthyGraph(), album(`  ${String(last.name).toUpperCase()} `, { datePublished: last.datePublished })]))
+    expect(rowOf(out, 'on your site')).toBe(names().join(' · '))
+    expect(rowOf(out, 'not in Music')?.toLowerCase()).toBe(String(last.name).toLowerCase())
+  })
+
+  // A card with no releases says "none", not "0 releases".
+  it('says none when the card lists no releases', () => {
+    const out = r(withGraph(healthyGraph().filter((n) => n['@type'] !== 'MusicAlbum')))
+    expect(rowOf(out, 'on your site')).toBe('none')
+  })
+
+  // Past 8 names the rest fold into "and N more", and it is the OLDEST that fold, so the latest stay in view.
+  it('names 8 at most, folding the oldest into "and N more"', () => {
+    const card = manyAlbums(10)
+    const newestFirst = card.map((a) => String(a.name)).reverse()
+    const out = r(withGraph([artistNode(), ...card]))
+    expect(rowOf(out, 'on your site')).toBe(`${newestFirst.slice(0, 8).join(' · ')} · and 2 more`)
+  })
+
+  // Long titles are shortened, so 8 names and "and N more" still fit once the run is stored (store.ts cuts each row at 600 bytes).
+  it('shortens long titles so the whole row survives being stored', () => {
+    const long = (i: number) => `${String(albumNodes()[1].name)} ${i + 1} `.repeat(8)
+    const stored = capResult(r(withGraph([artistNode(), ...manyAlbums(10, long)])))
+    expect(rowOf(stored, 'on your site')).toMatch(/ · and 2 more$/)
   })
 })

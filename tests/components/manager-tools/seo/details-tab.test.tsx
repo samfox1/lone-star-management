@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 /**
- * The SEO / GEO Listing tab: the page title and description save through the SEO gate (never
+ * The SEO / GEO Details tab: the page title and description save through the SEO gate (never
  * over their caps), the preview follows, and the share and photo rows open their editors.
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/listing/listing-tab.tsx,
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/details/details-tab.tsx,
  *           og-image-picker.tsx
- * Feature:  SEO / GEO page · Listing tab (round 2, prototypes/seo_variants_20260928_r2.html);
- *           feeds the `title`, `desc`, `share`, `preview` and `alt` tests
+ * Feature:  SEO / GEO page · Details tab, the tool's own route (the Listing tab until 2026-09-29;
+ *           round 2, prototypes/seo_variants_20260928_r2.html); feeds the `title`, `desc`,
+ *           `share`, `preview` and `alt` tests
  * Tier:     STRICT (AGENTS.md "Test depth") for what gets saved (the gate, the key, never a value
  *           over its cap) and for the ids a test's pencil lands on (`share`, `alt`); LIGHT for the rest.
  * Covers:   • the title saves to seo_title; blank shows the composed default; the preview follows
@@ -24,7 +25,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MAX_DESCRIPTION, MAX_TITLE } from '@samfox1/site-bridge/seo'
-import { ListingTab, DESCRIPTION_CAP, type AltPhoto } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/listing/listing-tab'
+import { DetailsTab, DESCRIPTION_CAP, type AltPhoto } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/details/details-tab'
 import { SEO_EDIT_TARGETS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
 import { saveSeoFieldAction, setMediaAltAction } from '@/app/artists/[id]/(dashboard)/actions'
 
@@ -45,9 +46,9 @@ afterEach(() => {
 })
 
 const PHOTOS: AltPhoto[] = [{ id: 'm1', url: 'https://cdn/x/a.jpg', alt: '', slug: 'a', caption: 'Tour w: Jigitz' }]
-const show = (over: Partial<Parameters<typeof ListingTab>[0]> = {}) =>
+const show = (over: Partial<Parameters<typeof DetailsTab>[0]> = {}) =>
   render(
-    <ListingTab
+    <DetailsTab
       artistId="a1"
       artistName="Skeen"
       defaultTitle="Skeen · Chicago house musician"
@@ -111,7 +112,7 @@ describe('share and alt', () => {
   })
   // Arriving on #share opens the preview picture editor.
   it('landing on #share opens the preview picture editor', async () => {
-    window.history.replaceState(null, '', '/artists/a1/tools/seo/listing#share')
+    window.history.replaceState(null, '', `/artists/a1/${SEO_EDIT_TARGETS.share}`)
     show()
     expect(await screen.findByRole('dialog', { name: 'Preview picture' })).toBeTruthy()
   })

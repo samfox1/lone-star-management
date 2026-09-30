@@ -11,6 +11,8 @@
  *   na         "doesn't apply": left out of both sides of "19 of 24" (types.ts SeoTestStatus);
  *              shown only under All
  * So pass + need + couldn't = the score's M, and All = M + doesn't-apply.
+ * (Since 2026-09-29 the tab itself shows no filter, only All: `groupsFor(results, 'all')`. The
+ * filter rules stay here, tested, for whatever next lists the tests by status.)
  * Derived from `results`, never from the row's stored `passed` / `total`: the stored total counts
  * `na` results, and the page must not.
  */
@@ -49,7 +51,7 @@ export const EMPTY_FILTER: Record<Exclude<TestFilter, 'all'>, string> = {
   unknown: 'Every test could be checked',
 }
 
-/* ── the headline: ONE helper for the Test tab and the Overview ─────────────────────── */
+/* ── the headline: ONE helper for every place a run is summed up ────────────────────── */
 
 /** Tests that do not need the artist's site at all (MusicBrainz is asked about the artist). */
 export const SITE_FREE_TESTS: readonly SeoTestId[] = ['mb']
@@ -93,7 +95,7 @@ const NOT_ANSWERED: Record<Exclude<SeoRunReach['state'], 'answered'>, { title: s
 }
 
 /**
- * THE HEADLINE for a run, the same words on the Test tab and the Overview. The score is always
+ * THE HEADLINE for a run, the same words wherever a run is summed up. The score is always
  * "N of M tests pass" (M leaves `na` out); never "All M pass", which read true while tests
  * couldn't be checked (review P2). `detail` is what sits beside it, in order: "5 need you",
  * "1 couldn't be checked". `headlineLine` joins them for one-line places.
@@ -278,6 +280,36 @@ export function safeHttps(href: unknown): string | null {
   }
 }
 
+/* ── the open row's card ────────────────────────────────────────────────────────────── */
+
+/** One line of WHAT WE SAW. `repeat`: the line above has the same label, so the card shows the
+ *  label once and lines this value up under it (a list of pages reads as one list, not the
+ *  same word five times). */
+export type EvidenceRow = { label: string; value: string; repeat: boolean }
+
+/**
+ * A result's evidence as the card shows it. Stored evidence is what a site sent, so anything
+ * can be in it: a row that isn't an object, a label that isn't text. Each becomes a plain
+ * string here (never html; the card renders it as React text).
+ */
+export function evidenceRows(evidence: unknown): EvidenceRow[] {
+  if (!Array.isArray(evidence)) return []
+  const out: EvidenceRow[] = []
+  for (const e of evidence as unknown[]) {
+    const row = e && typeof e === 'object' ? (e as { label?: unknown; value?: unknown }) : {}
+    const label = String(row.label ?? '')
+    const value = String(row.value ?? '')
+    out.push({ label, value, repeat: out.length > 0 && out[out.length - 1].label === label })
+  }
+  return out
+}
+
+/** The running test's clock: "0:07", "1:32". Whole seconds; never below 0:00. */
+export function clockText(seconds: number): string {
+  const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 /* ── times, in the manager's own time zone ──────────────────────────────────────────── */
 
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
@@ -316,13 +348,13 @@ export const STATUS_WORD: Record<SeoTestStatus, string> = {
   na: 'didn’t apply',
 }
 
-/* ── checking it yourself: other tools, behind "Show the details" ───────────────────── */
+/* ── checking it yourself: other tools, under "What we saw" ─────────────────────────── */
 
 /**
  * The outside checkers the old top row offered ("Test with": Rich Results Test, Schema
  * validator, PageSpeed, Search Console, Bing Webmaster), now beside the test each one checks,
- * inside "Show the details" where a product name is allowed (review N4: five jargon names sat in
- * the header). `site` is the address the run tested.
+ * in the open row's card under "What we saw", where a product name is allowed (review N4: five
+ * jargon names sat in the header). `site` is the address the run tested.
  */
 export function checkItYourself(id: SeoTestId, site: string): { label: string; href: string }[] {
   const enc = encodeURIComponent(`${site.replace(/\/+$/, '')}/`)

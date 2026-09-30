@@ -15,8 +15,8 @@
  *           • the timeline is publishes + runs only, inside the window, newest first
  *           • visits use the Analytics page's buckets (search, including unbucketed search hosts; AI)
  *           • any read that fails is null, never 0, and a half timeline is never returned
- * Not here: how the Overview page words and draws this (tests/unit/manager-tools/seo/overview-model.test.ts,
- *           tests/components/manager-tools/seo/overview-tab.test.tsx).
+ * Not here: a page that draws this: the Overview tab that did was removed 2026-09-29; the module is
+ *           kept for the stashed "AI visibility" page (TODO.md).
  * Fixtures: hand-made run summaries; a PostgREST fake (brand/_fake-client) for the reads, each
  *           of which a test can make fail.
  */

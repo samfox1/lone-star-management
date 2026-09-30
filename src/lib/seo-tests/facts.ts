@@ -414,8 +414,17 @@ const releases = make('releases', (e) => {
     else if (shown === 'unsure') unsure.push(a.name)
   }
   const blind = blindPaths(e)
+  // The releases the card lists, by name: newest first, undated last (each kept in the card's
+  // order), so past 8 it is the OLDEST that fold into "and N more", never the latest this test
+  // is about. A name listed twice shows once (the extra one is named under "not in Music").
+  // Clipped like `named` below, so 8 names still fit in one stored row (store.ts caps it).
+  const folded = new Set<string>()
+  const onSite = [...live]
+    .sort((x, y) => (y.day ?? '').localeCompare(x.day ?? ''))
+    .filter((a) => !folded.has(matchFold(a.name)) && folded.add(matchFold(a.name)))
+    .map((a) => clip(a.name, 40))
   const evidence = [
-    { label: 'on your site', value: `${live.length} ${plural(live.length, 'release')}` },
+    { label: 'on your site', value: onSite.length ? listOf(onSite, 8) : 'none' },
     ...(newestLive ? [{ label: 'newest on your site', value: `${newestLive.name} · ${prettyDay(newestLive.day!)}` }] : []),
     { label: 'in Tapir', value: `${n} published ${plural(n, 'release')}` },
     ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing) }] : []),

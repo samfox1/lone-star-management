@@ -4,7 +4,7 @@
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model.ts,
  *           test/load.ts (loadTestTab, isMissingTable)
- * Feature:  SEO / GEO page · Test tab (and the Overview, which shares its headline), all 24 SEO
+ * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), all 24 SEO
  *           tests in their four groups
  * Tier:     STRICT (AGENTS.md "Test depth"): the counts ("19 of 24", "5 need you"), the headline
  *           and the hrefs a stored result can reach are what the manager is told is true.
@@ -20,6 +20,8 @@
  *             pencil lands on a real tab or route
  *           • reading the tab: the table missing is "off", a failed read is "error", an empty
  *             table is "never tested"
+ *           • the open row's card: evidence as plain strings, a repeated label said once; the
+ *             running clock
  * Not here: drawing the tab (tests/components/manager-tools/seo/test-tab.test.tsx); the server
  *           action around the read (tests/unit/seo-tests/runs/actions.test.ts).
  * Fixtures: results from the REAL engine (tests/components/manager-tools/seo/seo-run-fixture.ts);
@@ -35,6 +37,8 @@ import {
   EMPTY_FILTER,
   checkItYourself,
   classifyRunError,
+  clockText,
+  evidenceRows,
   cooldownEnd,
   countResults,
   dotText,
@@ -129,7 +133,7 @@ describe('groups and the filter', () => {
   })
 })
 
-describe('the headline: one helper for the Test tab and the Overview', () => {
+describe('the headline: one helper for every place a run is summed up', () => {
   // Site didn't answer (timed out, or error 500): one sentence, never a score, no rows.
   it('CRITICAL: a site that didn\u2019t answer (timed out, or error 500) is ONE sentence, never a score', () => {
     for (const s of ['siteDown', 'site500'] as const) {
@@ -318,5 +322,40 @@ describe('reading the tab: "not switched on" vs "couldn\'t read" vs "never teste
     const ok = await loadTestTab(fake({ data: null, error: null }), 'a1')
     expect(ok.state).toBe('ready')
     expect(ok.state === 'ready' && ok.latest).toBeNull()
+  })
+})
+
+describe('the open row’s card', () => {
+  // WHAT WE SAW: consecutive rows with the same label show it once (repeat), a label that comes back later is said again.
+  it('a repeated label is said once; the same label later, after another, is said again', () => {
+    const rows = evidenceRows([
+      { label: 'opened', value: '/' },
+      { label: 'opened', value: '/about' },
+      { label: 'robots.txt', value: 'allows all' },
+      { label: 'opened', value: '/music' },
+    ])
+    expect(rows.map((r) => r.repeat)).toEqual([false, true, false, false])
+    expect(rows.map((r) => r.value)).toEqual(['/', '/about', 'allows all', '/music'])
+  })
+  // Stored evidence is untrusted: anything that isn't a list reads as none, and each odd row becomes plain strings (never dropped silently mid-list, never an object).
+  it('odd stored evidence reads as plain strings; not a list reads as none', () => {
+    expect(evidenceRows(null)).toEqual([])
+    expect(evidenceRows('<img src=x onerror=alert(1)>')).toEqual([])
+    expect(evidenceRows({ label: 'a', value: 'b' })).toEqual([])
+    const rows = evidenceRows([null, { label: 3, value: { a: 1 } }, { label: '<b>x</b>', value: '</script>' }])
+    expect(rows).toEqual([
+      { label: '', value: '', repeat: false },
+      { label: '3', value: '[object Object]', repeat: false },
+      { label: '<b>x</b>', value: '</script>', repeat: false },
+    ])
+    for (const r of rows) expect([typeof r.label, typeof r.value]).toEqual(['string', 'string'])
+  })
+  // The running clock reads minutes:seconds from whole seconds, and never goes below 0:00 (a browser clock behind the server's).
+  it('the running clock: m:ss, whole seconds, never below 0:00', () => {
+    expect(clockText(0)).toBe('0:00')
+    expect(clockText(7.9)).toBe('0:07')
+    expect(clockText(92)).toBe('1:32')
+    expect(clockText(-3)).toBe('0:00')
+    expect(clockText(Number.NaN)).toBe('0:00')
   })
 })

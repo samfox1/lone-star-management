@@ -6,7 +6,8 @@ import { pendingMessage } from './pending'
 import { SeoRiser } from './seo-riser'
 
 /**
- * SEO / GEO (Sam, 2026-09-28, the round 2 design): five tabs on the thin rail's second panel
+ * SEO / GEO (Sam, 2026-09-28, the round 2 design; tabs since 2026-09-29: Details · Facts · Answers ·
+ * AI test): four tabs on the thin rail's second panel
  * (sections.ts), the page up to ~1180px like Brand, and ONE rising Publish bar shared by every
  * tab. A layout does not re-render on a tab switch, so the bar keeps its place; a save's
  * router.refresh re-renders it.

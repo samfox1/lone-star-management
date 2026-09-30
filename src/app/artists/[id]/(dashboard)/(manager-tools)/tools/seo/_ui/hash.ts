@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 
 /**
  * A ROW'S EDITOR OPENS WHEN THE PAGE IS ARRIVED AT BY ITS ID. A test's pencil (sections.ts
- * SEO_EDIT_TARGETS) links to `listing#share`, `listing#alt`, `facts#bio`, and its label says
+ * SEO_EDIT_TARGETS) links to Details `#share`, Details `#alt`, `facts#bio`, and its label says
  * what happens next ("Change the share picture", "Open the bio editor"): so landing there
  * opens that editor, not just the row.
  *

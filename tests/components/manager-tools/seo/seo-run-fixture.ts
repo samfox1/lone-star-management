@@ -3,7 +3,7 @@
  * page is tested against results the engine really gives.
  *
  * Code:     src/lib/seo-tests/engine.ts (SEO_ENGINE), run.ts (runAllTests), store.ts (capResults)
- * Feature:  SEO / GEO page · every tab that shows a run (Test, Overview)
+ * Feature:  SEO / GEO page · the AI test tab, which shows a run
  * Tier:     STRICT (AGENTS.md "Test depth"): the page's counts and states are asserted from these
  *           results, so a hand-written result the engine never gives would test nothing real
  *           (the UI review, 2026-09-29: the first fixture had a Bing FAIL the engine can't give,
@@ -12,7 +12,7 @@
  *           • engineResults(scenario): the 24 real results for a made-up site, capped as stored
  *           • fixtureResults(over, scenario): the same with some tests forced (only to a status
  *             the engine can really give that test)
- *           • fixtureRun / engineRun: a stored run around those results (a publish run, or a
+ *           • fixtureRun: a stored run around those results (a publish run, or a
  *             manual one); fixtureHistory: each test's last statuses, oldest first
  *           • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500,
  *             trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
@@ -126,26 +126,6 @@ export function fixtureResults(over: Partial<Record<SeoTestId, Partial<SeoTestRe
 }
 
 export const RAN_AT = '2026-09-28T21:14:00.000Z'
-
-/** A MANUAL run of one scenario (id `run-<scenario>`, no publish): the Overview's tests use this. */
-export function engineRun(s: Scenario, over: Partial<StoredSeoRun> = {}): StoredSeoRun {
-  const results = engineResults(s)
-  return {
-    id: `run-${s}`,
-    artistId: 'a1',
-    ranAt: RAN_AT,
-    trigger: 'manual',
-    siteUrl: ORIGIN,
-    results,
-    finishedAt: RAN_AT,
-    passed: results.filter((r) => r.status === 'pass').length,
-    total: results.filter((r) => r.status !== 'na').length,
-    siteFresh: true,
-    publishedAt: null,
-    note: null,
-    ...over,
-  }
-}
 
 /** A PUBLISH run (id `run-1`) around `results`, the needsWork scenario by default. */
 export function fixtureRun(over: Partial<StoredSeoRun> = {}, results?: SeoTestResult[]): StoredSeoRun {

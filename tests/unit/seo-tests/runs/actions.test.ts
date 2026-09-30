@@ -3,8 +3,8 @@
  * FIRST, then run the tests, apply a fix, or read the results.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions.ts
- *           (runSeoTestsAction, applySeoFixAction, readSeoTestsAction, readSeoOverviewAction)
- * Feature:  SEO / GEO page · Test tab and Overview actions; the `apple` test's fix (Facts are true)
+ *           (runSeoTestsAction, applySeoFixAction, readSeoTestsAction)
+ * Feature:  SEO / GEO page · AI test tab actions; the `apple` test's fix (Facts are true)
  * Tier:     STRICT (AGENTS.md "Test depth"): server actions (permissions), and the fix writes a link.
  * Covers:   • signed out, or not this artist's manager: refused before anything is read, run or written
  *           • "Test again" is a MANUAL run written by the service role in the manager's name
@@ -106,7 +106,6 @@ describe('every action checks who is asking FIRST', () => {
     ['runSeoTestsAction', (m: Awaited<ReturnType<typeof actions>>) => m.runSeoTestsAction(A)],
     ['applySeoFixAction', (m: Awaited<ReturnType<typeof actions>>) => m.applySeoFixAction(A, 'apple-storefront')],
     ['readSeoTestsAction', (m: Awaited<ReturnType<typeof actions>>) => m.readSeoTestsAction(A)],
-    ['readSeoOverviewAction', (m: Awaited<ReturnType<typeof actions>>) => m.readSeoOverviewAction(A)],
   ])('CRITICAL: %s refuses a signed-out caller and a stranger, touching nothing else', async (_name, call) => {
     const m = await actions()
     h.user = null

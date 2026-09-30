@@ -17,7 +17,6 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { readSeoOverview, type SeoOverview } from '@/lib/seo-tests/overview'
 import { loadEngine, runSeoTests } from '@/lib/seo-tests/run'
 import { latestRun, readTestTab, type SeoTestTab, type StoredSeoRun } from '@/lib/seo-tests/store'
 import { updateContentAction } from '../../../actions'
@@ -132,15 +131,4 @@ export async function readSeoTestsAction(
   const tab = await readTestTab(gate.supabase, artistId)
   if (tab.state === 'error') return { ok: false, state: 'error', error: 'Couldn’t read the test results.' }
   return { ok: true, ...tab }
-}
-
-/** The Overview tab. Parts that cannot be read come back null, never 0 (overview.ts). */
-export async function readSeoOverviewAction(artistId: string): Promise<{ ok: true; overview: SeoOverview } | Fail> {
-  const gate = await owned(artistId)
-  if (!gate.ok) return gate
-  try {
-    return { ok: true, overview: await readSeoOverview(gate.supabase, artistId) }
-  } catch {
-    return { ok: false, error: 'Couldn’t read the overview.' }
-  }
 }

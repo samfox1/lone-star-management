@@ -11,6 +11,9 @@
  *
  * THE RULE: a number that could not be read is `null`, never 0. `null` reads "couldn't read";
  * 0 would read "nobody came", which is a claim.
+ *
+ * UNUSED FOR NOW: the Overview tab that read this was removed on 2026-09-29; it is kept for the
+ * stashed "AI visibility" page (TODO.md).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'

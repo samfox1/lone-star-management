@@ -1,26 +1,39 @@
-import { createClient } from '@/lib/supabase/server'
-import { seoSiteOrigin } from '@/lib/seo-tests/known'
-import { requireArtist } from '../../../_data'
-import { loadTestTab } from './test/load'
-import { readSeoOverviewAction } from './test-actions'
-import { buildOverview } from './overview/model'
-import { SeoOverview } from './overview/overview'
+import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
+import { brandSwatches } from '@/lib/site-editor/style-apply'
+import { defaultTitleOf, loadAltPhotos, loadSeoBase, loadShareSources } from './load'
+import { DetailsTab } from './details/details-tab'
 
 /**
- * OVERVIEW, the SEO / GEO tool's first tab (/tools/seo): Sam's "Overview 3 · Timeline" from
- * prototypes/seo_variants_20260928_r2.html. What needs you now, then what really happened
- * (publishes, test runs and what changed between them), then visits over 30 days.
- *
- * Two reads, side by side, after the ownership gate: the Test tab's own (`loadTestTab`, the one
- * that tells "testing isn't switched on" from "couldn't read") for the headline and the to-do
- * list, and the overview reader for the timeline and the visits. A part that couldn't be read
- * is null and shows as "—" or a plain sentence, never as 0 (overview/model.ts). The site's
- * address NOW is passed too: the run's may be an old one.
+ * DETAILS, the SEO / GEO tool's first tab and its own route (/tools/seo, Sam 2026-09-29; it was
+ * the Listing tab at /tools/seo/listing, which now redirects here): how the artist shows up when
+ * found or shared (round 2 mock: Google · Share · Photos; the share image is called the "preview
+ * picture" since 2026-09-29). The ids `share` and `alt` are where a test's pencil lands
+ * (sections.ts SEO_EDIT_TARGETS) and where the old /logo and /alt routes redirect:
+ * details/details-tab.tsx keeps them on the rows that hold those settings, and landing on one
+ * opens its editor.
  */
-export default async function SeoOverviewPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SeoDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const artist = await requireArtist(id)
-  const [tab, res] = await Promise.all([loadTestTab(await createClient(), id), readSeoOverviewAction(id)])
-  const view = buildOverview({ tab, overview: res.ok ? res.overview : null, siteUrl: seoSiteOrigin(artist) })
-  return <SeoOverview artistId={id} view={view} />
+  const base = await loadSeoBase(id)
+  const [sources, photos, colors] = await Promise.all([
+    loadShareSources(base),
+    loadAltPhotos(base),
+    // The Brand colours, as the site editor reads them (its swatches): the preview picture's
+    // background choices. RLS-scoped; a failed read is no swatches, not a broken tab.
+    listBrandColors(base.supabase, id).catch(() => []),
+  ])
+  return (
+    <DetailsTab
+      artistId={id}
+      artistName={base.artist.name}
+      defaultTitle={defaultTitleOf(base)}
+      bio={base.bio}
+      siteUrl={base.siteUrl}
+      initial={{ seo_title: base.seo.seo_title ?? '', seo_description: base.seo.seo_description ?? '' }}
+      shareUrl={base.content.og_image ?? ''}
+      sources={sources}
+      photos={photos}
+      brandColors={brandSwatches(colors)}
+    />
+  )
 }

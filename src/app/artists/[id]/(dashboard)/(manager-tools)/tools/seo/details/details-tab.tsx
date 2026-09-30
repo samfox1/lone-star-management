@@ -26,15 +26,16 @@ export type AltPhoto = { id: string; url: string; alt: string; slug: string; cap
 export const DESCRIPTION_CAP = MAX_DESCRIPTION
 
 /**
- * LISTING (round 2, prototypes/seo_variants_20260928_r2.html): how the artist shows up when
- * found or shared. Google (the page title, the description, the result as Google draws it),
- * Share (the picture a shared link shows, `#share`) and Photos (the alt text, `#alt`). A test's
- * pencil lands on those ids and opens their editor.
+ * DETAILS, the tool's first tab (round 2, prototypes/seo_variants_20260928_r2.html; the Listing
+ * tab until 2026-09-29): how the artist shows up when found or shared. Google (the page title,
+ * the description, the result as Google draws it), Share (the picture a shared link shows,
+ * `#share`) and Photos (the alt text, `#alt`). A test's pencil lands on those ids and opens
+ * their editor.
  *
  * Rows AUTOSAVE to the draft, silently (the save model); a refusal shows under its row in the
  * gate's own words and is never sent. The layout's Publish bar ships them.
  */
-export function ListingTab({
+export function DetailsTab({
   artistId,
   artistName,
   defaultTitle,

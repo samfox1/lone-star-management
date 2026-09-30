@@ -7,10 +7,10 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**67 test files · 1131 tests**
+**65 test files · 1091 tests**
 
-- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 537 tests
-- [SEO / GEO page](#seo--geo-page) · 13 files · 221 tests
+- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 542 tests
+- [SEO / GEO page](#seo--geo-page) · 11 files · 176 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 102 tests
 - [Stored logins](#stored-logins) · 2 files · 27 tests
@@ -344,7 +344,7 @@ Proves the "Your fact card lists all your profiles" test passes only when the ar
 - A card with no artist in it, while Tapir has profiles, fails.
 - Another band's profiles are not yours. (verify-found PR2)
 
-### tests/unit/seo-tests/facts-are-true/releases.test.ts · 20 tests
+### tests/unit/seo-tests/facts-are-true/releases.test.ts · 25 tests
 
 Proves the "Your latest releases are listed" test passes only when every release published in Music is on the fact card, the card lists nothing Music lacks, and every release the card lists is shown on a page.
 
@@ -374,6 +374,11 @@ Proves the "Your latest releases are listed" test passes only when every release
 - No releases in Music or on the card: a fail pointing to Music.
 - CRITICAL: a visual artist with no releases anywhere: the test does not apply (`na`), and says why.
 - A visual artist whose card lists a release Music doesn't have still fails: the look found something wrong.
+- Sam, 2026-09-29 ("list what it sees"): each release the card lists is named, newest first whatever the card's order, one with no date last.
+- A release the card lists twice (in another case, with spaces) is named once; "not in Music" still names the extra one.
+- A card with no releases says "none", not "0 releases".
+- Past 8 names the rest fold into "and N more", and it is the OLDEST that fold, so the latest stay in view.
+- Long titles are shortened, so 8 names and "and N more" still fit once the run is stored (store.ts cuts each row at 600 bytes).
 
 ### tests/unit/seo-tests/facts-are-true/shows.test.ts · 14 tests
 
@@ -552,7 +557,7 @@ Proves the page readers every "Says who you are", "Looks right when shared" and 
 
 The SEO / GEO page's server actions check that the caller is signed in and manages the artist FIRST, then run the tests, apply a fix, or read the results.
 
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions.ts (runSeoTestsAction, applySeoFixAction, readSeoTestsAction, readSeoOverviewAction)
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions.ts (runSeoTestsAction, applySeoFixAction, readSeoTestsAction)
 - **Tier:** STRICT (AGENTS.md "Test depth"): server actions (permissions), and the fix writes a link.
 - **Not here:** the run itself (runs/running.test.ts); how the Test tab reads its data (tests/unit/manager-tools/seo/test-tab-model.test.ts); the Apple store rule itself (src/lib/seo-tests/apple-storefront.ts, with the SEO tests under tests/unit/seo-tests/).
 
@@ -613,7 +618,7 @@ The SEO / GEO Overview's data: failing tests most important first, a timeline of
 
 - **Code:** src/lib/seo-tests/overview.ts (SEO_TEST_PRIORITY, failingInPriority, runChanges, buildTimeline, searchAndAiVisits, readSeoOverview)
 - **Tier:** STRICT (AGENTS.md "Test depth"): it decides what the manager is told needs them, and a 0 shown for a number we couldn't read would be untrue.
-- **Not here:** how the Overview page words and draws this (tests/unit/manager-tools/seo/overview-model.test.ts, tests/components/manager-tools/seo/overview-tab.test.tsx).
+- **Not here:** a page that draws this: the Overview tab that did was removed 2026-09-29; the module is kept for the stashed "AI visibility" page (TODO.md).
 
 **Tests**
 
@@ -950,6 +955,26 @@ The SEO / GEO Answers tab: five fixed questions, two of them read-only (from Tou
 - Own questions: Add fills the next free slot (question and answer); Remove asks, then clears both halves.
 - No more questions than slots: Add goes when they are full.
 
+### tests/components/manager-tools/seo/details-tab.test.tsx · 9 tests
+
+The SEO / GEO Details tab: the page title and description save through the SEO gate (never over their caps), the preview follows, and the share and photo rows open their editors.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/details/details-tab.tsx, og-image-picker.tsx
+- **Tier:** STRICT (AGENTS.md "Test depth") for what gets saved (the gate, the key, never a value over its cap) and for the ids a test's pencil lands on (`share`, `alt`); LIGHT for the rest.
+- **Not here:** the save rules (tests/unit/manager-tools/seo/save-rules.test.ts); the preview picture's geometry (tests/unit/manager-tools/seo/preview-picture.test.ts).
+
+**Tests**
+
+- The title saves to its key through the SEO gate; blank shows the default, and the preview follows.
+- A title over the cap is kept (not cut), refused in the gate's words, and never sent.
+- The description has ONE limit (Google's): over it, never sent; under it, saved.
+- The share and alt tests' pencils land on these rows' ids.
+- Arriving on #share opens the preview picture editor.
+- A Brand colour can be the background; trying colours writes nothing (one explicit action, no Save pill).
+- Photo descriptions: one at a time, each saved to THAT photo, with a readable suggestion (no file-name code).
+- Arrow keys move between photos, except while typing.
+- Calm rows: a count only while typing in its field, and no descriptor lines (Sam's notes).
+
 ### tests/components/manager-tools/seo/facts-tab.test.tsx · 19 tests
 
 The SEO / GEO Facts tab: each fact saves through its own gate, a value the gate would refuse shows the gate's own words and is never sent, and the bio keeps its rules.
@@ -980,51 +1005,6 @@ The SEO / GEO Facts tab: each fact saves through its own gate, a value the gate 
 - Profiles: how many reach the fact card, and MusicBrainz's own editor filled in with the name.
 - A linked fact database shows what is linked instead of the create link.
 
-### tests/components/manager-tools/seo/listing-tab.test.tsx · 9 tests
-
-The SEO / GEO Listing tab: the page title and description save through the SEO gate (never over their caps), the preview follows, and the share and photo rows open their editors.
-
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/listing/listing-tab.tsx, og-image-picker.tsx
-- **Tier:** STRICT (AGENTS.md "Test depth") for what gets saved (the gate, the key, never a value over its cap) and for the ids a test's pencil lands on (`share`, `alt`); LIGHT for the rest.
-- **Not here:** the save rules (tests/unit/manager-tools/seo/save-rules.test.ts); the preview picture's geometry (tests/unit/manager-tools/seo/preview-picture.test.ts).
-
-**Tests**
-
-- The title saves to its key through the SEO gate; blank shows the default, and the preview follows.
-- A title over the cap is kept (not cut), refused in the gate's words, and never sent.
-- The description has ONE limit (Google's): over it, never sent; under it, saved.
-- The share and alt tests' pencils land on these rows' ids.
-- Arriving on #share opens the preview picture editor.
-- A Brand colour can be the background; trying colours writes nothing (one explicit action, no Save pill).
-- Photo descriptions: one at a time, each saved to THAT photo, with a readable suggestion (no file-name code).
-- Arrow keys move between photos, except while typing.
-- Calm rows: a count only while typing in its field, and no descriptor lines (Sam's notes).
-
-### tests/components/manager-tools/seo/overview-tab.test.tsx · 14 tests
-
-The SEO / GEO Overview tab shows each state plainly, links each to-do to its test, lists what couldn't be checked, draws the timeline, and runs "Test again".
-
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/overview/overview.tsx, overview/test-again.tsx (drawn from overview/model.ts buildOverview)
-- **Tier:** LIGHT for layout (the main path of each state), STRICT (AGENTS.md "Test depth") for what could mislead: a to-do lands on its own test, a site that didn't answer is said once with no to-dos, "All N pass" is never said while something couldn't be checked, an unreadable number shows "—" (never 0), no "weekly test" is drawn.
-- **Not here:** the Overview's arithmetic (tests/unit/manager-tools/seo/overview-model.test.ts); reading its data (tests/unit/seo-tests/runs/overview-data.test.ts); the Test tab opening the row a to-do points at (test-tab.test.tsx, "a deep link").
-
-**Tests**
-
-- Not switched on: calm, nothing to press, and the visits and last publish still show.
-- Site didn't answer: said once, with no to-dos and no couldn't-check list blaming the settings.
-- Nothing failed but something couldn't be checked: never "All N tests pass"; each couldn't-check says why.
-- Never tested: says so and offers "Test now".
-- No site, or couldn't read: each says so in the headline.
-- A moved site: the old site's results are not listed as the manager's to-dos.
-- A newer test that didn't finish is said, not hidden behind the older run.
-- To-do links: each opens its own test on the Test tab and scrolls to it.
-- A long to-do list: the five most important, then "Show N more".
-- Test again: the same action as the Test tab, then the page is read again.
-- A refusal (another run going) is said in words.
-- The timeline: publishes and runs as they happened, what changed, and never a "weekly" test.
-- Unreadable parts: "—" and a plain sentence, never a 0 that looks like a real count.
-- A long history: five moments, then "Show N more".
-
 ### tests/components/manager-tools/seo/publish-bar.test.tsx · 5 tests
 
 The SEO / GEO Publish bar: it publishes what the SEO tabs changed with one password, each part only when it is waiting, and it is gone when nothing waits.
@@ -1041,50 +1021,35 @@ The SEO / GEO Publish bar: it publishes what the SEO tabs changed with one passw
 - A refused site publish (wrong password) stops before the links.
 - The message says what is waiting, in a few words.
 
-### tests/components/manager-tools/seo/test-tab.test.tsx · 34 tests
+### tests/components/manager-tools/seo/test-tab.test.tsx · 19 tests
 
-The SEO / GEO Test tab: the score line, the filter, the dropdown under each row, the actions, evidence shown as plain text, and every state (not on yet, never tested, running, refused...).
+The SEO / GEO AI test tab: start, running and done, the card under an open row, its actions, evidence shown as plain text, and the quiet states (busy, cool-down, failed, no site...).
 
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab.tsx, test/test-row.tsx (drawn from test/model.ts)
-- **Tier:** STRICT (AGENTS.md "Test depth") for the counts, the filters and what the header claims (a site that is down is never a score; "N of M" leaves `na` out), for evidence rendered as TEXT (a hostile site's `<img onerror>` / `</script>` must never become an element), for https-only outside links and for one run per double click; LIGHT for the rest.
-- **Not here:** the counts, headline and refusal rules themselves (tests/unit/manager-tools/seo/test-tab-model.test.ts); the actions on the server (tests/unit/seo-tests/runs/actions.test.ts).
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab.tsx, test/test-row.tsx, test/scan-art.tsx (drawn from test/model.ts)
+- **Tier:** LIGHT (AGENTS.md "Test depth": a UI still being designed) for the steps, the card and the states: one test per main path, no class strings, no copy. STRICT where it guards something that can't be allowed to slip: evidence rendered as TEXT (a hostile site's `<img onerror>` / `</script>` must never become an element), https-only outside links, and one run per double click.
+- **Not here:** the counts, headline, evidence rows and refusal rules themselves (tests/unit/manager-tools/seo/test-tab-model.test.ts); the actions on the server (tests/unit/seo-tests/runs/actions.test.ts); how the drawings move (decoration, checked by eye).
 
 **Tests**
 
-- The score line: `na` is left out of both sides; need-you and couldn't-check sit beside it, and never "All".
-- Site didn't answer (timed out, error 500, or the run's own `reach` says error): said ONCE, with no score, no rows, no filter; Test again stays on.
-- A publish run says it ran after the publish; a manual one doesn't.
-- The filter: each choice holds exactly its rows, together every scored row once, counts spoken with a space.
-- An emptied filter says so instead of a blank page; "Couldn't check" shows only when there is one.
-- A filter that hides the open row closes it, so it isn't open out of sight.
-- The dropdown: opens under its row, one at a time, wired for assistive tech.
-- Keyboard: rows are real buttons, Esc closes and returns focus, arrows move between rows.
-- Each status opens with its lead, and the whole sentence reads, never cut however long.
-- Names wrap, never cut with "…": the six bot rows differ only in their last words.
-- A deep link (?open=, from an Overview to-do) opens that test's dropdown on arrival.
-- The history dots in the dropdown: one per past result; a test with no history yet draws none (no empty "Last 0 results").
-- The pencil: a link to the tab that holds the setting, named by the result.
+- Never tested: the start shows (no rows), and "Test my site" runs the first test; its result then shows.
+- Two fast clicks (in one act batch) start ONE run (AGENTS.md rule 5: the latch is a ref).
+- No site connected: nothing to run, so there is no "Test my site" at all.
+- While a test runs: no heading, no list and no ticks (the drawing never fakes progress); the rows come back when it lands.
+- A run that lands here makes its rows rise in one after another; the run already there on load stays still.
+- A stored run: its headline (runHeadline's own words) and the four groups, every test once.
+- Site didn't answer (the engine's own timed-out run): said ONCE in the header, no rows to open; Test again stays on.
+- A failing row opens a card with its lead and sentence, its evidence, and its pencil linking to the setting; a pass has no "what to do".
+- Keyboard: Esc closes the open row and returns focus to it; the arrows move between rows.
+- A deep link (?open=) opens that test's row on arrival.
 - Outside links: a new tab, noopener, https only; a stored javascript: link renders nothing.
-- The fix: makes the change, says "publish to finish", and refreshes so the Publish bar rises.
-- A refused fix says why and leaves the wrench to try again.
-- The per-test refresh is honest: it tests EVERYTHING again.
-- Other sites' checkers sit behind "Show the details", next to the test they check.
+- The fix: the wrench calls applySeoFixAction, the card confirms it, and a refresh raises the Publish bar.
+- A refused fix says why (the server's words, in a toast) and leaves the wrench to try again.
 - A hostile site's html shows as characters, never as elements (the engine really carried it).
-- The details say what we did, what we saw, and what the test can't see.
-- Not on yet: a plain "coming soon", nothing to press, rows marked untested.
-- Couldn't read: said, with a way to try again.
-- Never tested: one control, and it runs the first test.
-- Running: rows keep their last result, dimmed and out of reach; the control is off; a progress line.
-- Two fast clicks (in one act batch) start ONE run (AGENTS.md rule 5).
-- A refusal is read from its REASON, whatever its words: cool-down shows a countdown with the control off; busy shows the one "already running" line.
-- The cool-down is known before asking (a run started under a minute ago), and a browser clock far behind the server never locks the button for an hour.
-- Another run going (a publish's): said once, control off, and we look again every few seconds.
-- A failed run: its sentence shows and Test again stays on.
-- A failed attempt is still said after a reload; one older than the latest run is not.
-- No site: said once at the top, not 24 times, and no run offered.
-- Never tested and no site: nothing to run, and it says why.
-- "May not have updated yet": for a fresh publish run only, not a confirmed one, not days later.
-- Old results say so: a run over 30 days old says how old; a run of an address the site no longer has says the results are for the old one.
+- Tests not switched on: nothing to press, no rows. Couldn't read: a way to try again that refreshes.
+- Another run going (a publish's): the running view with its one "already running" line, no rows, and we look again every few seconds.
+- A cool-down refusal (read from its reason) counts down, with Test again off.
+- A failed run: the server's sentence shows, and Test again stays on.
+- The lines under the header: a failed attempt after the latest run (after a reload), a run over 30 days old, a run of an old address.
 
 ### tests/unit/manager-tools/seo/facts-tab-model.test.ts · 12 tests
 
@@ -1129,46 +1094,13 @@ The OLD live check ("Run check") reports every rule pass or fail against a serve
 - A redirect from a public host into a private one is not followed.
 - An ordinary redirect between public hosts (apex to www) is still followed.
 
-### tests/unit/manager-tools/seo/overview-model.test.ts · 22 tests
-
-The SEO / GEO Overview's words and numbers: which headline, which to-dos, how the timeline joins a publish to the test it set off, and "—" (never 0) for what couldn't be read.
-
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/overview/model.ts (buildOverview, TODO, mergeTimeline, eventTitle, eventLine, countText, whenParts)
-- **Tier:** STRICT (AGENTS.md "Test depth"): it decides what the Overview tells the manager is true.
-- **Not here:** drawing it (tests/components/manager-tools/seo/overview-tab.test.tsx); reading the data (tests/unit/seo-tests/runs/overview-data.test.ts); the shared headline rule (test-tab-model.test.ts).
-
-**Tests**
-
-- One to-do table: every test has a title and a mark, so no failing test shows as a blank row.
-- Honest bot to-dos: they ask to let the bot in, never claim it can "read" the site (the tests can't prove that).
-- Never "All N pass" while something couldn't be checked; the couldn't-checks are listed apart, not as to-dos.
-- One score: the Overview and the Test tab say the same thing about the same run.
-- `na` is left out of both sides of "N of M" (a visual artist).
-- Timed out: one plain sentence, no to-dos, no couldn't-check list.
-- Error 500: the same, whatever the rows say, so nothing blames the site's settings for an outage.
-- Things need you: the fails, most important first, with the score and the couldn't-checks beside them.
-- 0 of 0 is not a score: every test `na` says none apply.
-- Not switched on: calm, and the visits and last publish still show.
-- A failed read: null everywhere, drawn as "—"; a real 0 still reads 0.
-- No site, couldn't read, never tested; a run from before the site was connected is not a test of it.
-- A moved site: the old site's results are not listed as the manager's to-dos.
-- Old and stale runs: an old run says how old; a fresh stale run says it may not have updated.
-- A newer failed attempt is said; an older one is not.
-- "Test again" only when a test can run (not while one runs, not with no site).
-- A publish and the test it set off read as one moment.
-- A test run by hand is never joined to a publish, even right after one.
-- Too late, or before the publish: they stay apart.
-- Each publish joins one test, the nearest one before each test; newest first.
-- The lines: what went live, the score, and never a "weekly" test.
-- When: today, yesterday or a date, and a time, in the manager's day.
-
 ### tests/unit/manager-tools/seo/preview-picture.test.ts · 10 tests
 
 The preview picture made on the Listing tab is 1200 × 630 with the logo centred, never cropped, on a SOLID background that is never transparent.
 
 - **Code:** src/lib/manager-tools/seo/og-card.ts (OG_CARD_WIDTH / HEIGHT, ogCardDrawBox, OG_BACKGROUNDS, ogBackgroundHex)
 - **Tier:** STRICT (AGENTS.md "Test depth"): the broken render happens on someone else's server, invisible from inside the app. TRANSPARENCY: a logo PNG has alpha, and platforms lay it on THEIR background, so a black logo turns into a blank square in dark mode. ASPECT: previews are ~1.91:1, and a logo of another shape is cropped or letterboxed as the platform likes. Baking a solid background into the right shape settles both here.
-- **Not here:** the picture editor on the page (tests/components/manager-tools/seo/listing-tab.test.tsx).
+- **Not here:** the picture editor on the page (tests/components/manager-tools/seo/details-tab.test.tsx).
 
 **Tests**
 
@@ -1246,9 +1178,9 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 - The type is the registry only; genre and city are trimmed, capped at 120, blank clears.
 - The city follows the fact text rule: no markup, no control characters, no hidden marks.
 
-### tests/unit/manager-tools/seo/tabs-and-routes.test.ts · 5 tests
+### tests/unit/manager-tools/seo/tabs-and-routes.test.ts · 8 tests
 
-The SEO / GEO page has five tabs on the rail, each with its own page, and every old section address still lands on the tab (and the row) that now holds it.
+The SEO / GEO page has four tabs on the rail, each with its own page, the tool opens on Details, and every old section address still lands on the tab (and the row) that now holds it.
 
 - **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections.ts, tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
 - **Tier:** STRICT (AGENTS.md "Test depth"): nothing that worked may lose its home, and a bad address must be a 404, not a crash.
@@ -1256,13 +1188,16 @@ The SEO / GEO page has five tabs on the rail, each with its own page, and every 
 
 **Tests**
 
-- Five tabs, unique, Overview first as the tool's own route.
+- Four tabs, unique, Details first as the tool's own route, so the tool opens on it.
 - The rail shows exactly these tabs for the SEO / GEO tool.
 - Every tab has its own page on disk, so no tab is a dead link.
+- A page.tsx in a folder that is not a tab is a stray route; under an old name it would win over the redirect route (Next matches a static folder first), so the redirect would never run.
 - Every old section still has a home: it is a tab, or it redirects to one.
 - The redirect route sends each moved section to its tab and row; anything else is a 404.
+- The old Listing tab's address (Sam's bookmarks, old links) lands on Details, the tool's own page.
+- An old address and a test's pencil for the same setting land on the same tab and row.
 
-### tests/unit/manager-tools/seo/test-tab-model.test.ts · 24 tests
+### tests/unit/manager-tools/seo/test-tab-model.test.ts · 27 tests
 
 The Test tab's rules: every count, headline, word and link the manager reads there, and how the tab tells "not switched on yet" from "couldn't read" from "never tested".
 
@@ -1296,13 +1231,16 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 - Every pencil lands on a real SEO tab or dashboard route.
 - "No such table": PostgREST's and Postgres's words for it, and nothing else (a denied read is not "off").
 - The table missing (the migration isn't pushed) is "off"; a denied read is "error"; an empty table is "never tested".
+- WHAT WE SAW: consecutive rows with the same label show it once (repeat), a label that comes back later is said again.
+- Stored evidence is untrusted: anything that isn't a list reads as none, and each odd row becomes plain strings (never dropped silently mid-list, never an object).
+- The running clock reads minutes:seconds from whole seconds, and never goes below 0:00 (a browser clock behind the server's).
 
 ### tests/components/manager-tools/seo/seo-run-fixture.ts · support file
 
 Stored SEO / GEO runs for the page's tests, made by the REAL engine over made-up sites, so the page is tested against results the engine really gives.
 
 - **Code:** src/lib/seo-tests/engine.ts (SEO_ENGINE), run.ts (runAllTests), store.ts (capResults)
-- **What it provides:** • engineResults(scenario): the 24 real results for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun / engineRun: a stored run around those results (a publish run, or a manual one); fixtureHistory: each test's last statuses, oldest first • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
+- **What it provides:** • engineResults(scenario): the 24 real results for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun: a stored run around those results (a publish run, or a manual one); fixtureHistory: each test's last statuses, oldest first • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
 
 ## SEO / GEO saved runs (database)
 
