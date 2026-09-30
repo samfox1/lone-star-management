@@ -17,17 +17,51 @@
  *           • the stale-site verdict and the run-level `reach` are worked out and stored
  *           • a failure after the claim marks the run failed and returns a plain error
  *           • `na` (does not apply) is a verdict the run keeps
+ *           • "How crawlers see your site": the crawl built from the gathered evidence reaches
+ *             finishRun (null with no site or a failed gather); the other spelling (www ↔ bare)
+ *             is checked ONCE; Google / Bing are asked only for the providers the site is
+ *             REGISTERED with (read through the writer, verified rows only), at the registered
+ *             address, at most 5 pages, inside the budget; a provider that fails leaves nulls
+ *             and never sinks the run; with nothing registered the key-reading clients are never built
  * Not here: what each test decides (tests/unit/seo-tests/<test>.test.ts); how a run is stored and
  *           read back (runs/storage.test.ts); the wait after a publish (runs/after-publish.test.ts);
- *           the database rules themselves (tests/integration/seo-tests/seo-test-runs.test.ts).
- * Fixtures: a PostgREST fake (brand/_fake-client) answers the claim, finish and publish_moments
- *           calls; a fake engine whose 24 tests all pass unless a test swaps one out; what Tapir
- *           knows is handed in (`readKnown`), never read.
+ *           the database rules themselves (tests/integration/seo-tests/seo-test-runs.test.ts); how
+ *           the crawl is built from evidence (how-crawlers-see-your-site/crawl.test.ts); the Google
+ *           and Bing calls themselves (tests/unit/search-engines/).
+ * Fixtures: a PostgREST fake (brand/_fake-client) answers the claim, finish, publish_moments and
+ *           site_verifications calls; a fake engine whose 24 tests all pass unless a test swaps one
+ *           out; what Tapir knows is handed in (`readKnown`), never read; Google and Bing are fake
+ *           clients handed in (`listingClients`), so no test reaches the server's keys; the other
+ *           spelling is fetched from a fake web (../fake-site.ts).
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runAllTests, runSeoTests, type RunWho, type SeoEngine, type SitePages } from '@/lib/seo-tests/run'
-import { SEO_TEST_IDS, type SeoEvidence, type SeoKnown, type SeoTest, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BingResult, BingUrlInfo } from '@/lib/search-engines/bing'
+import type { GoogleInspection, GoogleResult } from '@/lib/search-engines/google'
+import { BROWSER_UA } from '@/lib/seo-tests/bots'
+import { buildCrawl } from '@/lib/seo-tests/crawl'
+import { checkOtherHost, runAllTests, runSeoTests, type ListingClients, type RunWho, type SeoEngine, type SeoRegistration, type SitePages, listingClientsFromEnv } from '@/lib/seo-tests/run'
+import type { FinishInput } from '@/lib/seo-tests/store'
+import { SEO_TEST_IDS, type SeoCrawl, type SeoEvidence, type SeoKnown, type SeoTest, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
 import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+
+/** Every input the run hands finishRun, seen through a pass-through (the real finishRun still runs,
+ *  so everything else in this file reads the stored call as before). A plain function, not a mock:
+ *  the config's clearMocks / restoreMocks can't reset it. */
+const spy = vi.hoisted(() => ({ finish: [] as unknown[] }))
+vi.mock('@/lib/seo-tests/store', async (orig) => {
+  const real = await orig<typeof import('@/lib/seo-tests/store')>()
+  const finishRun: typeof real.finishRun = async (writer, runId, input) => {
+    spy.finish.push(input)
+    return real.finishRun(writer, runId, input)
+  }
+  return { ...real, finishRun }
+})
+beforeEach(() => {
+  spy.finish.length = 0
+})
+/** The crawl the run handed finishRun (undefined = no finish call). */
+const crawlSent = (): SeoCrawl | null | undefined => (spy.finish.at(-1) as FinishInput | undefined)?.crawl
 
 const A = 'artist-1'
 const ORIGIN = 'https://www.example-artist.com'
@@ -72,15 +106,16 @@ function engine(over: Partial<SeoEngine> = {}): SeoEngine & { calls: string[] } 
   }
 }
 
-type World = { claim?: { outcome: string; retry_in_s?: number | null }; finishRow?: boolean; finishError?: boolean; moments?: string[] }
+type World = { claim?: { outcome: string; retry_in_s?: number | null }; finishRow?: boolean; finishError?: boolean; moments?: string[]; verifications?: unknown[] }
 
 /** ONE fake for the reader (the manager's session) and the writer (service role); `writerOf`
  *  below splits them when a test needs to see which client did what. */
-function world({ claim = { outcome: 'claimed' }, finishRow = true, finishError = false, moments = [PUBLISHED_AT] }: World = {}) {
+function world({ claim = { outcome: 'claimed' }, finishRow = true, finishError = false, moments = [PUBLISHED_AT], verifications }: World = {}) {
   return fakeClient((c: Call): Reply => {
     if (c.op === 'rpc' && c.table === 'seo_test_claim') return { data: [{ run_id: claim.outcome === 'claimed' ? 'run-1' : null, ran_at: '2026-09-28T21:20:00Z', retry_in_s: null, ...claim }] }
     if (c.op === 'rpc' && c.table === 'seo_test_finish') return finishError ? { error: { code: '23514', message: 'seo_test_runs_results_size' } } : { data: finishRow }
     if (c.op === 'rpc' && c.table === 'publish_moments') return { data: moments.map((m) => ({ published_at: m, entities: 1 })) }
+    if (c.op === 'select' && c.table === 'site_verifications' && verifications) return { data: verifications }
     return { data: null }
   })
 }
@@ -333,5 +368,282 @@ describe('`na` (does not apply) is a verdict the run keeps', () => {
     const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests, lookupMusicBrainz: async () => { throw new Error('down') } }), readKnown: async () => known() })
     expect(out.ok).toBe(true)
     expect(stored(f).results.find((r) => r.id === 'mb')?.status).toBe('na')
+  })
+})
+
+/* ── "How crawlers see your site" ───────────────────────────────────────────────────── */
+
+/** The evidence the run builds around what the gatherer answered (the crawl reads only the
+ *  site's side, so the share picture / MusicBrainz / Tapir's data don't change it). */
+const evidenceOf = (p: SitePages): SeoEvidence => ({ ...p, shareImage: null, musicbrainz: { looked: false, artistUrl: null, matchedOn: null }, known: known() })
+const TWO_PAGES = (): SitePages => pages({
+  paths: ['/', '/about'],
+  plain: [
+    { path: '/', finalUrl: `${ORIGIN}/`, status: 200, headers: {}, html: `<html><head><link rel="canonical" href="${ORIGIN}/"></head></html>` },
+    { path: '/about', finalUrl: `${ORIGIN}/about`, status: 200, headers: {}, html: '<html></html>' },
+  ],
+})
+/** Registered addresses: the BARE spelling, on purpose, so a call made with the connected site
+ *  (www, known.siteUrl) instead of the registered one shows. */
+const REG = 'https://example-artist.com/'
+const reg = (...providers: SeoRegistration['provider'][]): SeoRegistration[] => providers.map((provider) => ({ provider, siteUrl: REG }))
+
+type GoogleAnswer = GoogleResult<GoogleInspection> | Promise<GoogleResult<GoogleInspection>>
+type BingAnswer = BingResult<BingUrlInfo> | Promise<BingResult<BingUrlInfo>>
+/** Fake Google / Bing clients that record every (siteUrl, pageUrl) they are asked about. */
+function fakeListing(o: { google?: (pageUrl: string) => GoogleAnswer; bing?: (pageUrl: string) => BingAnswer }) {
+  const calls = { google: [] as [string, string][], bing: [] as [string, string][] }
+  const clients: ListingClients = {
+    google: o.google ? { inspectUrl: async (siteUrl, pageUrl) => (calls.google.push([siteUrl, pageUrl]), o.google!(pageUrl)) } : null,
+    bing: o.bing ? { urlInfo: async (siteUrl, pageUrl) => (calls.bing.push([siteUrl, pageUrl]), o.bing!(pageUrl)) } : null,
+  }
+  return { calls, clients, make: vi.fn(async () => clients) }
+}
+const INDEXED = (pageUrl: string): GoogleResult<GoogleInspection> => ({ ok: true, value: { verdict: 'PASS', coverage: 'Submitted and indexed', lastCrawl: `2026-09-29T08:00:00.000Z#${pageUrl}` } })
+const CRAWLED = (pageUrl: string): BingResult<BingUrlInfo> => ({ ok: true, value: { lastCrawled: `2026-09-28T00:00:00.000Z#${pageUrl}`, status: 200 } })
+// Asked, no answer: `answered: false`, so the page never reads it as "not listed" / "no visit".
+const NULL_G = (path: string) => ({ path, answered: false, verdict: null, coverage: null, lastCrawl: null })
+const NULL_B = (path: string) => ({ path, answered: false, lastCrawled: null, status: null })
+
+describe('"How crawlers see your site": what the run hands the store', () => {
+  // The section is built from the SAME evidence the 24 tests read, plus what only the run can
+  // find out (the other spelling, the listing), and handed to finishRun with the results.
+  it('CRITICAL: the crawl built from the gathered evidence reaches finishRun, with the other spelling and the listing', async () => {
+    const other = { url: 'https://example-artist.com/', status: 200, to: `${ORIGIN}/` }
+    const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+    const f = world()
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), {
+      engine: engine({ gatherSiteEvidence: async () => TWO_PAGES(), checkOtherHost: async () => other }),
+      readKnown: async () => known(), readRegistered: async () => reg('google', 'bing'), listingClients: l.make,
+    })
+    expect(out.ok).toBe(true)
+    const paths = TWO_PAGES().paths
+    const listing = {
+      google: paths.map((path) => ({ path, answered: true, ...(INDEXED(`${REG.slice(0, -1)}${path}`) as { value: GoogleInspection }).value })),
+      bing: paths.map((path) => ({ path, answered: true, ...(CRAWLED(`${REG.slice(0, -1)}${path}`) as { value: BingUrlInfo }).value })),
+    }
+    expect(crawlSent()).toEqual(buildCrawl(evidenceOf(TWO_PAGES()), { otherHost: other, listing }))
+  })
+
+  // No site: nothing was seen, so there is no crawl, and nobody is asked anything.
+  it('no site connected: crawl null, and neither the registrations, Google, Bing nor the other spelling is asked', async () => {
+    const l = fakeListing({ google: INDEXED })
+    const read = vi.fn(async () => reg('google'))
+    const other = vi.fn(async () => null)
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ checkOtherHost: other }), readKnown: async () => known({ siteUrl: null }), readRegistered: read, listingClients: l.make })
+    expect(crawlSent()).toBeNull()
+    expect(read).not.toHaveBeenCalled()
+    expect(l.make).not.toHaveBeenCalled()
+    expect(other).not.toHaveBeenCalled()
+  })
+
+  // A gather that broke or timed out saw nothing: no crawl, and Google / Bing are not asked.
+  it('a failed or timed-out gather: crawl null, and the listing is not asked', async () => {
+    for (const gatherSiteEvidence of [async (): Promise<SitePages> => { throw new Error('bug') }, () => new Promise<SitePages>(() => {})]) {
+      const l = fakeListing({ google: INDEXED })
+      const f = world()
+      const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence }), readKnown: async () => known(), readRegistered: async () => reg('google'), listingClients: l.make, budgetMs: 40 })
+      expect(out.ok).toBe(true)
+      expect(crawlSent()).toBeNull()
+      expect(l.calls.google).toEqual([])
+    }
+  })
+})
+
+describe('the listing: asked only where the site is registered', () => {
+  // Only a REGISTERED provider can be asked (the robot owns only those properties), and at the
+  // address it was registered with, never the connected site's spelling.
+  it('CRITICAL: asks only the registered provider, at the registered address, once per opened page', async () => {
+    for (const only of ['google', 'bing'] as const) {
+      const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+      const f = world()
+      await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg(only), listingClients: l.make })
+      const asked = TWO_PAGES().paths.map((p) => [REG, `https://example-artist.com${p}`])
+      const other = only === 'google' ? 'bing' : 'google'
+      expect(l.calls[only], only).toEqual(asked)
+      expect(l.calls[other], only).toEqual([])
+      expect(crawlSent()?.listing[other], only).toBeNull()
+      expect(crawlSent()?.listing[only]?.map((x) => x.path), only).toEqual(TWO_PAGES().paths)
+    }
+  })
+
+  // Nothing registered: no provider is asked, and the clients (which read the server's keys) are
+  // never even built.
+  it('nothing registered: both null, and the key-reading clients are never built', async () => {
+    const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => known(), readRegistered: async () => [], listingClients: l.make })
+    expect(l.make).not.toHaveBeenCalled()
+    expect(crawlSent()?.listing).toEqual({ google: null, bing: null })
+  })
+
+  // At most 5 pages, in the order the run opened them.
+  it('asks about at most 5 pages, in the order they were opened', async () => {
+    const seven = ['/', '/a', '/b', '/c', '/d', '/e', '/f']
+    const l = fakeListing({ google: INDEXED })
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => pages({ paths: seven }) }), readKnown: async () => known(), readRegistered: async () => reg('google'), listingClients: l.make })
+    expect(l.calls.google.map(([, u]) => u)).toEqual(seven.slice(0, 5).map((p) => `https://example-artist.com${p}`))
+  })
+
+  // Tests load .env.local, so the real clients must refuse under vitest: a test that forgot to
+  // inject its own could otherwise call the real Google and Bing with the real keys.
+  it('CRITICAL: the real listing clients refuse to load inside a test', async () => {
+    await expect(listingClientsFromEnv()).rejects.toThrow(/not for tests/)
+  })
+
+  // A provider that fails leaves THOSE pages as nulls ("couldn't ask"), never a made-up answer,
+  // and never sinks the run: a refusal, a throw, a missing key, clients that can't be built.
+  it('CRITICAL: a failing provider leaves nulls and the run still stores its 24 results', async () => {
+    const paths = TWO_PAGES().paths
+    const cases: { name: string; l: ReturnType<typeof fakeListing>; make?: () => Promise<ListingClients>; google: unknown; bing: unknown }[] = [
+      {
+        name: 'one page refused, one page thrown',
+        l: fakeListing({ google: (u) => (u.endsWith('/about') ? Promise.reject(new Error('boom')) : INDEXED(u)), bing: () => ({ ok: false, reason: 'bing_urlinfo', status: 400 }) }),
+        google: [{ path: '/', answered: true, ...(INDEXED(`${REG}`) as { value: GoogleInspection }).value }, NULL_G('/about')],
+        bing: paths.map(NULL_B),
+      },
+      { name: 'no key for either', l: fakeListing({}), google: paths.map(NULL_G), bing: paths.map(NULL_B) },
+    ]
+    for (const c of cases) {
+      const f = world()
+      const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg('google', 'bing'), listingClients: c.make ?? c.l.make })
+      expect(out.ok, c.name).toBe(true)
+      expect(stored(f).results, c.name).toHaveLength(SEO_TEST_IDS.length)
+      expect(crawlSent()?.listing, c.name).toEqual({ google: c.google, bing: c.bing })
+    }
+    // Clients that can't even be built, or registrations that can't be read.
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg('google'), listingClients: async () => { throw new Error('no env') } })
+    expect(crawlSent()?.listing).toEqual({ google: paths.map(NULL_G), bing: null })
+    const g = world()
+    const never = vi.fn(async (): Promise<ListingClients> => ({ google: null, bing: null }))
+    const out = await runSeoTests(g.client, A, 'manual', WHO(g), { engine: engine(), readKnown: async () => known(), readRegistered: async () => { throw new Error('db') }, listingClients: never })
+    expect(never).not.toHaveBeenCalled()
+    expect(out.ok).toBe(true)
+    expect(crawlSent()?.listing).toEqual({ google: null, bing: null })
+  })
+
+  // Google hanging must not hold the run open: the listing lives inside the run's budget.
+  it('a provider that never answers is cut off by the run’s budget', async () => {
+    const l = fakeListing({ google: () => new Promise(() => {}) })
+    const f = world()
+    const t0 = Date.now()
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg('google'), listingClients: l.make, budgetMs: 60 })
+    expect(Date.now() - t0).toBeLessThan(2_000)
+    expect(out.ok).toBe(true)
+    expect(stored(f).results.every((r) => r.status === 'pass')).toBe(true)
+    expect(crawlSent()?.listing.google).toEqual(TWO_PAGES().paths.map(NULL_G))
+  })
+
+  // The registrations live in a table closed to managers: they are read through the WRITER
+  // (service role), never the manager's session, and only a VERIFIED row counts.
+  it('CRITICAL: registrations are read through the writer, and only verified rows count', async () => {
+    const reader = world()
+    const writer = world({
+      verifications: [
+        { provider: 'google', site_url: REG, verified_at: '2026-09-30T10:00:00+00:00' },
+        { provider: 'bing', site_url: REG, verified_at: null },
+      ],
+    })
+    const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+    await runSeoTests(reader.client, A, 'manual', { writer: writer.client, userId: 'user-1' }, { engine: engine(), readKnown: async () => known(), listingClients: l.make })
+    expect(reader.calls.some((c) => c.table === 'site_verifications')).toBe(false)
+    const read = writer.calls.find((c) => c.table === 'site_verifications')
+    expect(read?.op).toBe('select')
+    expect(read?.filters).toContainEqual(['eq', 'artist_id', A])
+    expect(l.calls.google).toEqual([[REG, 'https://example-artist.com/']])
+    expect(l.calls.bing).toEqual([])
+  })
+
+  // A row that isn't a registration we can use (another provider, an address that isn't a
+  // registered https property) is never asked about.
+  it('ignores rows that aren’t a usable registration', async () => {
+    const writer = world({
+      verifications: [
+        { provider: 'yahoo', site_url: REG, verified_at: '2026-09-30T10:00:00+00:00' },
+        { provider: 'google', site_url: 'http://example-artist.com/', verified_at: '2026-09-30T10:00:00+00:00' },
+        { provider: 'bing', site_url: 'https://example-artist.com/shop/', verified_at: '2026-09-30T10:00:00+00:00' },
+      ],
+    })
+    const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+    await runSeoTests(writer.client, A, 'manual', { writer: writer.client, userId: 'user-1' }, { engine: engine(), readKnown: async () => known(), listingClients: l.make })
+    expect(l.make).not.toHaveBeenCalled()
+    expect(crawlSent()?.listing).toEqual({ google: null, bing: null })
+  })
+})
+
+describe('the other spelling (www ↔ bare)', () => {
+  // Checked ONCE per run, for the origin the gather actually landed on.
+  it('is checked once, for the origin the site answered on', async () => {
+    const landed = 'https://www.landed-artist.example'
+    const other = vi.fn(async () => ({ url: 'https://landed-artist.example/', status: 200, to: `${landed}/` }))
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => pages({ origin: landed }), checkOtherHost: other }), readKnown: async () => known(), readRegistered: async () => [] })
+    expect(other).toHaveBeenCalledTimes(1)
+    expect((other.mock.calls[0] as unknown[])[0]).toBe(landed)
+    expect(crawlSent()?.otherHost).toEqual({ url: 'https://landed-artist.example/', status: 200, to: `${landed}/` })
+  })
+
+  // A check that breaks or hangs is "not checked" (null), and nothing else about the run changes.
+  it('a check that throws or hangs is null, and the run is otherwise untouched', async () => {
+    for (const checkOtherHost of [async () => { throw new Error('bug') }, () => new Promise<SeoCrawl['otherHost']>(() => {})]) {
+      const f = world()
+      const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ checkOtherHost }), readKnown: async () => known(), readRegistered: async () => [], budgetMs: 60 })
+      expect(out.ok).toBe(true)
+      expect(stored(f).results.every((r) => r.status === 'pass')).toBe(true)
+      expect(crawlSent()?.otherHost).toBeNull()
+      expect(stored(f).note ?? '').not.toMatch(/ran out of time/)
+    }
+  })
+})
+
+describe('checkOtherHost: the real check, on a fake web', () => {
+  const W = 'https://www.skeen.example'
+  const BARE = 'https://skeen.example'
+
+  // www → asks the bare spelling ONCE, as a person's browser, follows it home, and records where it landed.
+  it('asks the bare spelling once for a www site, and records where it sent us', async () => {
+    const web = fakeSite({ [`${BARE}/`]: { status: 308, location: `${W}/` }, [`${W}/`]: '<html>home</html>' })
+    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: 200, to: `${W}/` })
+    expect(web.calls.filter((c) => c.url === `${BARE}/`)).toHaveLength(1)
+    expect(web.calls.every((c) => c.ua === BROWSER_UA)).toBe(true)
+  })
+
+  // A bare site: its www spelling. One that answers itself (no redirect) says so: `to` is itself.
+  it('asks the www spelling for a bare site; a spelling that answers itself names itself', async () => {
+    const web = fakeSite({ [`${W}/`]: '<html>a second copy</html>' })
+    expect(await checkOtherHost(BARE, { fetcher: web })).toEqual({ url: `${W}/`, status: 200, to: `${W}/` })
+  })
+
+  // Only www.<name> ↔ <name>: a sub-domain, a name we can't tell is the bare domain, an
+  // address or a port has no clear "other spelling", and nothing is fetched.
+  it.each(['https://shop.skeen.example', 'https://skeen.co.uk', 'https://93.184.216.34', 'https://www.skeen.example:8443', 'https://www.com', 'not a url'])('%s: no clear other spelling, nothing fetched', async (origin) => {
+    const web = fakeSite({})
+    expect(await checkOtherHost(origin, { fetcher: web })).toBeNull()
+    expect(web.calls).toEqual([])
+  })
+  // www.<name> is always clear, whatever <name> is.
+  it('drops www from any name', async () => {
+    const web = fakeSite({ 'https://skeen.co.uk/': { status: 301, location: 'https://www.skeen.co.uk/' }, 'https://www.skeen.co.uk/': '<html></html>' })
+    expect(await checkOtherHost('https://www.skeen.co.uk', { fetcher: web })).toMatchObject({ url: 'https://skeen.co.uk/', to: 'https://www.skeen.co.uk/' })
+  })
+
+  // A spelling that sends visitors to ANOTHER site is not followed; where it pointed is kept.
+  it('does not follow it to another site, and names where it pointed', async () => {
+    const web = fakeSite({ [`${BARE}/`]: { status: 302, location: 'https://parked-domains.example/lander' } })
+    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: null, to: 'https://parked-domains.example/lander' })
+    expect(web.calls.map((c) => c.url)).toEqual([`${BARE}/`])
+  })
+
+  // No answer: no status, nowhere; asked once, never retried. Sent home, and home didn't answer:
+  // where it was sent is still a fact.
+  it('no answer: nulls, asked once; a redirect that then got no answer keeps where it pointed', async () => {
+    const web = fakeSite({ [`${BARE}/`]: { fail: true } })
+    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: null, to: null })
+    expect(web.calls).toHaveLength(1)
+    const home = fakeSite({ [`${BARE}/`]: { status: 301, location: `${W}/` }, [`${W}/`]: { fail: true } })
+    expect(await checkOtherHost(W, { fetcher: home })).toEqual({ url: `${BARE}/`, status: null, to: `${W}/` })
   })
 })

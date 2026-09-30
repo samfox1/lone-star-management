@@ -11,6 +11,7 @@ import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { useSeeded } from '../../../_ui/use-seeded'
 import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
 import { useMounted, useNow } from './clock'
+import { CrawlSection } from './crawl-section'
 import type { TestTabData } from './load'
 import {
   classifyRunError,
@@ -247,7 +248,7 @@ export function TestTab({
     if (!revealId || !showRows || revealedRef.current === revealId) return
     revealedRef.current = revealId
     if (calm) return
-    const items = listRef.current?.querySelectorAll<HTMLElement>('[data-test-item]') ?? []
+    const items = listRef.current?.querySelectorAll<HTMLElement>('[data-crawl-item], [data-test-item]') ?? []
     items.forEach((el, i) => {
       el.animate?.(RISE, { duration: 350, delay: i * STAGGER_MS, easing: 'ease', fill: 'backwards' })
       el.querySelector<HTMLElement>('[data-status-mark]')?.animate?.(POP, { duration: 400, delay: i * STAGGER_MS + 120, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' })
@@ -395,6 +396,8 @@ export function TestTab({
 
       {showRows ? (
         <div ref={listRef} onKeyDown={onListKey} className="mt-2">
+          {/* How crawlers see your site: first, above the four groups (round 11). */}
+          <CrawlSection crawl={latest?.crawl} site={latest?.siteUrl ?? ''} />
           {groups.map((g) => (
             <section key={g.id} aria-label={g.label}>
               <div className="mb-0.5 mt-[26px] flex items-baseline justify-between gap-4">

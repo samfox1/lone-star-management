@@ -6,10 +6,13 @@
  * ┌──────────────────────────────────────────────────────────────────────────────────────────┐
  * │ NOT RUN until the migration is pushed. Flip MIGRATION_PUSHED to true in the SAME change  │
  * │ as `npm run db:push`, then run this file (and `npm run audit:grants`).                   │
+ * │ The crawl block has its own gate: CRAWL_MIGRATION_PUSHED, for 20261001120000.            │
  * └──────────────────────────────────────────────────────────────────────────────────────────┘
  *
  * Code:     supabase/migrations/20260929140000_seo_test_runs.sql (the seo_test_runs table, its
- *           RLS and grants, seo_test_claim, seo_test_finish), through src/lib/seo-tests/store.ts
+ *           RLS and grants, seo_test_claim, seo_test_finish) and 20261001120000_seo_test_crawl.sql
+ *           (the `crawl` column, its check, seo_test_finish + p_crawl), through
+ *           src/lib/seo-tests/store.ts
  * Feature:  Test runs · storage (who may read and write a run), all 24 SEO tests
  * Tier:     STRICT (AGENTS.md "Test depth"): RLS, grants and stored data. Every denial has a
  *           planted witness (rule 2), every refused write is checked by row STATE through the
@@ -24,25 +27,33 @@
  *             three clicks makes one), at most 2 runs at once per person
  *           • a finished run is immutable; `reach` is stored as given and junk is refused; results
  *             over 256 KB (bytes) are refused and the run can still be failed; the newest 30 are kept
+ *           • the crawl (what a run saw): stored with a done run and read back by its manager; a
+ *             failed run keeps none; it never changes after the finish; only the service role may
+ *             call the new seo_test_finish; over 64 KB (bytes) or not an object, the table refuses
  *           The 2026-09-29 security review's attacks are cases here (a forged run, skipping the
  *           cool-down by claiming as "publish", wiping the history by delete or by 35 claims).
  * Not here: the 5-minute "abandoned run" sweep and the hourly per-person ceiling (30): ran_at is
  *           stamped by the database so a client can't backdate a row, and 30 real runs are too
- *           slow for this suite; both were checked on a throwaway local Postgres. The TypeScript
- *           side of each rule: tests/unit/seo-tests/runs/storage.test.ts.
+ *           slow for this suite; both were checked on a throwaway local Postgres. Likewise "a new
+ *           run never starts with a crawl" and "a running run cannot gain one": no API role can
+ *           insert or update the table, so only the owner could try (checked locally, 2026-09-30).
+ *           The TypeScript side of each rule: tests/unit/seo-tests/runs/storage.test.ts.
  * Fixtures: the HOSTED project (no fake): the seeded managers A and B signed in, the service
  *           client, and throwaway artists made and deleted by this file; one finished run on
  *           artist A is the witness every denial is measured against.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { claimRun, failRun, finishRun } from '@/lib/seo-tests/store'
-import { SEO_TEST_IDS, type SeoTestResult } from '@/lib/seo-tests/types'
+import { claimRun, failRun, finishRun, latestRun } from '@/lib/seo-tests/store'
+import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
+import { SEO_TEST_IDS, type SeoCrawl, type SeoTestResult } from '@/lib/seo-tests/types'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 const MIGRATION_PUSHED = true
+/** 20261001120000_seo_test_crawl.sql. Flip in the same change as its push, then run this file. */
+const CRAWL_MIGRATION_PUSHED = false
 
 const results = (fails: number): SeoTestResult[] =>
   SEO_TEST_IDS.map((id, i) => ({ id, status: i < fails ? 'fail' : 'pass', value: 'v', sentence: 's.', evidence: [{ label: 'seen', value: id }] }))
@@ -257,5 +268,129 @@ describe.skipIf(!MIGRATION_PUSHED)('seo_test_runs', () => {
       expect(kept).not.toContain(ids[1])
       expect(kept).toContain(ids[31])
     }, 120_000)
+  })
+})
+
+/** A small crawl as a run makes one (types.ts SeoCrawl), every crawler from the registry (bots.ts). */
+const crawl = (): SeoCrawl => ({
+  v: 1,
+  robots: {
+    url: 'https://www.example-artist.com/robots.txt',
+    status: 200,
+    text: 'User-agent: *\nAllow: /',
+    truncated: false,
+    bots: SEO_BOTS.map((b) => ({ key: b.key, who: b.who, token: b.robotsToken, visits: b.fetches, verdict: 'allowed' as const, why: 'rules' as const, group: 'User-agent: *', rule: 'Allow: /' })),
+  },
+  sitemap: { url: 'https://www.example-artist.com/sitemap.xml', status: 200, namedInRobots: true, total: 1, pages: [{ path: '/', lastmod: '2026-09-28', status: 200 }], sameDates: true },
+  pages: [{
+    path: '/',
+    status: 200,
+    canonical: { person: 'https://www.example-artist.com/', google: 'https://www.example-artist.com/', bing: null },
+    noindex: { meta: false, header: false },
+    visits: Object.fromEntries(FETCHING_BOTS.map((b) => [b.key, 200])),
+  }],
+  otherHost: null,
+  listing: { google: null, bing: [{ path: '/', answered: true, lastCrawled: '2026-09-26T08:00:00Z', status: 200 }] },
+})
+
+describe.skipIf(!CRAWL_MIGRATION_PUSHED)('seo_test_runs.crawl: what a run saw (20261001120000)', () => {
+  let svc: SupabaseClient
+  let mA: SupabaseClient
+  const made: ThrowawayArtist[] = []
+
+  const rowOf = async (runId: string) => {
+    const { data, error } = await svc.from('seo_test_runs').select('*').eq('id', runId).single()
+    if (error) throw new Error(error.message)
+    return data as Record<string, unknown>
+  }
+  /** A running run on a fresh throwaway artist (scheduled: no cool-down, no per-person limit). */
+  const running = async (label: string) => {
+    const artist = await createThrowawayArtist(svc, label, mA)
+    made.push(artist)
+    const claim = await claimRun(svc, artist.id, 'scheduled', { userId: null })
+    if (!claim.ok) throw new Error(`${label} claim: ${claim.error}`)
+    return { artist, runId: claim.runId }
+  }
+  /** Every argument of the NEW seo_test_finish, p_crawl included (so only it can answer). */
+  const finishArgs = (runId: string, over: Record<string, unknown> = {}) => ({
+    p_run_id: runId, p_status: 'done', p_results: results(0), p_site_url: null, p_site_fresh: null, p_published_at: null, p_note: null, p_reach: null, p_crawl: crawl(), ...over,
+  })
+
+  beforeAll(async () => {
+    svc = serviceClient()
+    mA = await signInAs(SEED.managerA)
+  })
+
+  afterAll(async () => {
+    for (const a of made) await deleteThrowawayArtist(svc, a)
+  })
+
+  // Stored and shown: finishRun stores the crawl with the run, and the manager's own session
+  // (RLS) reads it back whole. The ROW is checked too: finishRun retries without the crawl when
+  // the call with it fails, so `ok: true` alone would not prove the crawl was stored.
+  it('CRITICAL: a run finished with a crawl reads back with it, in the manager\'s own session', async () => {
+    const { artist, runId } = await running('seo-crawl read')
+    expect(await finishRun(svc, runId, { results: results(0), siteUrl: null, siteFresh: null, publishedAt: null, crawl: crawl() })).toEqual({ ok: true })
+    expect((await rowOf(runId)).crawl).toEqual(crawl())
+    const run = await latestRun(mA, artist.id)
+    expect(run?.id).toBe(runId)
+    expect(run?.crawl).toEqual(crawl())
+  })
+
+  // A failed run keeps none: the finish is handed a crawl the table would take (no error: the
+  // call reached the row), and the row still has no crawl.
+  it('CRITICAL: a FAILED run keeps no crawl, even when the finish hands it one', async () => {
+    const { runId } = await running('seo-crawl failed')
+    const { data, error } = await svc.rpc('seo_test_finish', finishArgs(runId, { p_status: 'failed', p_results: null, p_note: 'failed on purpose' }))
+    expect(error).toBeNull()
+    expect(data).toBe(true)
+    const row = await rowOf(runId)
+    expect(row.status).toBe('failed')
+    expect(row.crawl).toBeNull()
+  })
+
+  // Immutable: once finished, the crawl is fixed. Finishing again answers false, and neither a
+  // manager nor the service role can write the column directly (42501); the row is unchanged.
+  it('CRITICAL: a finished run\'s crawl can never change (finish again, a manager\'s update, the service role\'s update)', async () => {
+    const { runId } = await running('seo-crawl immutable')
+    await finishRun(svc, runId, { results: results(0), siteUrl: null, siteFresh: null, publishedAt: null, crawl: crawl() })
+    const before = await rowOf(runId)
+    expect(before.crawl).toEqual(crawl())
+    const forged = { ...crawl(), otherHost: { url: 'https://forged.example/', status: 200, to: null } }
+    const again = await svc.rpc('seo_test_finish', finishArgs(runId, { p_crawl: forged }))
+    expect(again.error).toBeNull()
+    expect(again.data).toBe(false)
+    expectRlsDenied((await mA.from('seo_test_runs').update({ crawl: forged }).eq('id', runId)).error, 'a manager\'s update')
+    expectRlsDenied((await svc.from('seo_test_runs').update({ crawl: null }).eq('id', runId)).error, 'the service role\'s update')
+    expect(await rowOf(runId)).toEqual(before)
+  })
+
+  // The door: the new seo_test_finish (with p_crawl) is service-role only. The call names
+  // p_crawl, so before the push it would be PGRST202 and fail here, never pass as "denied".
+  it('CRITICAL: anon and a manager\'s session cannot execute the new seo_test_finish', async () => {
+    const { runId } = await running('seo-crawl grants')
+    const before = await rowOf(runId)
+    expect(before.status).toBe('running')
+    for (const client of [anonClient(), mA]) {
+      expectExecuteDenied((await client.rpc('seo_test_finish', finishArgs(runId))).error, 'seo_test_finish')
+    }
+    expect(await rowOf(runId)).toEqual(before)
+    await failRun(svc, runId, 'grants test')
+  })
+
+  // The table's own check: over 64 KB counted in BYTES, or not an object, is refused (23514)
+  // and the run is still running. Straight through the function: capCrawl would have cut it.
+  // Then finishRun with the same crawl stores the run, its robots text cut (capCrawl, step 1).
+  it('the table refuses a crawl over 64 KB (bytes) or one that is not an object; finishRun cuts it and stores the run', async () => {
+    const { runId } = await running('seo-crawl size')
+    const big = crawl()
+    big.robots.text = '音'.repeat(22_000) // 22,000 characters, 66,000 bytes
+    expect((await svc.rpc('seo_test_finish', finishArgs(runId, { p_crawl: big }))).error?.code).toBe('23514')
+    expect((await svc.rpc('seo_test_finish', finishArgs(runId, { p_crawl: [crawl()] }))).error?.code).toBe('23514')
+    expect((await rowOf(runId)).status).toBe('running')
+    expect(await finishRun(svc, runId, { results: results(0), siteUrl: null, siteFresh: null, publishedAt: null, crawl: big })).toEqual({ ok: true })
+    const row = await rowOf(runId)
+    expect(row.status).toBe('done')
+    expect(row.crawl).toEqual({ ...crawl(), robots: { ...crawl().robots, text: null, truncated: true } })
   })
 })

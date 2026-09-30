@@ -338,8 +338,10 @@ export type SeoCrawl = {
    *  registered with it (site_verifications, verified), so it couldn't be asked. Bing has no
    *  "listed" answer: only when it last crawled a page (say "Bing last visited", never "listed"). */
   listing: {
-    google: { path: string; verdict: string | null; coverage: string | null; lastCrawl: string | null }[] | null
-    bing: { path: string; lastCrawled: string | null; status: number | null }[] | null
+    /** `answered` false = we asked and got no answer (failed, timed out, no key): never "not
+     *  listed" and never "no visit". */
+    google: { path: string; answered: boolean; verdict: string | null; coverage: string | null; lastCrawl: string | null }[] | null
+    bing: { path: string; answered: boolean; lastCrawled: string | null; status: number | null }[] | null
   }
 }
 

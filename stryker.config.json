@@ -30,6 +30,7 @@
     "packages/site-bridge/src/mirror.ts",
     "packages/site-bridge/src/brand.ts",
     "packages/site-bridge/src/verification.ts",
+    "src/lib/seo-tests/crawl.ts",
     "src/lib/search-engines/address.ts",
     "src/lib/search-engines/bing.ts",
     "src/lib/search-engines/google.ts",

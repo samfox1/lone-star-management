@@ -5,6 +5,8 @@
  * its private key (no library, Node crypto), trades it for an access token, and calls:
  *   Site Verification API v1  getToken (META) · webResource.insert (verify, with the owner)
  *   Search Console API v3     sites.add · sitemaps.submit
+ *   Search Console API v1     urlInspection.index.inspect (is a page listed? the AI test's
+ *                             "How crawlers see your site", seo-tests/run.ts)
  * The key comes from the env (`GOOGLE_SEARCH_SERVICE_ACCOUNT_B64`, base64 JSON). It owns every
  * client site in Search Console: it never appears in a return value, a log line or an error, and
  * this file is server-only (imported by the register script and, later, admin server actions).
@@ -18,7 +20,7 @@ import { isGoogleVerification } from '@samfox1/site-bridge/verification'
 
 export type GoogleCreds = { client_email: string; private_key: string }
 
-export type GoogleReason = 'google_auth' | 'google_token' | 'google_verify' | 'google_owner' | 'google_add' | 'google_sitemap' | 'google_network'
+export type GoogleReason = 'google_auth' | 'google_token' | 'google_verify' | 'google_owner' | 'google_add' | 'google_sitemap' | 'google_inspect' | 'google_network'
 export type GoogleResult<T> = { ok: true; value: T } | { ok: false; reason: GoogleReason; status?: number; detail?: string }
 
 export type GoogleDeps = { fetcher?: typeof fetch; now?: () => number }
@@ -27,6 +29,7 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const SCOPES = ['https://www.googleapis.com/auth/siteverification', 'https://www.googleapis.com/auth/webmasters']
 const VERIFY_API = 'https://www.googleapis.com/siteVerification/v1'
 const CONSOLE_API = 'https://www.googleapis.com/webmasters/v3'
+const INSPECT_API = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect'
 const TIMEOUT_MS = 15_000
 
 /** The robot's key from the env value (base64 JSON), or null when it is missing or broken.
@@ -52,6 +55,21 @@ export function metaContent(token: unknown): string | null {
   const inTag = token.match(/\bcontent\s*=\s*"([^"]*)"/i)?.[1] ?? token.match(/\bcontent\s*=\s*'([^']*)'/i)?.[1]
   const value = (inTag ?? token).trim()
   return isGoogleVerification(value) ? value : null
+}
+
+/** What URL Inspection says about one page (`indexStatusResult`): `verdict` PASS / PARTIAL / FAIL /
+ *  NEUTRAL, `coverage` Google's sentence ("Submitted and indexed"), `lastCrawl` when Googlebot
+ *  last fetched it (ISO). null = Google's answer did not say. */
+export type GoogleInspection = { verdict: string | null; coverage: string | null; lastCrawl: string | null }
+
+/** A string field of Google's answer, cut; anything else null. */
+const textField = (v: unknown, max: number): string | null => (typeof v === 'string' && v !== '' ? v.slice(0, max) : null)
+
+/** An RFC 3339 time as ISO, or null when it isn't one. */
+function timeField(v: unknown): string | null {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(v)) return null
+  const t = Date.parse(v)
+  return Number.isFinite(t) ? new Date(t).toISOString() : null
 }
 
 /** Google's own short message from an error body, cut, for the operator. */
@@ -167,6 +185,19 @@ export function googleClient(creds: GoogleCreds, deps: GoogleDeps = {}) {
     async addSite(siteUrl: string): Promise<GoogleResult<true>> {
       const r = await call('google_add', `${CONSOLE_API}/sites/${encodeURIComponent(siteUrl)}`, { method: 'PUT' })
       return r.ok ? { ok: true, value: true } : r
+    },
+
+    /**
+     * Is this page on Google? Search Console's URL Inspection for a page of a property the robot
+     * owns (`siteUrl` exactly as registered). Read-only: it asks Google, it changes nothing.
+     */
+    async inspectUrl(siteUrl: string, pageUrl: string): Promise<GoogleResult<GoogleInspection>> {
+      const r = await call('google_inspect', INSPECT_API, jsonInit('POST', { inspectionUrl: pageUrl, siteUrl }))
+      if (!r.ok) return r
+      const j = (await r.value.json().catch(() => ({}))) as { inspectionResult?: { indexStatusResult?: Record<string, unknown> } }
+      if (!j.inspectionResult || typeof j.inspectionResult !== 'object') return { ok: false, reason: 'google_inspect', status: r.value.status, detail: 'no inspection result in the answer' }
+      const x = j.inspectionResult.indexStatusResult ?? {}
+      return { ok: true, value: { verdict: textField(x.verdict, 60), coverage: textField(x.coverageState, 200), lastCrawl: timeField(x.lastCrawlTime) } }
     },
 
     /** Tells Google where the site's page list is. */

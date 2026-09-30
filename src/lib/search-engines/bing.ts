@@ -5,7 +5,8 @@
  * Bing's JSON API (`https://ssl.bing.com/webmaster/api.svc/json/{Method}?apikey=…`; SOAP/POX were
  * retired 2026-08-31). Answers come wrapped as `{ "d": … }`. The calls:
  *   AddSite · GetUserSites (this site's `AuthenticationCode`, the msvalidate.01 value) ·
- *   VerifySite · SubmitFeed (how a sitemap reaches Bing; there is no SubmitSitemap)
+ *   VerifySite · SubmitFeed (how a sitemap reaches Bing; there is no SubmitSitemap) ·
+ *   GetUrlInfo (when Bing last crawled a page: the AI test's "How crawlers see your site")
  *
  * The key rides in every request URL, so it is the thing to protect: it never reaches a return
  * value, and Bing's own message is passed on (`detail`) only with the key blanked out. A thrown
@@ -16,11 +17,31 @@
  */
 import { isBingVerification } from '@samfox1/site-bridge/verification'
 
-export type BingReason = 'bing_auth' | 'bing_add' | 'bing_code' | 'bing_verify' | 'bing_feed' | 'bing_network'
+export type BingReason = 'bing_auth' | 'bing_add' | 'bing_code' | 'bing_verify' | 'bing_feed' | 'bing_urlinfo' | 'bing_network'
 export type BingResult<T> = { ok: true; value: T } | { ok: false; reason: BingReason; status?: number; detail?: string }
 
 const API = 'https://ssl.bing.com/webmaster/api.svc/json/'
 const TIMEOUT_MS = 15_000
+
+/** When Bing last crawled a page (ISO) and the status it got then. null = Bing didn't say, or
+ *  never crawled it. Bing has no "is it listed" answer: only this. */
+export type BingUrlInfo = { lastCrawled: string | null; status: number | null }
+
+/** Before this, a "crawl date" is .NET's DateTime.MinValue (year 1: never crawled) or junk. */
+const EARLIEST_CRAWL = Date.UTC(2000, 0, 1)
+
+/**
+ * Bing's dates, .NET's JSON form `/Date(1316156400000-0700)/`: milliseconds since 1970 in UTC,
+ * then an optional `±hhmm` that only says which zone the value was local to (Microsoft's
+ * DataContractJsonSerializer docs), so it does not move the moment. ISO, or null.
+ */
+function bingDate(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const m = /^\/Date\((-?\d{1,15})(?:[+-]\d{4})?\)\/$/.exec(v)
+  if (!m) return null
+  const ms = Number(m[1])
+  return Number.isFinite(ms) && ms >= EARLIEST_CRAWL ? new Date(ms).toISOString() : null
+}
 
 /** The same site whatever the case or trailing slash. */
 function sameUrl(a: string, b: string): boolean {
@@ -40,8 +61,8 @@ export function bingClient(apiKey: string, deps: { fetcher?: typeof fetch } = {}
   const scrub = (text: string) => text.split(apiKey).join('<key>').slice(0, 200)
 
   /** One call. `reason` names the step when Bing says no. */
-  async function call(reason: BingReason, method: string, body?: Record<string, string>): Promise<BingResult<unknown>> {
-    const url = `${API}${method}?apikey=${encodeURIComponent(apiKey)}`
+  async function call(reason: BingReason, method: string, body?: Record<string, string>, query: Record<string, string> = {}): Promise<BingResult<unknown>> {
+    const url = `${API}${method}?${new URLSearchParams({ ...query, apikey: apiKey }).toString()}`
     let res: Response
     try {
       res = await fetcher(url, {
@@ -83,6 +104,16 @@ export function bingClient(apiKey: string, deps: { fetcher?: typeof fetch } = {}
       const r = await call('bing_verify', 'VerifySite', { siteUrl })
       if (!r.ok) return r
       return r.value === true ? { ok: true, value: true } : { ok: false, reason: 'bing_verify', detail: 'Bing did not find the tag yet' }
+    },
+
+    /** When Bing last crawled one page of the site (`siteUrl` exactly as registered). Read-only. */
+    async urlInfo(siteUrl: string, pageUrl: string): Promise<BingResult<BingUrlInfo>> {
+      const r = await call('bing_urlinfo', 'GetUrlInfo', undefined, { siteUrl, url: pageUrl })
+      if (!r.ok) return r
+      if (!r.value || typeof r.value !== 'object') return { ok: false, reason: 'bing_urlinfo', detail: 'no url info in the answer' }
+      const d = r.value as { LastCrawledDate?: unknown; HttpStatus?: unknown }
+      const status = typeof d.HttpStatus === 'number' && Number.isInteger(d.HttpStatus) && d.HttpStatus >= 100 && d.HttpStatus <= 599 ? d.HttpStatus : null
+      return { ok: true, value: { lastCrawled: bingDate(d.LastCrawledDate), status } }
     },
 
     /** Tells Bing where the site's page list is. */

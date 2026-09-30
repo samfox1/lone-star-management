@@ -104,7 +104,9 @@ export type FinishInput = {
   publishedAt: string | null
   note?: string | null
   /** Did the site answer (SeoEvidence.reach)? null = no site, or the run could not tell. */
-  reach?: SeoRunReach | null  /** What the run saw, for "How crawlers see your site" (types.ts SeoCrawl). null/absent = none. */
+  reach?: SeoRunReach | null
+  /** What the run saw, for "How crawlers see your site" (types.ts SeoCrawl). null/absent = none.
+   *  Stored through `capCrawl`: anything but a whole v:1 crawl is dropped, never guessed at. */
   crawl?: SeoCrawl | null
 }
 
@@ -127,11 +129,17 @@ export function reachOf(v: unknown): SeoRunReach | null {
  * Finish a running run with its results: one call to `seo_test_finish` (service role). `true`
  * back means a RUNNING run was finished; `false` (abandoned, pruned, already finished) is not
  * reported as saved.
+ *
+ * The crawl rides along as `p_crawl` (capped by `capCrawl`), and only when there is one: a
+ * database from before 20261001120000 has no such argument. It is extra, never the run: when
+ * the call WITH a crawl fails (that migration not pushed yet, or a crawl the table refuses), the
+ * run is finished again without it, so its results are never lost to the crawl. A failed call
+ * changes nothing (the function is one statement), so the second call is the only write.
  */
 export async function finishRun(writer: SupabaseClient, runId: string, input: FinishInput): Promise<{ ok: true } | { ok: false; error: string }> {
   const fail = { ok: false as const, error: 'The test finished but its results weren’t saved.' }
   try {
-    const { data, error } = await writer.rpc('seo_test_finish', {
+    const args = {
       p_run_id: runId,
       p_status: 'done',
       p_results: capResults(input.results),
@@ -140,7 +148,10 @@ export async function finishRun(writer: SupabaseClient, runId: string, input: Fi
       p_published_at: input.publishedAt,
       p_note: capNote(input.note),
       p_reach: reachOf(input.reach),
-    })
+    }
+    const crawl = capCrawl(input.crawl)
+    let { data, error } = await writer.rpc('seo_test_finish', crawl ? { ...args, p_crawl: crawl } : args)
+    if (error && crawl) ({ data, error } = await writer.rpc('seo_test_finish', args))
     return !error && data === true ? { ok: true } : fail
   } catch {
     return fail
@@ -195,7 +206,8 @@ function cutBytes(s: unknown, max: number): string {
   let kept = ''
   for (const ch of text) {
     const cp = ch.codePointAt(0)!
-    const c = cp >= 0xd800 && cp <= 0xdfff ? '\uFFFD' : ch
+    // A lone surrogate or a NUL: Postgres refuses either inside jsonb (22P02 / 22P05).
+    const c = (cp >= 0xd800 && cp <= 0xdfff) || cp === 0 ? '\uFFFD' : ch
     const b = charBytes(c.codePointAt(0)!)
     if (used + b > max) {
       cut = true
@@ -276,6 +288,147 @@ export function capResults(results: readonly SeoTestResult[]): SeoTestResult[] {
   return results.map(capResult)
 }
 
+/* ── the crawl: what a run saw (types.ts SeoCrawl) ──────────────────────────────────── */
+
+/** The table's check on `crawl` (20261001120000): `octet_length(crawl::text) <= 65536`. */
+export const CRAWL_MAX_BYTES = 65_536
+
+type CrawlBot = SeoCrawl['robots']['bots'][number]
+// Record<union, true>: a value added to the union is a compile error here until it is listed.
+const VERDICT: Record<CrawlBot['verdict'], true> = { allowed: true, blocked: true, unknown: true }
+const WHY: Record<CrawlBot['why'], true> = { rules: true, 'no-file': true, 'server-error': true, 'not-shown': true, 'slow-down': true, 'no-answer': true }
+
+function must(ok: boolean): asserts ok {
+  if (!ok) throw new Error('not a crawl')
+}
+const obj = (v: unknown): Row => (must(!!v && typeof v === 'object' && !Array.isArray(v)), v as Row)
+const text = (v: unknown): string => (must(typeof v === 'string'), v as string)
+const textOrNull = (v: unknown): string | null => (v === null ? null : text(v))
+const flag = (v: unknown): boolean => (must(typeof v === 'boolean'), v as boolean)
+/** An HTTP status (a whole number, three digits at most) or null. */
+const statusOf = (v: unknown): number | null => (v === null ? null : (must(Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 999), v as number))
+const countOf = (v: unknown): number => (must(Number.isSafeInteger(v) && (v as number) >= 0), v as number)
+const listOf = <T>(v: unknown, each: (x: Row) => T): T[] => (must(Array.isArray(v)), (v as unknown[]).map((x) => each(obj(x))))
+const oneOf = <T extends string>(v: unknown, known: Record<T, true>): T => (must(typeof v === 'string' && Object.hasOwn(known, v)), v as T)
+
+/**
+ * A crawl in EXACTLY its shape (types.ts SeoCrawl, version 1), rebuilt from its known fields
+ * only, or null. Anything else (another version, a missing or mistyped field anywhere, a
+ * verdict the page does not know) is null as a whole: the page renders every field as text,
+ * and a half-read crawl would say things the run never saw. Nullable fields must be present as
+ * null (absent is not "none"). Used on the way in (`capCrawl`) and on the way out (the reader).
+ */
+export function crawlOf(v: unknown): SeoCrawl | null {
+  try {
+    const c = obj(v)
+    must(c.v === 1)
+    const robots = obj(c.robots)
+    const sitemap = obj(c.sitemap)
+    const listing = obj(c.listing)
+    const other = c.otherHost === null ? null : obj(c.otherHost)
+    return {
+      v: 1,
+      robots: {
+        url: text(robots.url),
+        status: statusOf(robots.status),
+        text: textOrNull(robots.text),
+        truncated: flag(robots.truncated),
+        bots: listOf(robots.bots, (b) => ({
+          key: text(b.key),
+          who: text(b.who),
+          token: text(b.token),
+          visits: flag(b.visits),
+          verdict: oneOf(b.verdict, VERDICT),
+          why: oneOf(b.why, WHY),
+          group: textOrNull(b.group),
+          rule: textOrNull(b.rule),
+        })),
+      },
+      sitemap: {
+        url: textOrNull(sitemap.url),
+        status: statusOf(sitemap.status),
+        namedInRobots: flag(sitemap.namedInRobots),
+        total: countOf(sitemap.total),
+        pages: listOf(sitemap.pages, (p) => ({ path: text(p.path), lastmod: textOrNull(p.lastmod), status: statusOf(p.status) })),
+        sameDates: flag(sitemap.sameDates),
+      },
+      pages: listOf(c.pages, (p) => {
+        const canonical = obj(p.canonical)
+        const noindex = obj(p.noindex)
+        return {
+          path: text(p.path),
+          status: statusOf(p.status),
+          canonical: { person: textOrNull(canonical.person), google: textOrNull(canonical.google), bing: textOrNull(canonical.bing) },
+          noindex: { meta: flag(noindex.meta), header: flag(noindex.header) },
+          visits: Object.fromEntries(Object.entries(obj(p.visits)).map(([key, status]) => [key, statusOf(status)])),
+        }
+      }),
+      otherHost: other && { url: text(other.url), status: statusOf(other.status), to: textOrNull(other.to) },
+      listing: {
+        google: listing.google === null ? null : listOf(listing.google, (g) => ({ path: text(g.path), answered: g.answered === true, verdict: textOrNull(g.verdict), coverage: textOrNull(g.coverage), lastCrawl: textOrNull(g.lastCrawl) })),
+        bing: listing.bing === null ? null : listOf(listing.bing, (b) => ({ path: text(b.path), answered: b.answered === true, lastCrawled: textOrNull(b.lastCrawled), status: statusOf(b.status) })),
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+/** A NUL or half an emoji (a lone surrogate): Postgres refuses either inside jsonb (22P05 /
+ *  22P02), which would sink the whole finish, results and all. Each becomes U+FFFD. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+const storableText = (s: string) => s.replace(LONE_SURROGATE, '�').replaceAll('\u0000', '�')
+function storable<T>(v: T): T {
+  if (typeof v === 'string') return storableText(v) as T
+  if (Array.isArray(v)) return v.map(storable) as T
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [storableText(k), storable(x)])) as T
+  return v
+}
+
+/**
+ * BYTES of `v` as Postgres writes jsonb as text (`crawl::text`, what the table's check counts):
+ * `{"k": v, "k2": v}`, `[a, b]`, strings JSON-escaped in UTF-8 (charBytes). Numbers reach here
+ * only as whole numbers (crawlOf), which both sides spell the same.
+ */
+function jsonbBytes(v: unknown): number {
+  if (v === null) return 4
+  if (typeof v === 'string') return textBytes(v) + 2
+  if (typeof v === 'boolean') return v ? 4 : 5
+  if (typeof v === 'number') return String(v).length
+  const parts = Array.isArray(v) ? v.map(jsonbBytes) : Object.entries(v as Row).map(([k, x]) => textBytes(k) + 4 + jsonbBytes(x))
+  return 2 + parts.reduce((n, b) => n + b, 0) + 2 * Math.max(0, parts.length - 1)
+}
+
+/** Take items off the END of `list` (inside a crawl of `bytes`) until the crawl fits or the
+ *  list is empty. Each item but the first follows a ", ", which goes with it; the first one's
+ *  removal ends the loop either way. */
+function trimToFit<T>(list: T[], bytes: number): void {
+  let n = bytes
+  while (n > CRAWL_MAX_BYTES && list.length > 0) n -= jsonbBytes(list.pop()) + 2
+}
+
+/**
+ * The crawl as it may be stored, or null. Null for anything that is not a whole v:1 crawl
+ * (crawlOf). Every string made storable (`storable`). Kept under the table's 64 KB, in
+ * bytes as Postgres counts them, by giving up the least useful part first:
+ *   1. the robots.txt file's own text (`text: null`, `truncated: true`: read, but not kept);
+ *   2. sitemap pages, from the end (`total` still says how many the list named);
+ *   3. opened pages, from the end ("/" is first, so it goes last).
+ * Every crawler's robots verdict is always kept: if the crawl still does not fit, it is null.
+ */
+export function capCrawl(v: unknown): SeoCrawl | null {
+  const parsed = crawlOf(v)
+  if (!parsed) return null
+  const crawl = storable(parsed)
+  if (jsonbBytes(crawl) > CRAWL_MAX_BYTES && crawl.robots.text !== null) {
+    crawl.robots.text = null
+    crawl.robots.truncated = true
+  }
+  trimToFit(crawl.sitemap.pages, jsonbBytes(crawl))
+  trimToFit(crawl.pages, jsonbBytes(crawl))
+  return jsonbBytes(crawl) <= CRAWL_MAX_BYTES ? crawl : null
+}
+
 /* ── readers ────────────────────────────────────────────────────────────────────────── */
 
 /** A finished run as the page reads it: the contract's `SeoTestRun` plus what the run knew
@@ -301,7 +454,13 @@ export type StoredSeoRun = SeoTestRun & {
 export type SeoRunSummary = Omit<StoredSeoRun, 'results'> & { statuses: Partial<Record<SeoTestId, SeoTestStatus>> }
 
 const SUMMARY_COLS = 'id, artist_id, ran_at, finished_at, trigger, site_url, passed, total, summary, site_fresh, published_at, note, reach'
-const RUN_COLS = `${SUMMARY_COLS}, results`
+/** The full run adds its results and its crawl (the history reads neither). */
+const RUN_COLS = `${SUMMARY_COLS}, results, crawl`
+/** The same read on a table without the crawl column (before 20261001120000 is pushed). */
+const RUN_COLS_NO_CRAWL = `${SUMMARY_COLS}, results`
+
+/** Postgres's "no such column" (42703), as PostgREST passes it through. */
+const missingColumn = (e: { code?: string | null; message?: string | null } | null) => !!e && (e.code === '42703' || /column .* does not exist/i.test(e.message ?? ''))
 
 type Row = Record<string, unknown>
 
@@ -359,22 +518,20 @@ function resultsOf(raw: unknown): SeoTestResult[] {
 function runOf(row: Row): StoredSeoRun {
   const { statuses: _statuses, ...rest } = summaryOf(row)
   void _statuses
-  return { ...rest, results: resultsOf(row.results) }
+  return { ...rest, results: resultsOf(row.results), crawl: crawlOf(row.crawl) }
 }
 
 /** The newest FINISHED run, or null when the artist has never been tested. Throws when the
  *  read fails: "never tested" and "couldn't read" must not look the same. */
 export async function latestRun(supabase: SupabaseClient, artistId: string): Promise<StoredSeoRun | null> {
-  const { data, error } = await supabase
-    .from('seo_test_runs')
-    .select(RUN_COLS)
-    .eq('artist_id', artistId)
-    .eq('status', 'done')
-    .order('ran_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const read = (cols: string) =>
+    supabase.from('seo_test_runs').select(cols).eq('artist_id', artistId).eq('status', 'done').order('ran_at', { ascending: false }).limit(1).maybeSingle()
+  let { data, error } = await read(RUN_COLS)
+  // The crawl column arrives with a migration; until it is live, the page reads the run without it
+  // rather than saying "couldn't read" (the code can run before the database has the column).
+  if (missingColumn(error)) ({ data, error } = await read(RUN_COLS_NO_CRAWL))
   if (error) throw new Error(`seo_test_runs: ${error.message}`)
-  return data ? runOf(data as Row) : null
+  return data ? runOf(data as unknown as Row) : null
 }
 
 /** The newest finished runs, newest first, without their results. Throws when the read fails. */

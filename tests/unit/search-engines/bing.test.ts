@@ -160,3 +160,66 @@ describe('failures never carry the key', () => {
     noKey(r)
   })
 })
+
+describe('when Bing last crawled a page (GetUrlInfo)', () => {
+  const PAGE = 'https://www.skeenmusic.com/about'
+  /** 2011-09-16T07:00:00Z: Bing's own documented example value. */
+  const MS = 1316156400000
+
+  // A GET with the site and the page in the query, the key beside them, no body.
+  it('asks GetUrlInfo for one page of the site', async () => {
+    const b = fakeBing(() => json({ d: { __type: 'UrlInfo:#Microsoft.Bing.Webmaster.Api', Url: PAGE, HttpStatus: 200, LastCrawledDate: `/Date(${MS}-0700)/` } }))
+    const r = await bingClient(KEY, { fetcher: b.fetcher }).urlInfo(SITE, PAGE)
+    expect(r).toEqual({ ok: true, value: { lastCrawled: '2011-09-16T07:00:00.000Z', status: 200 } })
+    const c = b.calls[0]
+    expect(`${c.url.origin}${c.url.pathname}`).toBe(`${API}GetUrlInfo`)
+    expect(c.method).toBe('GET')
+    expect(c.body).toBeUndefined()
+    expect(c.url.searchParams.get('apikey')).toBe(KEY)
+    expect(c.url.searchParams.get('siteUrl')).toBe(SITE)
+    expect(c.url.searchParams.get('url')).toBe(PAGE)
+  })
+
+  // The .NET date form: the number is milliseconds since 1970 in UTC, and the "+hhmm" after it
+  // only says which zone the value was local to (Microsoft's DataContractJsonSerializer docs). So
+  // the same number is the same moment whatever the offset: applying the offset again would
+  // move the date by hours.
+  it('reads /Date(ms±hhmm)/ as the UTC moment the number names, whatever the offset', async () => {
+    for (const offset of ['', '+0000', '-0700', '+0530', '-1200']) {
+      const b = fakeBing(() => json({ d: { HttpStatus: 200, LastCrawledDate: `/Date(${MS}${offset})/` } }))
+      const r = await bingClient(KEY, { fetcher: b.fetcher }).urlInfo(SITE, PAGE)
+      expect(r, offset).toEqual({ ok: true, value: { lastCrawled: new Date(MS).toISOString(), status: 200 } })
+    }
+  })
+
+  // "Never crawled" comes back as .NET's DateTime.MinValue (year 1) or no date; a status of 0 is
+  // "no answer recorded". Both are null, never a date or a status nobody saw.
+  it('is null for a page Bing never crawled, or a date that isn’t one', async () => {
+    for (const LastCrawledDate of ['/Date(-62135596800000)/', '/Date(-62135568000000-0800)/', '/Date(0)/', 'yesterday', '/Date(abc)/', null, 1316156400000, `/Date(${MS})/ trailing`]) {
+      for (const HttpStatus of [0, null, 'x', 1000, 200.5]) {
+        const b = fakeBing(() => json({ d: { HttpStatus, LastCrawledDate } }))
+        expect(await bingClient(KEY, { fetcher: b.fetcher }).urlInfo(SITE, PAGE), `${String(LastCrawledDate)} ${String(HttpStatus)}`).toEqual({ ok: true, value: { lastCrawled: null, status: null } })
+      }
+    }
+  })
+
+  // No url info at all is a failure, not "never crawled".
+  it('says bing_urlinfo when Bing sends no url info', async () => {
+    for (const body of [{ d: null }, { d: 'x' }, {}]) {
+      const b = fakeBing(() => json(body))
+      expect(await bingClient(KEY, { fetcher: b.fetcher }).urlInfo(SITE, PAGE), JSON.stringify(body)).toMatchObject({ ok: false, reason: 'bing_urlinfo' })
+    }
+  })
+
+  // Refusals: a page not on the site is bing_urlinfo, a refused key bing_auth; the key never rides along.
+  it('says bing_urlinfo or bing_auth when Bing refuses, and never carries the key', async () => {
+    const bad = fakeBing(() => json({ ErrorCode: 7, Message: `InvalidUrl for ${API}GetUrlInfo?apikey=${KEY}` }, 400))
+    const r = await bingClient(KEY, { fetcher: bad.fetcher }).urlInfo(SITE, PAGE)
+    expect(r).toMatchObject({ ok: false, reason: 'bing_urlinfo', status: 400 })
+    noKey(r)
+    const auth = fakeBing(() => json({ Message: `bad key ${KEY}` }, 401))
+    const a = await bingClient(KEY, { fetcher: auth.fetcher }).urlInfo(SITE, PAGE)
+    expect(a).toMatchObject({ ok: false, reason: 'bing_auth' })
+    noKey(a)
+  })
+})

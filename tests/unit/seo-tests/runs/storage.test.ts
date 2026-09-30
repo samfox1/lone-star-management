@@ -2,8 +2,8 @@
  * Storing and reading SEO / GEO test runs: the database's refusals come back in plain words,
  * results are capped before they are stored, and reading back never passes junk to the page.
  *
- * Code:     src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), latestRun,
- *           historyFor, recentRuns, currentRun, seoScore)
+ * Code:     src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), capCrawl,
+ *           crawlOf, latestRun, historyFor, recentRuns, currentRun, seoScore)
  * Feature:  Test runs · storage (the seo_test_runs table), all 24 SEO tests
  * Tier:     STRICT (AGENTS.md "Test depth"): stored data the live page reads back, and a stored
  *           `outside` link the page renders (a javascript: link would be stored XSS).
@@ -16,15 +16,21 @@
  *             ("couldn't read" is not "never tested"); history is oldest first with every test id
  *           • a run left "running" over 5 minutes is abandoned, not "running"
  *           • `na` is kept everywhere and left out of the score on both sides
- * Not here: the database's own rules (cool-down, busy, limits, retention, immutability): the
- *           migration, pinned in tests/integration/seo-tests/seo-test-runs.test.ts; running the
- *           tests (runs/running.test.ts).
+ *           • the crawl (what a run saw): sent as `p_crawl` only whole (v:1, every field), made
+ *             storable (no NUL, no half emoji), cut under the table's 64 KB in the stated order
+ *             (robots text, then sitemap pages, then opened pages, else nothing), never costing the
+ *             run its results, and read back only whole
+ * Not here: the database's own rules (cool-down, busy, limits, retention, immutability, the crawl's
+ *           64 KB check): the migrations, pinned in tests/integration/seo-tests/seo-test-runs.test.ts;
+ *           running the tests (runs/running.test.ts); building the crawl (run.ts).
  * Fixtures: a PostgREST fake (brand/_fake-client) answers each call; `pgJsonbTextBytes` below
- *           rebuilds Postgres's own jsonb text so the byte budget is the table's measure.
+ *           rebuilds Postgres's own jsonb text so the byte budget is the table's measure;
+ *           `realCrawl` is a crawl as a run makes one, built from the crawler registry (bots.ts).
  */
 import { describe, expect, it } from 'vitest'
-import { capResult, capResults, claimRun, currentRun, failRun, finishRun, historyFor, latestRun, recentRuns, seoScore } from '@/lib/seo-tests/store'
-import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
+import { CRAWL_MAX_BYTES, capCrawl, capResult, capResults, claimRun, crawlOf, currentRun, failRun, finishRun, historyFor, latestRun, recentRuns, seoScore } from '@/lib/seo-tests/store'
+import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoCrawl, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
 import { fakeClient, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
 
 const A = 'artist-1'
@@ -109,6 +115,14 @@ describe('claimRun / finishRun: the ONLY write path, the service-role functions'
 
 describe('capResult: what may be stored', () => {
   const base: SeoTestResult = { id: 'title', status: 'fail', value: 'x', sentence: 'y', evidence: [] }
+
+  // A NUL anywhere in a result would make Postgres refuse the whole finish (22P05): it becomes U+FFFD.
+  it('CRITICAL: a NUL in a result becomes U+FFFD, so one bad byte can’t lose the run', () => {
+    const r = capResult({ ...base, value: 'a\u0000b', sentence: 's\u0000', evidence: [{ label: 'l\u0000', value: '\u0000v' }] })
+    expect(JSON.stringify(r)).not.toContain('\\u0000')
+    expect(r.value).toBe('a\uFFFDb')
+    expect(r.evidence[0]).toEqual({ label: 'l\uFFFD', value: '\uFFFDv' })
+  })
 
   // Outside links: only https survives storage, since the page renders it as a link.
   it('CRITICAL: an `outside` action keeps only a https href (a javascript: link would be a stored XSS)', () => {
@@ -210,6 +224,21 @@ describe('readers', () => {
     expect(await latestRun(fakeClient(() => ({ data: null })).client, A)).toBeNull()
   })
 
+  // Before the crawl column exists (the migration not pushed yet), the page must keep working:
+  // the read tries again without it. Any other failure still throws.
+  it('latestRun reads without the crawl when that column doesn’t exist yet', async () => {
+    const run = row('r1', '2026-09-28T03:00:00Z', {})
+    const f = fakeClient((call) => (String(call.cols).includes('crawl') ? { error: { code: '42703', message: 'column seo_test_runs.crawl does not exist' } } : { data: { ...run, results: [] } }))
+    const got = await latestRun(f.client, A)
+    expect(got?.id).toBe('r1')
+    expect(got?.crawl ?? null).toBeNull()
+    expect(f.calls).toHaveLength(2)
+    expect(String(f.calls[1].cols)).not.toContain('crawl')
+    const other = fakeClient(() => ({ error: { code: '42501', message: 'permission denied for table seo_test_runs' } }))
+    await expect(latestRun(other.client, A)).rejects.toThrow()
+    expect(other.calls).toHaveLength(1)
+  })
+
   // Shape: a stored result the page can't draw (a missing field, an unknown test, not an object) is dropped, never shown; `na` is kept.
   it('CRITICAL: a stored result without the whole shape is dropped, not shown; a real one (`na` too) is kept', async () => {
     const good = { id: 'title', status: 'pass', value: 'v', sentence: 's', evidence: [{ label: 'l', value: 'v' }] }
@@ -269,5 +298,233 @@ describe('`na` (does not apply): kept, shown, and left out of the score on both 
     const summary = Object.fromEntries(SEO_TEST_STATUSES.map((st, i) => [SEO_TEST_IDS[i], st]))
     const h = await historyFor(fakeClient(() => ({ data: [row('r1', '2026-09-28T03:00:00Z', summary)] })).client, A, 8)
     SEO_TEST_STATUSES.forEach((st, i) => expect(h[SEO_TEST_IDS[i]].map((d) => d.status)).toEqual([st]))
+  })
+})
+
+/**
+ * A crawl as a run makes one (types.ts SeoCrawl): every crawler the tests know (SEO_BOTS, in
+ * order, GPTBot blocked), "/" and four pages opened and answered by every VISITING crawler
+ * (FETCHING_BOTS), a sitemap of 50, the other spelling, and both listing answers. Built from the
+ * registries, so a crawler added to bots.ts is in it too.
+ */
+function realCrawl(): SeoCrawl {
+  const site = 'https://www.example-artist.com'
+  const opened = ['/', '/music', '/shows', '/about', '/press']
+  const blocked = (key: string) => key === 'gptbot'
+  return {
+    v: 1,
+    robots: {
+      url: `${site}/robots.txt`,
+      status: 200,
+      text: `User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nDisallow: /\n\nSitemap: ${site}/sitemap.xml`,
+      truncated: false,
+      bots: SEO_BOTS.map((b) => ({
+        key: b.key, who: b.who, token: b.robotsToken, visits: b.fetches,
+        verdict: blocked(b.key) ? ('blocked' as const) : ('allowed' as const), why: 'rules' as const,
+        group: blocked(b.key) ? 'User-agent: GPTBot' : 'User-agent: *', rule: blocked(b.key) ? 'Disallow: /' : 'Allow: /',
+      })),
+    },
+    sitemap: {
+      url: `${site}/sitemap.xml`,
+      status: 200,
+      namedInRobots: true,
+      total: 50,
+      pages: Array.from({ length: 50 }, (_, i) => ({ path: opened[i] ?? `/music/song-${i}`, lastmod: '2026-09-28', status: i < opened.length ? 200 : null })),
+      sameDates: true,
+    },
+    pages: opened.map((path) => ({
+      path,
+      status: 200,
+      canonical: { person: `${site}${path}`, google: `${site}${path}`, bing: `${site}${path}` },
+      noindex: { meta: false, header: false },
+      visits: Object.fromEntries(FETCHING_BOTS.map((b) => [b.key, blocked(b.key) ? 403 : 200])),
+    })),
+    otherHost: { url: 'https://example-artist.com/', status: 308, to: `${site}/` },
+    listing: {
+      google: opened.map((path) => ({ path, answered: true, verdict: 'PASS', coverage: 'Submitted and indexed', lastCrawl: '2026-09-27T10:00:00Z' })),
+      bing: opened.map((path) => ({ path, answered: true, lastCrawled: '2026-09-26T08:00:00Z', status: 200 })),
+    },
+  }
+}
+
+/** Every string in `v`, object keys included. */
+const allText = (v: unknown): string[] =>
+  typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(allText) : v && typeof v === 'object' ? Object.entries(v).flatMap(([k, x]) => [k, ...allText(x)]) : []
+
+describe('the crawl (what a run saw): stored only whole, under the table\'s 64 KB, read back only whole', () => {
+  const r = [{ id: 'title', status: 'pass', value: 'v', sentence: 's.', evidence: [] }] as SeoTestResult[]
+  const finishWith = async (crawl: unknown, reply: (args: Record<string, unknown>) => Reply = () => ({ data: true })) => {
+    const f = fakeClient((call) => reply(call.args as Record<string, unknown>))
+    const out = await finishRun(f.client, 'r1', { results: r, siteUrl: 'https://www.example-artist.com', siteFresh: true, publishedAt: null, crawl: crawl as never })
+    return { out, args: f.calls.map((c) => c.args as Record<string, unknown>) }
+  }
+
+  // The witness every "null" below is measured against: the fixture IS a whole crawl, and a crawl
+  // that fits is stored exactly as the run made it.
+  it('a real crawl is whole (crawlOf keeps it) and, under 64 KB, is stored exactly as made', () => {
+    expect(crawlOf(realCrawl())).toEqual(realCrawl())
+    expect(capCrawl(realCrawl())).toEqual(realCrawl())
+    expect(pgJsonbTextBytes(realCrawl())).toBeLessThan(CRAWL_MAX_BYTES)
+  })
+
+  // The crawl reaches the database: one finish call carrying it as `p_crawl`, capped, with a
+  // field the page does not know dropped rather than stored.
+  it('CRITICAL: finish sends the crawl as `p_crawl` through capCrawl: a real crawl arrives whole, an unknown extra field does not', async () => {
+    const { out, args } = await finishWith({ ...realCrawl(), extra: '<script>' })
+    expect(out).toEqual({ ok: true })
+    expect(args).toHaveLength(1)
+    expect(args[0].p_crawl).toEqual(realCrawl())
+    expect(args[0].p_results).toEqual(r)
+  })
+
+  // No crawl, no argument: a database from before the crawl migration has no `p_crawl`, and a
+  // finish that named it would be refused there (PGRST202).
+  it('without a crawl (absent, null or junk) `p_crawl` is not sent at all', async () => {
+    for (const crawl of [undefined, null, { ...realCrawl(), v: 2 }]) {
+      const { args } = await finishWith(crawl)
+      expect(Object.keys(args[0])).not.toContain('p_crawl')
+    }
+  })
+
+  // The crawl is extra, never the run: when the finish WITH one fails, the run is finished again
+  // without it, so its 24 results are kept. Without a crawl there is nothing to drop: no retry.
+  it('CRITICAL: when the finish WITH a crawl fails (not pushed yet, or refused), the run is finished again without it: its results are never lost', async () => {
+    const refused = (args: Record<string, unknown>): Reply => ('p_crawl' in args ? { error: { code: 'PGRST202', message: 'Could not find the function public.seo_test_finish' } } : { data: true })
+    const { out, args } = await finishWith(realCrawl(), refused)
+    expect(out).toEqual({ ok: true })
+    expect(args).toHaveLength(2)
+    expect(args[0].p_crawl).toEqual(realCrawl())
+    expect(args[1]).not.toHaveProperty('p_crawl')
+    expect(args[1].p_results).toEqual(args[0].p_results)
+    const bare = await finishWith(null, () => ({ error: { code: '23514', message: 'check' } }))
+    expect(bare.out).toMatchObject({ ok: false })
+    expect(bare.args).toHaveLength(1)
+  })
+
+  // Only a WHOLE v:1 crawl is stored or shown: each broken piece makes the whole crawl null, on
+  // the way in (capCrawl) and on the way out (crawlOf, what the reader uses).
+  it.each<[string, (c: Record<string, any>) => void]>([ // eslint-disable-line @typescript-eslint/no-explicit-any
+    ['another version', (c) => { c.v = 2 }],
+    ['no robots part', (c) => { delete c.robots }],
+    ['a status as text', (c) => { c.robots.status = '200' }],
+    ['a status that is not a whole number', (c) => { c.pages[0].status = 200.5 }],
+    ['a verdict the page does not know', (c) => { c.robots.bots[0].verdict = 'maybe' }],
+    ['a reason the page does not know', (c) => { c.robots.bots[1].why = 'because' }],
+    ['a crawler without its plain name', (c) => { delete c.robots.bots[0].who }],
+    ['a nullable part missing (absent is not "none")', (c) => { delete c.otherHost }],
+    ['a crawler\'s deciding rule missing (absent is not "none")', (c) => { delete c.robots.bots[2].rule }],
+    ['a sitemap path that is not text', (c) => { c.sitemap.pages[3].path = { html: '<b>' } }],
+    ['a crawler\'s answer as text', (c) => { c.pages[1].visits[FETCHING_BOTS[0].key] = 'ok' }],
+    ['a listing that is not a list', (c) => { c.listing.google = 'indexed' }],
+    ['a negative total', (c) => { c.sitemap.total = -1 }],
+    ['a noindex that is not true or false', (c) => { c.pages[0].noindex.meta = 'yes' }],
+    ['a canonical that is not text', (c) => { c.pages[2].canonical.google = 42 }],
+  ])('CRITICAL: %s: the whole crawl is null, in and out', (_what, breakIt) => {
+    const c = structuredClone(realCrawl()) as unknown as Record<string, unknown>
+    breakIt(c)
+    expect(crawlOf(c)).toBeNull()
+    expect(capCrawl(c)).toBeNull()
+  })
+
+  // Not a crawl at all: never stored, never shown.
+  it('something that is not an object at all is null', () => {
+    for (const v of [null, undefined, 'crawl', 1, [], [realCrawl()]]) {
+      expect(crawlOf(v)).toBeNull()
+      expect(capCrawl(v)).toBeNull()
+    }
+  })
+
+  // Step 1 of the size cap: the robots.txt text goes first (marked truncated: read, not kept),
+  // and when that is enough nothing else is cut.
+  it('CRITICAL: over 64 KB, the robots.txt TEXT goes first, marked truncated, and nothing else is cut when that is enough', () => {
+    const c = realCrawl()
+    c.robots.text = '音'.repeat(25_000) // 75,000 bytes: the crawl is over the limit because of it alone
+    expect(pgJsonbTextBytes(c)).toBeGreaterThan(CRAWL_MAX_BYTES)
+    const out = capCrawl(c)!
+    expect(out.robots.text).toBeNull()
+    expect(out.robots.truncated).toBe(true)
+    expect(out.sitemap).toEqual(realCrawl().sitemap)
+    expect(out.pages).toEqual(realCrawl().pages)
+    expect(out.robots.bots).toEqual(realCrawl().robots.bots)
+    expect(pgJsonbTextBytes(out)).toBeLessThanOrEqual(CRAWL_MAX_BYTES)
+  })
+
+  // Step 2: then sitemap pages, from the END, keeping as many as fit (one more would not: short
+  // pages, so a cut of even ~70 bytes too many shows); the opened pages are untouched and `total`
+  // still says how many the list named. (run.ts keeps 50; the cap does not count on it.)
+  it('CRITICAL: then sitemap pages from the end, as few as needed; opened pages untouched; `total` unchanged', () => {
+    const c = realCrawl()
+    c.sitemap.total = 2_000
+    c.sitemap.pages = Array.from({ length: 2_000 }, (_, i) => ({ path: `/music/song-${i}`, lastmod: '2026-09-28', status: null }))
+    expect(pgJsonbTextBytes(c)).toBeGreaterThan(CRAWL_MAX_BYTES)
+    const out = capCrawl(c)!
+    const n = out.sitemap.pages.length
+    expect(n).toBeGreaterThan(0)
+    expect(n).toBeLessThan(2_000)
+    expect(out.sitemap.pages).toEqual(c.sitemap.pages.slice(0, n))
+    expect(out.sitemap.total).toBe(2_000)
+    expect(out.robots.text).toBeNull()
+    expect(out.pages).toEqual(realCrawl().pages)
+    expect(pgJsonbTextBytes(out)).toBeLessThanOrEqual(CRAWL_MAX_BYTES)
+    expect(pgJsonbTextBytes({ ...out, sitemap: { ...out.sitemap, pages: c.sitemap.pages.slice(0, n + 1) } })).toBeGreaterThan(CRAWL_MAX_BYTES)
+  })
+
+  // Step 3: then opened pages, from the end ("/" is first, so it goes last); every crawler's
+  // robots verdict is kept whatever else goes.
+  it('CRITICAL: then opened pages from the end ("/" last), after every sitemap page; every crawler\'s verdict is kept', () => {
+    const c = realCrawl()
+    c.pages = c.pages.map((p) => ({ ...p, canonical: { ...p.canonical, person: `https://www.example-artist.com/${'音'.repeat(6_000)}` } })) // ~18 KB each
+    const out = capCrawl(c)!
+    const n = out.pages.length
+    expect(n).toBeGreaterThan(0)
+    expect(n).toBeLessThan(5)
+    expect(out.pages).toEqual(c.pages.slice(0, n))
+    expect(out.pages[0].path).toBe('/')
+    expect(out.sitemap.pages).toEqual([])
+    expect(out.robots.bots).toEqual(realCrawl().robots.bots)
+    expect(crawlOf(out)).toEqual(out)
+    expect(pgJsonbTextBytes(out)).toBeLessThanOrEqual(CRAWL_MAX_BYTES)
+  })
+
+  // Too big even then (the verdicts alone): null, never an oversized crawl the table would refuse.
+  it('CRITICAL: when even the verdicts alone are over 64 KB the crawl is null, never an oversized one', () => {
+    const c = realCrawl()
+    c.robots.bots = c.robots.bots.map((b) => ({ ...b, rule: `Disallow: /${'a'.repeat(6_000)}` }))
+    expect(c.robots.bots.length * 6_000).toBeGreaterThan(CRAWL_MAX_BYTES)
+    expect(capCrawl(c)).toBeNull()
+  })
+
+  // Postgres refuses a NUL or half an emoji inside jsonb, which would sink the whole finish (the
+  // results with it): each is replaced before it is sent; a whole emoji is kept.
+  it('CRITICAL: a NUL or half an emoji (anywhere, keys included) is replaced before it is sent; a whole emoji is kept', () => {
+    const c = realCrawl()
+    c.robots.text = 'a\u0000b\uD800c 😀'
+    c.sitemap.pages[0].path = '/\uDC00x'
+    c.pages[0].visits['bad\u0000key'] = 200
+    const out = capCrawl(c)!
+    for (const s of allText(out)) {
+      expect(s).not.toContain('\u0000')
+      expect(hasLoneSurrogate(s)).toBe(false)
+    }
+    expect(out.robots.text).toBe('a�b�c 😀')
+  })
+
+  // The page reads the crawl back only whole: as stored, or null for a run from before crawls and
+  // for junk. The full-run read asks for it; the history read (many rows) never does.
+  it('CRITICAL: latestRun hands the page the crawl as stored, or null (older runs, junk); only the full-run read selects it', async () => {
+    const at = async (crawl: unknown) => {
+      const f = fakeClient(() => ({ data: { ...row('r1', '2026-09-28T03:00:00Z', {}), results: [], crawl } }))
+      return { run: await latestRun(f.client, A), cols: String(f.calls[0].cols) }
+    }
+    const real = await at(realCrawl())
+    expect(real.run?.crawl).toEqual(realCrawl())
+    expect(real.cols).toMatch(/\bcrawl\b/)
+    expect((await at(undefined)).run?.crawl).toBeNull()
+    expect((await at(null)).run?.crawl).toBeNull()
+    expect((await at({ ...realCrawl(), v: 2 })).run?.crawl).toBeNull()
+    expect((await at({ ...realCrawl(), pages: [{ path: '/' }] })).run?.crawl).toBeNull()
+    const f = fakeClient(() => ({ data: [] }))
+    await recentRuns(f.client, A, 5)
+    expect(String(f.calls[0].cols)).not.toMatch(/\bcrawl\b/)
   })
 })

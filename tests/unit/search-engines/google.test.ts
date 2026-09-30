@@ -356,3 +356,67 @@ describe('verify, add, sitemap', () => {
     expect(await googleClient(CREDS, { fetcher: down.fetcher }).addSite(SITE)).toMatchObject({ ok: false, reason: 'google_network' })
   })
 })
+
+describe('inspecting a page (URL Inspection)', () => {
+  const INSPECT = 'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect'
+  const PAGE = 'https://www.skeenmusic.com/about'
+  /** Google's documented answer shape (UrlInspectionResult), with only the fields we read filled. */
+  const answer = (index: Record<string, unknown>) => json({ inspectionResult: { inspectionResultLink: 'https://search.google.com/search-console/inspect?x', indexStatusResult: index } })
+
+  // The documented call: POST index:inspect with the page and the property it belongs to,
+  // authorised like every other call.
+  it('asks Search Console about one page of the registered property', async () => {
+    const g = signedIn(() => answer({ verdict: 'PASS', coverageState: 'Submitted and indexed', lastCrawlTime: '2026-09-29T08:15:02Z' }))
+    const r = await googleClient(CREDS, { fetcher: g.fetcher }).inspectUrl(SITE, PAGE)
+    expect(r).toEqual({ ok: true, value: { verdict: 'PASS', coverage: 'Submitted and indexed', lastCrawl: '2026-09-29T08:15:02.000Z' } })
+    const call = g.calls[1]
+    expect(call.url).toBe(INSPECT)
+    expect(call.method).toBe('POST')
+    expect(call.headers['content-type']).toBe('application/json')
+    expect(call.headers.authorization).toBe('Bearer ya29.test')
+    expect(JSON.parse(call.body)).toEqual({ inspectionUrl: PAGE, siteUrl: SITE })
+  })
+
+  // A page Google has never seen: its answer leaves the crawl time out. Missing or junk fields
+  // are null, never a made-up value, and a time that isn't a time is null too.
+  it('keeps only what Google said: missing or junk fields are null', async () => {
+    for (const [index, want] of [
+      [{ verdict: 'NEUTRAL', coverageState: 'URL is unknown to Google' }, { verdict: 'NEUTRAL', coverage: 'URL is unknown to Google', lastCrawl: null }],
+      [{}, { verdict: null, coverage: null, lastCrawl: null }],
+      [{ verdict: 42, coverageState: { x: 1 }, lastCrawlTime: 'yesterday' }, { verdict: null, coverage: null, lastCrawl: null }],
+      // "1" and "2026" are times to Date.parse (2001, 2026): not to us, Google sends RFC 3339.
+      [{ verdict: '', coverageState: '', lastCrawlTime: '1' }, { verdict: null, coverage: null, lastCrawl: null }],
+      [{ lastCrawlTime: '2026' }, { verdict: null, coverage: null, lastCrawl: null }],
+      [{ lastCrawlTime: '2026-09-29T03:15:02-05:00' }, { verdict: null, coverage: null, lastCrawl: '2026-09-29T08:15:02.000Z' }],
+    ] as const) {
+      const g = signedIn(() => answer(index as Record<string, unknown>))
+      expect(await googleClient(CREDS, { fetcher: g.fetcher }).inspectUrl(SITE, PAGE), JSON.stringify(index)).toEqual({ ok: true, value: want })
+    }
+  })
+
+  // Google's strings are shown as text, so a runaway one is cut rather than stored whole.
+  it('cuts an overlong verdict or coverage', async () => {
+    const g = signedIn(() => answer({ verdict: 'V'.repeat(500), coverageState: 'c'.repeat(5000) }))
+    const r = await googleClient(CREDS, { fetcher: g.fetcher }).inspectUrl(SITE, PAGE)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.verdict!.length).toBeLessThanOrEqual(60)
+    expect(r.value.coverage!.length).toBeLessThanOrEqual(200)
+  })
+
+  // An answer with no inspection result at all is not "Google knows nothing": it is a failure.
+  it('says google_inspect when the answer has no inspection result', async () => {
+    const g = signedIn(() => json({}))
+    expect(await googleClient(CREDS, { fetcher: g.fetcher }).inspectUrl(SITE, PAGE)).toMatchObject({ ok: false, reason: 'google_inspect' })
+  })
+
+  // Google refusing (a property the robot doesn't own, the daily quota) is its own reason.
+  it('says google_inspect when Google refuses, google_network when it can’t be reached', async () => {
+    const refuse = signedIn(() => json({ error: { message: 'User does not have sufficient permission for site' } }, 403))
+    expect(await googleClient(CREDS, { fetcher: refuse.fetcher }).inspectUrl(SITE, PAGE)).toMatchObject({ ok: false, reason: 'google_inspect', status: 403 })
+    const down = signedIn(() => {
+      throw new TypeError('fetch failed')
+    })
+    expect(await googleClient(CREDS, { fetcher: down.fetcher }).inspectUrl(SITE, PAGE)).toMatchObject({ ok: false, reason: 'google_network' })
+  })
+})

@@ -560,23 +560,42 @@ function blockingRule(rules: string[], now: number): string | null {
   return null
 }
 
-/** Does this visit tell a bot answering to `names` (lower-case; "robots" = everyone) not to
- *  list the page? Returns where and what, e.g. `X-Robots-Tag: googlebot: noindex`. */
-function noindexFor(f: SeoPageFetch | undefined, page: Page | null, names: string[], now: number): string | null {
-  if (!f) return null
+/** The "don't list this page" signals a visit carries for a bot answering to `names` (lower-case;
+ *  "robots" = everyone), each as where and what, or null: the X-Robots-Tag header
+ *  (`X-Robots-Tag: googlebot: noindex`) and the page's robots meta tags (`meta robots: noindex`). */
+function noindexSignals(f: SeoPageFetch | undefined, page: Page | null, names: string[], now: number): { header: string | null; meta: string | null } {
+  const out: { header: string | null; meta: string | null } = { header: null, meta: null }
+  if (!f) return out
   const header = f.headers?.['x-robots-tag']
   if (header) {
     const rules = xRobotsRules(header).filter((r) => r.scope === '*' || names.includes(r.scope)).map((r) => r.rule)
-    if (blockingRule(rules, now)) return `X-Robots-Tag: ${clip(header, 80)}`
+    if (blockingRule(rules, now)) out.header = `X-Robots-Tag: ${clip(header, 80)}`
   }
   if (page) {
-    for (const name of ['robots', ...names]) {
+    search: for (const name of ['robots', ...names]) {
       for (const content of page.meta[name] ?? []) {
-        if (blockingRule(xRobotsRules(content).map((r) => r.rule), now)) return `meta ${name}: ${clip(collapse(content), 60)}`
+        if (blockingRule(xRobotsRules(content).map((r) => r.rule), now)) {
+          out.meta = `meta ${name}: ${clip(collapse(content), 60)}`
+          break search
+        }
       }
     }
   }
-  return null
+  return out
+}
+
+/** Does this visit tell a bot answering to `names` not to list the page? The header first, then
+ *  the page's tags: where and what, e.g. `X-Robots-Tag: googlebot: noindex`. */
+function noindexFor(f: SeoPageFetch | undefined, page: Page | null, names: string[], now: number): string | null {
+  const s = noindexSignals(f, page, names, now)
+  return s.header ?? s.meta
+}
+
+/** The same signals as the tests read them, for "How crawlers see your site" (crawl.ts): the
+ *  page's tags count only when the visit is a readable page (not a wall, an error, not html). */
+export function visitNoindex(f: SeoPageFetch | undefined, names: string[], now: number): { header: string | null; meta: string | null } {
+  const v = readVisit(f)
+  return noindexSignals(f, v.kind === 'ok' ? v.page : null, names, now)
 }
 
 /* ── the settings file ──────────────────────────────────────────────────────────────── */
@@ -874,9 +893,29 @@ function robotsRowFor(f: SeoPageFetch | undefined): string {
 
 /* ── allowed ────────────────────────────────────────────────────────────────────────── */
 
-const SEARCH_BOTS = ['googlebot', 'bingbot'] as const
+/** The two crawlers whose listing `allowed` judges (and crawl.ts reports). */
+export const SEARCH_BOTS = ['googlebot', 'bingbot'] as const
 
-const pathKey = (u: URL) => `${trimTrailingSlashes(u.pathname) || '/'}${u.search}`
+/** One page however its address ends: "/about/" and "/about" are the same page, query kept. */
+export const pathKey = (u: URL) => `${trimTrailingSlashes(u.pathname) || '/'}${u.search}`
+
+/**
+ * The canonicals one visit names, read the way `allowed` reads them: every `<link rel=canonical>`
+ * in the head, then a `Link: <…>; rel=canonical` header, each resolved against the page's
+ * `<base href>` and the address that answered (`finalUrl`). `url` is null when it doesn't parse.
+ * [] when the visit isn't a readable page (no answer, a wall, an error, not html) or names none.
+ */
+export function canonicalTargets(f: SeoPageFetch | undefined, origin: string, path: string): { raw: string; url: URL | null }[] {
+  if (!f) return []
+  const cv = readVisit(f)
+  if (cv.kind !== 'ok' || !f.html) return []
+  const { canonicals, base } = headLinks(f.html)
+  const m = /<([^>]+)>\s*;[^,]*\brel\s*=\s*"?canonical"?/i.exec((f.headers?.link ?? '').slice(0, 4096))
+  if (m) canonicals.push(m[1].trim())
+  const answeredAt = f.finalUrl ?? `${origin}${path}`
+  const baseUrl = safe(() => (base ? new URL(decodeEntities(base), answeredAt).toString() : answeredAt), answeredAt)
+  return canonicals.filter((c) => c !== '').map((c) => ({ raw: c, url: safe(() => new URL(decodeEntities(c), baseUrl), null as URL | null) }))
+}
 
 const allowed: Inner = (e) => {
   const limits = 'We check the pages we opened; a page can also be hidden from inside Google Search Console or Bing Webmaster Tools, which we can’t see.'
@@ -944,15 +983,9 @@ const allowed: Inner = (e) => {
     let canonSaid = false
     for (const [label, f] of copies) {
       if (!f || canonSaid) continue
-      const cv = readVisit(f)
-      if (cv.kind !== 'ok' || !f.html) continue
-      const { canonicals, base } = headLinks(f.html)
-      const m = /<([^>]+)>\s*;[^,]*\brel\s*=\s*"?canonical"?/i.exec((f.headers?.link ?? '').slice(0, 4096))
-      if (m) canonicals.push(m[1].trim())
-      const answeredAt = f.finalUrl ?? `${e.origin}${path}`
-      const baseUrl = safe(() => (base ? new URL(decodeEntities(base), answeredAt).toString() : answeredAt), answeredAt)
-      const targets = canonicals.filter((c) => c !== '').map((c) => ({ raw: c, url: safe(() => new URL(decodeEntities(c), baseUrl), null as URL | null) }))
+      const targets = canonicalTargets(f, e.origin, path)
       if (!targets.length) continue
+      const answeredAt = f.finalUrl ?? `${e.origin}${path}`
       rows.canonical.push(`${path} (${label}) → ${targets.map((t) => clip(t.raw, 80)).join(' + ')}`)
       const distinct = new Set(targets.map((t) => (t.url ? `${t.url.host}${pathKey(t.url)}` : t.raw)))
       // Two that disagree: Google may ignore both, or pick either. Each is judged, and noted.
