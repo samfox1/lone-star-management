@@ -25,6 +25,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "make:admin": "tsx scripts/make-admin.ts",
     "site:custom": "tsx scripts/set-custom-site.ts",
+    "site:register": "tsx scripts/site-register.ts",
     "tokens": "tsx scripts/generate-bridge-tokens.ts",
     "social-icons": "tsx scripts/generate-social-icons.ts",
     "service-icons": "tsx scripts/generate-service-icons.ts",

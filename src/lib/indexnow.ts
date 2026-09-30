@@ -59,7 +59,7 @@ export function newIndexNowKey(): string {
 type SiteRow = { site_kind?: string | null; custom_site_url?: string | null }
 
 /** The origin of `url` if a ping may name it: public (no loopback hatch), https, not a preview. */
-function pingableOrigin(url: string): string | null {
+export function pingableOrigin(url: string): string | null {
   if (!isPublicSiteUrl(url)) return null
   let u: URL
   try {

@@ -150,6 +150,13 @@ Before writing it (post-push audit, 2026-09-30):
 - Skeen's `GOOGLE_SITE_VERIFICATION` env var is NOT set in production (no tag on the live site), so
   the "keep the site's own code" merge is inert there today.
 
+**Step 4 DONE 2026-09-30:** `npm run site:register -- skeen` registered skeenmusic.com: Tapir's robot
+is siteOwner in Search Console, Sam a (delegated) owner, sitemap read by Google; Bing verified +
+sitemap. Code: src/lib/search-engines/{address,google,bing,register,register-store}.ts,
+scripts/site-register.ts. Confirmed live: Google's META code is different per site (so it IS the
+proof of which artist a site serves; connect requires it). Bing's AddSite refuses a site already on
+the account, so the code is always read after it.
+
 **5 · Add website panel** — DEFERRED (Sam, 2026-09-30): it goes on a new ADMIN page built after
 Skeen is finished, before site #2 (TODO.md). Originally: (light test; mock first) the admin action on Settings → Site, wrapping
 the same `register` steps, with the checklist. Managers see "Google ✓ · Bing ✓".
