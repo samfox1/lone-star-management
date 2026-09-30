@@ -448,6 +448,9 @@ sightings, from icon size to line spacing.)
 
 ## 10. Be findable (0.33.0)
 
+This section is the site's part. The whole per-site recipe (site code, launch day, what every
+publish does) is lone-star's `VISIBILITY_RECIPE.md`.
+
 Search engines index the plumbing; AI answer engines quote the words. A connected site
 supplies both from the published payload, through the builders in
 `@samfox1/site-bridge/seo` — the bridge never writes your `<head>`, it hands you values.

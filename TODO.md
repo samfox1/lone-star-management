@@ -6,7 +6,12 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
 1. ~~Register Skeen with Google + Bing~~ DONE 2026-09-30 (`npm run site:register -- skeen`).
 2. ~~The AI test shows the results~~ DONE 2026-09-30 (migration 20261001120000 pushed; Skeen's first run shows it). Was: "Listed on Google" per page, "Bing last visited…", and the
    "How crawlers see your site" section (prototypes/seo_variants_20260930_r11.html).
-3. The quick wins from VISIBILITY_TOOLKIT.md.
+3. The quick wins from VISIBILITY_TOOLKIT.md, plus (Sam, 2026-09-30, "a recipe for visibility
+   that works for all": VISIBILITY_RECIPE.md is that recipe, keep it true):
+   a. honest per-page sitemap dates (a style-only publish moves none), bridge 0.45
+   b. resend the sitemap to Google after a publish that changed content
+   c. a one-click Request indexing link beside each page Google hasn't listed (the AI test)
+   d. then the toolkit items: 3 more crawlers, the Copilot noarchive check, IndexNow only changed pages
 
 **REMIND SAM when 1–3 are done:** talk through what Google's and Bing's APIs can do for us
 (Sam: "Remind me to talk through what google and bing's apis can do for us after we complete these

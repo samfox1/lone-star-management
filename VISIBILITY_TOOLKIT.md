@@ -1,5 +1,7 @@
 # The visibility toolkit: free and cheap tools for every Digital Tapir site (2026-09-30)
 
+**The checklist to run per site is VISIBILITY_RECIPE.md.** This file is the research behind it.
+
 Research by three agents (Google, Microsoft, everyone else), official sources only; anything a
 source didn't confirm is marked UNCONFIRMED. Builds on AI_VISIBILITY_AUDIT.md and
 ADD_WEBSITE_PLAN.md (registration with Google and Bing is already planned there and not repeated).

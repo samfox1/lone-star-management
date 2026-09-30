@@ -3,6 +3,8 @@
 Status: REVIEWED (3 reviewers, 2026-09-30: security/data, codebase fit, external APIs + simplicity).
 Nothing here is built. The review's changes are listed at the bottom.
 
+Registration is step 3 of launch day in VISIBILITY_RECIPE.md, the per-site checklist.
+
 ## Why
 
 Sam asked ChatGPT about Skeen and nothing came up. skeenmusic.com's plumbing was fine (robots.txt
