@@ -53,7 +53,7 @@ import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supaba
 
 const MIGRATION_PUSHED = true
 /** 20261001120000_seo_test_crawl.sql. Flip in the same change as its push, then run this file. */
-const CRAWL_MIGRATION_PUSHED = false
+const CRAWL_MIGRATION_PUSHED = true
 
 const results = (fails: number): SeoTestResult[] =>
   SEO_TEST_IDS.map((id, i) => ({ id, status: i < fails ? 'fail' : 'pass', value: 'v', sentence: 's.', evidence: [{ label: 'seen', value: id }] }))

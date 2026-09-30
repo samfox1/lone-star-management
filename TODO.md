@@ -4,7 +4,7 @@
 
 Sam: "We are going to finish digital tapir for skeen before we add more sites." Order:
 1. ~~Register Skeen with Google + Bing~~ DONE 2026-09-30 (`npm run site:register -- skeen`).
-2. The AI test shows the results: "Listed on Google" per page, "Bing last visited…", and the
+2. ~~The AI test shows the results~~ DONE 2026-09-30 (migration 20261001120000 pushed; Skeen's first run shows it). Was: "Listed on Google" per page, "Bing last visited…", and the
    "How crawlers see your site" section (prototypes/seo_variants_20260930_r11.html).
 3. The quick wins from VISIBILITY_TOOLKIT.md.
 
