@@ -270,6 +270,79 @@ export type SeoEvidence = {
 /** One test: pure, synchronous, total. Never throws: a missing piece of evidence is `unknown`. */
 export type SeoTest = (evidence: SeoEvidence) => SeoTestResult
 
+/* ── the crawl summary ──────────────────────────────────────────────────────────────── */
+
+/**
+ * WHAT THE RUN SAW, for the AI test's "How crawlers see your site" section (prototypes/
+ * seo_variants_20260930_r11.html; Sam 2026-09-29: robots.txt, sitemap, canonical tags and where
+ * each crawler may go "should all be explicitly detailed and broken down in the test"). FACTS,
+ * not verdicts: the 24 tests judge, this shows. Built once per run from the evidence
+ * (crawl.ts `buildCrawl`) and stored with the run (seo_test_runs.crawl, byte-capped). Every
+ * string came from the artist's site or from Google / Bing: the page renders it as TEXT only.
+ */
+export type SeoCrawl = {
+  /** Shape version: a reader shows nothing for a version it doesn't know. */
+  v: 1
+  robots: {
+    /** Where it was read: origin + "/robots.txt". */
+    url: string
+    status: number | null
+    /** The file as the site sent it, cut to its first 2,000 characters. null = none read. */
+    text: string | null
+    truncated: boolean
+    /** Every crawler the tests know (bots.ts SEO_BOTS), in that order. */
+    bots: {
+      key: string
+      /** Plain name: "Google", "ChatGPT search". */
+      who: string
+      /** The name robots.txt knows it by: "Googlebot", "OAI-SearchBot". */
+      token: string
+      /** false = a robots.txt name only, never a visitor (Google-Extended, Applebot-Extended). */
+      visits: boolean
+      verdict: 'allowed' | 'blocked' | 'unknown'
+      /** robots-txt.ts RobotsVerdict['why']. */
+      why: 'rules' | 'no-file' | 'server-error' | 'not-shown' | 'slow-down' | 'no-answer'
+      /** The group and rule that decided, spelled as robots.txt lines: "User-agent: *",
+       *  "Allow: /". null = no group applied / no rule matched / no file. */
+      group: string | null
+      rule: string | null
+    }[]
+  }
+  sitemap: {
+    url: string | null
+    status: number | null
+    namedInRobots: boolean
+    /** Every page the list names (before any cap). */
+    total: number
+    /** The first pages it lists (at most 50), as paths, with their last-updated date and, for the
+     *  pages the run opened, the status a person got. */
+    pages: { path: string; lastmod: string | null; status: number | null }[]
+    /** Every listed page carries the same date (so the dates tell a search engine nothing). */
+    sameDates: boolean
+  }
+  /** The pages the run opened: "/" and up to 4 from the sitemap. */
+  pages: {
+    path: string
+    /** What a person's visit got. */
+    status: number | null
+    /** The canonical each visitor was given (absolute URL), null = none. */
+    canonical: { person: string | null; google: string | null; bing: string | null }
+    /** A "don't list this page" signal: the robots meta tag, or the X-Robots-Tag header. */
+    noindex: { meta: boolean; header: boolean }
+    /** Each VISITING crawler's answer, by SeoBot key: the status, null = no answer. */
+    visits: Record<string, number | null>
+  }[]
+  /** The site's other spelling (apex ↔ www) and where it sends a visitor; null = not checked. */
+  otherHost: { url: string; status: number | null; to: string | null } | null
+  /** Whether Google and Bing list the opened pages. A provider is null when the site isn't
+   *  registered with it (site_verifications, verified), so it couldn't be asked. Bing has no
+   *  "listed" answer: only when it last crawled a page (say "Bing last visited", never "listed"). */
+  listing: {
+    google: { path: string; verdict: string | null; coverage: string | null; lastCrawl: string | null }[] | null
+    bing: { path: string; lastCrawled: string | null; status: number | null }[] | null
+  }
+}
+
 /* ── runs ───────────────────────────────────────────────────────────────────────────── */
 
 export type SeoRunTrigger = 'manual' | 'publish' | 'scheduled'

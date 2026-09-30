@@ -19,7 +19,7 @@
  * READERS take the manager's own client (RLS: their artists only).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoRunReach, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoCrawl, type SeoRunReach, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
 
 /** Mirrors the migration, for tests and copy. The database is the authority. */
 export const SEO_RUN_KEEP = 30
@@ -104,7 +104,8 @@ export type FinishInput = {
   publishedAt: string | null
   note?: string | null
   /** Did the site answer (SeoEvidence.reach)? null = no site, or the run could not tell. */
-  reach?: SeoRunReach | null
+  reach?: SeoRunReach | null  /** What the run saw, for "How crawlers see your site" (types.ts SeoCrawl). null/absent = none. */
+  crawl?: SeoCrawl | null
 }
 
 const REACH_STATES: readonly SeoRunReach['state'][] = ['answered', 'server-error', 'refused', 'no-answer']
@@ -291,6 +292,9 @@ export type StoredSeoRun = SeoTestRun & {
   siteFresh: boolean | null
   publishedAt: string | null
   note: string | null
+  /** What the run saw (types.ts SeoCrawl); null for a run from before 20261001 or one that
+   *  couldn't look. Only the full-run reader fills it. */
+  crawl?: SeoCrawl | null
 }
 
 /** A finished run without its results: what history dots and the timeline read. */
