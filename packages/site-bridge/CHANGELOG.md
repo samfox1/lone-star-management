@@ -81,7 +81,7 @@ Nothing yet.
 
 ## 0.44.0 — Google and Bing can confirm the site is Tapir's
 
-*Not published yet (built 2026-09-30). Includes 0.43.0, which was never published on its own.
+*Published 2026-09-30 (GitHub Packages). Includes 0.43.0, which was never published on its own.
 Each site redeploys WITHOUT build cache to pick it up.*
 
 **Site action: one line in the root `generateMetadata`** (CONNECTING.md §10):
@@ -115,7 +115,7 @@ breaks, the site just can't be registered by Tapir yet.
 
 ## 0.43.0 — the fact card tells this artist apart: other names, start year, a full place
 
-*Not published yet (built 2026-09-28). Each site redeploys WITHOUT build cache to pick it up.*
+*Built 2026-09-28; never published on its own: it shipped inside 0.44.0 (2026-09-30). Each site redeploys WITHOUT build cache to pick it up.*
 
 **Site action: bump to 0.43.0 and redeploy. Nothing to write.** The new facts arrive in the
 `site_content` map a site already fetches, and `jsonLdGraph` states them. A site on 0.42 or
