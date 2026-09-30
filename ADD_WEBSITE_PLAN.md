@@ -137,6 +137,19 @@ account signs its own JWT with Node crypto) and `npm run site:register <slug> <a
 "How it works" end to end. **Run it on Skeen first**: that is the live test of the service account.
 If Google refuses, switch to the OAuth fallback before going on.
 
+Before writing it (post-push audit, 2026-09-30):
+- Every `site_verifications` write goes through the SERVICE client (`src/lib/supabase/admin.ts`),
+  never the admin's own session: the table is closed to every signed-in user, admins included.
+  One test pins it.
+- Writes UPSERT on `(artist_id, provider)`, so "Try again" re-runs cleanly.
+- The codes are written before the site is connected, so a failed "Live?" step (a typo, the wrong
+  artist) DELETES the rows it wrote; otherwise they hold `(provider, site_url)` and block the right
+  artist (23505) and the wrong artist's deletion. Say which artist already holds an address.
+- Compare addresses normalised: `custom_site_url` has no trailing slash
+  (`https://www.skeenmusic.com`), `site_url` always ends in "/".
+- Skeen's `GOOGLE_SITE_VERIFICATION` env var is NOT set in production (no tag on the live site), so
+  the "keep the site's own code" merge is inert there today.
+
 **5 · Add website panel** (light test; mock first): the admin action on Settings → Site, wrapping
 the same `register` steps, with the checklist. Managers see "Google ✓ · Bing ✓".
 

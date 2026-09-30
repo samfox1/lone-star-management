@@ -74,6 +74,10 @@ export async function createThrowawayArtist(
 /**
  * Drop a throwaway artist and, by cascade, every row any test hung off it.
  *
+ * One table does NOT cascade on purpose: `site_verifications` (20260930120000) restricts the
+ * delete, so a real artist can't be deleted while Tapir still owns its site at Google and Bing.
+ * A throwaway's own codes are cleared first, so every suite can keep using this one call.
+ *
  * Tolerates `undefined` so an afterAll that runs after a failed beforeAll deletes
  * NOTHING rather than throwing — or, worse, falling through to a broader delete.
  */
@@ -86,6 +90,8 @@ export async function deleteThrowawayArtist(
   // Loud, not silent: a refused delete used to return quietly and leave the row in the
   // production table (two 'cascade throwaway' artists from 2026-09-21 were found on
   // 2026-09-23). A zero-row match is fine — the test may have deleted it itself.
+  const codes = await svc.from('site_verifications').delete().eq('artist_id', id)
+  if (codes.error) throw new Error(`deleteThrowawayArtist(${id}) site_verifications: ${codes.error.message}`)
   const { error } = await svc.from('artists').delete().eq('id', id)
   if (error) throw new Error(`deleteThrowawayArtist(${id}): ${error.message}`)
 }

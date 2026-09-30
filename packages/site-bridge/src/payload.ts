@@ -380,4 +380,9 @@ export type PublicSitePayload = {
    *  let `brandColorCss` / `brandHead` in ./brand do the reading: they validate every
    *  value, and an absent or empty brand emits nothing, so the site keeps its own colours. */
   brand?: SiteBrand | null
+  /** Google's and Bing's ownership codes for this site (0.44.0, 20260930120000): config lone-star's
+   *  server writes, never content. Null until the site is registered, ABSENT on a door older than
+   *  that migration. Don't read it yourself: `siteVerification(payload)` in ./verification checks
+   *  each code's shape and returns the tags for your root metadata. */
+  verification?: { google?: string | null; bing?: string | null } | null
 }

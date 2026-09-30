@@ -86,10 +86,8 @@ describe.skipIf(!MIGRATION_PUSHED)('site_verifications', () => {
   })
 
   afterAll(async () => {
-    // Exactly this file's rows: the registrations first (the FK restricts the artist delete).
-    for (const t of [a, b]) {
-      if (t) await svc.from('site_verifications').delete().eq('artist_id', t.id)
-    }
+    // Exactly this file's rows: deleteThrowawayArtist clears the artist's own codes first (the
+    // FK restricts the artist delete), then the artist.
     await deleteThrowawayArtist(svc, a)
     await deleteThrowawayArtist(svc, b)
   })

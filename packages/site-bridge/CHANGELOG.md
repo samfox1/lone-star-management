@@ -79,6 +79,40 @@ Nothing yet.
 
 ---
 
+## 0.44.0 — Google and Bing can confirm the site is Tapir's
+
+*Not published yet (built 2026-09-30). Includes 0.43.0, which was never published on its own.
+Each site redeploys WITHOUT build cache to pick it up.*
+
+**Site action: one line in the root `generateMetadata`** (CONNECTING.md §10):
+
+```ts
+import { siteVerification } from '@samfox1/site-bridge/verification'
+// …
+verification: siteVerification(payload, { google: process.env.GOOGLE_SITE_VERIFICATION }),
+```
+
+Pass your own Google code as `own.google` if you already verify with one (skeen does, from an
+env var): it is kept beside Tapir's, never replaced. Render it on EVERY page, unconditionally:
+Google and Bing re-check it for as long as the site is registered.
+
+**Why** (lone-star ADD_WEBSITE_PLAN.md, Sam 2026-09-30: "Tapir is going to be the home base but I
+need visibility for each site"). Tapir registers every site in its own Google Search Console and
+Bing Webmaster Tools, which needs each site to carry an ownership code. The codes live in a
+lone-star table only its server writes (20260930120000), and `get_public_site` sends them as
+`verification: { google, bing }`: config, not content, so no publish, and nothing a manager or
+"Restore version" can change.
+
+**What's new:** `siteVerification(payload, own?)` → Next's `Metadata['verification']` shape
+(`{ google?: string[], other?: { 'msvalidate.01' } }`) or `undefined`; `isGoogleVerification`,
+`isBingVerification`, the two shapes (the database's own CHECKs); `PublicSitePayload.verification`.
+A value that isn't a code in its provider's shape is never emitted.
+
+**A site on 0.43 or older** emits no Tapir codes and keeps whatever it emitted before; nothing
+breaks, the site just can't be registered by Tapir yet.
+
+---
+
 ## 0.43.0 — the fact card tells this artist apart: other names, start year, a full place
 
 *Not published yet (built 2026-09-28). Each site redeploys WITHOUT build cache to pick it up.*

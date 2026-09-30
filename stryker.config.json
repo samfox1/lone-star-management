@@ -29,6 +29,7 @@
     "packages/site-bridge/src/analytics.ts",
     "packages/site-bridge/src/mirror.ts",
     "packages/site-bridge/src/brand.ts",
+    "packages/site-bridge/src/verification.ts",
     "src/lib/analytics-major-cities.ts",
     "src/lib/analytics-map.ts",
     "src/lib/analytics-places.ts",

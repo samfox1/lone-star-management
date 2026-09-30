@@ -461,6 +461,11 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
 - **`generateMetadata`** — `resolveSeo(payload)` gives `title`, `description`, `ogImage`
   with ONE precedence everywhere: the manager's override → the artist's own data → a
   dull, honest default. Put them in `<title>`, `description`, Open Graph and Twitter.
+- **Ownership codes (0.44.0)** — `verification: siteVerification(payload, { google: yourOwnCode })`
+  in the ROOT `generateMetadata`, on every page, always. It emits Google's and Bing's codes when
+  Tapir has registered the site (and your own Google code if you pass one), nothing otherwise.
+  Never render them conditionally: Google and Bing re-check them for as long as the site is
+  registered, and a missing tag un-verifies it.
 - **Fact sheet** — inline `jsonLdScript(jsonLdGraph(payload, { origin, releases, mediaUrl,
   today }))` in `<head>`. It carries the artist (or Person), the site, one `MusicEvent`
   per dated upcoming show, one `MusicAlbum` per release with its songs, and the photos
