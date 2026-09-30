@@ -167,7 +167,9 @@ function looksLikeApprovedGuidance(text: string, words: string[]): boolean {
  *  non-greedy match to the next `</p>` is exact for every file this sweep covers. */
 export function instructionalParagraphsIn(src: string, file: string): Hit[] {
   const hits: Hit[] = []
-  const re = /<p([^>]*)>([\s\S]*?)<\/p>/g
+  // `<p` followed by a space or `>`: a `<pre>` (or `<path>`) is not a paragraph (2026-09-30: a
+  // `<pre>` holding a robots.txt was read as a `<p>` running on to the next `</p>`).
+  const re = /<p(?=[\s>])([^>]*)>([\s\S]*?)<\/p>/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src))) {
     const [, attrs, inner] = m
@@ -247,6 +249,8 @@ const SANCTIONED = [
   ['error report', '<p role="alert" className="accent-red">That file is bigger than the 30 MB this bucket accepts.</p>'],
   ['a question', '<p className="text-sm">Delete this show and everything attached to it?</p>'],
   ['a bare value', '<p className="text-sm">{count}</p>'],
+  // A <pre> holding a file the site sent (robots.txt) is not a paragraph, whatever it says.
+  ['a <pre> block, which is not a paragraph', '<pre className="m-0">Upload a logo on the Brand page, or a hero image on the Site page, and it can be used here.</pre><p className="text-sm">{count}</p>'],
 ] as const
 
 describe('the detector itself', () => {

@@ -428,11 +428,11 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
       {oh ? (
         <Field label="Address" name="address">
           {/* One line that wraps on a phone: the other spelling → where it sends you · how. */}
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-space text-[12px] text-ink-faint [overflow-wrap:anywhere]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-space text-[12px] text-ink-faint [overflow-wrap:anywhere]">
             <span className="text-ink">{shortUrl(oh.url)}</span>
             {oh.to ? <span>{`→ ${shortUrl(oh.to)}`}</span> : opens(oh.status) ? <span>opens on its own</span> : null}
             {oh.to ? <Mark mark={toOwn ? (permanent ? 'ok' : null) : 'bad'} word={redirectWord(oh.status)} /> : <Mark mark={opens(oh.status) ? null : 'bad'} word={answered(oh.status)} />}
-          </p>
+          </div>
           {toOwn && permanent ? <Caption>One address for the whole site, so search engines don’t split you in two.</Caption> : null}
           {!oh.to && opens(oh.status) ? <Caption>Both addresses show your site.</Caption> : null}
         </Field>
