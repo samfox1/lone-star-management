@@ -3,7 +3,7 @@
 ## Finish Digital Tapir for Skeen FIRST, then more sites (Sam, 2026-09-30)
 
 Sam: "We are going to finish digital tapir for skeen before we add more sites." Order:
-1. Register Skeen with Google + Bing (ADD_WEBSITE_PLAN.md step 4, `npm run site:register`).
+1. ~~Register Skeen with Google + Bing~~ DONE 2026-09-30 (`npm run site:register -- skeen`).
 2. The AI test shows the results: "Listed on Google" per page, "Bing last visited…", and the
    "How crawlers see your site" section (prototypes/seo_variants_20260930_r11.html).
 3. The quick wins from VISIBILITY_TOOLKIT.md.
