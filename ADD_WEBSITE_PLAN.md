@@ -150,7 +150,8 @@ Before writing it (post-push audit, 2026-09-30):
 - Skeen's `GOOGLE_SITE_VERIFICATION` env var is NOT set in production (no tag on the live site), so
   the "keep the site's own code" merge is inert there today.
 
-**5 · Add website panel** (light test; mock first): the admin action on Settings → Site, wrapping
+**5 · Add website panel** — DEFERRED (Sam, 2026-09-30): it goes on a new ADMIN page built after
+Skeen is finished, before site #2 (TODO.md). Originally: (light test; mock first) the admin action on Settings → Site, wrapping
 the same `register` steps, with the checklist. Managers see "Google ✓ · Bing ✓".
 
 **6 · The AI test** (engine strict, UI light; its own migration): `seo_test_runs.crawl jsonb`

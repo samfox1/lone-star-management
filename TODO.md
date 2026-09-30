@@ -1,5 +1,24 @@
 # TODO
 
+## Finish Digital Tapir for Skeen FIRST, then more sites (Sam, 2026-09-30)
+
+Sam: "We are going to finish digital tapir for skeen before we add more sites." Order:
+1. Register Skeen with Google + Bing (ADD_WEBSITE_PLAN.md step 4, `npm run site:register`).
+2. The AI test shows the results: "Listed on Google" per page, "Bing last visited…", and the
+   "How crawlers see your site" section (prototypes/seo_variants_20260930_r11.html).
+3. The quick wins from VISIBILITY_TOOLKIT.md.
+
+**REMIND SAM when 1–3 are done:** talk through what Google's and Bing's APIs can do for us
+(Sam: "Remind me to talk through what google and bing's apis can do for us after we complete these
+next steps"). The short version is in the conversation of 2026-09-30 and VISIBILITY_TOOLKIT.md.
+
+## Admin page + "Add website" button — LATER, after Skeen is finished (Sam, 2026-09-30)
+
+Sam: "We can wait on the add website button. That will be on an admin page that we will create
+later." The Add website step (ADD_WEBSITE_PLAN.md step 5) moves off the artist's Settings row onto
+a new ADMIN page (Tapir staff only), built after Skeen is done and before site #2. The register
+logic from step 4 is reused as is.
+
 ## "AI visibility" button — STASHED, after the SEO/GEO page redesign (added 2026-09-28)
 
 Sam: "stash that for after (the ai visibility button)." The idea (AI_VISIBILITY_AUDIT.md +
