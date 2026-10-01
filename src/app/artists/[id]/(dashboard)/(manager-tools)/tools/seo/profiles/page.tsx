@@ -25,11 +25,9 @@ type Base = Awaited<ReturnType<typeof loadSeoBase>>
 export default async function SeoProfilesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const base = await loadSeoBase(id)
-  const [{ input, photos }, marks, bios] = await Promise.all([
-    loadBioPack(base),
-    readProfileMarks(base.supabase, id).catch(() => null),
-    loadOutsideBios(base.supabase, base.artist),
-  ])
+  // Read once: the AllMusic row and the Outside bios both use it.
+  const marksRead = readProfileMarks(base.supabase, id).catch(() => null)
+  const [{ input, photos }, marks, bios] = await Promise.all([loadBioPack(base), marksRead, loadOutsideBios(base.supabase, base.artist, marksRead)])
   return (
     <ProfilesTab
       artistId={id}
@@ -42,7 +40,7 @@ export default async function SeoProfilesPage({ params }: { params: Promise<{ id
           <OutsideLive base={base} links={input.links ?? []} />
         </Suspense>
       }
-      bios={<BioRows artistId={id} rows={bioRows(bios, new Date())} change={bios.change} />}
+      bios={<BioRows artistId={id} rows={bioRows(bios, new Date())} />}
     />
   )
 }

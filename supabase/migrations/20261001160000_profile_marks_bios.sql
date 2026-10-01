@@ -7,7 +7,8 @@
 --   2. `supabase db push --dry-run` lists this file. Then `npm run db:push`.
 --   3. `npm run audit:grants`: one new function, profile_marks_stamp (a trigger), revoked from
 --      public, anon and authenticated, so expect NO change. Column grants, by eye (expect
---      authenticated: INSERT on artist_id + item, UPDATE on done_at, nothing else):
+--      authenticated: INSERT on artist_id + item, UPDATE on done_at, plus SELECT on all four
+--      columns from the table-level grant, nothing else):
 --        select grantee, column_name, privilege_type from information_schema.column_privileges
 --         where table_schema = 'public' and table_name = 'profile_marks' and grantee = 'authenticated'
 --         order by privilege_type, column_name;

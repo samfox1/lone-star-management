@@ -20,16 +20,16 @@ import { OUTSIDE_BIOS, bioItem, type OutsideBio } from './bios'
 
 /**
  * The facts an outside bio repeats, by their column in the published profile (ARTIST_SNAPSHOT:
- * a renamed column is a compile error here). `hero_image_url` is the one photo the profile
- * carries (the EPK falls back to it for the artist's photo). Left out on purpose: the template,
- * the press kit, the JSON-LD type and the Spotify id, none of which a bio says. The profile
- * photo (a media row) and the Facts tab's region and country (site text) publish elsewhere.
+ * a renamed column is a compile error here). Left out on purpose: `hero_image_url` (the site's
+ * hero banner, not the artist's photo), the template, the press kit, the JSON-LD type and the
+ * Spotify id, none of which a bio says. The Facts tab's region and country are site text.
  */
-export const BIO_FACTS = ['name', 'bio', 'location', 'genre', 'hero_image_url'] as const satisfies readonly (typeof ARTIST_SNAPSHOT)[number][]
+// The profile photo (media purpose 'profile_photo') joins once Sam settles where it lives.
+export const BIO_FACTS = ['name', 'bio', 'location', 'genre'] as const satisfies readonly (typeof ARTIST_SNAPSHOT)[number][]
 export type BioFact = (typeof BIO_FACTS)[number]
 
 /** Each fact as the manager reads it: "bio and city changed". */
-export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', location: 'city', genre: 'genre', hero_image_url: 'photo' }
+export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', location: 'city', genre: 'genre' }
 
 /** After this long, a tick asks to be looked at again ("changes + 6 months", decided 2026-10-01). */
 export const RECHECK_AFTER_DAYS = 183
@@ -38,7 +38,7 @@ export const RECHECK_AFTER_MS = RECHECK_AFTER_DAYS * 24 * 60 * 60 * 1000
 /** One published profile, shaped like a `revisions` row of entity_type 'artist'. */
 export type ProfileRevision = { published_at: string; data: Record<string, unknown> | null }
 
-/** The newest Publish that changed a fact, and which. `first`: the artist's first Publish. */
+/** One Publish that changed a fact, and which. `first`: the artist's first Publish. */
 export type FactsChange = { at: string; fields: BioFact[]; first: boolean }
 
 export type BioState = 'unconfirmed' | 'stale' | 'recheck' | 'current'
@@ -54,32 +54,31 @@ function factValue(v: unknown): string | null {
 }
 
 /**
- * The newest Publish whose facts differ from the Publish before it, and which facts. The first
- * Publish counts (it is when the facts first went out), naming the facts it set. A republish
- * with the same facts never counts: an editor restyle re-publishes the profile, and must not
- * nudge anyone.
+ * Every Publish whose facts differ from the Publish before it, newest first, with which facts.
+ * The first Publish counts (it is when the facts first went out), naming the facts it set. A
+ * republish with the same facts never counts: an editor restyle re-publishes the profile, and
+ * must not nudge anyone.
  *
- * `complete: false` says the rows are a capped window, not the whole history: when the window
- * holds no change, the change is older than anything read, so the oldest row read is NOT
- * treated as the first Publish and nothing is returned.
+ * `complete: false` says the rows are a capped window, not the whole history: the oldest row
+ * read has an unknown Publish before it, so it is never treated as the first Publish (no guess).
  *
  * Rows arrive newest first; they are sorted anyway. A row with no snapshot or no date is skipped.
  */
-export function factsChangedAt(revisions: readonly ProfileRevision[], { complete = true }: { complete?: boolean } = {}): FactsChange | null {
+export function factChanges(revisions: readonly ProfileRevision[], { complete = true }: { complete?: boolean } = {}): FactsChange[] {
   const rows = revisions
     .filter((r): r is { published_at: string; data: Record<string, unknown> } => isObj(r.data) && Number.isFinite(Date.parse(r.published_at)))
     .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at))
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
+  const changes: FactsChange[] = []
+  rows.forEach((row, i) => {
     const before = rows[i + 1]
-    if (!before) {
-      if (!complete) return null
-      return { at: row.published_at, fields: BIO_FACTS.filter((f) => factValue(row.data[f]) !== null), first: true }
+    if (before) {
+      const fields = BIO_FACTS.filter((f) => factValue(row.data[f]) !== factValue(before.data[f]))
+      if (fields.length) changes.push({ at: row.published_at, fields, first: false })
+    } else if (complete) {
+      changes.push({ at: row.published_at, fields: BIO_FACTS.filter((f) => factValue(row.data[f]) !== null), first: true })
     }
-    const fields = BIO_FACTS.filter((f) => factValue(row.data[f]) !== factValue(before.data[f]))
-    if (fields.length) return { at: row.published_at, fields, first: false }
-  }
-  return null
+  })
+  return changes
 }
 
 /**
@@ -95,7 +94,7 @@ export function bioState({ confirmedAt, factsChangedAt: changedAt, now }: { conf
   return 'current'
 }
 
-/** "bio", "city and genre", "name, bio and photo". */
+/** "bio", "city and genre", "name, bio and genre". */
 export function changedWords(fields: readonly BioFact[]): string {
   const words = fields.map((f) => FACT_WORDS[f])
   if (words.length < 2) return words.join('')
@@ -132,24 +131,55 @@ export type BiosInput = {
   marks: Partial<Record<string, string>> | null
   /** False: the published profiles couldn't be read. */
   factsKnown: boolean
-  change: FactsChange | null
+  /** Every fact change, newest first (factChanges). */
+  changes: FactsChange[]
 }
 
-export type BioRow = ConnectedBio & { confirmedAt: string | null; state: BioState | null }
+export type BioRow = ConnectedBio & {
+  confirmedAt: string | null
+  state: BioState | null
+  /** Stale only: the OLDEST change after this bio's tick ("may be out of date since"). */
+  since: string | null
+  /** Stale only: every fact changed after this bio's tick, in BIO_FACTS order. */
+  changed: BioFact[]
+}
 
 /**
  * The rows, each with its state at `now`. Null when the links couldn't be read (which bios is
  * unknown). A row's state is null when its tick or the published facts couldn't be read: it
  * says "couldn't check", never a guess.
+ *
+ * Each row reads only the changes AFTER its own tick: out of date since the oldest of them,
+ * naming every fact any of them changed. A never-ticked row is "not confirmed", with neither.
  */
 export function bioRows(input: BiosInput, now: Date | number): BioRow[] | null {
   if (!input.bios) return null
-  const { marks, factsKnown, change } = input
+  const { marks, factsKnown, changes } = input
   return input.bios.map((b) => {
     const confirmedAt = marks?.[bioItem(b.key)] ?? null
-    const state = marks && factsKnown ? bioState({ confirmedAt, factsChangedAt: change?.at ?? null, now }) : null
-    return { ...b, confirmedAt, state }
+    const state = marks && factsKnown ? bioState({ confirmedAt, factsChangedAt: changes[0]?.at ?? null, now }) : null
+    if (state !== 'stale') return { ...b, confirmedAt, state, since: null, changed: [] }
+    const after = changes.filter((c) => Date.parse(c.at) > Date.parse(confirmedAt!))
+    return {
+      ...b,
+      confirmedAt,
+      state,
+      since: after[after.length - 1].at,
+      changed: BIO_FACTS.filter((f) => after.some((c) => c.fields.includes(f))),
+    }
   })
+}
+
+/**
+ * "Sep 29" in the time zone this runs in (the viewer's, in the browser), with the year when it
+ * is not the year of `now`. Call it only after mount: a server in UTC would print another day,
+ * and React 19 does not repaint a mismatched text node. Empty for a bad date.
+ */
+export function dayLabel(iso: string, now: Date | number): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const year = d.getFullYear() !== new Date(now).getFullYear()
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) })
 }
 
 /** How many bios to look at: every row that is not current. A row that couldn't be checked is

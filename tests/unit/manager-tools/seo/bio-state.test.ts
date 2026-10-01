@@ -6,15 +6,18 @@
  * Feature:  SEO tool · Profiles tab · Outside bios (OUTSIDE_PROFILES_PLAN.md, build step 1, "the
  *           change nudge"), and the AI test's one "to check" line
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo.
- * Covers:   • factsChangedAt: the newest Publish whose facts differ from the one before; which
- *             facts; the first Publish counts; identical republishes and non-fact changes
- *             (template, press kit, JSON-LD type) never count; a fact missing from an older
- *             snapshot equals an empty one; a capped read that finds no change says nothing
+ * Covers:   • factChanges: every Publish whose facts differ from the one before, newest first;
+ *             which facts; the first Publish counts; identical republishes and non-fact changes
+ *             (template, press kit, JSON-LD type, the hero banner) never count; a fact missing
+ *             from an older snapshot equals an empty one; a capped read never guesses its oldest
  *           • bioState: each of the four states; the 6-month edge; a change after the tick
  *             wins over the 6 months
  *           • connectedBios: only bios whose platform is connected, from OUTSIDE_BIOS (never
  *             hand-listed), by link or by source id; contact and role-bound rows don't count
+ *           • bioRows: each row reads only the changes after ITS tick: since the oldest of them,
+ *             naming every fact they changed
  *           • bioRows / biosToCheck: a read that failed says "couldn't check" and is not counted
+ *           • dayLabel: the year only when it is not this year
  * Not here: the rows on screen (tests/components/manager-tools/seo/bio-rows.test.tsx); the tick
  *           itself (profile-marks.test.ts).
  * Fixtures: SKEEN_HISTORY is Skeen's real profile history (the hosted `revisions` rows, entity
@@ -35,7 +38,8 @@ import {
   biosToCheck,
   changedWords,
   connectedBios,
-  factsChangedAt,
+  dayLabel,
+  factChanges,
   type BiosInput,
   type ProfileRevision,
 } from '@/lib/manager-tools/profiles/bio-state'
@@ -70,21 +74,32 @@ const SKEEN_HISTORY: ProfileRevision[] = [
 ]
 const SKEEN_CHANGED = '2026-08-28T17:15:41.909228+00:00'
 
+/** Skeen's fact changes, newest first. The Jul 29 Publish cleared the hero banner only: not a fact. */
+const SKEEN_CHANGES = [
+  { at: SKEEN_CHANGED, fields: ['location', 'genre'], first: false },
+  { at: '2026-07-16T17:29:17.449282+00:00', fields: ['bio'], first: false },
+  { at: '2026-07-16T16:14:45.165854+00:00', fields: ['bio'], first: false },
+  { at: '2026-07-16T16:13:35.12744+00:00', fields: ['bio'], first: false },
+  { at: '2026-07-16T16:11:31.086449+00:00', fields: ['bio'], first: false },
+  { at: '2026-07-14T23:30:37.451623+00:00', fields: ['name', 'bio'], first: true },
+]
+
 /** A newer Publish on top of Skeen's history. */
 const republish = (at: string, data: Record<string, unknown>): ProfileRevision[] => [{ published_at: at, data }, ...SKEEN_HISTORY]
 
-describe('factsChangedAt', () => {
-  // Skeen's real history: the last fact change was genre and city joining the profile.
-  it('Skeen: the newest change is genre and city joining the profile, Aug 28', () => {
-    expect(factsChangedAt(SKEEN_HISTORY)).toEqual({ at: SKEEN_CHANGED, fields: ['location', 'genre'], first: false })
+describe('factChanges', () => {
+  // Skeen's real history: four bio rewrites on Jul 16, then genre and city joining the profile.
+  it('Skeen: every fact change, newest first, with what each changed', () => {
+    expect(factChanges(SKEEN_HISTORY)).toEqual(SKEEN_CHANGES)
   })
 
   // The point of the nudge: a Publish that repeats the facts (an editor restyle, a press-kit
-  // edit, a template switch) must never move the date.
-  it('CRITICAL: a republish with the same facts, or only non-fact changes, does not move it', () => {
+  // edit, a template switch, a new hero banner) must never count as a change.
+  it('CRITICAL: a republish with the same facts, or only non-fact changes, adds nothing', () => {
     const same = facts(BIO.v5)
-    expect(factsChangedAt(republish('2026-10-01T09:00:00.000Z', same))?.at).toBe(SKEEN_CHANGED)
-    expect(factsChangedAt(republish('2026-10-01T09:00:00.000Z', { ...same, template: 'minimal', press_pitch: 'A new pitch.', press_quotes: [{ quote: 'Big.' }], schema_type: 'Person', spotify_artist_id: 'other' }))?.at).toBe(SKEEN_CHANGED)
+    expect(factChanges(republish('2026-10-01T09:00:00.000Z', same))).toEqual(SKEEN_CHANGES)
+    const restyled = { ...same, template: 'minimal', press_pitch: 'A new pitch.', press_quotes: [{ quote: 'Big.' }], schema_type: 'Person', spotify_artist_id: 'other', hero_image_url: HERO }
+    expect(factChanges(republish('2026-10-01T09:00:00.000Z', restyled))).toEqual(SKEEN_CHANGES)
   })
 
   // A history of restyles and press-kit edits after the first Publish: a tick after it stays current.
@@ -96,33 +111,31 @@ describe('factsChangedAt', () => {
       { published_at: '2026-08-01T10:00:00.000Z', data: facts(BIO.v5) },
       { published_at: first, data: facts(BIO.v5) },
     ]
-    const change = factsChangedAt(restyles)
-    expect(change).toEqual({ at: first, fields: ['name', 'bio', 'location', 'genre'], first: true })
-    expect(bioState({ confirmedAt: '2026-07-02T10:00:00.000Z', factsChangedAt: change!.at, now: Date.parse('2026-10-01T10:00:00.000Z') })).toBe('current')
+    const changes = factChanges(restyles)
+    expect(changes).toEqual([{ at: first, fields: ['name', 'bio', 'location', 'genre'], first: true }])
+    expect(bioState({ confirmedAt: '2026-07-02T10:00:00.000Z', factsChangedAt: changes[0].at, now: Date.parse('2026-10-01T10:00:00.000Z') })).toBe('current')
   })
 
   // Every fact, on its own, is a change (derived from BIO_FACTS, so a fact added later is
   // covered the day it is).
   it.each(BIO_FACTS)('a change to %s alone counts, and names only it', (fact) => {
-    const changed = { ...facts(BIO.v5), hero_image_url: HERO, [fact]: `new ${fact}` }
-    const base = { ...facts(BIO.v5), hero_image_url: HERO }
     const history: ProfileRevision[] = [
-      { published_at: '2026-10-01T09:00:00.000Z', data: changed },
-      { published_at: '2026-09-30T09:00:00.000Z', data: base },
+      { published_at: '2026-10-01T09:00:00.000Z', data: { ...facts(BIO.v5), [fact]: `new ${fact}` } },
+      { published_at: '2026-09-30T09:00:00.000Z', data: facts(BIO.v5) },
     ]
-    expect(factsChangedAt(history)).toEqual({ at: '2026-10-01T09:00:00.000Z', fields: [fact], first: false })
+    expect(factChanges(history)[0]).toEqual({ at: '2026-10-01T09:00:00.000Z', fields: [fact], first: false })
   })
 
   // Two facts in one Publish are both named, in words.
   it('names every fact that changed in one Publish: bio and city', () => {
-    const change = factsChangedAt(republish('2026-10-01T09:00:00.000Z', { ...facts('A new bio.'), location: 'Detroit' }))
-    expect(change?.fields).toEqual(['bio', 'location'])
-    expect(changedWords(change!.fields)).toBe('bio and city')
+    const [change] = factChanges(republish('2026-10-01T09:00:00.000Z', { ...facts('A new bio.'), location: 'Detroit' }))
+    expect(change.fields).toEqual(['bio', 'location'])
+    expect(changedWords(change.fields)).toBe('bio and city')
   })
 
   // The first Publish is when the facts first went out: it counts, naming what it set.
   it('the first-ever Publish counts as a change, naming the facts it set', () => {
-    expect(factsChangedAt(SKEEN_HISTORY.slice(-1))).toEqual({ at: '2026-07-14T23:30:37.451623+00:00', fields: ['name', 'bio', 'hero_image_url'], first: true })
+    expect(factChanges(SKEEN_HISTORY.slice(-1))).toEqual([{ at: '2026-07-14T23:30:37.451623+00:00', fields: ['name', 'bio'], first: true }])
   })
 
   // A column that joined the snapshot later is ABSENT from older revisions. Absent, null, ''
@@ -133,28 +146,31 @@ describe('factsChangedAt', () => {
       { published_at: '2026-09-01T09:00:00.000Z', data: early(BIO.v5, null) },
       { published_at: '2026-08-01T09:00:00.000Z', data: early(BIO.v1, null) },
     ]
-    expect(factsChangedAt(history)).toEqual({ at: '2026-09-01T09:00:00.000Z', fields: ['bio'], first: false })
+    expect(factChanges(history).map((c) => [c.at, c.fields])).toEqual([
+      ['2026-09-01T09:00:00.000Z', ['bio']],
+      ['2026-08-01T09:00:00.000Z', ['name', 'bio']],
+    ])
   })
 
   // Rows in any order give the same answer.
   it('reads newest first whatever order the rows arrive in', () => {
-    expect(factsChangedAt([...SKEEN_HISTORY].reverse())?.at).toBe(SKEEN_CHANGED)
+    expect(factChanges([...SKEEN_HISTORY].reverse())).toEqual(SKEEN_CHANGES)
   })
 
-  // The loader reads a capped window. If the window holds no change, the change is older than
-  // anything read: its oldest row is NOT the first Publish, and must not be dated as one.
-  it('a capped read with no change in it says nothing; a change inside it is still found', () => {
+  // The loader reads a capped window. Its oldest row has an unknown Publish before it, so it is
+  // NOT the first Publish and must not be dated as a change; changes inside it are still found.
+  it('a capped read never takes its oldest row for the first Publish', () => {
     const window = SKEEN_HISTORY.slice(0, 3) // three identical republishes
-    expect(factsChangedAt(window, { complete: false })).toBeNull()
-    expect(factsChangedAt(window)).toEqual({ at: '2026-09-09T18:34:14.863126+00:00', fields: ['name', 'bio', 'location', 'genre'], first: true })
-    expect(factsChangedAt(SKEEN_HISTORY.slice(0, 6), { complete: false })?.at).toBe(SKEEN_CHANGED)
+    expect(factChanges(window, { complete: false })).toEqual([])
+    expect(factChanges(window)).toEqual([{ at: '2026-09-09T18:34:14.863126+00:00', fields: ['name', 'bio', 'location', 'genre'], first: true }])
+    expect(factChanges(SKEEN_HISTORY.slice(0, 6), { complete: false })).toEqual([SKEEN_CHANGES[0]])
   })
 
   // No Publish yet: no change. A row with no snapshot or a bad date is skipped, not trusted.
   it('never published: nothing; a row with no snapshot or no date is skipped', () => {
-    expect(factsChangedAt([])).toBeNull()
+    expect(factChanges([])).toEqual([])
     const history = [{ published_at: '2026-10-01T09:00:00.000Z', data: null }, { published_at: 'not a date', data: facts('X') }, ...SKEEN_HISTORY]
-    expect(factsChangedAt(history)?.at).toBe(SKEEN_CHANGED)
+    expect(factChanges(history)).toEqual(SKEEN_CHANGES)
   })
 })
 
@@ -200,11 +216,11 @@ describe('bioState', () => {
 })
 
 describe('changedWords', () => {
-  // The words for what changed: "bio", "city and genre", "name, bio and photo".
+  // The words for what changed: "bio", "city and genre", "name, bio and genre".
   it('reads like a person: one, two, then a list', () => {
     expect(changedWords(['bio'])).toBe('bio')
     expect(changedWords(['location', 'genre'])).toBe('city and genre')
-    expect(changedWords(['name', 'bio', 'hero_image_url'])).toBe('name, bio and photo')
+    expect(changedWords(['name', 'bio', 'genre'])).toBe('name, bio and genre')
     expect(changedWords([])).toBe('')
   })
 
@@ -276,8 +292,8 @@ describe('connectedBios', () => {
 describe('bioRows and biosToCheck', () => {
   const now = Date.parse('2026-10-01T12:00:00.000Z')
   const bios = connectedBios(SKEEN_LINKS, SKEEN_ARTIST)
-  const change = factsChangedAt(SKEEN_HISTORY)
-  const input = (over: Partial<BiosInput> = {}): BiosInput => ({ bios, marks: {}, factsKnown: true, change, ...over })
+  const changes = factChanges(SKEEN_HISTORY)
+  const input = (over: Partial<BiosInput> = {}): BiosInput => ({ bios, marks: {}, factsKnown: true, changes, ...over })
 
   // Each row reads ITS bio_<key> tick, never another item's.
   it('each row reads its own tick: bio_<key>', () => {
@@ -288,6 +304,22 @@ describe('bioRows and biosToCheck', () => {
     expect(state.instagram).toBe('stale')
     expect(state.x).toBe('unconfirmed')
     expect(rows.find((r) => r.key === 'spotify')?.confirmedAt).toBe('2026-09-01T00:00:00.000Z')
+  })
+
+  // Ticked Aug 15, bio changed Sep 1, city Sep 20: out of date since Sep 1 (the OLDEST change
+  // after the tick), naming both. A tick between the two sees only the city; no tick, neither.
+  it('CRITICAL: two changes after one tick: since the older, naming both; each row reads its own tick', () => {
+    const history: ProfileRevision[] = [
+      { published_at: '2026-09-20T12:00:00.000Z', data: { ...facts('Bio two.'), location: 'Detroit' } },
+      { published_at: '2026-09-01T12:00:00.000Z', data: facts('Bio two.') },
+      { published_at: '2026-08-01T12:00:00.000Z', data: facts('Bio one.') },
+    ]
+    const marks = { [bioItem('spotify')]: '2026-08-15T12:00:00.000Z', [bioItem('instagram')]: '2026-09-10T12:00:00.000Z' }
+    const rows = bioRows(input({ marks, changes: factChanges(history) }), now)!
+    const row = (k: string) => rows.find((r) => r.key === k)!
+    expect(row('spotify')).toMatchObject({ state: 'stale', since: '2026-09-01T12:00:00.000Z', changed: ['bio', 'location'] })
+    expect(row('instagram')).toMatchObject({ state: 'stale', since: '2026-09-20T12:00:00.000Z', changed: ['location'] })
+    expect(row('x')).toMatchObject({ state: 'unconfirmed', since: null, changed: [] })
   })
 
   // The AI test's count: everything not current; 0 when all are ticked and nothing changed.
@@ -309,5 +341,15 @@ describe('bioRows and biosToCheck', () => {
       expect(rows.every((r) => r.state === null)).toBe(true)
       expect(biosToCheck(rows)).toBe(0)
     }
+  })
+})
+
+describe('dayLabel', () => {
+  // "Sep 29" this year; "Sep 29, 2025" when it is not this year; nothing for a bad date.
+  it('shows the year only when it is not this year', () => {
+    const now = new Date(2026, 9, 1, 12)
+    expect(dayLabel(new Date(2026, 8, 29, 12).toISOString(), now)).toBe('Sep 29')
+    expect(dayLabel(new Date(2025, 8, 29, 12).toISOString(), now)).toBe('Sep 29, 2025')
+    expect(dayLabel('not a date', now)).toBe('')
   })
 })

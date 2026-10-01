@@ -5,8 +5,10 @@ import { cx } from '@/lib/cx'
 import { slugify } from '@/lib/slug'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
+import { dayLabel } from '@/lib/manager-tools/profiles/bio-state'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { useNow } from '../test/clock'
 import { markProfileItemAction } from './actions'
 import type { PackPhoto } from './load'
 
@@ -47,10 +49,11 @@ export type ProfilesTabProps = {
   bios?: ReactNode
 }
 
-/** "sent Sep 30", in the manager's own time zone. */
-function sentLabel(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? 'sent' : `sent ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+/** "sent Sep 30", in the viewer's time zone; plain "sent" before mount (`now` null on the
+ *  server, so a server in UTC never prints another day). */
+function sentLabel(iso: string, now: number | null): string {
+  const day = now != null ? dayLabel(iso, now) : ''
+  return day ? `sent ${day}` : 'sent'
 }
 
 /** A Supabase storage file downloads (rather than opens) with `?download=<name>`; anything
@@ -63,6 +66,7 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
   const cardId = useId()
   const [sentAt, setSentAt] = useState<string | null>(initialSent)
   const [open, setOpen] = useState(!initialSent)
+  const now = useNow(false)
 
   return (
     <div className="mx-auto max-w-[800px] pt-10">
@@ -73,9 +77,7 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
             {sentAt ? <Icon name="check" size={10} /> : null}
           </span>
           <span className="flex-1 text-[15px]">Apple Music &amp; Amazon bio</span>
-          <span className="font-space text-[12px] text-ink-muted" suppressHydrationWarning>
-            {marksOk ? (sentAt ? sentLabel(sentAt) : 'not sent') : ''}
-          </span>
+          <span className="font-space text-[12px] text-ink-muted">{marksOk ? (sentAt ? sentLabel(sentAt, now) : 'not sent') : ''}</span>
           <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
         </button>
         {open ? (

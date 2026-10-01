@@ -1,10 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
-import { readProfileMarks } from '@/lib/manager-tools/profiles/marks'
-import { BIO_FACTS, connectedBios, factsChangedAt, type BiosInput, type ProfileRevision } from '@/lib/manager-tools/profiles/bio-state'
+import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/profiles/marks'
+import { BIO_FACTS, connectedBios, factChanges, type BiosInput, type ProfileRevision } from '@/lib/manager-tools/profiles/bio-state'
 
 /** The newest profile Publishes read. A Publish only writes the profile when it changed, so this
- *  is years of history; a window with no change in it says nothing (factsChangedAt). */
+ *  is years of history; the oldest row of a full window is never taken for the first (factChanges). */
 const REVISION_CAP = 300
 
 /**
@@ -16,9 +16,14 @@ const REVISION_CAP = 300
  * (`revisions_rw`, `links`, `profile_marks`: the artist's managers). NEVER THROWS: a read that
  * fails leaves its part null, and the rows say "couldn't check" (bioRows).
  *
- * `artist` is the gate's row (requireArtist), which carries the source id columns.
+ * `artist` is the gate's row (requireArtist), which carries the source id columns. `marks`: the
+ * page's own read of profile_marks, when it makes one (the Profiles page), so it is read once.
  */
-export async function loadOutsideBios(supabase: SupabaseClient, artist: IntegrationArtist & { id: string }): Promise<BiosInput> {
+export async function loadOutsideBios(
+  supabase: SupabaseClient,
+  artist: IntegrationArtist & { id: string },
+  marksRead?: Promise<ProfileMarks | null>,
+): Promise<BiosInput> {
   const id = artist.id
   const [links, marks, revisions] = await Promise.all([
     supabase
@@ -29,7 +34,7 @@ export async function loadOutsideBios(supabase: SupabaseClient, artist: Integrat
         (r) => (r.error ? null : ((r.data ?? []) as { id: string; label: string | null; url: string | null; role: string | null }[])),
         () => null,
       ),
-    readProfileMarks(supabase, id).catch(() => null),
+    marksRead ?? readProfileMarks(supabase, id).catch(() => null),
     supabase
       .from('revisions')
       // `name:data->name, …`: the facts only, never the whole snapshot (the press kit rides it).
@@ -48,6 +53,6 @@ export async function loadOutsideBios(supabase: SupabaseClient, artist: Integrat
     bios: links ? connectedBios(links, artist) : null,
     marks,
     factsKnown: rows !== null,
-    change: rows ? factsChangedAt(rows, { complete: rows.length < REVISION_CAP }) : null,
+    changes: rows ? factChanges(rows, { complete: rows.length < REVISION_CAP }) : [],
   }
 }
