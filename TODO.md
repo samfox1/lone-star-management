@@ -36,7 +36,7 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
 **Outside profiles go INTO the visibility test, automated (Sam, 2026-09-30):** "these should be
 things that you add in the visibility test. If you can see that he hasn't updated them in a while
 … it should suggest him to do it … I am trying to build a longterm product that is capable of
-helping multiple artists, automated in any way possible." Plan DRAFTED in OUTSIDE_PROFILES_PLAN.md (3 decisions for Sam):
+helping multiple artists, automated in any way possible." Plan DECIDED in OUTSIDE_PROFILES_PLAN.md (2026-10-01; build order inside):
 - READ IT OURSELVES where an API allows: YouTube channel description (our YouTube key: does it
   name the site, city, genre?), MusicBrainz (have), Wikidata, Discogs `urls`, Bandsintown shows vs
   Tapir's (artist's key + their terms), Instagram bio/website (Business Discovery needs Tapir's own

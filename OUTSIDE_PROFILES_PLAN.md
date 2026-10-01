@@ -1,4 +1,4 @@
-# Outside profiles in the visibility test (draft, 2026-09-30)
+# Outside profiles in the visibility test (plan, 2026-09-30; decided 2026-10-01)
 
 Sam, 2026-09-30:
 
@@ -52,15 +52,13 @@ photo, on Publish. That is the moment every outside bio goes out of date.
 - **A tick is one click** ("updated"), stored in `profile_marks`. Its item list grows: spotify_bio,
   instagram_bio, and so on. That's a migration to widen the CHECK, plus a `confirmed_at` date.
 
-## Decisions for Sam
+## Decided (Sam, 2026-10-01)
 
-1. **Do outside profiles count in the score** ("18 of 24")?
-   - My pick: only rows Tapir can check AND the artist can fix soon (MusicBrainz, YouTube, Discogs
-     once linked, Bandsintown).
-   - Wikidata and the checklist rows don't count. They show, but they don't lower the score.
-2. **How often to nudge** a place Tapir can't read? My pick: every 6 months, plus whenever the
-   artist's facts change.
-3. **Instagram:** worth a Meta app review? My pick: research it after the rest is built.
+1. **Score:** only the rows Tapir can check AND the artist can fix soon count (MusicBrainz, YouTube,
+   Discogs once linked, Bandsintown). Wikidata and the checklist rows show, but don't lower the score.
+2. **Nudges:** whenever the artist's facts change on Publish, plus a "still current?" check every
+   6 months.
+3. **Instagram:** research the Meta review after the rest is built. Until then it's a checklist row.
 
 ## Build order (each one small)
 
