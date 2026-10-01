@@ -13,7 +13,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8}}
 :root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8}
 *{box-sizing:border-box}
-html{overflow-x:clip}
+html{overflow-x:clip;overscroll-behavior-y:none}
 body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 a{color:inherit;text-decoration:none}
@@ -135,6 +135,10 @@ body[data-s=pub] .nudge{display:inline-flex}
 .tile.round{width:64px;height:64px;border-radius:50%}
 .tile.empty{border-style:dashed;background:none;font-size:12px;color:var(--faint);transition:color .15s,border-color .15s}
 .tile.empty:hover{border-color:var(--faint);color:var(--ink)}
+.tile.round.empty{color:var(--ink)}
+.tile.round.empty:hover{color:var(--accent);border-color:var(--accent)}
+.tile.set .tile-ic{display:grid;place-items:center;width:100%;height:100%;color:#fff;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s}
+.tile.set:hover .tile-ic,.tile.set:focus-visible .tile-ic{opacity:1}
 /* an added row: renamable title + note (inline-text.tsx) */
 .rt{display:inline-block;min-width:60px;white-space:nowrap;font-size:15px;font-weight:500;color:var(--ink);border-bottom:1px solid transparent;outline:none;cursor:text}
 .rt:focus{border-bottom-color:var(--ink)}
@@ -439,8 +443,8 @@ $$('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go
 let profile = null
 function ppRow() {
   $('#ppCtl').innerHTML = profile
-    ? `<span class="tile round" style="background-image:url('${profile}')" data-pick="profile"></span><button class="ri faint" data-pick="profile" data-tip="Change" aria-label="Change the profile photo">${svg('edit', 20)}</button><span class="endslot"></span>`
-    : `<span class="tile round empty" data-pick="profile">Add</span><button class="ri primary" data-pick="profile" data-tip="Add photo" aria-label="Add a profile photo">${svg('plus', 20)}</button><span class="endslot"></span>`
+    ? `<button class="tile round set" style="background-image:url('${profile}')" data-pick="profile" data-tip="Change" aria-label="Change the profile photo"><span class="tile-ic">${svg('edit', 18)}</span></button><span class="endslot"></span>`
+    : `<button class="tile round empty" data-pick="profile" data-tip="Add photo" aria-label="Add a profile photo">${svg('plus', 20)}</button><span class="endslot"></span>`
 }
 function openPick() { $('#pickModal').classList.add('on') }
 function closePick() { $('#pickModal').classList.remove('on') }

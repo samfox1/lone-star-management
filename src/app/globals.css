@@ -149,3 +149,12 @@ body {
   border-radius: 50%;
   background: var(--color-ink);
 }
+
+/* The dashboard never bounces (Sam, 2026-10-01: "make the top nav bar row not move when I
+   scroll"). Its header is sticky and its side rails are fixed; a Mac trackpad scrolled past
+   either end rubber-bands the page, the header rides the bounce, and the rails don't. With
+   no overscroll the bar stays exactly where it is. Scoped by `data-dashboard` (the artist
+   layout), so public pages keep their normal feel. */
+html:has([data-dashboard]) {
+  overscroll-behavior-y: none;
+}
