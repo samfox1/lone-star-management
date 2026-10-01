@@ -1,7 +1,8 @@
 import type { SeoTestAction } from '@/lib/seo-tests/types'
 
 /**
- * THE SEO / GEO TOOL'S TABS (Sam, 2026-09-29): Details · Facts · Answers · AI test. Four tabs on
+ * THE SEO / GEO TOOL'S TABS (Sam, 2026-09-29): Details · Facts · Answers · AI test, and Profiles
+ * (2026-09-30: outside profiles, starting with the Apple Music & Amazon bio email). Tabs on
  * the thin rail's second panel, exactly like Brand and Settings: tools-registry.ts builds its
  * `tabs` from SEO_TABS below, so the rail, the routes and the tests all derive from this one list.
  *
@@ -16,6 +17,7 @@ export const SEO_SECTIONS = [
   { seg: 'facts', label: 'Facts' },
   { seg: 'answers', label: 'Answers' },
   { seg: 'test', label: 'AI test' },
+  { seg: 'profiles', label: 'Profiles' },
 ] as const
 
 export type SeoSection = (typeof SEO_SECTIONS)[number]['seg']

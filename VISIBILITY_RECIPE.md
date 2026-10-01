@@ -47,8 +47,9 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
    - MusicBrainz (the AI test checks it).
    - Bandsintown for Artists: claim it, invite Tapir as Editor, connect Apple Music + Amazon Music,
      then upload Tapir's show CSV (**planned**). It feeds Google, Spotify, Apple and Amazon.
-   - AllMusic/Xperi: send Tapir's bio pack (**planned**) to apple.coverage.support@xperi.com and
-     content.music@tivo.com. It writes the Apple Music and Amazon Music bios (takes months).
+   - AllMusic/Xperi: the SEO tool's Profiles tab builds the email (**live**, 2026-09-30): to
+     apple.coverage.support@xperi.com and content.music@tivo.com, CC the artist, Mark as sent.
+     It writes the Apple Music and Amazon Music bios (takes months); artists can't edit those.
    - Resident Advisor for DJs, after checking for a same-named artist. Manual only.
    - One Discogs release, then the site under Sites. Tapir checks it (**planned**).
    - The site link in the YouTube and Instagram bios. Spotify has no website field, so put the

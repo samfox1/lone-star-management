@@ -1,15 +1,16 @@
 /**
- * The SEO / GEO page has four tabs on the rail, each with its own page, the tool opens on
+ * The SEO / GEO page has five tabs on the rail, each with its own page, the tool opens on
  * Details, and every old section address still lands on the tab (and the row) that now holds it.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections.ts,
  *           tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
- * Feature:  SEO / GEO page · its tabs: Details · Facts · Answers · AI test (Sam, 2026-09-29:
+ * Feature:  SEO / GEO page · its tabs: Details · Facts · Answers · AI test · Profiles (Profiles
+ *           added 2026-09-30, outside profiles; Sam, 2026-09-29:
  *           Listing became Details, the tool's own route; Overview was removed; Test became
  *           "AI test". Before that, 2026-09-28, round 2: five tabs replacing seven pill sections)
  * Tier:     STRICT (AGENTS.md "Test depth"): nothing that worked may lose its home, and a bad
  *           address must be a 404, not a crash.
- * Covers:   • four tabs, unique, Details first as the tool's own route
+ * Covers:   • five tabs, unique, Details first as the tool's own route
  *           • the rail lists exactly these tabs; every tab has its own page.tsx
  *           • no folder that is not a tab has a page.tsx (a leftover one would shadow its redirect)
  *           • every old section is still a tab or redirects to one; the redirect route sends each
@@ -58,9 +59,9 @@ const moved = async (section: string) => {
 }
 
 describe('the registry', () => {
-  // Four tabs, unique, Details first as the tool's own route, so the tool opens on it.
-  it('four tabs, unique, Details first as the tool’s own route', () => {
-    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Facts', 'Answers', 'AI test'])
+  // Five tabs, unique, Details first as the tool's own route, so the tool opens on it.
+  it('five tabs, unique, Details first as the tool’s own route', () => {
+    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Facts', 'Answers', 'AI test', 'Profiles'])
     expect(new Set(SEO_SECTIONS.map((s) => s.seg)).size).toBe(SEO_SECTIONS.length)
     for (const s of SEO_SECTIONS) expect(isSeoSection(s.seg)).toBe(true)
     expect(isSeoSection('logo')).toBe(false)
