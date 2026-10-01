@@ -43,8 +43,16 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 5. **YOU: ask Google to list each page it hasn't yet.** In the AI test, click the page's
    Request indexing link (**building**), then click Request indexing in Search Console. It takes
    about 2 minutes. Google allows no API for this button.
-6. **YOU: outside profiles.** Get MusicBrainz, and the site link in the Spotify, Apple, YouTube and
-   Instagram bios. Links from other places are the biggest lever of all.
+6. **YOU: outside profiles.** Links from other places are the biggest lever of all.
+   - MusicBrainz (the AI test checks it).
+   - Bandsintown for Artists, with every show. It feeds Google, Spotify, Apple and Amazon.
+   - An email to AllMusic/Xperi (content.music@tivo.com). It writes the Apple Music and Amazon
+     Music bios.
+   - Resident Advisor for DJs, after checking for a same-named artist.
+   - One Discogs release.
+   - The site link in the YouTube and Instagram bios. Spotify has no website field, so put the
+     city, genre and site name in its bio text.
+   Details: VISIBILITY_TOOLKIT.md "Round 2".
 7. **Brave:** if the Brave check says the site is missing, submit it at
    search.brave.com/submit-url (**planned**).
 
@@ -63,6 +71,9 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
   robots.txt, the sitemap, canonicals, crawler visits, whether Google lists each page, and when
   Bing last visited.
 - **Planned (VISIBILITY_TOOLKIT.md):**
+  - a weekly AI answers check: Perplexity, OpenAI and Claude, 5 questions, about $3-5 per artist
+    a month
+  - a Wikidata check
   - Brave and Perplexity index checks
   - PageSpeed
   - uptime
@@ -73,7 +84,10 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 
 - **The Google Indexing API for artist pages.** Google allows it only for job ads and livestreams,
   and misuse risks the robot account that owns every client site.
-- **Blocking a search or AI crawler.** Vercel's AI Bots rule stays on Log, never Deny.
+- **Blocking a search or AI crawler,** or an AI agent acting for a person (Google-Agent, ChatGPT
+  agent, Claude-User). Vercel's AI Bots rule stays on Log, never Deny.
+- **Storing answers from Gemini or Bing grounding.** Their terms forbid it, so they are live-only.
+- **Creating or editing Wikidata or Wikipedia entries as Tapir.**
 - **A sitemap date that changes on every request,** or that moves on every page at once.
 - **Ownership tags shown only sometimes.** A missing tag un-verifies the site.
 - **Saying "listed on Bing".** Bing only tells us when it last visited.

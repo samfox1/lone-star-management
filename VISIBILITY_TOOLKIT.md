@@ -93,6 +93,73 @@ publisher program · Apple Business Connect · Tapir writing Wikipedia articles 
 GA4 (duplicates Tapir's analytics) · Bing URL/Content Submission APIs (IndexNow does it) · Clarity
 Bot Activity (no Vercel support).
 
+## Round 2 (2026-09-30): music profiles, asking the AIs, new standards
+
+Three more research agents, official sources first. Sam: "What other tools or apis can I call to
+improve my site's AI visibility."
+
+**Corrections to what we had**
+- **Spotify has no website field.** Its profile only takes Instagram, Facebook, X, TikTok,
+  Wikipedia and WhatsApp. Put the city, genre and site name in the bio text instead.
+- **Apple Music and Amazon Music bios come from AllMusic/Xperi** (both say so). One email
+  (content.music@tivo.com: bio, a JPEG at least 800px, releases) updates both.
+- **Google retired FAQ rich results** (2026-05-07). /faqsheet's FAQPage JSON-LD earns nothing in
+  Google any more. It's harmless and AI still reads the page; just never call it a rich result.
+- **Google's event results need one page per event** ("a leaf page"). Our MusicEvent nodes on the
+  home page can't qualify. Listing shows on ticketing/event platforms is the easy route.
+- **llms.txt: still skip.** In June 2026 Google added a line saying it isn't needed; no vendor
+  says it reads it.
+- **Perplexity's Sonar API ended 2026-09-27.** Build on its Agent API.
+
+**DO (new)**
+1. **Weekly AI answers check** (AUTO, about $3-5 per artist a month). Ask Perplexity (Agent API),
+   OpenAI (`web_search`) and Claude (web search) 5 questions, 3 runs each: who is the artist,
+   the latest release, the next show, the official site, how to book. Grade: is the site cited,
+   is the artist named, do the facts match `get_public_site`. Report a rate ("cited 7 of 9"),
+   never one answer: answers change run to run. Pin the location to the artist's city.
+   NOT Gemini grounding or Bing grounding: their terms ban storing or analysing answers.
+   It shows "what this AI's search finds", not exactly what fans see in the app.
+2. **Wikidata check** (AUTO, free, no key): find the artist's item by MusicBrainz ID (P434) or
+   official site (P856). Show "no item yet" as info. Never create or edit items as Tapir
+   (self-promotion is discouraged; paid edits must be disclosed).
+3. **AllMusic/Xperi email** (YOU): the Apple Music and Amazon Music bio. The most direct route
+   toward Siri and Alexa.
+4. **Bandsintown for Artists** (YOU): claim it and list every show. Bandsintown says it sends
+   events to Google, Spotify, YouTube, Apple, Shazam and Amazon Music.
+5. **Resident Advisor** (YOU, DJs): claim or create the profile, add bio + site. Manual only (its
+   terms ban bots). CHECK NAME CLASHES: ra.co/dj/skeen looked like a Glasgow DJ (search snippet
+   only; RA blocks fetching).
+6. **One Discogs release** (YOU): creates the Discogs page; its ID links MusicBrainz and Wikidata,
+   which helps tell same-named artists apart.
+7. **VideoObject `creator`** (bridge, tiny): point it at the artist's `@id` (Google, 2026-09-24).
+8. **Search Console platform properties** (YOU, free): add the artist's YouTube, Instagram, TikTok
+   and X to see the Google traffic to those posts.
+9. **Preferred sources link** (`google.com/preferences/source?q=<domain>`): fans who pick the site
+   see more of it in Top Stories, AI Mode and AI Overviews. Check the site qualifies first.
+10. **Shopify Agentic Storefronts**, when merch is unparked: lists products in ChatGPT, AI Mode,
+    Gemini, Copilot and Meta. On by default for eligible stores.
+
+**MAYBE**
+- **Per-show pages** (`/shows/[id]`) with full MusicEvent markup: the only way the site itself
+  reaches Google's event results.
+- **LLMrefs** ($79/mo for 500 prompts, 8 engines, API included, about $0.80 per artist): a monthly
+  reading of the consumer apps beside our own check. How it collects answers is UNCONFIRMED.
+- **ProfilePage on /about**, **Google Trends API** (alpha, by application), **WebMCP** (booking
+  forms for in-browser agents, later).
+
+**SKIP (new)**
+- NLWeb
+- a site MCP server or ChatGPT app
+- ACP/UCP checkout directly (Shopify covers both)
+- the IETF AI-preferences draft
+- speakable
+- Gemini and Bing grounding for checks (their terms)
+- scraping consumer AI apps (OpenAI's terms)
+- Last.fm, Genius, Songkick
+- the pricier trackers: Profound, Peec, AthenaHQ, Semrush, Ahrefs
+
+**Never (new):** block AI agents acting for a person (Google-Agent, ChatGPT agent, Claude-User).
+
 ## The honest pitch
 
 Say: **"We do everything Google, Microsoft and the AI companies document to get your site found,
