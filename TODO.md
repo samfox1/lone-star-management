@@ -33,6 +33,21 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
       approval isn't blocking today; the other terms still are (Bandsintown branding + Track/RSVP
       buttons, session-only caching, remove what's removed upstream).
 
+**Outside profiles go INTO the visibility test, automated (Sam, 2026-09-30):** "these should be
+things that you add in the visibility test. If you can see that he hasn't updated them in a while
+… it should suggest him to do it … I am trying to build a longterm product that is capable of
+helping multiple artists, automated in any way possible." Plan to write (OUTSIDE_PROFILES_PLAN.md):
+- READ IT OURSELVES where an API allows: YouTube channel description (our YouTube key: does it
+  name the site, city, genre?), MusicBrainz (have), Wikidata, Discogs `urls`, Bandsintown shows vs
+  Tapir's (artist's key + their terms), Instagram bio/website (Business Discovery needs Tapir's own
+  IG business account + Meta app review: research first).
+- CAN'T READ (Spotify bio, Apple Music Q&A, SoundCloud, TikTok, RA): a checklist row with "last
+  confirmed" and a nudge every few months.
+- TRIGGERED BY TAPIR: when the artist's bio, city, genre or name changes on Publish, the test says
+  which outside bios to update. Platforms don't expose "last edited"; Tapir's own changes do.
+- Skeen, 2026-09-30: ra.co/dj/skeen is the GLASGOW DJ, not him (Sam checked). Skeen needs his own
+  RA page; the test should flag same-name clashes where it can.
+
 **BUILDING (Sam, 2026-09-30, "if the user cant write it. You can build it"):** the Profiles tab +
 AllMusic bio pack (mock: prototypes/profiles_bio_pack_20260930.html). Artists can edit their own
 Spotify/Instagram/SoundCloud/YouTube/Bandsintown bios and Apple's Q&A + hometown; only the main
