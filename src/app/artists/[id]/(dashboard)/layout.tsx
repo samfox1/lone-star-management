@@ -52,7 +52,7 @@ export default async function DashboardLayout({
   const onTour = (count ?? 0) > 0
 
   return (
-    <div data-dashboard className="font-ui text-ink flex flex-1 flex-col bg-paper">
+    <div className="font-ui text-ink flex flex-1 flex-col bg-paper">
       {/* STICKY (Sam, 2026-09-10, with a screenshot of the Integrations page mid-scroll:
           "the vertical line on the side bar disconnects… I think the top nav bar should
           stay in place when scrolling"). The tools and assets rails are `fixed` to the
