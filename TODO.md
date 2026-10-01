@@ -21,10 +21,11 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
    b. ~~resend the sitemap to Google after a content publish~~ LIVE (in the dashboard code)
    c. ~~"Ask Google" link beside each page Google hasn't listed~~ LIVE
    d. ~~3 more crawlers, the Copilot noarchive check~~ DONE 2026-10-01; still: IndexNow only changed pages
-   e. a Wikidata check in the AI test (Sam liked it, 2026-09-30): item by MusicBrainz ID / official
-      site, read only; Tapir never creates or edits items
+   e. ~~a Wikidata check~~ DONE 2026-10-01: a live row in the Profiles tab (item by MusicBrainz ID /
+      official site, read only; Tapir never creates or edits items)
    f. outside profiles (VISIBILITY_TOOLKIT.md "Round 3"; no platform lets Tapir WRITE a profile by
-      API): build a Bandsintown show CSV export, a Discogs check, an AllMusic bio pack; RA manual.
+      API): build a Bandsintown show CSV export (needs the template from Skeen's account); Discogs
+      check DONE 2026-10-01 (Profiles tab); AllMusic bio pack DONE; RA manual.
       NOTE: a Bandsintown API key is now self-serve (Bandsintown for Artists > Settings > General);
       the paid-service written approval below still applies to any API read.
       LATER (Sam, 2026-09-30: "We will do that once more stuff is finished"): email

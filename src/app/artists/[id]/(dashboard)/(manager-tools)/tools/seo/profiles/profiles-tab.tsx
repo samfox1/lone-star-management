@@ -22,14 +22,15 @@ import type { PackPhoto } from './load'
  *
  * The CC is the artist's own address, typed here and kept nowhere (Tapir doesn't store it, and
  * the booking email is often an agent's). Only one valid address is ever used (`ccAddress`).
- * The rows under it are the profiles still to come, greyed.
+ * Under it, `outside`: the live Discogs and Wikidata rows (outside-rows.tsx), then the profiles
+ * still to come, greyed.
  */
 
-const LATER = ['Bandsintown shows', 'Discogs', 'Resident Advisor', 'Wikidata'] as const
+const LATER = ['Bandsintown shows', 'Resident Advisor'] as const
 
-const LABEL = 'font-space text-[10.5px] font-bold uppercase leading-none tracking-[0.14em] text-ink-faint'
-const ROW = 'flex w-full items-center gap-3.5 border-b border-hairline px-2.5 py-[13px] text-left'
-const GLYPH = cx('relative inline-flex rounded p-1 text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING, 'focus-visible:outline-offset-2')
+export const LABEL = 'font-space text-[10.5px] font-bold uppercase leading-none tracking-[0.14em] text-ink-faint'
+export const ROW = 'flex w-full items-center gap-3.5 border-b border-hairline px-2.5 py-[13px] text-left'
+export const GLYPH = cx('relative inline-flex rounded p-1 text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING, 'focus-visible:outline-offset-2')
 
 export type ProfilesTabProps = {
   artistId: string
@@ -39,6 +40,8 @@ export type ProfilesTabProps = {
   sentAt: string | null
   /** False when the marks couldn't be read: the row says nothing rather than "not sent". */
   marksOk: boolean
+  /** The live Discogs and Wikidata rows, streamed in by the page (outside-rows.tsx). */
+  outside?: ReactNode
 }
 
 /** "sent Sep 30", in the manager's own time zone. */
@@ -53,7 +56,7 @@ function downloadHref(url: string, fileName: string): string {
   return url.includes('/storage/v1/object/public/') ? `${url}?download=${encodeURIComponent(fileName)}` : url
 }
 
-export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, marksOk }: ProfilesTabProps) {
+export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, marksOk, outside }: ProfilesTabProps) {
   const cardId = useId()
   const [sentAt, setSentAt] = useState<string | null>(initialSent)
   const [open, setOpen] = useState(!initialSent)
@@ -83,6 +86,7 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
             onMarked={(done) => setSentAt(done ? new Date().toISOString() : null)}
           />
         ) : null}
+        {outside}
         {LATER.map((label) => (
           <div key={label} className={cx(ROW, 'text-ink-faint')}>
             <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border-[1.5px] border-dashed border-ink-faint" />
@@ -96,7 +100,7 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-1 gap-1.5 border-t border-hairline-soft py-3 first:border-t-0 first:pt-0.5 min-[600px]:grid-cols-[120px_minmax(0,1fr)] min-[600px]:gap-[18px]">
       <span className={cx(LABEL, 'pt-[3px]')}>{label}</span>
@@ -105,7 +109,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Glyph({ icon, label }: { icon: IconName; label: string }) {
+export function Glyph({ icon, label }: { icon: IconName; label: string }) {
   return (
     <>
       <Icon name={icon} size={18} aria-hidden="true" />

@@ -1,0 +1,138 @@
+{
+  "_about": "Real answers, fetched 2026-09-30 (US time) with Tapir's User-Agents; trimmed: Discogs' profile text, images, members and aliases are left out (we never show them). See tests/unit/manager-tools/seo/outside-profiles.test.ts.",
+  "wikidata": {
+    "search_P434_or_P856_thebeatles": {
+      "batchcomplete": "",
+      "query": {
+        "searchinfo": {
+          "totalhits": 1
+        },
+        "search": [
+          {
+            "ns": 0,
+            "title": "Q1299",
+            "pageid": 1683
+          }
+        ]
+      }
+    },
+    "search_none": {
+      "batchcomplete": "",
+      "query": {
+        "searchinfo": {
+          "totalhits": 0
+        },
+        "search": []
+      }
+    },
+    "Q1299_P856": {
+      "P856": [
+        {
+          "id": "Q1299$3C3771C7-4CBF-4FB4-B766-A0DE85C6D78A",
+          "rank": "normal",
+          "qualifiers": [
+            {
+              "property": {
+                "id": "P407",
+                "data_type": "wikibase-item"
+              },
+              "value": {
+                "type": "value",
+                "content": "Q1860"
+              }
+            }
+          ],
+          "references": [],
+          "property": {
+            "id": "P856",
+            "data_type": "url"
+          },
+          "value": {
+            "type": "value",
+            "content": "https://thebeatles.com"
+          }
+        }
+      ]
+    },
+    "Q1299_P434": {
+      "P434": [
+        {
+          "id": "q1299$1fa7c2b9-48c8-63b4-dcc9-42c8ef84e221",
+          "rank": "normal",
+          "qualifiers": [],
+          "references": [
+            {
+              "hash": "706208b3024200fd0a39ad499808dd0d98d74065",
+              "parts": [
+                {
+                  "property": {
+                    "id": "P248",
+                    "data_type": "wikibase-item"
+                  },
+                  "value": {
+                    "type": "value",
+                    "content": "Q14005"
+                  }
+                }
+              ]
+            }
+          ],
+          "property": {
+            "id": "P434",
+            "data_type": "external-id"
+          },
+          "value": {
+            "type": "value",
+            "content": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
+          }
+        }
+      ]
+    },
+    "Q5_P856_empty": {},
+    "Q999999990_missing": {
+      "code": "resource-not-found",
+      "message": "The requested resource does not exist",
+      "context": {
+        "resource_type": "item"
+      }
+    }
+  },
+  "discogs": {
+    "artist_82730_the_beatles": {
+      "name": "The Beatles",
+      "id": 82730,
+      "resource_url": "https://api.discogs.com/artists/82730",
+      "uri": "https://www.discogs.com/artist/82730-The-Beatles",
+      "urls": [
+        "https://www.thebeatles.com/",
+        "https://www.britannica.com/topic/the-Beatles",
+        "https://www.facebook.com/thebeatles",
+        "https://www.instagram.com/thebeatles/",
+        "https://linktr.ee/thebeatlesofficial",
+        "https://myspace.com/thebeatles",
+        "https://soundcloud.com/thebeatles",
+        "http://www.beatlesebooks.com/",
+        "https://x.com/thebeatless",
+        "https://en.wikipedia.org/wiki/The_Beatles",
+        "https://www.youtube.com/thebeatles",
+        "https://www.youtube.com/@TheBeatlesVEVO",
+        "https://webgrafikk.com/blog/",
+        "https://www.allmusic.com/artist/the-beatles-mn0000754032",
+        "https://www.progarchives.com/artist.asp?id=2407",
+        "https://www.beatlesbible.com"
+      ],
+      "data_quality": "Needs Vote"
+    },
+    "artist_1230117_the_other_skeen": {
+      "name": "Skeen",
+      "id": 1230117,
+      "resource_url": "https://api.discogs.com/artists/1230117",
+      "uri": "https://www.discogs.com/artist/1230117-Skeen",
+      "releases_url": "https://api.discogs.com/artists/1230117/releases",
+      "data_quality": "Needs Major Changes"
+    },
+    "artist_999999999_missing": {
+      "message": "Artist not found."
+    }
+  }
+}
