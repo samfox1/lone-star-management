@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Manager tools as ONE admin dashboard (Sam, 2026-08-28): a fixed side panel lists every
+ * Manager tools as ONE admin dashboard (Sam, 2026-08-28): a side panel lists every
  * tool; the page beside it is the tool. Same language as the editor's inspector and the
  * assets rail — Space Mono, hairline border, accent-soft active row — so it reads as the
  * same app. Rendered by the dashboard layout on every tool route; nothing else changes:
@@ -18,17 +18,46 @@ export { TOOLS, tabFor, toolFor, toolsFor }
 // FULL HEIGHT FROM THE TOP, UNDER THE HEADER (Sam, 2026-09-10). The rail used to start at
 // top:71px — the header's height — so its border-right met the header's border-bottom.
 // That held while scrolling, and broke the moment a Mac trackpad rubber-banded past the
-// top: the STICKY header rides the bounce with the page, the FIXED rail does not, and
+// top: the STICKY header rides the bounce with the page, the FIXED rail did not, and
 // the line came away from the bar by however far the page was pulled. Headless Chromium
 // never bounces, which is why it could not be reproduced there.
 //
-// So the rail now runs the whole viewport, z-10, and the header (z-30, bg-paper) simply
-// covers its top 71px — and, during a bounce, the gap ABOVE itself too, via a screen-tall
-// `::before` hung off the header (layout.tsx). Without that cover the full-height line
-// showed above the bar for the length of the bounce, which was the next screenshot. The line is continuous behind the bar at every scroll offset and
-// through the bounce, and there is no longer a number here that has to match the
-// header's height. The icon group centres on 50vh of the VIEWPORT, which is where it
-// already sat (assets-rail.tsx does the same).
+// So the rail runs the whole window height from the very top, z-10, and the header (z-30,
+// bg-paper) simply covers its top 71px. There is no number here that has to match the
+// header's height. The icon group centres on 50vh of the VIEWPORT (assets-rail.tsx does
+// the same).
+//
+// RIDING THE BOUNCE (Sam, 2026-10-01: "I liked how the top nav bar had some wiggle room
+// to it… allow the side panels to move with the scroll like that too"). A `fixed` box
+// is pinned to the window, so it held still while the rubber band pulled the page and the
+// header away from it. The panels are now `sticky top-0 h-screen`, the same as the header:
+// positioned by the page's own scroll, so they move with its bounce and the bar and the
+// rails travel as one frame. In a normal scroll a sticky box at top:0 sits exactly where
+// the fixed one did.
+//
+// A sticky box can only stick inside its parent, and the in-flow slot starts below the
+// header and <main>'s padding. So each panel sits in a LANE (RAIL_LANE) that is absolute
+// against the dashboard root (`relative`, layout.tsx): it starts at the top of the page,
+// ends at the bottom, and the sticky panel inside it can stay at the window top for the
+// whole scroll. Being absolute, the lane is out of the flow, so it pushes nothing: the
+// in-flow slot still holds the page's left edge, and the thin rail still widens OVER the
+// page on hover. Positioned against the root, so the lane ignores <main>'s padding and
+// starts at x=0 (or right of the thin rail, for the second panel), as the fixed panels did.
+//
+// Headless Chromium does not bounce, so the bounce itself can only be checked by hand on
+// a trackpad. What was measured (2026-10-01) is that nothing else moved: every panel's box
+// at every scroll offset, before and after, on a tabbed tool, a plain one and an assets page.
+/**
+ * The lane each side panel rides in (the tools rail, the second panel, the assets rail).
+ *
+ * `round(100%, 1px)`, not `bottom-0`: the root's height is often fractional (829.875px on
+ * SEO/GEO), and Chrome rounds the page's scroll height to the NEAREST whole pixel (830).
+ * A lane ending at 829.875 is then short by the difference, and at the very bottom of
+ * the scroll the sticky panel was pushed up by it (measured: up to half a pixel). Rounded
+ * the same way, the lane ends exactly where the page does, and never past it, so it adds
+ * no scroll of its own.
+ */
+export const RAIL_LANE = 'absolute top-0 h-[round(100%,1px)]'
 /**
  * The manager tools as a 84px icon rail — the ASSETS rail, one to one (Sam,
  * 2026-08-28: "mimic the side panel used on the assets page"). Icons stacked and
@@ -84,67 +113,71 @@ const railColumnTop = (count: number) => (count * RAIL_ITEM_H + (count - 1) * RA
 
 function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
   return (
-    // Collapsed (a tabbed tool), this in-flow slot lies exactly under the fixed rail and draws
+    // Collapsed (a tabbed tool), this in-flow slot lies exactly under the rail and draws
     // the SAME line the whole height of the page (see ToolsShell: FULL-HEIGHT LINES).
     <div data-rail-slot="" className={cx('hidden flex-none md:block', collapsed && 'md:border-r md:border-hairline')} style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
-      <nav
-        aria-label="Manager tools"
-        data-collapsed={collapsed ? 'true' : 'false'}
-        // z-20 while thin: the hover-widened rail has to paint OVER the second panel, which
-        // is fixed at the same level and starts where the thin rail ends. Header (z-30) wins.
-        className={cx(
-          'group fixed left-0 top-0 flex h-screen flex-col overflow-hidden border-r border-hairline bg-paper transition-[width] duration-150',
-          collapsed ? 'z-20 w-[52px] hover:w-[84px]' : 'z-10 w-[84px]',
-        )}
-      >
-        {/* Stretches to the nav, so the icons re-centre as it widens. Deliberately NOT a
-            fixed width — see the note on RAIL_COLLAPSED_W. */}
-        <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-1.5">
-          {tools.map((t) => {
-            const on = t.seg === active
-            return (
-              <Link
-                key={t.seg}
-                href={`/artists/${artistId}/${t.seg}`}
-                aria-current={on ? 'page' : undefined}
-                style={{ height: RAIL_ITEM_H }}
-                className={cx(
-                  'flex flex-col items-center justify-center gap-1 rounded-lg py-2 transition-colors',
-                  on ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
-                )}
-              >
-                <Icon name={t.icon} size={20} />
-                <span
+      {/* The full-page lane the sticky rail rides in — see RIDING THE BOUNCE above. */}
+      <div className={cx(RAIL_LANE, 'left-0')}>
+        <nav
+          aria-label="Manager tools"
+          data-collapsed={collapsed ? 'true' : 'false'}
+          // z-20 while thin: the hover-widened rail has to paint OVER the second panel, which
+          // sits at the same level and starts where the thin rail ends. Header (z-30) wins.
+          className={cx(
+            'group sticky top-0 flex h-screen flex-col overflow-hidden border-r border-hairline bg-paper transition-[width] duration-150',
+            collapsed ? 'z-20 w-[52px] hover:w-[84px]' : 'z-10 w-[84px]',
+          )}
+        >
+          {/* Stretches to the nav, so the icons re-centre as it widens. Deliberately NOT a
+              fixed width — see the note on RAIL_COLLAPSED_W. */}
+          <div className="mt-[50vh] flex -translate-y-1/2 flex-col gap-1 px-1.5">
+            {tools.map((t) => {
+              const on = t.seg === active
+              return (
+                <Link
+                  key={t.seg}
+                  href={`/artists/${artistId}/${t.seg}`}
+                  aria-current={on ? 'page' : undefined}
+                  style={{ height: RAIL_ITEM_H }}
                   className={cx(
-                    'max-w-[84px] truncate font-space text-[10px] leading-[12px] tracking-[0.02em] transition-opacity duration-150',
-                    // opacity, NEVER `hidden`: the label keeps its height even while
-                    // invisible, which is what stops the stack sliding vertically on hover.
-                    collapsed && 'opacity-0 group-hover:opacity-100',
+                    'flex flex-col items-center justify-center gap-1 rounded-lg py-2 transition-colors',
+                    on ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
                   )}
                 >
-                  {t.short ?? t.label}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
+                  <Icon name={t.icon} size={20} />
+                  <span
+                    className={cx(
+                      'max-w-[84px] truncate font-space text-[10px] leading-[12px] tracking-[0.02em] transition-opacity duration-150',
+                      // opacity, NEVER `hidden`: the label keeps its height even while
+                      // invisible, which is what stops the stack sliding vertically on hover.
+                      collapsed && 'opacity-0 group-hover:opacity-100',
+                    )}
+                  >
+                    {t.short ?? t.label}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   )
 }
 
 /**
  * The second panel: a tool's sub-tabs, beside the thin rail. Same language as the rail
- * (fixed, hairline, mono, accent when current) but TEXT ONLY — the rail beside it already
+ * (sticky, hairline, mono, accent when current) but TEXT ONLY — the rail beside it already
  * shows the tool's icon, and a second column of icons said nothing the first had not
  * (Sam, 2026-09-22: "I dont need icons on the right rail").
  */
 function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
   const tabs = tool.tabs ?? []
   return (
-    // THE WIDTH IS THE LONGEST LABEL (Sam, 2026-09-23). The panel is `fixed`, and a fixed
-    // box pushes nothing, so the slot it leaves in the page's flow is held open by an
-    // invisible copy of every label, laid out exactly as the panel lays them out (same
+    // THE WIDTH IS THE LONGEST LABEL (Sam, 2026-09-23). The panel hangs in an absolute
+    // lane (RIDING THE BOUNCE, above), and an out-of-flow box pushes nothing, so the slot
+    // it leaves in the page's flow is held open by an invisible copy of every label, laid
+    // out exactly as the panel lays them out (same
     // paddings, same font, BOLD so the current tab's weight can never outgrow it). Both are
     // `w-max`, so they come to the same width and the page starts where the panel ends —
     // whichever tool, whichever labels. No number to keep in step with the copy.
@@ -159,37 +192,39 @@ function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; t
           </span>
         ))}
       </div>
-      <nav
-        aria-label={tool.label}
-        className={cx('fixed top-0 z-10 flex h-screen w-max flex-col border-r border-hairline bg-paper', SUB_RAIL_MIN)}
-        style={{ left: RAIL_COLLAPSED_W }}
-      >
-        {/* The RAIL's offset, not its own — see RAIL_COLUMN_TOP. No `-translate-y-1/2`:
-            that would re-centre it on its own short height and undo the alignment. */}
-        <div className="flex flex-col gap-1 px-2" style={{ marginTop: `calc(50vh - ${railColumnTop(railCount)}px)` }}>
-          {tabs.map((t) => {
-            const on = t.seg === activeSeg
-            return (
-              <Link
-                key={t.seg}
-                href={`/artists/${artistId}/${t.seg}`}
-                aria-current={on ? 'page' : undefined}
-                className={cx(
-                  'flex items-center rounded-lg px-2.5 py-2 transition-colors',
-                  // Bold BLACK for the current tab (Sam, 2026-09-23; it was accent for a day).
-                  // The rail beside it already lights the tool in accent, and a second blue
-                  // read as two selections. Space Mono is monospaced, so the bold weight is
-                  // the same width — the row cannot reflow just because it is selected.
-                  on ? 'font-bold text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
-                )}
-              >
-                {/* nowrap, never `truncate`: a label is read whole or the panel widens. */}
-                <span className="whitespace-nowrap font-space text-[13px] tracking-[0.02em]">{t.label}</span>
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
+      {/* Its full-page lane starts where the thin rail ends. */}
+      <div className={RAIL_LANE} style={{ left: RAIL_COLLAPSED_W }}>
+        <nav
+          aria-label={tool.label}
+          className={cx('sticky top-0 z-10 flex h-screen w-max flex-col border-r border-hairline bg-paper', SUB_RAIL_MIN)}
+        >
+          {/* The RAIL's offset, not its own — see RAIL_COLUMN_TOP. No `-translate-y-1/2`:
+              that would re-centre it on its own short height and undo the alignment. */}
+          <div className="flex flex-col gap-1 px-2" style={{ marginTop: `calc(50vh - ${railColumnTop(railCount)}px)` }}>
+            {tabs.map((t) => {
+              const on = t.seg === activeSeg
+              return (
+                <Link
+                  key={t.seg}
+                  href={`/artists/${artistId}/${t.seg}`}
+                  aria-current={on ? 'page' : undefined}
+                  className={cx(
+                    'flex items-center rounded-lg px-2.5 py-2 transition-colors',
+                    // Bold BLACK for the current tab (Sam, 2026-09-23; it was accent for a day).
+                    // The rail beside it already lights the tool in accent, and a second blue
+                    // read as two selections. Space Mono is monospaced, so the bold weight is
+                    // the same width — the row cannot reflow just because it is selected.
+                    on ? 'font-bold text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
+                  )}
+                >
+                  {/* nowrap, never `truncate`: a label is read whole or the panel widens. */}
+                  <span className="whitespace-nowrap font-space text-[13px] tracking-[0.02em]">{t.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
     </div>
   )
 }
@@ -245,17 +280,18 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
   }
   return (
     <div className="flex gap-8">
-      {/* ONE slot for both fixed panels, 32px from the page (visual check, 2026-09-23: the
-          mock's gap; it was ~92px). The panels are fixed at x=0, but this slot sits inside
+      {/* ONE slot for both panels, 32px from the page (visual check, 2026-09-23: the
+          mock's gap; it was ~92px). The panels sit at x=0 (their lanes are positioned
+          against the dashboard root, not this slot), but this slot sits inside
           <main>'s px-7 (layout.tsx), so each placeholder started 28px right of its panel
           and the shell's gap-8 ran twice. `md:-ml-7` pulls the pair back under their
           panels, with no gap between them; the shell's one gap-8 is then the whole gap.
           The test reads main's padding from layout.tsx, so the two cannot drift apart. */}
       {/* FULL-HEIGHT LINES (Sam, 2026-09-29: "the column stops partway down the page"). The
-          two panels are `fixed h-screen`, so they end one window-height down wherever the
-          page is captured whole (a full-page screenshot) or pulled past its end. The in-flow
-          slots under them now carry the same two lines, stretched the page's full height and,
-          with `md:-mb-8`, over <main>'s bottom padding too. Inside the window the fixed panels
+          two panels are `h-screen` (fixed then, sticky now), so they end one window-height
+          down wherever the page is captured whole (a full-page screenshot). The in-flow
+          slots under them carry the same two lines, stretched the page's full height and,
+          with `md:-mb-8`, over <main>'s bottom padding too. Inside the window the panels
           (bg-paper) cover them, so there is only ever one line. */}
       <div className="hidden flex-none md:-mb-8 md:-ml-7 md:flex">
         <ToolsRail artistId={artistId} active={tool.seg} collapsed tools={tools} />

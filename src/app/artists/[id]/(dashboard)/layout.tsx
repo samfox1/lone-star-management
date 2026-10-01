@@ -52,27 +52,36 @@ export default async function DashboardLayout({
   const onTour = (count ?? 0) > 0
 
   return (
-    <div className="font-ui text-ink flex flex-1 flex-col bg-paper">
+    // `relative` is load-bearing: the side rails hang their full-height lanes off THIS box
+    // (RAIL_LANE, tools-rail.tsx: RIDING THE BOUNCE), so it is what makes a lane run from
+    // the top of the page to the bottom. Nothing between here and the rails may be
+    // positioned, or the lanes shrink to that box instead.
+    <div className="font-ui text-ink relative flex flex-1 flex-col bg-paper">
       {/* STICKY (Sam, 2026-09-10, with a screenshot of the Integrations page mid-scroll:
           "the vertical line on the side bar disconnects… I think the top nav bar should
-          stay in place when scrolling"). The tools and assets rails are `fixed` to the
-          viewport at top:71px — this header's rendered height — so they stay put while
-          the page scrolls. The header did not, so it scrolled away and left the rail
+          stay in place when scrolling"). The tools and assets rails were `fixed` to the
+          viewport at top:71px — this header's rendered height — so they stayed put while
+          the page scrolled. The header did not, so it scrolled away and left the rail
           pinned 71px down with blank paper above it and its border-right meeting nothing.
-          Pinning the header is what makes 71px mean "just under the header" always.
+          Pinning the header is what made the rail meet the bar at every scroll offset.
+          (The rails now run from the very top, under this bar, and are sticky like it:
+          see RIDING THE BOUNCE in tools-rail.tsx.)
 
-          z-30: under the modal overlay (z-50) and the toasts (z-60), above page content.
-          `bg-paper` because a sticky element with no background lets the page show
-          through it as it scrolls underneath.
+          z-30: under the modal overlay (z-50) and the toasts (z-60), above page content
+          and the side rails (z-10 / z-20). `bg-paper` because a sticky element with no
+          background lets the page show through it as it scrolls underneath.
 
           THE BOUNCE COVER (`before:` classes, Sam, 2026-09-10, fourth screenshot: "now
           when I scroll far enough down I see the line above the nav bar"). A Mac trackpad
-          scrolled past the top rubber-bands the page; this sticky header rides that bounce
-          and the FIXED side rail does not, so for the length of the bounce the rail's
-          full-height line showed in the gap above the bar. The ::before is a screen-tall
-          block of paper hung above the header — off-screen at rest, and exactly filling the
-          exposed gap during a bounce because it moves with the header. It sits inside the
-          header's stacking context, so it covers the rail (z-10) the way the header does.
+          scrolled past the top rubber-bands the page and this sticky header rides that
+          bounce. While the side rails were FIXED they did not, so for the length of the
+          bounce their full-height line showed in the gap above the bar. Since 2026-10-01
+          the rails are sticky too and ride the bounce with the bar (Sam: "allow the side
+          panels to move with the scroll like that too"), so there is no line up there any
+          more. The cover stays for the other thing in that gap: the canvas, which is the
+          body's `--background` and near-black when the Mac is in dark mode. The ::before
+          is a screen-tall block of paper hung above the header — off-screen at rest, and
+          exactly filling the exposed gap during a bounce because it moves with the header.
 
           Not pinned by a test — jsdom does no layout, headless Chromium does not bounce,
           and this is an async server component that reads the database. */}

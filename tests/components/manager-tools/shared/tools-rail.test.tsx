@@ -235,7 +235,8 @@ describe('the second panel is as wide as its LONGEST label (Sam, 2026-09-23)', (
   // "Tab icon" must not wrap or truncate: the panel widens and the page moves over. jsdom
   // does no layout, so the mechanism is what is pinned: no fixed width anywhere, labels
   // that cannot wrap or clip, and an in-flow sizer carrying EVERY label, because the
-  // visible panel is `fixed` and a fixed box pushes nothing.
+  // visible panel hangs out of the flow (fixed until 2026-10-01, a sticky panel in an
+  // absolute lane since) and pushes nothing.
   for (const tool of tabbed) {
     it(`CRITICAL: ${tool.label} — no label wraps or truncates, and the page is pushed by all of them`, () => {
       pathname = `/artists/a1/${tool.seg}`
@@ -257,7 +258,7 @@ describe('the second panel is as wide as its LONGEST label (Sam, 2026-09-23)', (
 
       // The in-flow slot beside it: no fixed width, and a hidden copy of every label is
       // what gives it its width — so the page's left edge moves with the longest one.
-      const slot = panel.parentElement!
+      const slot = panel.closest('[data-panel-slot]') as HTMLElement
       expect(slot.style.width, 'fixed width on the slot').toBe('')
       const sizer = slot.querySelector('[aria-hidden="true"]')
       expect(sizer, 'sizer').not.toBeNull()
@@ -304,7 +305,7 @@ describe('a tool\'s tabs on a phone (visual check, 2026-09-23)', () => {
 
         // The desktop panels stay desktop-only, or a phone would get both.
         for (const nav of [screen.getByRole('navigation', { name: 'Manager tools' }), screen.getByRole('navigation', { name: tool.label })]) {
-          const slot = nav.parentElement!.className.split(/\s+/)
+          const slot = nav.closest('[data-rail-slot], [data-panel-slot]')!.className.split(/\s+/)
           expect(slot, tab.seg).toContain('hidden')
           expect(slot, tab.seg).toContain('md:block')
         }
@@ -324,7 +325,8 @@ describe('a tool\'s tabs on a phone (visual check, 2026-09-23)', () => {
 })
 
 describe('the page starts 32px right of the second panel (visual check, 2026-09-23)', () => {
-  // The panels are `fixed` at x=0; their in-flow slots sat inside <main>'s px-7, so each
+  // The panels sit at x=0 (fixed then, in lanes positioned against the dashboard root
+  // now); their in-flow slots sat inside <main>'s px-7, so each
   // slot started 28px right of its panel, and the shell's gap-8 ran twice (rail→panel,
   // panel→page). The page began ~92px past the panel's edge; the mock has ~32. Now the two
   // slots share ONE group pulled back over main's padding (so each slot lies exactly under
@@ -342,8 +344,8 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
     for (const tool of tabbed) {
       pathname = `/artists/a1/${tool.seg}`
       render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
-      const panelSlot = screen.getByRole('navigation', { name: tool.label }).parentElement!
+      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!
+      const panelSlot = screen.getByRole('navigation', { name: tool.label }).closest('[data-panel-slot]')!
       const side = railSlot.parentElement!
       expect(panelSlot.parentElement, tool.seg).toBe(side)
 
@@ -358,16 +360,18 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
     }
   })
 
-  it('full-height lines: under a tabbed tool\u2019s two fixed panels, the in-flow slots carry the same lines, stretched past <main>\u2019s bottom padding', () => {
-    // Sam, 2026-09-29 (a full-page screenshot): the fixed panels are one window tall, so their
+  it('full-height lines: under a tabbed tool\u2019s two window-tall panels, the in-flow slots carry the same lines, stretched past <main>\u2019s bottom padding', () => {
+    // Sam, 2026-09-29 (a full-page screenshot): the panels are one window tall, so their
     // lines stopped partway down a long page. jsdom does no layout: the mechanism is pinned.
+    // Slots are found by their markers, not as the nav's parent: the nav sits in a lane
+    // inside its slot (tools-rail.tsx: RIDING THE BOUNCE).
     const mainPadY = /<main className="[^"]*\bpy-(\d+)\b/.exec(readFileSync(join(dash, 'layout.tsx'), 'utf8'))?.[1]
     expect(mainPadY).toMatch(/^\d+$/)
     for (const tool of tabbed) {
       pathname = `/artists/a1/${tool.seg}`
       render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
-      const panelSlot = screen.getByRole('navigation', { name: tool.label }).parentElement!
+      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!
+      const panelSlot = screen.getByRole('navigation', { name: tool.label }).closest('[data-panel-slot]')!
       for (const slot of [railSlot, panelSlot]) expect(slot.className.split(/\s+/), tool.seg).toEqual(expect.arrayContaining(['md:border-r', 'md:border-hairline']))
       // The sizer carries no border of its own: the slot's line stands in for the panel's.
       expect(panelSlot.querySelector('[aria-hidden="true"]')!.className, tool.seg).not.toMatch(/(^|\s)border-r(\s|$)/)
@@ -380,7 +384,7 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
     const tool = plain[0]
     pathname = `/artists/a1/${tool.seg}`
     const { container } = render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-    const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).parentElement!
+    const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!
     const shell = railSlot.parentElement!
     expect(shell.className.split(/\s+/)).toContain('gap-8')
     expect(container.innerHTML).not.toMatch(/-ml-/)
