@@ -17,9 +17,9 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
    "How crawlers see your site" section (prototypes/seo_variants_20260930_r11.html).
 3. The quick wins from VISIBILITY_TOOLKIT.md, plus (Sam, 2026-09-30, "a recipe for visibility
    that works for all": VISIBILITY_RECIPE.md is that recipe, keep it true):
-   a. honest per-page sitemap dates (a style-only publish moves none), bridge 0.45
-   b. resend the sitemap to Google after a publish that changed content
-   c. a one-click Request indexing link beside each page Google hasn't listed (the AI test)
+   a. ~~honest per-page sitemap dates~~ LIVE 2026-09-30 (bridge 0.45 published, Skeen deployed)
+   b. ~~resend the sitemap to Google after a content publish~~ LIVE (in the dashboard code)
+   c. ~~"Ask Google" link beside each page Google hasn't listed~~ LIVE
    d. then the toolkit items: 3 more crawlers, the Copilot noarchive check, IndexNow only changed pages
    e. a Wikidata check in the AI test (Sam liked it, 2026-09-30): item by MusicBrainz ID / official
       site, read only; Tapir never creates or edits items

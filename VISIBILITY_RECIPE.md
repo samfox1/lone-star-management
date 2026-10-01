@@ -24,7 +24,7 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 | Step | How | State |
 |---|---|---|
 | robots.txt lets every search and AI crawler in, and names the sitemap | `robotsRules(origin)` | live |
-| sitemap.xml lists every public page, **each with its own last-changed date** | `sitemapEntries` (§10) | live, per-page dates **building** (bridge 0.45) |
+| sitemap.xml lists every public page, **each with its own last-changed date** | `sitemapEntries` with `{ path, shows }` per page (§10) | live (bridge 0.45, Skeen 2026-09-30) |
 | One address: the other spelling (www ↔ bare) redirects permanently (308) to the real one | the domain settings | live, the AI test checks it |
 | Each page's canonical tag points at itself | `resolveSeo` / page metadata | live, the AI test checks it |
 | Google and Bing ownership codes on every page, always | `siteVerification` in the root `generateMetadata` | live (0.44) |
@@ -41,7 +41,7 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
    *Later:* the Add website button on the admin page.
 4. **Run the AI test.** Fix every red row.
 5. **YOU: ask Google to list each page it hasn't yet.** In the AI test, click the page's
-   Request indexing link (**building**), then click Request indexing in Search Console. It takes
+   "Ask Google" link (live), then click Request indexing in Search Console. It takes
    about 2 minutes. Google allows no API for this button.
 6. **YOU: outside profiles.** Links from other places are the biggest lever of all.
    - MusicBrainz (the AI test checks it).
@@ -63,9 +63,9 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 | What | State |
 |---|---|
 | IndexNow tells Bing, Yandex, Naver, Seznam, Amazon, the Internet Archive and Yep which pages changed | live. Sending only the changed pages is **planned** (step 3) |
-| The sitemap is resent to Google when content changed | **building** |
+| The sitemap is resent to Google when content changed | live |
 | The AI test runs again once the live site shows the publish | live |
-| A style-only publish (Brand) pings nothing and moves no sitemap date | pings: live. Dates: **building** |
+| A style-only publish (Brand) pings nothing and moves no sitemap date | live |
 
 ## 4. Keep checking (AUTO; a person reads the results)
 
