@@ -24,9 +24,10 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
       approval isn't blocking today; the other terms still are (Bandsintown branding + Track/RSVP
       buttons, session-only caching, remove what's removed upstream).
 
-**LATER, with site #2 (Sam, 2026-09-30, "wouldnt it be quicker to just do it manually?"):** the
-Profiles tab + AllMusic bio pack (mock: prototypes/profiles_bio_pack_20260930.html, Sam liked the
-look). For Skeen the email is sent BY HAND; the tool only pays off with many artists.
+**BUILDING (Sam, 2026-09-30, "if the user cant write it. You can build it"):** the Profiles tab +
+AllMusic bio pack (mock: prototypes/profiles_bio_pack_20260930.html). Artists can edit their own
+Spotify/Instagram/SoundCloud/YouTube/Bandsintown bios and Apple's Q&A + hometown; only the main
+Apple Music and Amazon Music bio needs the AllMusic email.
 
 **LATER (Sam, 2026-09-30):** a MONTHLY AI answers check, not weekly, and never relying on the Claude
 API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenAI.
@@ -339,6 +340,22 @@ from the request body would make the endpoint an open relay on our verified doma
 - [ ] Sam: `npm run fn:deploy`, then the curl checklist in `docs/contact-endpoint.md`
       with `CONTACT_DRY_RUN=true`. Send one to Resend's `delivered@resend.dev` sink
       before flipping dry-run off.
+
+**Then: confirm every email address with a code (Sam, 2026-09-30) — right after Resend works.**
+Sam: "there should be a confirmation email sent with a code for us to make sure the email is legit."
+Any address Tapir SENDS to or SHOWS on a site (booking, contact, per-kind enquiry recipients, and
+any future one) starts UNCONFIRMED and gets a 6-digit code by email; Tapir neither sends to it nor
+publishes it until confirmed. Not needed for addresses only the manager's own mail app uses (the
+AllMusic bio pack's CC). The usual rules:
+- [ ] 6-digit code (+ an optional link that lands on the same page; codes survive link-scanners
+      and phone-to-desktop), expires in 10–15 min, single use, ~5 wrong tries then a new code,
+      resend after ~60 s with an hourly cap; store only a HASH of the code, tied to address +
+      artist + purpose.
+- [ ] Changing a confirmed address: confirm the new one, tell the old one.
+- [ ] Neutral wording (never reveal whether an address exists elsewhere); rate-limit per
+      artist and per address; a strict test tier (security + what the live site receives).
+- [ ] Existing addresses (Skeen's booking email, enquiry lists): decide at build time whether
+      they are grandfathered as confirmed or asked once.
 
 **Then, skeen side:**
 - [ ] Add `sendContact()` to `lib/backend.ts` and swap `ContactModal`'s `mailto:`
