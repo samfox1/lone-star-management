@@ -3,11 +3,7 @@
  * "updated" ticks on the SEO tool's Profiles tab) are readable and writable by that artist's
  * managers only, carry a stamp the database sets, and accept only the items the app knows.
  *
- * ┌──────────────────────────────────────────────────────────────────────────────────────────┐
- * │ 20261001150000 is LIVE (PROFILE_MARKS_PUSHED). 20261001160000 (bios + re-confirm) is NOT: │
- * │ flip BIO_MARKS_PUSHED to true in the SAME change as its push, run this file, then delete │
- * │ the two `skipIf(BIO_MARKS_PUSHED)` tests (they pin the rules that push replaces).        │
- * └──────────────────────────────────────────────────────────────────────────────────────────┘
+ * Both migrations are LIVE (20261001150000, and 20261001160000 since 2026-10-01).
  *
  * Code:     supabase/migrations/20261001150000_profile_marks.sql (the table, its RLS policies,
  *           its grants, the CHECK, the cascade); 20261001160000_profile_marks_bios.sql (the
@@ -17,7 +13,7 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): RLS, grants and isolation. Every denial has a planted
  *           witness (rule 2), every refused write is checked by row STATE through the service
  *           client (rule 3), and every row lives on a throwaway artist (rule 6).
- * Covers:   • a manager marks, reads back, the stamp is theirs, marking twice keeps the first
+ * Covers:   • a manager marks, reads back, the stamp is theirs, marking again moves the stamp
  *             stamp; undo deletes the row
  *           • another artist's manager cannot read, add or remove a mark
  *           • anon has no grant at all (the wording says GRANT, not policy)
@@ -47,7 +43,7 @@ import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supaba
 
 const PROFILE_MARKS_PUSHED = true
 /** 20261001160000_profile_marks_bios.sql: the bio items and re-confirm. */
-const BIO_MARKS_PUSHED = false
+const BIO_MARKS_PUSHED = true
 
 const [ITEM] = PROFILE_ITEMS
 const NO_GRANT = /permission denied for table profile_marks/
@@ -103,14 +99,6 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
     const [row] = await marksOf(a.id)
     expect(row).toMatchObject({ item: ITEM, done_by: mAUserId })
     expect(await readProfileMarks(mA, a.id)).toEqual({ [ITEM]: row.done_at })
-  })
-
-  // The rule 20261001160000 replaces (re-confirm moves the stamp). Delete at that push.
-  it.skipIf(BIO_MARKS_PUSHED)('(before 20261001160000) marking twice keeps the first stamp', async () => {
-    expect(await setProfileMark(mA, a.id, ITEM, true)).toEqual({ ok: true })
-    const [row] = await marksOf(a.id)
-    expect(await setProfileMark(mA, a.id, ITEM, true)).toEqual({ ok: true })
-    expect(await marksOf(a.id)).toEqual([row])
   })
 
   it('undo deletes the mark', async () => {
@@ -170,16 +158,6 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
       expect(error?.message).toMatch(NO_GRANT)
     }
     expect(await marksOf(a.id)).toEqual([])
-  })
-
-  // The rule 20261001160000 replaces (UPDATE of done_at, restamped by a trigger). Delete at that push.
-  it.skipIf(BIO_MARKS_PUSHED)('(before 20261001160000) a manager cannot update a mark at all', async () => {
-    await plant(a.id)
-    const before = await marksOf(a.id)
-    const { error } = await mA.from('profile_marks').update({ done_at: '2020-01-01T00:00:00Z' }).eq('artist_id', a.id)
-    expectRlsDenied(error, 'manager A updating a mark')
-    expect(error?.message).toMatch(NO_GRANT)
-    expect(await marksOf(a.id)).toEqual(before)
   })
 
   describe.skipIf(!BIO_MARKS_PUSHED)('bios and re-confirm (20261001160000)', () => {

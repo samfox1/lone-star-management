@@ -65,10 +65,8 @@ const NOW = 'now'
  * matched, it is a first mark: insert artist_id + item with ON CONFLICT DO NOTHING (a double
  * click racing it is not an error). Undo: delete the row.
  *
- * Until 20261001160000 is pushed, managers hold no UPDATE grant, so the update fails with 42501
- * and the mark falls back to the insert alone (the old rule: a re-mark keeps the first stamp).
- * After the push a 42501 here only means that grant went missing. Remove the fallback at push
- * time (that migration's checklist, step 4).
+ * Any failed re-confirm is a failure (20261001160000 is live, so a 42501 means the UPDATE grant
+ * went missing: inserting then would report "done" for a stamp that did not move).
  *
  * A denied UPDATE or DELETE is row-filtered (no error, zero rows), so callers must check
  * ownership first; the server action does. (A denied update then tries the insert, which RLS
@@ -97,8 +95,8 @@ export async function setProfileMark(
     .eq('artist_id', artistId)
     .eq('item', item)
     .select('item')
-  if (re.error && re.error.code !== '42501') return fail(re.error)
-  if (!re.error && (re.data?.length ?? 0) > 0) return { ok: true }
+  if (re.error) return fail(re.error)
+  if ((re.data?.length ?? 0) > 0) return { ok: true }
 
   const { error } = await supabase
     .from('profile_marks')

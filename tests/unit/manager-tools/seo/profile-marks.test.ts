@@ -243,14 +243,14 @@ describe('setProfileMark', () => {
     expect(calls).toEqual([reconfirm(item), firstMark(item)])
   })
 
-  // Until 20261001160000 is pushed, managers have no UPDATE grant (42501): marking must still
-  // work the old way (insert, keep the first stamp). Delete this test with the fallback.
-  it('falls back to the old insert while UPDATE is not granted (42501)', async () => {
+  // 20261001160000 is live: a re-confirm refused for lack of the UPDATE grant (42501) is a
+  // failure, never a silent insert that reports "done" while the stamp stays put.
+  it('a re-confirm refused with 42501 fails, and inserts nothing', async () => {
     const [item] = PROFILE_ITEMS
     const noGrant = { code: '42501', message: 'permission denied for table profile_marks' }
     const { client, calls } = writing(null, [], noGrant)
-    expect(await setProfileMark(client, 'a1', item, true)).toEqual({ ok: true })
-    expect(calls).toEqual([reconfirm(item), firstMark(item)])
+    expect((await setProfileMark(client, 'a1', item, true)).ok).toBe(false)
+    expect(calls).toEqual([reconfirm(item)])
   })
 
   // Any other failure of the re-confirm is a failure: inserting after it could report "done"
