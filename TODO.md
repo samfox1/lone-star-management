@@ -1,5 +1,14 @@
 # TODO
 
+## LAUNCH BLOCKERS: required before Tapir goes live for real users (production / `main`)
+
+Nothing here blocks the Skeen work on `dev` (sitemaps, bridge, Skeen's site): none of it adds,
+sends to or publishes a new email address.
+
+- [ ] **Every added email address confirmed with a code** (Sam, 2026-09-30: "this should be
+      required before deploying"). Needs Resend first. Spec: "confirm every email address with
+      a code" under Contact enquiries below.
+
 ## Finish Digital Tapir for Skeen FIRST, then more sites (Sam, 2026-09-30)
 
 Sam: "We are going to finish digital tapir for skeen before we add more sites." Order:
