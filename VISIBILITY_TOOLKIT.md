@@ -102,7 +102,8 @@ improve my site's AI visibility."
 - **Spotify has no website field.** Its profile only takes Instagram, Facebook, X, TikTok,
   Wikipedia and WhatsApp. Put the city, genre and site name in the bio text instead.
 - **Apple Music and Amazon Music bios come from AllMusic/Xperi** (both say so). One email
-  (content.music@tivo.com: bio, a JPEG at least 800px, releases) updates both.
+  (apple.coverage.support@xperi.com per Apple, content.music@tivo.com per Amazon: bio, a JPEG at
+  least 800px, releases) updates both. See Round 3.
 - **Google retired FAQ rich results** (2026-05-07). /faqsheet's FAQPage JSON-LD earns nothing in
   Google any more. It's harmless and AI still reads the page; just never call it a rich result.
 - **Google's event results need one page per event** ("a leaf page"). Our MusicEvent nodes on the
@@ -160,6 +161,23 @@ improve my site's AI visibility."
 - the pricier trackers: Profound, Peec, AthenaHQ, Semrush, Ahrefs
 
 **Never (new):** block AI agents acting for a person (Google-Agent, ChatGPT agent, Claude-User).
+
+## Round 3 (2026-09-30): outside profiles, what we can read and write
+
+Sam: "If we can write and read data through connecting to these APIs, lets do it." **None of the
+four lets Tapir WRITE an artist profile by API.** What each allows:
+
+| Platform | Read | Write | What Tapir builds | The artist does |
+|---|---|---|---|---|
+| **Bandsintown** | Yes, free. Key: Bandsintown for Artists > Settings > General > Get API Key (no email needed now); one key per artist. Terms: a PAID service needs written approval; session-only caching; branding + Track/RSVP buttons | No API. **CSV bulk upload** (25 rows per file, lands as drafts), manual entry, or auto-import from Ticketmaster, AXS, Eventbrite, See Tickets | **"Export to Bandsintown"**: a CSV of our shows in their template. Our own data, so the API terms don't apply. A read check only after written approval | Claim the page; invite Tapir as Editor; connect Apple Music + Amazon Music once; upload the CSV |
+| **Discogs** | Yes, free (token; 60/min; a unique User-Agent). Artist names/notes/links are CC0. Showing data needs a "Data provided by Discogs" link | No ("Artists are read-only") | **A check**: the artist's Discogs page lists the site; add it to `sameAs`. Link out, don't show their data | Submit one release that is sold or downloadable (not streaming-only). Skeen's page will be **"Skeen (2)"** (id 1230117 is someone else). Then add a factual profile + the site under Sites |
+| **AllMusic / Xperi** | No (paid licence) | **Email only**: apple.coverage.support@xperi.com (Apple's page) and content.music@tivo.com (Amazon's). Months, not guaranteed | **A "bio pack"** email: bio, photo, releases (UPC/ISRC) filled from our data | Send it. Fill Apple Music for Artists' "in your own words" Q&A meanwhile |
+| **Resident Advisor** | No. Terms ban bots; pages 403 to scripts | No API. RA Pro by hand | A checklist line only | Check ra.co/dj/skeen (maybe a Glasgow DJ); claim (content@ra.co) or create (ra.co/pro/dj-create.aspx, photo required, ~72 h) |
+| **Wikidata** | Yes, free. `haswbstatement:P434=<mbid>\|P856=<url>` search, then the REST API. User-Agent with "bot" required; 200/min | Tapir never. The artist may create an item once independent press exists | **The Wikidata check** in the AI test (try each spelling of the site URL: the match is exact) | Wait for press, then create the item with P856 + P434, each backed by that source |
+
+**Worth knowing:** RA's robots.txt blocks GPTBot, ClaudeBot, PerplexityBot, Applebot and Amazonbot,
+so an RA page helps Google and fans, not most AI answers. Bandsintown sends shows to Spotify,
+YouTube, Google, Apple Music and Maps, Shazam and Amazon Music in 24-48 hours (official).
 
 ## The honest pitch
 

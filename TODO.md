@@ -14,8 +14,10 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
    d. then the toolkit items: 3 more crawlers, the Copilot noarchive check, IndexNow only changed pages
    e. a Wikidata check in the AI test (Sam liked it, 2026-09-30): item by MusicBrainz ID / official
       site, read only; Tapir never creates or edits items
-   f. outside profiles for Skeen (Bandsintown, AllMusic, Resident Advisor name clash, Discogs):
-      research on reading/writing them by API is in progress
+   f. outside profiles (VISIBILITY_TOOLKIT.md "Round 3"; no platform lets Tapir WRITE a profile by
+      API): build a Bandsintown show CSV export, a Discogs check, an AllMusic bio pack; RA manual.
+      NOTE: a Bandsintown API key is now self-serve (Bandsintown for Artists > Settings > General);
+      the paid-service written approval below still applies to any API read.
 
 **LATER (Sam, 2026-09-30):** a MONTHLY AI answers check, not weekly, and never relying on the Claude
 API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenAI.

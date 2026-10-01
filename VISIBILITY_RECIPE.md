@@ -45,11 +45,12 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
    about 2 minutes. Google allows no API for this button.
 6. **YOU: outside profiles.** Links from other places are the biggest lever of all.
    - MusicBrainz (the AI test checks it).
-   - Bandsintown for Artists, with every show. It feeds Google, Spotify, Apple and Amazon.
-   - An email to AllMusic/Xperi (content.music@tivo.com). It writes the Apple Music and Amazon
-     Music bios.
-   - Resident Advisor for DJs, after checking for a same-named artist.
-   - One Discogs release.
+   - Bandsintown for Artists: claim it, invite Tapir as Editor, connect Apple Music + Amazon Music,
+     then upload Tapir's show CSV (**planned**). It feeds Google, Spotify, Apple and Amazon.
+   - AllMusic/Xperi: send Tapir's bio pack (**planned**) to apple.coverage.support@xperi.com and
+     content.music@tivo.com. It writes the Apple Music and Amazon Music bios (takes months).
+   - Resident Advisor for DJs, after checking for a same-named artist. Manual only.
+   - One Discogs release, then the site under Sites. Tapir checks it (**planned**).
    - The site link in the YouTube and Instagram bios. Spotify has no website field, so put the
      city, genre and site name in its bio text.
    Details: VISIBILITY_TOOLKIT.md "Round 2".
