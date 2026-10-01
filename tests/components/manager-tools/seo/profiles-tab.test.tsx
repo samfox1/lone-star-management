@@ -10,6 +10,8 @@
  * Covers:   • the card shows the pack, and Open in Mail's href is the builder's mailto (with the
  *             CC once a valid one is typed); the CC check shows while the CC is empty
  *           • Mark as sent calls the action with the artist, the item and `true`
+ * Not here: the email's wording, encoding and CC rules (bio-pack.test.ts); who may mark
+ *           (profile-marks tests).
  * Fixtures: the mark action is a mock; the input is shaped like Skeen's get_public_site links and
  *           get_public_releases rows (2026-09-30).
  */

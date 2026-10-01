@@ -12,9 +12,11 @@
 --      file. Also run tests/integration/sync/sync.bandsintown.test.ts (its pull now carries a
 --      time when Bandsintown gives one; the fixture has none, so it writes none).
 --   5. In Tour, open a show, set Time, Publish: get_public_site carries "start_time" on it.
---   6. Expect, once per artist: the next tour Publish writes a fresh revision for EVERY show,
---      because the snapshot gained a key (null on the working row, absent on the stored copy).
---      Same content, one extra publish moment. Not a bug; it does not repeat.
+--   6. The backfill at the bottom gives each show's LATEST revision `"start_time": null`, so the
+--      next tour Publish does NOT rewrite every show (the working row's null would otherwise
+--      differ from the stored copy's missing key: an empty version in the history, and a new
+--      sitemap date for the tour pages with nothing changed). Sites on bridge 0.44 ignore the
+--      extra null key. Pattern: 20260925120000's artist_font backfill.
 --
 -- ── WHY text, NOT time ──────────────────────────────────────────────────────────────────
 -- The value is a label for one place's clock, never arithmetic, and it travels as-is: into the
@@ -36,3 +38,18 @@ alter table public.tour_dates
   add column if not exists start_time text
   constraint tour_dates_start_time_check
   check (start_time is null or start_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+-- ── BACKFILL: the latest published copy of each live show gains "start_time": null ──────────
+-- So it matches the working row's snapshot (null until someone sets a time), and the next tour
+-- Publish writes only shows that really changed. Tombstones are left alone. Idempotent.
+with latest as (
+  select distinct on (r.entity_id) r.id
+  from public.revisions r
+  where r.entity_type = 'tour_date' and r.entity_id is not null
+    and coalesce((r.data ->> '_deleted')::boolean, false) = false
+  order by r.entity_id, r.published_at desc, r.id desc
+)
+update public.revisions rv
+   set data = rv.data || jsonb_build_object('start_time', null)
+  from latest l
+ where rv.id = l.id and not (rv.data ? 'start_time');

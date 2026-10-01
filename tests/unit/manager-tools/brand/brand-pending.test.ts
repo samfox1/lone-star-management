@@ -49,6 +49,10 @@ const font = (id: string, slots: string[]): ContentRow => ({
   family: 'mori',
   storage_path: `${A}/fonts/${id}.woff2`,
   format: 'woff2',
+  // As artist_fonts_with_slots returns them (20260925120000): the snapshot copies only the keys a
+  // row HAS (2026-09-30), so a fixture missing these would read as a changed font.
+  source: 'upload',
+  google_family: null,
   slots,
 })
 

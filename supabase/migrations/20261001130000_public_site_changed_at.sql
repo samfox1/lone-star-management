@@ -10,7 +10,8 @@
 -- ── AT PUSH TIME, IN THIS ORDER ─────────────────────────────────────────────────────────
 --   1. Full suite green (AGENTS.md: always before a migration push).
 --   2. Save Skeen's public payload:  select public.get_public_site('skeen');
---   3. `supabase db push --dry-run` lists ONLY this file. Then push (`npm run db:push`).
+--   3. `supabase db push --dry-run` lists this file (with 20261001140000 and 20261001150000 when
+--      pushed together, 2026-09-30). Then push (`npm run db:push`).
 --   4. `npm run audit:grants` (get_public_site is an intended anon door; nothing new).
 --   5. Flip CHANGED_AT_PUSHED in tests/integration/publish/site-published-at-payload.test.ts
 --      and run that file.

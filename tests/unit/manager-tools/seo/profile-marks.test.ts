@@ -29,11 +29,14 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 /** The session the action would open. Every chain it can reach is recorded. */
 const upsert = vi.fn(async () => ({ error: null }))
 const fromCalls: string[] = []
+/** Who is signed in, and whether they own the artist: the action's two gates before any write. */
+let signedIn: { id: string } | null = { id: 'u1' }
+let owned: { id: string } | null = { id: 'a1' }
 const session = {
-  auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+  auth: { getUser: async () => ({ data: { user: signedIn } }) },
   from: (table: string) => {
     fromCalls.push(table)
-    if (table === 'artists') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1' } }) }) }) }
+    if (table === 'artists') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: owned }) }) }) }
     return { upsert, delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }) }
   },
 }
@@ -53,9 +56,13 @@ const reading = (res: { data: unknown; error: unknown }) =>
 beforeEach(() => {
   fromCalls.length = 0
   reads.length = 0
+  signedIn = { id: 'u1' }
+  owned = { id: 'a1' }
+  upsert.mockClear()
 })
 
 describe('isProfileItem', () => {
+  // The one gate on the item name: the CHECK in the migration says the same.
   it('accepts every PROFILE_ITEMS entry and nothing else', () => {
     for (const item of PROFILE_ITEMS) expect(isProfileItem(item)).toBe(true)
     const near = PROFILE_ITEMS.flatMap((i) => [i.toUpperCase(), ` ${i}`, `${i} `, i.slice(0, -1)])
@@ -66,6 +73,7 @@ describe('isProfileItem', () => {
 })
 
 describe('readProfileMarks', () => {
+  // Only items the code knows reach the page; an unknown row is ignored, never shown.
   it('returns each known item’s done_at, and drops rows it does not know', async () => {
     const [item] = PROFILE_ITEMS
     const marks = await readProfileMarks(
@@ -138,6 +146,7 @@ describe('setProfileMark', () => {
     }
   })
 
+  // setProfileMark checks the item itself, so no caller can write a row the CHECK would refuse.
   it('refuses an unknown item without touching the table', async () => {
     const { client, calls } = writing(null)
     const res = await setProfileMark(client, 'a1', 'discogs' as ProfileItem, true)
@@ -158,6 +167,7 @@ describe('markProfileItemAction', () => {
     expect(upsert).toHaveBeenCalledWith({ artist_id: 'a1', item }, { onConflict: 'artist_id,item', ignoreDuplicates: true })
   })
 
+  // The action's first gate: a bad item never opens a session or reaches a table.
   it('refuses an unknown item before opening a session', async () => {
     const act = await loadAction()
     for (const bad of ['discogs', '', 'ALLMUSIC_BIO', 'allmusic_bio ']) {
@@ -167,6 +177,7 @@ describe('markProfileItemAction', () => {
     expect(fromCalls).toEqual([])
   })
 
+  // A flag from the client is checked as a real boolean, never coerced ("false" is not false).
   it('refuses a flag that is not a boolean before opening a session', async () => {
     const act = await loadAction()
     const [item] = PROFILE_ITEMS
@@ -175,5 +186,23 @@ describe('markProfileItemAction', () => {
     }
     expect(createClient).not.toHaveBeenCalled()
     expect(fromCalls).toEqual([])
+  })
+
+  // Signed out: refused before any mark is read or written (RLS would also refuse, but then a
+  // cross-artist undo would report ok: the check is what keeps the answer honest).
+  it('refuses when nobody is signed in, without touching profile_marks', async () => {
+    signedIn = null
+    const act = await loadAction()
+    expect(await act('a1', PROFILE_ITEMS[0], true)).toEqual({ ok: false, error: 'Not signed in.' })
+    expect(fromCalls).not.toContain('profile_marks')
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  // Not this manager's artist (the owned read comes back empty): refused, nothing written.
+  it('refuses an artist the caller does not own, without touching profile_marks', async () => {
+    owned = null
+    const act = await loadAction()
+    expect(await act('a1', PROFILE_ITEMS[0], false)).toEqual({ ok: false, error: 'Artist not found.' })
+    expect(fromCalls).not.toContain('profile_marks')
   })
 })
