@@ -36,7 +36,7 @@ import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } fr
 import { expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-const PROFILE_MARKS_PUSHED = false
+const PROFILE_MARKS_PUSHED = true
 
 const [ITEM] = PROFILE_ITEMS
 const NO_GRANT = /permission denied for table profile_marks/

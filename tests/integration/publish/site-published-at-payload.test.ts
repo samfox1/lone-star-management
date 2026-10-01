@@ -25,7 +25,7 @@ import { anonClient, serviceClient } from '@tests/helpers/supabase'
  * that migration is pushed: flip this to true in the SAME change as the push, then run this
  * file. The preview's half reads `revisions` directly and runs now.
  */
-const CHANGED_AT_PUSHED = false
+const CHANGED_AT_PUSHED = true
 
 const svc = serviceClient()
 const SLUG = `zz-h2-published-at-${randomUUID().slice(0, 8)}`

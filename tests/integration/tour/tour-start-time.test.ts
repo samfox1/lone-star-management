@@ -13,7 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createContent, publishContent, updateContent } from '@/lib/content'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-const START_TIME_PUSHED = false
+const START_TIME_PUSHED = true
 
 let artistA: string
 let asA: SupabaseClient
