@@ -20,7 +20,7 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
    a. ~~honest per-page sitemap dates~~ LIVE 2026-09-30 (bridge 0.45 published, Skeen deployed)
    b. ~~resend the sitemap to Google after a content publish~~ LIVE (in the dashboard code)
    c. ~~"Ask Google" link beside each page Google hasn't listed~~ LIVE
-   d. then the toolkit items: 3 more crawlers, the Copilot noarchive check, IndexNow only changed pages
+   d. ~~3 more crawlers, the Copilot noarchive check~~ DONE 2026-10-01; still: IndexNow only changed pages
    e. a Wikidata check in the AI test (Sam liked it, 2026-09-30): item by MusicBrainz ID / official
       site, read only; Tapir never creates or edits items
    f. outside profiles (VISIBILITY_TOOLKIT.md "Round 3"; no platform lets Tapir WRITE a profile by

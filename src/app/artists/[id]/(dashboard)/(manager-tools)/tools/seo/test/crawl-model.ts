@@ -134,8 +134,9 @@ export function dayText(iso: string | null | undefined, locale?: string): string
 
 /**
  * The company behind each test's crawlers. `others` holds several companies, so there a
- * crawler's own plain name is its company ("Apple", "Common Crawl"). A Record over the union:
- * a new test is a compile error here until it is named (AGENTS.md rule 4).
+ * crawler's company comes from bots.ts: its `company` ("Meta" for Meta AI, "Amazon" for Alexa),
+ * else its own plain name ("Apple", "Common Crawl"). A Record over the union: a new test is a
+ * compile error here until it is named (AGENTS.md rule 4).
  */
 const COMPANY_BY_TEST: Record<SeoBot['test'], string | null> = {
   google: 'Google',
@@ -153,7 +154,7 @@ export function companyOf(key: string, who: string): string {
   const bot = SEO_BOTS.find((b) => b.key === key)
   if (!bot) return who || 'Other'
   const visitor = (bot.visitsAs && SEO_BOTS.find((b) => b.key === bot.visitsAs)) || bot
-  return COMPANY_BY_TEST[visitor.test] ?? visitor.who
+  return COMPANY_BY_TEST[visitor.test] ?? visitor.company ?? visitor.who
 }
 
 /** Crawlers grouped by company, companies in the order they first appear. */

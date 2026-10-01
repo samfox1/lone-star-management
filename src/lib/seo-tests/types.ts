@@ -101,6 +101,9 @@ export type SeoBot = {
   key: string
   /** The name a person knows: "ChatGPT", "Google". */
   who: string
+  /** Who runs it, when the test is not one company's (`others`) and `who` is a product, not
+   *  the company: Meta AI is Meta's, Alexa is Amazon's. Unset = `who`. */
+  company?: string
   /** The exact User-Agent string sent, from the vendor's own documentation. */
   userAgent: string | null
   /** The product token robots.txt rules are written against. */

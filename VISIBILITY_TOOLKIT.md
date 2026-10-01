@@ -19,9 +19,9 @@ picked up by AI when working with us."
 | Claude, Mistral Le Chat | **Brave Search** (Anthropic subprocessor list, 2025; recheck quarterly) | Be in Brave's index; Brave follows the Googlebot rules. Submit form only, no API |
 | Perplexity | Its own index | Let PerplexityBot in (tested). No submission exists |
 | Siri, Spotlight, Apple Intelligence | Applebot | Let Applebot in (tested) |
-| Meta AI | Meta-WebIndexer | Let it in (**not tested yet**) |
-| Alexa | Amzn-SearchBot | Let it in (**not tested yet**) |
-| DuckDuckGo | Mostly Bing + DuckAssistBot | Bing + let DuckAssistBot in (**not tested yet**) |
+| Meta AI | Meta-WebIndexer | Let it in (tested since 2026-10-01) |
+| Alexa | Amzn-SearchBot | Let it in (tested since 2026-10-01) |
+| DuckDuckGo | Mostly Bing + DuckAssistBot | Bing + let DuckAssistBot in (tested since 2026-10-01) |
 | Grok | Not disclosed; also X posts | The artist's X profile |
 
 ## DO NOW: what Tapir does for every site

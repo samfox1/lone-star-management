@@ -15,9 +15,9 @@
  *                   crawler named in `visitsAs` (Google's docs: "Crawling is done with existing
  *                   Google user agent strings"; Apple's: "Applebot-Extended does not crawl").
  *
- * `Chrome/W.X.Y.Z` in Google's and Bing's strings is their placeholder for "the current
- * browser version"; a concrete version is filled in below (a firewall matching the bot keys
- * on the bot's name, not on this number).
+ * `Chrome/W.X.Y.Z` in Google's, Bing's and Amazon's strings is their placeholder for "the
+ * current browser version"; a concrete version is filled in below (a firewall matching the bot
+ * keys on the bot's name, not on this number).
  */
 import type { SeoBot } from './types'
 
@@ -33,6 +33,9 @@ const OPENAI_DOC = 'https://developers.openai.com/api/docs/bots'
 const ANTHROPIC_DOC = 'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler'
 const PERPLEXITY_DOC = 'https://docs.perplexity.ai/guides/bots'
 const APPLE_DOC = 'https://support.apple.com/en-us/119829'
+const META_DOC = 'https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/'
+const AMAZON_DOC = 'https://developer.amazon.com/amazonbot'
+const DUCKDUCKGO_DOC = 'https://duckduckgo.com/duckduckgo-help-pages/results/duckassistbot'
 
 export const SEO_BOTS: readonly SeoBot[] = [
   // Google. Smartphone Googlebot: Google indexes the mobile page first ("mobile-first
@@ -115,6 +118,41 @@ export const SEO_BOTS: readonly SeoBot[] = [
   {
     key: 'applebot-extended', who: 'Apple Intelligence', robotsToken: 'Applebot-Extended', fetches: false, test: 'others', userAgent: null, trainingOnly: true,
     visitsAs: 'applebot', docUrl: APPLE_DOC,
+  },
+  // The three below were read 2026-09-30 (VISIBILITY_TOOLKIT.md item 5). None of the three
+  // vendors says whether its crawler runs a page's scripts, so `runsScripts` is unset (treated
+  // as NOT running them). None is training-only: each says it gathers pages for answers.
+  //
+  // Meta AI. Meta: Meta-WebIndexer "navigates the web to improve Meta AI search result quality"
+  // and allowing it "helps us cite and link to your content in Meta AI's responses". Meta's doc
+  // prints the string as `meta-webindexer/1.1 (+/documentation/sharing/webmasters/web-crawlers)`
+  // (a link with its host cut off) or `meta-webindexer/1.1`; we send the second, which is the
+  // doc's own text character for character. The doc's robots.txt example writes Meta's tokens
+  // lower-case; robots.txt tokens match in any case (RFC 9309).
+  {
+    key: 'meta-webindexer', who: 'Meta AI', company: 'Meta', robotsToken: 'Meta-WebIndexer', fetches: true, test: 'others',
+    userAgent: 'meta-webindexer/1.1',
+    docUrl: META_DOC, uaDocumented: true,
+  },
+  // Alexa. Amazon: "By permitting Amzn-SearchBot access to your website, your content is eligible
+  // to appear in search experiences such as Alexa", and it "does not crawl content for generative
+  // AI model training". "Each user agent setting is independent of the others" (so Amazonbot's
+  // rules don't reach it). UNCONFIRMED: Amazon also says that when robots.txt doesn't mention it
+  // "but allow[s] other search bots", it follows "the robots.txt directives given to other search
+  // bots", without naming which, so no fallback is set: it is judged by its own group or `*`.
+  {
+    key: 'amzn-searchbot', who: 'Alexa', company: 'Amazon', robotsToken: 'Amzn-SearchBot', fetches: true, test: 'others',
+    userAgent: `Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/${CHROME} Safari/537.36`,
+    docUrl: AMAZON_DOC, uaDocumented: true,
+  },
+  // DuckDuckGo's AI answers. DuckDuckGo: DuckAssistBot "crawls pages in real-time for our
+  // AI-assisted answers", "This data is not used in any way to train AI models", and its "user
+  // agent will appear as DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)".
+  // Turning it away "does not impact organic search rankings".
+  {
+    key: 'duckassistbot', who: 'DuckDuckGo', robotsToken: 'DuckAssistBot', fetches: true, test: 'others',
+    userAgent: 'DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)',
+    docUrl: DUCKDUCKGO_DOC, uaDocumented: true,
   },
   // Common Crawl: the shared copy of the web many AI models learn from.
   {

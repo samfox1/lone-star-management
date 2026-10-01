@@ -12,7 +12,9 @@
  *     published words (bio, releases, shows) a person's copy shows is in the bot's copy too;
  *   - the settings file (robots.txt) does not disallow that page for the bot's token;
  *   - neither the page (<meta name="robots"> / <meta name="{bot}">) nor the X-Robots-Tag header
- *     says noindex / none / a past unavailable_after, for everyone or for that bot.
+ *     says noindex / none / a past unavailable_after, for everyone or for that bot;
+ *   - for `bing` only, neither says noarchive (Bing: "Do not link in Chat and Copilot") without
+ *     nocache. nocache and nosnippet don't fail it: a pass says what they limit (see `copilotRules`).
  * `fail` is only for what we SAW. `unknown` is for what we could not look at: no answer, a
  * settings file refused to us, a page cut at the size cap, a wall that turned our PERSON's
  * visit away too (then it is our server being turned away, not the bot), or a home page that
@@ -48,7 +50,7 @@ const num = (n: number) => n.toLocaleString('en-US')
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`
 const pageName = (path: string) => (path === '/' ? 'your home page' : `your page ${path}`)
 const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`)
-const listWords = (items: string[]) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`)
+const listWords = (items: string[], and = 'and') => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]}`)
 
 /** A status in plain words, no number (the number is in the details). */
 const STATUS_WORDS: Record<number, string> = {
@@ -598,6 +600,56 @@ export function visitNoindex(f: SeoPageFetch | undefined, names: string[], now: 
   return noindexSignals(f, v.kind === 'ok' ? v.page : null, names, now)
 }
 
+/* ── Copilot: what Bing may use of a page in its answers ────────────────────────────── */
+
+/**
+ * Bing's own list of the robots tags it reads (bing.com/webmasters/help/which-robots-metatags-
+ * does-bing-support-5198d240, read 2026-09-30):
+ *   noarchive  "Do not link in Chat and Copilot."
+ *   nocache    "Display only URL/Snippet/Title in Chat or Copilot." … "If content has both
+ *              NOCACHE and NOARCHIVE tags, we will treat it as NOCACHE."
+ *   nosnippet  "Do not show a description nor a preview thumbnail (where applicable) for the page."
+ * "Each of these tags can also be specified as X-Robots-Tag", and `name="bingbot"` in place of
+ * `name="robots"` limits a tag to Bing. Bing's announcement (blogs.bing.com/webmaster/
+ * september-2023/Announcing-new-options-for-webmasters-to-control-usage-of-their-content-in-
+ * Bing-Chat): "Content tagged NOARCHIVE will not be included in Bing Chat answers, not be linked
+ * to in the answers", and with either tag the page "will still appear in our search results":
+ * neither is a "don't list me", so the `allowed` test and the crawl section's noindex don't read
+ * them. Bing does not say nosnippet changes Copilot, so its words name Bing only.
+ */
+const COPILOT_RULES = ['noarchive', 'nocache', 'nosnippet'] as const
+type CopilotRule = (typeof COPILOT_RULES)[number]
+
+/** The Copilot rules a visit carries for a bot answering to `names` (lower-case), each with where
+ *  it was first seen: the X-Robots-Tag header for everyone or for that bot, then the page's
+ *  robots and bot-named meta tags. */
+function copilotRules(f: SeoPageFetch | undefined, page: Page | null, names: string[]): Partial<Record<CopilotRule, string>> {
+  const out: Partial<Record<CopilotRule, string>> = {}
+  const saw = (rules: string[], where: string) => {
+    for (const r of rules) {
+      const rule = COPILOT_RULES.find((c) => c === r.trim())
+      if (rule && !out[rule]) out[rule] = where
+    }
+  }
+  const header = f?.headers?.['x-robots-tag']
+  if (header) saw(xRobotsRules(header).filter((r) => r.scope === '*' || names.includes(r.scope)).map((r) => r.rule), `X-Robots-Tag: ${clip(header, 80)}`)
+  for (const name of page ? ['robots', ...names] : []) {
+    for (const content of page!.meta[name] ?? []) saw(xRobotsRules(content).map((r) => r.rule), `meta ${name}: ${clip(collapse(content), 60)}`)
+  }
+  return out
+}
+
+/** "your home page", "2 of your pages": where a Copilot limit is, short enough for a sentence. */
+const onPages = (paths: string[]) => (paths.length === 1 ? pageName(clip(paths[0], 30)) : `${num(paths.length)} of your pages`)
+
+/** The one sentence a bing PASS adds for a limit that doesn't fail it (the results have no
+ *  "warning" state): nocache first, as the one that changes Copilot. '' for none. */
+function copilotSaid(short: string[], noText: string[]): string {
+  if (short.length) return `A setting on ${onPages(short)} lets Copilot show only ${short.length === 1 ? 'its title' : 'their titles'} and a short line.`
+  if (noText.length) return `A setting on ${onPages(noText)} asks Bing to show no description for ${noText.length === 1 ? 'it' : 'them'}.`
+  return ''
+}
+
 /* ── the settings file ──────────────────────────────────────────────────────────────── */
 
 function robotsRow(e: SeoEvidence): string {
@@ -619,11 +671,18 @@ function robotsUnread(e: SeoEvidence, v: RobotsVerdict, who: string): string {
 
 /* ── the bot tests ──────────────────────────────────────────────────────────────────── */
 
+/** The names `others` reads, from bots.ts, so a crawler added there is named here too: every
+ *  name but a training-only token that never visits (Apple Intelligence is Apple's own visit),
+ *  and the ones that answer and search (all but the training-only). */
+const OTHERS = botsForTest('others')
+const OTHERS_NAMED = [...new Set(OTHERS.filter((b) => !b.trainingOnly || b.fetches).map((b) => b.who))]
+const OTHERS_SEARCHERS = [...new Set(OTHERS.filter((b) => !b.trainingOnly).map((b) => b.who))]
+
 const WHO: Record<BotTestId, string> = {
-  google: 'Google', bing: 'Bing', chatgpt: 'ChatGPT', claude: 'Claude', perplexity: 'Perplexity', others: 'Gemini, Apple and Common Crawl',
+  google: 'Google', bing: 'Bing', chatgpt: 'ChatGPT', claude: 'Claude', perplexity: 'Perplexity', others: listWords(OTHERS_NAMED),
 }
 /** The visitors that answer and search, per test, for "nothing we saw turns … away". */
-const SEARCHERS: Partial<Record<BotTestId, string>> = { chatgpt: 'ChatGPT search', claude: 'Claude search', others: 'Gemini or Apple' }
+const SEARCHERS: Partial<Record<BotTestId, string>> = { chatgpt: 'ChatGPT search', claude: 'Claude search', others: listWords(OTHERS_SEARCHERS, 'or') }
 /** The name a training-only visitor learns for ("asks ChatGPT not to learn from it"). */
 const LEARNER: Record<string, string> = { gptbot: 'ChatGPT', claudebot: 'Claude', 'applebot-extended': 'Apple Intelligence', ccbot: 'Common Crawl' }
 /** The same visitor as a thing that can be turned away ("turns away ChatGPT's training visitor"). */
@@ -654,6 +713,10 @@ function botTest(test: BotTestId): Inner {
     const robotsNotes: string[] = []
     const tagNotes: string[] = []
     const notes: string[] = []
+    /** bing only: the Copilot rules seen, and the pages limited by nocache / nosnippet. */
+    const copilotNotes: string[] = []
+    const copilotShort: string[] = []
+    const copilotNoText: string[] = []
     const seenPage = new Set<string>()
     const gone = new Set<string>()
     let robotsLevel: 'ok' | 'said' = 'ok'
@@ -672,7 +735,7 @@ function botTest(test: BotTestId): Inner {
             if (robotsLevel === 'ok') {
               robotsLevel = 'said'
               if (v.why === 'server-error') {
-                findings.push({ level: 'fail', path: null, training: false, sentence: `your site gives an error when search engines ask for its settings, so ${who} stays away from your whole site.`, todo: 'Ask whoever runs your site to fix its settings for search engines.' })
+                findings.push({ level: 'fail', path: null, training: false, sentence: `your site gives an error when search engines ask for its settings, so ${who} ${test === 'others' ? 'stay' : 'stays'} away from your whole site.`, todo: 'Ask whoever runs your site to fix its settings for search engines.' })
               } else findings.push({ level: 'unknown', path: null, training: false, sentence: robotsUnread(e, v, who) })
             }
             if (v.why === 'server-error') paths.forEach((p) => badPaths.add(p))
@@ -808,6 +871,16 @@ function botTest(test: BotTestId): Inner {
               badPaths.add(path)
               break
             }
+            if (test === 'bing') {
+              const c = copilotRules(f, v.page, names)
+              for (const rule of COPILOT_RULES) if (c[rule]) copilotNotes.push(`${c[rule]} (on ${path})`)
+              // Both tags: Bing treats the page as nocache (in answers, as title and a line).
+              if (c.noarchive && !c.nocache) {
+                findings.push({ level: 'fail', path, training: false, sentence: `${pageName(path)} asks Copilot to leave it out of its answers.`, todo: 'Ask whoever runs your site to let Copilot use that page.' })
+                badPaths.add(path)
+              } else if (c.nocache) copilotShort.push(path)
+              else if (c.nosnippet) copilotNoText.push(path)
+            }
           }
         }
       }
@@ -834,6 +907,7 @@ function botTest(test: BotTestId): Inner {
     }
     rows.push({ label: 'robots.txt', value: robotsNotes.length ? robotsNotes.join('; ') : `${robotsRow(e)}${e.robots?.status != null && e.robots.status >= 200 && e.robots.status < 300 ? ', no rule blocks these visitors' : ''}` })
     rows.push({ label: 'noindex', value: tagNotes.length ? tagNotes.join('; ') : 'none seen' })
+    if (test === 'bing') rows.push({ label: 'Copilot', value: copilotNotes.length ? copilotNotes.join('; ') : 'no noarchive, nocache or nosnippet seen' })
     if (notes.length) rows.push({ label: 'notes', value: notes.join('; ') })
 
     const counted = paths.filter((p) => !gone.has(p))
@@ -880,9 +954,9 @@ function botTest(test: BotTestId): Inner {
     }
     const pages = total === 1 ? 'your page' : `all ${num(total)} of your pages`
     const pass = test === 'others'
-      ? `Our visits using Apple’s and Common Crawl’s names opened ${pages}, and nothing asks Gemini, Apple or Common Crawl to stay away.`
+      ? `Our visits using each one’s name opened ${pages}, and nothing asks ${listWords(OTHERS_NAMED, 'or')} to stay away.`
       : `Our visits using ${who}’s name opened ${pages}, and nothing asks ${who} to stay away.`
-    return { status: 'pass', value, sentence: pass, evidence: rows, limits }
+    return { status: 'pass', value, sentence: [pass, test === 'bing' ? copilotSaid(copilotShort, copilotNoText) : ''].filter(Boolean).join(' '), evidence: rows, limits }
   }
 }
 

@@ -14,7 +14,8 @@
  *           • the settings file (robots.txt) and "don't list me" tags, for everyone or one bot
  *           • a page cut at the size cap is not judged on its words
  *           • per bot: the one exact sentence, and the rules only that test has (ChatGPT's and
- *             Claude's training visitors, Gemini reading Google's visit, Apple following Google)
+ *             Claude's training visitors, Gemini reading Google's visit, Apple following Google,
+ *             Bing's Copilot tags: noarchive fails, nocache / nosnippet are said in the pass)
  * Not here: what all ten tests share (contract.test.ts); how robots.txt is read line by line
  *           (robots-txt.test.ts); how the visits are fetched (evidence.test.ts).
  * Fixtures: ../found-fixtures.ts: a healthy two-page site; each case swaps ONE visit (a bot's, a
@@ -361,6 +362,34 @@ describe('bing', () => {
   it('the pass sentence, word for word', () => {
     expect(run('bing').sentence).toBe('Our visits using Bing’s name opened all 2 of your pages, and nothing asks Bing to stay away.')
   })
+  // Copilot. Bing's robots tag list: noarchive = "Do not link in Chat and Copilot", in the page
+  // or the header, for everyone or for Bing by name. It fails Bing only: the page is still listed
+  // ("will still appear in our search results"), so Google's test doesn't move.
+  it.each<[string, Fixture]>([
+    ['a robots meta tag', { pages: { '/': noindexMeta('robots', 'noarchive'), '/about': ABOUT } }],
+    ['a bingbot meta tag', { pages: { '/': noindexMeta('bingbot', 'noarchive'), '/about': ABOUT } }],
+    ['the header', { allBots: { '/': { headers: { ...html, 'x-robots-tag': 'noarchive' } } } }],
+  ])('noarchive in %s: fail, word for word, and only for Bing', (_name, f) => {
+    const r = run('bing', f)
+    expect(r).toMatchObject({ status: 'fail', value: '1 of 2 pages', sentence: 'your home page asks Copilot to leave it out of its answers.' })
+    expect(details(r)).toMatch(/noarchive \(on \/\)/)
+    expect(run('google', f).status).toBe('pass')
+  })
+  // What limits Copilot without keeping the page out is not a fail (there is no "warning"): the
+  // pass says it. nocache = "Display only URL/Snippet/Title"; noarchive WITH nocache, Bing's own
+  // example, = "we will treat it as NOCACHE"; nosnippet = no description. A noarchive for another
+  // bot is not Bing's.
+  const SHORT = 'A setting on your home page lets Copilot show only its title and a short line.'
+  it.each<[string, Fixture, string]>([
+    ['nocache in the header', { allBots: { '/': { headers: { ...html, 'x-robots-tag': 'nocache' } } } }, SHORT],
+    ['noarchive for everyone with nocache for Bing', { pages: { '/': noindexMeta('robots', 'noarchive').replace('<head>', '<head><meta name="bingbot" content="nocache">'), '/about': ABOUT } }, SHORT],
+    ['nosnippet in the header', { allBots: { '/': { headers: { ...html, 'x-robots-tag': 'nosnippet' } } } }, 'A setting on your home page asks Bing to show no description for it.'],
+    ['noarchive for Google only', { allBots: { '/': { headers: { ...html, 'x-robots-tag': 'googlebot: noarchive' } } } }, ''],
+  ])('%s: pass, saying what it limits', (_name, f, said) => {
+    const r = run('bing', f)
+    expect(r.status).toBe('pass')
+    expect(r.sentence).toBe(`Our visits using Bing’s name opened all 2 of your pages, and nothing asks Bing to stay away.${said ? ` ${said}` : ''}`)
+  })
 })
 
 describe('chatgpt', () => {
@@ -417,7 +446,7 @@ describe('others (Gemini, Apple and Common Crawl)', () => {
     const robots = { status: 200, body: 'User-agent: Applebot-Extended\nDisallow: /\n\nUser-agent: *\nAllow: /\n' }
     const r = run('others', { robots, bots: { ccbot: { '/': { status: 403, html: null }, '/about': { status: 403, html: null } } } })
     expect(r).toMatchObject({ status: 'fail', lead: 'Almost' })
-    expect(r.sentence).toBe('your site turns away Apple Intelligence and Common Crawl (they only gather pages to train AI). Nothing we saw turns Gemini or Apple away.')
+    expect(r.sentence).toBe('your site turns away Apple Intelligence and Common Crawl (they only gather pages to train AI). Nothing we saw turns Gemini, Apple, Meta AI, Alexa or DuckDuckGo away.')
   })
   // Gemini's name (Google-Extended) is a settings-only name: asking it to stay away fails
   // "others", naming Gemini, and does not touch Google's own test.

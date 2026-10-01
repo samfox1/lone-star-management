@@ -30,7 +30,7 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 | Google and Bing ownership codes on every page, always | `siteVerification` in the root `generateMetadata` | live (0.44) |
 | IndexNow key file at `/indexnow.txt` | `indexNowKeyFile` | live (0.42) |
 | Title, description, share image; the fact sheet (JSON-LD); one h1 and an h2 per section; alt text on every image; an /about page; /faqsheet; /edit set to noindex | §10 builders | live |
-| No `noindex` or `noarchive` on public pages (`noarchive` keeps a page out of Copilot) | the AI test | noindex live, noarchive check **planned** (step 3) |
+| No `noindex` or `noarchive` on public pages (`noarchive` keeps a page out of Copilot) | the AI test | live (noarchive fails the Bing/Copilot test since 2026-10-01) |
 
 ## 2. Launch day (once per site)
 
@@ -51,10 +51,14 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
      apple.coverage.support@xperi.com and content.music@tivo.com, CC the artist, Mark as sent.
      It writes the Apple Music and Amazon Music bios (takes months); artists can't edit those.
    - Resident Advisor for DJs, after checking for a same-named artist. Manual only.
-   - One Discogs release, then the site under Sites. Tapir checks it (**planned**).
+   - One Discogs release, then the site under Sites, then link the page in Connections. The
+     Profiles tab checks it lists the site (**live**, 2026-10-01; read only).
+   - Wikidata, once there is independent press: the artist creates the item with the site (P856)
+     and the MusicBrainz ID (P434). The Profiles tab checks for both (**live**, 2026-10-01; read
+     only, Tapir never edits Wikidata).
    - The site link in the YouTube and Instagram bios. Spotify has no website field, so put the
      city, genre and site name in its bio text.
-   Details: VISIBILITY_TOOLKIT.md "Round 2".
+   Details: VISIBILITY_TOOLKIT.md "Round 2" and "Round 3".
 7. **Brave:** if the Brave check says the site is missing, submit it at
    search.brave.com/submit-url (**planned**).
 
@@ -72,9 +76,10 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
 - **The AI test, live:** 24 checks, plus "How crawlers see your site". That section covers
   robots.txt, the sitemap, canonicals, crawler visits, whether Google lists each page, and when
   Bing last visited.
+- **The Profiles tab, live:** Discogs (does the linked page list the site?) and Wikidata (is
+  there an item, with the site and the MusicBrainz ID?). Read only, cached a day.
 - **Planned (VISIBILITY_TOOLKIT.md):**
   - later: a monthly AI answers check on Perplexity and OpenAI (never relying on the Claude API)
-  - a Wikidata check
   - Brave and Perplexity index checks
   - PageSpeed
   - uptime
