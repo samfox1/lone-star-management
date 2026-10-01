@@ -43,7 +43,8 @@ afterEach(async () => {
 })
 
 function ev(id: string, venue: string): BandsintownTourDate {
-  return { bandsintown_id: id, date: '2026-09-01', venue, city: 'Austin', country: 'US', ticket_url: null, latitude: 30.2672, longitude: -97.7431 }
+  // start_time null: no time, so the pull writes no start_time (safe before 20261001140000).
+  return { bandsintown_id: id, date: '2026-09-01', start_time: null, venue, city: 'Austin', country: 'US', ticket_url: null, latitude: 30.2672, longitude: -97.7431 }
 }
 
 describe('syncBandsintownTourDates', () => {

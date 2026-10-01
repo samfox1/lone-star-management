@@ -24,6 +24,10 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
       approval isn't blocking today; the other terms still are (Bandsintown branding + Track/RSVP
       buttons, session-only caching, remove what's removed upstream).
 
+**LATER, with site #2 (Sam, 2026-09-30, "wouldnt it be quicker to just do it manually?"):** the
+Profiles tab + AllMusic bio pack (mock: prototypes/profiles_bio_pack_20260930.html, Sam liked the
+look). For Skeen the email is sent BY HAND; the tool only pays off with many artists.
+
 **LATER (Sam, 2026-09-30):** a MONTHLY AI answers check, not weekly, and never relying on the Claude
 API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenAI.
 

@@ -50,6 +50,7 @@ export default async function TourPage({ params }: { params: Promise<{ id: strin
       tours={rows.map((row) => ({
         id: row.id as string,
         date: (row.date as string | null) ?? null,
+        start_time: (row.start_time as string | null | undefined) ?? null,
         venue: (row.venue as string | null) ?? null,
         city: (row.city as string | null) ?? null,
         state: (row.state as string | null) ?? null,

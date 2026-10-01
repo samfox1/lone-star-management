@@ -121,6 +121,9 @@ latest publish?" check reads it too, so the two cannot disagree. Sites don't nee
 `published_at` or the newest passed show, on every page. **A site on 0.44 or older** keeps its one
 date and ignores `changed_at`. Nothing breaks either way: `pages` only got wider.
 
+**Also:** `SiteTourDate.start_time`, the show's local start time as 24h `HH:MM`, or null (lone-star
+migration 20261001140000; absent on older revisions). Type only, nothing reads it yet. Site action: none.
+
 ---
 
 ## 0.44.0 — Google and Bing can confirm the site is Tapir's

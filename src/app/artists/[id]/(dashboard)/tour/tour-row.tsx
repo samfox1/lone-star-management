@@ -20,6 +20,8 @@ const STATE_OPTIONS = US_STATES.map((s) => ({ value: s.code, label: `${s.code} Â
 export type TourDate = {
   id: string
   date: string | null
+  /** Start time, 24h HH:MM, local to the venue (20261001140000). null = not announced. */
+  start_time?: string | null
   venue: string | null
   city: string | null
   /** Two-letter US state code (TX). null for out-of-country dates. */
@@ -182,6 +184,8 @@ export function TourRow({
         />
         <div className="mt-5">
           <KvField label="Date" value={tour.date ?? ''} type="date" mono onSave={saveField('date')} onError={fail} />
+          {/* 24h HH:MM, the venue's local time. A cleared input posts '' â†’ null. */}
+          <KvField label="Time" value={tour.start_time ?? ''} type="time" mono onSave={saveField('start_time')} onError={fail} />
           <KvField label="Venue" value={tour.venue ?? ''} onSave={saveField('venue')} onError={fail} />
           <KvCells
             label="Where"

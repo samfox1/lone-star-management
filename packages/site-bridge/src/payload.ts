@@ -72,6 +72,10 @@ export type SiteTourDate = {
   /** Null for an UNDATED show (announced, date TBA) — the wire has carried null since
    *  dates became clearable; undated rows sort last, sequenced by sort_order. */
   date: string | null
+  /** The show's start as the venue's LOCAL wall-clock time, 24h `HH:MM` ("20:30"), no zone.
+   *  Null when no time is announced; absent on revisions published before lone-star
+   *  migration 20261001140000. Read with `?? null`. */
+  start_time?: string | null
   venue: string | null
   city: string | null
   /** Two-letter US state code. Absent on revisions published before the column. */

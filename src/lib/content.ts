@@ -200,7 +200,9 @@ export const CRUD: Record<CrudEntity, CrudConfig> = {
   // Nothing is required — a date can be added before its date is known (a TBA row);
   // `date` became nullable in 20260716120000. `required` here only governs which
   // columns are never cleared to null on edit, so an empty list lets date be cleared.
-  tour_date: { fields: ['date', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'], required: [] },
+  // `start_time` is 24h HH:MM local to the venue (20261001140000); content-form runs it
+  // through lib/tour parseStartTime, so a malformed time is never written.
+  tour_date: { fields: ['date', 'start_time', 'venue', 'city', 'state', 'country', 'ticket_url', 'support', 'is_past'], required: [] },
   merch: { fields: ['title', 'image_url', 'price', 'url', 'in_stock'], required: ['title'] },
   link: { fields: ['label', 'url', 'sort_order'], required: ['label', 'url'] },
   // Manual video adds set provider + a normalized embed_url (validated by the
@@ -337,6 +339,9 @@ export const PUBLISHABLE = {
     snapshot: [
       'id',
       'date',
+      // 24h HH:MM, local to the venue, or null (20261001140000). get_public_site sends the
+      // snapshot wholesale, so this line is the whole path to the sites.
+      'start_time',
       'venue',
       'city',
       'state',
@@ -492,10 +497,17 @@ function pickFields(type: CrudEntity, input: Record<string, unknown>) {
   return out
 }
 
-/** The public-safe projection of a row — the shape published and previewed. */
+/** The public-safe projection of a row — the shape published and previewed.
+ *
+ *  A key the row does not HAVE is left out, not copied as `undefined`. That happens to a
+ *  snapshot column added before its migration is pushed (tour_dates.start_time, say):
+ *  `stableJson` reads the `undefined` as null, the stored copy has no such key (JSON drops
+ *  it on the way in), so every publish would see a change that never lands and re-write
+ *  every row of the type, the growth `revisionRows` exists to stop. Every caller passes a
+ *  `select('*')` row, so a column the table has is always present (null included). */
 export function publicSnapshot(type: PublishableEntity, row: ContentRow) {
   const out: Record<string, unknown> = {}
-  for (const key of PUBLISHABLE[type].snapshot) out[key] = row[key]
+  for (const key of PUBLISHABLE[type].snapshot) if (key in row) out[key] = row[key]
   return out
 }
 

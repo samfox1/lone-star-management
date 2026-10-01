@@ -11,6 +11,7 @@
  */
 import { CRUD, type GenericEntity } from '@/lib/content'
 import { isUrlField, safeHref } from '@/lib/url'
+import { parseStartTime } from '@/lib/tour'
 
 const NUMERIC = new Set(['price', 'sort_order'])
 
@@ -39,6 +40,8 @@ function coerce(field: string, raw: string): unknown {
   if (isUrlField(field)) {
     return safeHref(raw) !== undefined ? raw : undefined
   }
+  // A show's start time: normalised to 24h HH:MM, or dropped (lib/tour parseStartTime).
+  if (field === 'start_time') return parseStartTime(raw) ?? undefined
   return raw
 }
 

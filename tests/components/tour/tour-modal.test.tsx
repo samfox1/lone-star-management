@@ -87,6 +87,21 @@ describe('tour date modal', () => {
     expect((fd as FormData).get('venue')).toBe('Mohawk')
   })
 
+  it('the Time row saves start_time alone, as 24h HH:MM', async () => {
+    // Bandsintown's bulk upload needs a 24h start time (20261001140000). The server
+    // normalises and validates (tests/unit/tour/start-time.test.ts); this pins the row.
+    const dialog = openModal()
+    fireEvent.click(within(within(dialog).getByText('Time').closest('div')!).getByRole('button'))
+    const input = within(dialog).getByLabelText('Time')
+    expect(input).toHaveAttribute('type', 'time')
+    fireEvent.change(input, { target: { value: '20:30' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(updateContentAction).toHaveBeenCalledTimes(1))
+    const fd = vi.mocked(updateContentAction).mock.calls[0][3] as FormData
+    expect([...fd.keys()]).toEqual(['start_time'])
+    expect(fd.get('start_time')).toBe('20:30')
+  })
+
   it('city · state · country sit on one row and save one at a time', async () => {
     const dialog = openModal()
     fireEvent.click(within(dialog).getByText('Austin'))

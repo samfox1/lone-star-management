@@ -149,9 +149,9 @@ type EditableProps = {
   value: string
   onSave: (value: string) => Promise<SaveResult> | SaveResult
   onError?: (message: string) => void
-  /** Space Mono for dates, URLs, ids. */
+  /** Space Mono for dates, times, URLs, ids. */
   mono?: boolean
-  type?: 'text' | 'url' | 'date'
+  type?: 'text' | 'url' | 'date' | 'time'
   /** A select instead of a text input; saves on change. The empty option reads "—". */
   options?: SelectOption[]
   /** Drop the empty option — for a value that always has to be something (a song's type). */

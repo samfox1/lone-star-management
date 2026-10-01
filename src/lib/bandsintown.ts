@@ -9,6 +9,7 @@
 import { canonicalCountry } from '@/lib/country'
 import { coord } from '@/lib/geo'
 import { httpGetJson } from '@/lib/http'
+import { parseStartTime } from '@/lib/tour'
 
 const API_BASE = 'https://rest.bandsintown.com'
 
@@ -16,6 +17,8 @@ const API_BASE = 'https://rest.bandsintown.com'
 export type BandsintownTourDate = {
   bandsintown_id: string
   date: string // YYYY-MM-DD
+  /** 24h HH:MM, the venue's local time: `datetime`'s time part. Null if it has none. */
+  start_time: string | null
   venue: string | null
   city: string | null
   country: string | null
@@ -58,6 +61,9 @@ export function createBandsintownClient(opts: Options = {}) {
     return {
       bandsintown_id: String(e.id),
       date: e.datetime.slice(0, 10),
+      // `datetime` is local to the venue with no zone ("2026-09-01T20:00:00"), which is
+      // exactly what start_time holds. Anything else there reads as no time.
+      start_time: parseStartTime(e.datetime.slice(11, 16)),
       venue: e.venue?.name ?? null,
       city: e.venue?.city ?? null,
       // Same canonical spelling Ticketmaster writes — both land in tour_dates.country.

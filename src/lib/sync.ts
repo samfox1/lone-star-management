@@ -800,7 +800,18 @@ export function syncBandsintownTourDates(
     artistId,
     items: events.map((e) => ({
       externalId: e.bandsintown_id,
-      values: { date: e.date, venue: e.venue, city: e.city, country: e.country, ticket_url: e.ticket_url, latitude: e.latitude, longitude: e.longitude },
+      values: {
+        date: e.date,
+        // Only a time Bandsintown actually gave is written: an event without one never
+        // wipes a time already on the row (20261001140000).
+        ...(e.start_time ? { start_time: e.start_time } : {}),
+        venue: e.venue,
+        city: e.city,
+        country: e.country,
+        ticket_url: e.ticket_url,
+        latitude: e.latitude,
+        longitude: e.longitude,
+      },
     })),
     insertDefaults: { on_site: false },
   })

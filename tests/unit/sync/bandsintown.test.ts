@@ -39,6 +39,8 @@ describe('getArtistEvents', () => {
     expect(events[0]).toEqual({
       bandsintown_id: '987',
       date: '2026-09-01',
+      // The local time part of `datetime`, as 24h HH:MM (20261001140000).
+      start_time: '20:00',
       venue: 'Mohawk',
       city: 'Austin',
       country: 'United States',

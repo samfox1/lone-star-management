@@ -12,6 +12,20 @@ export function isPastShow(show: { date: string | null; is_past: boolean }, toda
   return show.date !== null && show.date < today
 }
 
+/**
+ * A show's start time as 24h `HH:MM`, or null when `raw` is not one (20261001140000).
+ * It is the LOCAL wall-clock time at the venue, with no zone: Bandsintown's bulk upload
+ * wants exactly this shape, and it rides the public snapshot to every site, so nothing
+ * looser gets through. A one-digit hour is padded ("9:05" → "09:05"); seconds, am/pm,
+ * other separators, surrounding spaces and non-ASCII digits are refused. The column's
+ * CHECK holds the same pattern.
+ */
+export function parseStartTime(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const m = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/.exec(raw)
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null
+}
+
 /** Today as YYYY-MM-DD, UTC — the one place the dashboard reads the clock for shows. */
 export function todayIso(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10)
