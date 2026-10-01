@@ -18,6 +18,11 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
       API): build a Bandsintown show CSV export, a Discogs check, an AllMusic bio pack; RA manual.
       NOTE: a Bandsintown API key is now self-serve (Bandsintown for Artists > Settings > General);
       the paid-service written approval below still applies to any API read.
+      LATER (Sam, 2026-09-30: "We will do that once more stuff is finished"): email
+      api@bandsintown.com to ask to be a "Website" integration partner (like Squarespace/Wix), so
+      shows flow Bandsintown → Tapir. Sam: Tapir is not making money yet, so the paid-service
+      approval isn't blocking today; the other terms still are (Bandsintown branding + Track/RSVP
+      buttons, session-only caching, remove what's removed upstream).
 
 **LATER (Sam, 2026-09-30):** a MONTHLY AI answers check, not weekly, and never relying on the Claude
 API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenAI.
