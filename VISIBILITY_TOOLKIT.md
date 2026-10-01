@@ -112,7 +112,8 @@ improve my site's AI visibility."
 - **Perplexity's Sonar API ended 2026-09-27.** Build on its Agent API.
 
 **DO (new)**
-1. **Weekly AI answers check** (AUTO, about $3-5 per artist a month). Ask Perplexity (Agent API),
+1. **AI answers check** (AUTO). Sam, 2026-09-30: later, MONTHLY, and never relying on the Claude
+   API: use Perplexity and OpenAI only. The original design, weekly, about $3-5 per artist a month: Ask Perplexity (Agent API),
    OpenAI (`web_search`) and Claude (web search) 5 questions, 3 runs each: who is the artist,
    the latest release, the next show, the official site, how to book. Grade: is the site cited,
    is the artist named, do the facts match `get_public_site`. Report a rate ("cited 7 of 9"),

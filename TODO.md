@@ -12,6 +12,13 @@ Sam: "We are going to finish digital tapir for skeen before we add more sites." 
    b. resend the sitemap to Google after a publish that changed content
    c. a one-click Request indexing link beside each page Google hasn't listed (the AI test)
    d. then the toolkit items: 3 more crawlers, the Copilot noarchive check, IndexNow only changed pages
+   e. a Wikidata check in the AI test (Sam liked it, 2026-09-30): item by MusicBrainz ID / official
+      site, read only; Tapir never creates or edits items
+   f. outside profiles for Skeen (Bandsintown, AllMusic, Resident Advisor name clash, Discogs):
+      research on reading/writing them by API is in progress
+
+**LATER (Sam, 2026-09-30):** a MONTHLY AI answers check, not weekly, and never relying on the Claude
+API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenAI.
 
 **REMIND SAM when 1–3 are done:** talk through what Google's and Bing's APIs can do for us
 (Sam: "Remind me to talk through what google and bing's apis can do for us after we complete these

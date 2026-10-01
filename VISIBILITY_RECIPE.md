@@ -71,8 +71,7 @@ State: **live**, **building** (in progress now), **planned** (in TODO.md).
   robots.txt, the sitemap, canonicals, crawler visits, whether Google lists each page, and when
   Bing last visited.
 - **Planned (VISIBILITY_TOOLKIT.md):**
-  - a weekly AI answers check: Perplexity, OpenAI and Claude, 5 questions, about $3-5 per artist
-    a month
+  - later: a monthly AI answers check on Perplexity and OpenAI (never relying on the Claude API)
   - a Wikidata check
   - Brave and Perplexity index checks
   - PageSpeed
