@@ -1,19 +1,21 @@
 /**
  * Every publish that changes a page's words schedules ONE SEO / GEO test run in the background,
- * and the run can never fail or slow the publish.
+ * and ONE sitemap resend to Google; neither can fail or slow the publish.
  *
- * Code:     src/app/artists/[id]/(dashboard)/actions.ts (publishGated's hook, beside the IndexNow ping)
+ * Code:     src/app/artists/[id]/(dashboard)/actions.ts (publishGated's hooks, beside the IndexNow ping)
  * Feature:  Test runs · the run after a publish (which publishes start one)
  * Tier:     STRICT (AGENTS.md "Test depth"): it sits on Publish, the one path whose failure
  *           loses a manager's work.
  * Covers:   • each gated publish that pings IndexNow schedules exactly one run, after it succeeds,
  *             in the name of the manager the password gate checked
+ *           • each of those publishes also schedules exactly one sitemap resend, for this artist
+ *             (VISIBILITY_RECIPE.md: "The sitemap is resent to Google when content changed")
  *           • Brand (no page words change) schedules none
  *           • a wrong password or a failed publish schedules none
  *           • the scheduler throwing does not fail the publish
- * Not here: what the scheduled run then does (runs/after-publish.test.ts); the publish itself
- *           (tests/unit/publish/).
- * Fixtures: the scheduler is a mock (the real one is tested in after-publish.test.ts); the
+ * Not here: what the scheduled run then does (runs/after-publish.test.ts); what the resend does
+ *           (tests/unit/search-engines/resubmit.test.ts); the publish itself (tests/unit/publish/).
+ * Fixtures: the two schedulers are mocks (the real ones are tested in their own files); the
  *           password check, next/cache and next/server are mocked; a PostgREST fake answers the
  *           publish's reads and writes and can refuse the revision insert.
  */
@@ -22,6 +24,7 @@ import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/bra
 
 const h = vi.hoisted(() => ({
   schedule: vi.fn(),
+  resubmit: vi.fn(),
   password: { error: null as null | { message: string; code?: string; status?: number } },
 }))
 
@@ -32,6 +35,7 @@ vi.mock('@supabase/supabase-js', async (orig) => ({
   createClient: () => ({ auth: { signInWithPassword: async () => ({ error: h.password.error }) } }),
 }))
 vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: h.schedule }))
+vi.mock('@/lib/search-engines/resubmit', () => ({ scheduleSitemapResubmit: h.resubmit }))
 
 const A = 'a1'
 let fake = fakeClient()
@@ -61,6 +65,7 @@ const TESTS_AFTER: { name: string; run: (a: Actions) => Promise<unknown> }[] = [
 beforeEach(() => {
   fake = world()
   h.schedule.mockReset()
+  h.resubmit.mockReset()
   h.password.error = null
 })
 
@@ -74,6 +79,10 @@ describe('the SEO / GEO run after a publish', () => {
     // The manager the password gate verified: the run's claim is made in their name (the
     // database's per-person limits count it), by the service role.
     expect(h.schedule.mock.calls[0][2]).toBe('u1')
+    // And one sitemap resend to Google for this artist (it decides for itself whether the site
+    // is registered).
+    expect(h.resubmit).toHaveBeenCalledTimes(1)
+    expect(h.resubmit.mock.calls[0][0]).toBe(A)
   })
 
   // Brand: colours, fonts and logos change no page's words, so there is nothing new to test.
@@ -81,6 +90,7 @@ describe('the SEO / GEO run after a publish', () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await publishBrandWithPasswordAction(A, 'pw')).toEqual({ ok: true })
     expect(h.schedule).not.toHaveBeenCalled()
+    expect(h.resubmit).not.toHaveBeenCalled()
   })
 
   // Nothing went live: a wrong password or a failed publish starts no run.
@@ -92,6 +102,7 @@ describe('the SEO / GEO run after a publish', () => {
     fake = world({ insertError: true })
     expect(await publishAction(A, 'pw')).toEqual({ ok: false, error: 'insert refused' })
     expect(h.schedule).not.toHaveBeenCalled()
+    expect(h.resubmit).not.toHaveBeenCalled()
   })
 
   // The publish is already live: a scheduler crash must not turn it into a reported failure.

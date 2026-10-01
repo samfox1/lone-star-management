@@ -152,6 +152,13 @@ describe('publishedFromPayload', () => {
     expect(p.releases).toEqual([{ title: 'EP One', releasedOn: '2026-05-01' }])
     expect(p.publishedAt).toBe('2026-09-28T21:14:03.123456+00:00')
   })
+
+  // The stale-site check's line: the last CONTENT change, as the bridge reads it (a restyle is not one).
+  it('CRITICAL: contentAt is the newest content change, never a restyle; null on a door with no changed_at', () => {
+    const p = publishedFromPayload(payload({ changed_at: { artist: '2026-09-20T10:00:00.5+00:00', site_styles: '2026-09-28T21:14:03.123456+00:00' } }), [])
+    expect(p.contentAt).toBe('2026-09-20T10:00:00.500Z')
+    expect(publishedFromPayload(payload(), []).contentAt).toBeNull()
+  })
 })
 
 describe('publishedFromPayload: the facts the tests need, as the fact card reads them', () => {

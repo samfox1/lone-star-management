@@ -31,6 +31,9 @@ vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/ser
 // The SEO / GEO test run is scheduled beside the ping (its own `after`); this suite counts the
 // PING's `after` only. The run's scheduling is pinned in tests/unit/seo-tests/runs/publish-hook.test.ts.
 vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: vi.fn() }))
+// The sitemap resend to Google is scheduled beside it too (its own `after`), pinned in
+// tests/unit/seo-tests/runs/publish-hook.test.ts and tests/unit/search-engines/resubmit.test.ts.
+vi.mock('@/lib/search-engines/resubmit', () => ({ scheduleSitemapResubmit: vi.fn() }))
 // The ping reads the site through lib/net-guard's transport, never the global fetch (the SSRF
 // guard, pinned in tests/unit/safe-fetching/blocked-before-connecting.test.ts). This suite is about WHEN a
 // publish pings, so the default transport is pointed at the stubbed `fetch` below.

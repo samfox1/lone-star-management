@@ -284,6 +284,16 @@ describe('the stale-site verdict is stored with the run', () => {
     expect(stored(f).note).toMatch(/older publish/)
   })
 
+  // A Brand-only publish moves no date on a 0.45 site: naming the last CONTENT change is fresh, not stale.
+  it('CRITICAL: after a Brand-only publish, a sitemap naming the last content change is stored fresh', async () => {
+    const content = '2026-09-28T21:00:00.000001+00:00'
+    const f = world({ moments: [PUBLISHED_AT, content] })
+    const e = engine({ gatherSiteEvidence: async () => pages({ sitemap: { status: 200, urls: [`${ORIGIN}/`], lastmods: ['2026-09-28T21:00:00.000Z'] } }) })
+    const k = known()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => ({ ...k, published: { ...k.published!, contentAt: content } }) })
+    expect(stored(f).site_fresh).toBe(true)
+  })
+
   // Couldn't tell: no timed sitemap date is null, never "fresh"; the publish hook's own look can fill it in.
   it('couldn\'t tell (no timed lastmod) is null, never true; the publish hook\'s own look fills in', async () => {
     const f = world()

@@ -11,7 +11,7 @@
  * separate mock (PLAN decision #7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ARTIST_SNAPSHOT, DRAFT_PRESENCE, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
+import { ARTIST_SNAPSHOT, DRAFT_PRESENCE, PUBLISHABLE, type PublishableEntity, listContent, publicSnapshot } from '@/lib/content'
 import { FONT_SLOTS, type FontSlot, type FontSlotMap } from '@/lib/fonts'
 import { isGoogleFamilyName } from '@/lib/google-fonts'
 import { mediaUrl } from '@/lib/storage-url'
@@ -167,6 +167,35 @@ export function fontPayload(f: {
   return base.path ? { ...base, source: 'upload' } : null
 }
 
+/** Every kind `revisions` holds: each publishable entity plus the `artist` profile singleton
+ *  (the same set the revisions_entity_type_check admits). Derived from the registry, so a new
+ *  kind reaches the preview's `changed_at` the day it becomes publishable. */
+const REVISION_KINDS: readonly (PublishableEntity | 'artist')[] = [
+  'artist',
+  ...(Object.keys(PUBLISHABLE) as PublishableEntity[]),
+]
+
+/** The door's `changed_at` (20261001130000): kind → the newest revision of that kind, over
+ *  ALL revisions, tombstones included (a deleted show re-dates its page), exactly as
+ *  `published_at` is computed. `{}` when there are none, never null. One newest-row read per
+ *  kind rather than every revision: PostgREST caps the rows it returns, and on a long history
+ *  the cap would cut the OLDEST rows, silently dropping a kind last changed long ago. */
+async function changedAtByKind(supabase: SupabaseClient, artistId: string): Promise<Record<string, string>> {
+  const newest = await Promise.all(
+    REVISION_KINDS.map((kind) =>
+      supabase
+        .from('revisions')
+        .select('published_at')
+        .eq('artist_id', artistId)
+        .eq('entity_type', kind)
+        .order('published_at', { ascending: false })
+        .limit(1)
+        .then(({ data }) => [kind, (data?.[0]?.published_at as string | undefined) ?? null] as const),
+    ),
+  )
+  return Object.fromEntries(newest.filter((e): e is readonly [PublishableEntity | 'artist', string] => e[1] !== null))
+}
+
 async function workingSection<T>(
   supabase: SupabaseClient,
   type: PublishableEntity,
@@ -205,7 +234,7 @@ export async function getWorkingSitePayload(
   // The artist row and every section are independent, so fetch them in ONE wave — the
   // artist row used to serially gate the other eight for no reason (a full round-trip
   // before any section query started). A missing artist just discards the rest below.
-  const [{ data: artist }, tracks, tour_dates, merch, linkRows, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows, colorRows, themeColor] =
+  const [{ data: artist }, tracks, tour_dates, merch, linkRows, videos, mediaRows, contentRows, styleRows, publishedAt, fontRows, colorRows, themeColor, changedAt] =
     await Promise.all([
       supabase
         .from('artists')
@@ -309,6 +338,7 @@ export async function getWorkingSitePayload(
       .eq('id', artistId)
       .maybeSingle()
       .then(({ data }) => ((data as { theme_color?: string | null } | null)?.theme_color ?? null) as string | null),
+    changedAtByKind(supabase, artistId),
   ])
   if (!artist) return null
 
@@ -393,6 +423,9 @@ export async function getWorkingSitePayload(
     // `lastModifiedFrom` fell back to tour dates and the preview's dateModified and
     // sitemap lastmod disagreed with the live site.
     published_at: publishedAt,
+    // The same stamp per kind, as the door sends it (20261001130000): the bridge dates each
+    // page by the kinds it shows, so the preview's sitemap agrees with the live site's.
+    changed_at: changedAt,
     tracks,
     tour_dates,
     merch,

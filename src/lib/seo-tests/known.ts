@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PublicSitePayload, SiteRelease } from '@samfox1/site-bridge/payload'
-import { resolveSeo, siteFacts } from '@samfox1/site-bridge/seo'
+import { contentChangedAt, resolveSeo, siteFacts } from '@samfox1/site-bridge/seo'
 import { isCustom, isPublicSiteUrl } from '@/lib/custom-site'
 import { mediaUrl } from '@/lib/storage-url'
 import type { SeoKnown } from './types'
@@ -81,6 +81,9 @@ export function publishedFromPayload(site: PublicSitePayload, releases: readonly
       .filter((m) => PHOTO_PURPOSES.has(m.purpose) && typeof m.path === 'string' && m.path !== '')
       .map((m) => ({ url: mediaUrl(m.path), alt: text(m.alt) })),
     publishedAt: text(site.published_at),
+    // The last CONTENT change, by the bridge's own reading (the one a 0.45 site dates its
+    // homepage by), for the stale-site check (fresh.ts). null on a door with no `changed_at`.
+    contentAt: contentChangedAt(site)?.toISOString() ?? null,
     region: text(facts.region),
     country: text(facts.country),
     countryCode: facts.countryCode,

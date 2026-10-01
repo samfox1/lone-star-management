@@ -7,8 +7,14 @@
  * compile error here, not a silently unexercised branch.
  */
 import { describe, expect, it } from 'vitest'
+import { PUBLISHABLE } from '@/lib/content'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import {
+  CHANGE_KINDS,
+  CONTENT_KINDS,
+  type ChangeKind,
+  type ContentKind,
+  type SitemapEntry,
   FAQ_AUTO_ONLY,
   MAX_TITLE,
   SEO_RULES,
@@ -274,6 +280,89 @@ describe('sitemap + robots', () => {
   })
   it('SEO_RULES is the registry every list derives from', () => {
     expect(SEO_RULES.map((r) => r.rule)).toEqual(expect.arrayContaining(['description', 'robots', 'facts', 'facts-geo', 'bio-visible', 'other']))
+  })
+})
+
+/**
+ * Each page's lastmod (0.45.0): the newest change to a kind that page SHOWS, from
+ * `changed_at`. One site-wide date that also moved on restyles taught Google to ignore it.
+ * Kind lists come from CHANGE_KINDS, never hand-listed, so a kind added later is covered.
+ */
+describe('sitemap: each page dated by what it shows', () => {
+  // The bridge's kind list must name every kind lone-star publishes: a kind missing from it counts
+  // as content on EVERY page (safe, but blunt), and nothing in the type forces it in.
+  it('CHANGE_KINDS names exactly what lone-star publishes', () => {
+    expect(Object.keys(CHANGE_KINDS).sort()).toEqual(['artist', ...Object.keys(PUBLISHABLE)].sort())
+  })
+  const LOOK_KINDS = (Object.keys(CHANGE_KINDS) as ChangeKind[]).filter((k) => CHANGE_KINDS[k] === 'look')
+  /** Day i of September 2026, as a revision time. */
+  const at = (i: number) => new Date(Date.UTC(2026, 8, 1 + i, 12)).toISOString()
+  /** Every content kind changed, each on its own day, in registry order. */
+  const allContent = (): Record<string, string> => Object.fromEntries(CONTENT_KINDS.map((k, i) => [k, at(i)]))
+  const dates = (e: SitemapEntry[]) => e.map((x) => x.lastModified?.toISOString())
+
+  it('CRITICAL: the homepage (and a plain-path page) moves with EVERY content kind', () => {
+    for (const kind of CONTENT_KINDS) {
+      const e = sitemapEntries(payload({ changed_at: { ...allContent(), [kind]: at(20) } }), { origin: ORIGIN, pages: ['/about'] })
+      expect(dates(e), kind).toEqual([at(20), at(20)])
+    }
+  })
+
+  it('CRITICAL: a { path, shows } page ignores the kinds it does not show', () => {
+    for (const kind of CONTENT_KINDS) {
+      const changed = { ...allContent(), [kind]: at(20) }
+      const rest = CONTENT_KINDS.filter((k) => k !== kind)
+      const newestOfRest = at(Math.max(...rest.map((k) => CONTENT_KINDS.indexOf(k))))
+      const e = sitemapEntries(payload({ changed_at: changed }), {
+        origin: ORIGIN,
+        pages: [{ path: '/only', shows: [kind] }, { path: '/rest', shows: rest }],
+      })
+      expect(dates(e).slice(1), kind).toEqual([at(20), newestOfRest])
+    }
+  })
+
+  it('CRITICAL: a style-only publish moves no page, even though published_at moves', () => {
+    const opts = { origin: ORIGIN, pages: ['/faqsheet', { path: '/about', shows: ['artist', 'media'] as const }], today: '2026-08-26' }
+    const before = sitemapEntries(payload({ changed_at: allContent(), published_at: at(8) }), opts)
+    const restyled = { ...allContent(), ...Object.fromEntries(LOOK_KINDS.map((k) => [k, at(20)])) }
+    expect(dates(sitemapEntries(payload({ changed_at: restyled, published_at: at(20) }), opts))).toEqual(dates(before))
+    // A look kind passed in `shows` anyway (a JS site): still nothing. No date known, no lastmod.
+    const smuggled = sitemapEntries(payload({ changed_at: { site_styles: at(20) } }), { origin: ORIGIN, pages: [{ path: '/x', shows: LOOK_KINDS as unknown as ContentKind[] }] })
+    expect(smuggled.every((x) => !('lastModified' in x))).toBe(true)
+  })
+
+  it('CRITICAL: a kind this bridge does not know counts as content, on every page', () => {
+    // `constructor` is not a kind either: an `in` check would find it on the prototype.
+    const e = sitemapEntries(payload({ changed_at: { artist: at(0), setlist: at(20), constructor: at(21) } }), {
+      origin: ORIGIN,
+      pages: ['/a', { path: '/about', shows: ['artist'] }],
+    })
+    expect(dates(e)).toEqual([at(21), at(21), at(21)])
+  })
+
+  it('CRITICAL: a passed show moves only the pages that show tour dates', () => {
+    // s1 (2026-09-10) has passed by the 20th; every kind last changed on the 1st.
+    const e = sitemapEntries(payload({ changed_at: { artist: at(0), tour_date: at(0) } }), {
+      origin: ORIGIN,
+      pages: ['/plain', { path: '/tour', shows: ['tour_date'] }, { path: '/about', shows: ['artist', 'site_content'] }],
+      today: '2026-09-20',
+    })
+    const passed = '2026-09-10T00:00:00.000Z'
+    expect(dates(e)).toEqual([passed, passed, passed, at(0)])
+  })
+
+  it('CRITICAL: an older database (no changed_at) gets exactly the 0.44 sitemap: one date, every page', () => {
+    // published_at 07-01, show s2 passed 08-01: 0.44 stamped EVERY page 08-01, a { path, shows }
+    // page that shows no tour dates included.
+    const opts = { origin: ORIGIN, pages: ['/about', { path: '/faqsheet', shows: ['artist', 'site_content'] as const }], today: '2026-08-26' }
+    const old = sitemapEntries(payload({ published_at: '2026-07-01T00:00:00.000Z' }), opts)
+    const lastModified = new Date('2026-08-01T00:00:00.000Z')
+    expect(old).toEqual([
+      { url: `${ORIGIN}/`, lastModified, changeFrequency: 'weekly', priority: 1 },
+      { url: `${ORIGIN}/about`, lastModified, changeFrequency: 'weekly', priority: 0.8 },
+      { url: `${ORIGIN}/faqsheet`, lastModified, changeFrequency: 'weekly', priority: 0.8 },
+    ])
+    expect(sitemapEntries(payload({ published_at: '2026-07-01T00:00:00.000Z', changed_at: null }), opts)).toEqual(old)
   })
 })
 

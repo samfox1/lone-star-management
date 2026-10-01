@@ -7,8 +7,9 @@
  * Feature:  Test runs · the run after a publish, and "is the site showing the latest publish?"
  * Tier:     STRICT (AGENTS.md "Test depth"): it runs on Publish, and a wrong "fresh" would store
  *           an old site's verdict as today's truth.
- * Covers:   • fresh ONLY when the sitemap names the latest publish (µs vs ms tolerated); stale ONLY
- *             when it names an older publish we made; anything else is "couldn't tell" (null)
+ * Covers:   • fresh ONLY when the sitemap names the latest publish, the last CONTENT change, or a
+ *             publish after it (µs vs ms tolerated; a Brand-only publish moves no 0.45 date);
+ *             stale ONLY when it names a publish of ours before that change; else null
  *           • the wait polls the sitemap and "/", returns as soon as the site turns, gives up at
  *             the cap, waits a fixed time when there is no marker, stops when told to, and every
  *             poll stays on the site (its www twin allowed)
@@ -28,6 +29,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SeoEngine } from '@/lib/seo-tests/run'
 import { sameSite, siteFreshness, sitemapLastmods, waitForFreshSite } from '@/lib/seo-tests/fresh'
+import { contentChangedAt, sitemapEntries } from '@samfox1/site-bridge/seo'
+import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import { SEO_TEST_IDS, type SeoKnown } from '@/lib/seo-tests/types'
 import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
 
@@ -121,6 +124,40 @@ describe('is the live site showing the latest publish? (siteFreshness)', () => {
   it('the NEWEST lastmod decides (pages share one stamp; a stray old one does not)', () => {
     expect(siteFreshness(['2026-09-20T10:00:00.500Z', '2026-09-28T21:14:03.123Z'], LATEST, MOMENTS)).toBe(true)
   })
+
+  // The line is the last CONTENT change (bridge 0.45 dates the homepage by it). LATEST is a
+  // Brand-only publish; MID another look-only one; CONTENT the last content change.
+  const CONTENT = '2026-09-28T21:00:00.000001+00:00'
+  const MID = '2026-09-28T21:05:00.000001+00:00'
+  const ALL = [LATEST, MID, CONTENT, OLDER]
+
+  // A restyle moves no sitemap date on a 0.45 site, so its homepage still names CONTENT: that is fresh.
+  it('CRITICAL: a Brand-only publish does not make a 0.45 site stale; one still on older content is', () => {
+    expect(siteFreshness(['2026-09-28T21:00:00.000Z'], LATEST, ALL, CONTENT)).toBe(true)
+    expect(siteFreshness(['2026-09-20T10:00:00.500Z'], LATEST, ALL, CONTENT)).toBe(false)
+  })
+
+  // A 0.44 site stamps published_at: any publish at or after the content change has all the content.
+  it('a 0.44 site: the latest publish, or any publish at or after the last content change, is fresh', () => {
+    // publish_moments unreadable: the latest publish still counts on its own.
+    expect(siteFreshness(['2026-09-28T21:14:03.123Z'], LATEST, [], CONTENT)).toBe(true)
+    // An earlier look-only publish: behind on the look, current on everything a test reads.
+    expect(siteFreshness(['2026-09-28T21:05:00.000Z'], LATEST, ALL, CONTENT)).toBe(true)
+  })
+
+  // One reading: the sitemap a 0.45 site builds and the marker come from the same bridge function.
+  it('CRITICAL: a 0.45 sitemap built from the payload reads fresh against contentChangedAt; a passed show never proves fresh', () => {
+    type Wire = Pick<PublicSitePayload, 'published_at' | 'tour_dates' | 'changed_at'>
+    const payload: Wire = { published_at: LATEST, tour_dates: [], changed_at: { artist: CONTENT, site_content: OLDER, site_styles: LATEST } }
+    const lastmods = (p: Wire) =>
+      sitemapEntries(p, { origin: ORIGIN, pages: [{ path: '/about', shows: ['site_content'] }], today: '2026-09-28' }).map((e) => e.lastModified?.toISOString())
+    expect(siteFreshness(lastmods(payload), LATEST, ALL, contentChangedAt(payload)?.toISOString())).toBe(true)
+    // A show that passed after the last content change outranks it on the homepage. A stale
+    // site shows that same midnight, so it says nothing either way.
+    const show: Wire = { ...payload, changed_at: { artist: OLDER, site_styles: LATEST }, tour_dates: [{ id: 's', date: '2026-09-25', venue: 'V', city: 'C', country: null, ticket_url: null }] }
+    expect(lastmods(show)[0]).toBe('2026-09-25T00:00:00.000Z')
+    expect(siteFreshness(lastmods(show), LATEST, ALL, contentChangedAt(show)?.toISOString())).toBeNull()
+  })
 })
 
 describe('reading the sitemap, and staying on the site', () => {
@@ -201,6 +238,16 @@ describe('waiting for the site to update (waitForFreshSite)', () => {
     expect(Date.now() - t).toBeLessThan(2000)
   })
 
+  // After a Brand-only publish a 0.45 site keeps naming the last content change: fresh at once, no 90 s wait.
+  it('CRITICAL: after a Brand-only publish, a site naming the last content change is fresh at once', async () => {
+    const s = site(['2026-09-28T21:00:00.000Z'])
+    const c = clock()
+    const content = '2026-09-28T21:00:00.000001+00:00'
+    const out = await waitForFreshSite({ origin: 'https://www.site.example', publishedAt: LATEST, contentAt: content, moments: [LATEST, content, OLDER], fetcher: s.fetcher, sleep: c.sleep, now: c.now })
+    expect(out).toMatchObject({ fresh: true, marker: 'sitemap' })
+    expect(c.elapsed()).toBeLessThan(10_000)
+  })
+
   // Early return: test as soon as the site shows the publish, poking "/" each time to wake a cached site.
   it('CRITICAL: returns fresh as soon as the sitemap names this publish, poking "/" each time', async () => {
     const s = site(['2026-09-20T10:00:00.500Z', '2026-09-20T10:00:00.500Z', '2026-09-28T21:14:03.123Z'])
@@ -263,13 +310,16 @@ describe('the test after a publish (testAfterPublish)', () => {
     const { testAfterPublish } = await import('@/lib/seo-tests/after-publish')
     const w = world()
     const steps: string[] = []
+    const CONTENT_AT = '2026-09-28T21:00:00.000Z'
+    const k = known()
     const out = await testAfterPublish(w.reader.client, A, w.who, {
-      engine, readKnown: async () => known(),
+      engine, readKnown: async () => ({ ...k, published: { ...k.published!, contentAt: CONTENT_AT } }),
       sleep: async (ms) => void steps.push(`sleep:${ms}`),
-      wait: async (o) => (steps.push(`wait:${o.publishedAt}`), FRESH()),
+      wait: async (o) => (steps.push(`wait:${o.publishedAt}:${o.contentAt}`), FRESH()),
     })
     expect(out.ran).toBe(true)
-    expect(steps).toEqual(['sleep:10000', `wait:${PUBLISHED_AT}`])
+    // The wait judges by the last CONTENT change too (a Brand-only publish moves no sitemap date).
+    expect(steps).toEqual(['sleep:10000', `wait:${PUBLISHED_AT}:${CONTENT_AT}`])
     expect(claims(w)).toHaveLength(1)
     expect(claims(w)[0].args).toEqual({ p_artist_id: A, p_trigger: 'publish', p_user_id: U, p_published_at: PUBLISHED_AT })
     // The manager's session wrote nothing.

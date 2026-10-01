@@ -8,6 +8,7 @@ import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { useMounted } from './clock'
 import {
+  ASK_GOOGLE,
   BING_WEBMASTER,
   CRAWL_ROWS,
   SEARCH_CONSOLE,
@@ -23,10 +24,12 @@ import {
   dayText,
   decisionOf,
   fineCount,
+  googleNotListed,
   googleWord,
   noindexBy,
   opens,
   redirectWord,
+  requestIndexingHref,
   robotsLead,
   robotsNotes,
   ruleText,
@@ -270,6 +273,28 @@ function OutsideLink({ link }: { link: { label: string; href: string } }) {
   )
 }
 
+/** "ASK GOOGLE ↗" beside a page Google doesn't list: Search Console's inspect page for it, where
+ *  its "Request indexing" button is (a new tab). */
+function AskGoogleLink({ href, path }: { href: string; path: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${ASK_GOOGLE} to list ${path}`}
+      data-ask-google
+      className={cx(
+        'ml-2.5 inline-flex items-center gap-1 whitespace-nowrap rounded align-middle font-space text-[10px] uppercase tracking-[0.1em] text-ink transition-colors hover:text-accent',
+        FOCUS_RING,
+        'focus-visible:outline-offset-2',
+      )}
+    >
+      {ASK_GOOGLE}
+      <Icon name="external" size={12} aria-hidden="true" />
+    </a>
+  )
+}
+
 function CardBody({ id, crawl, origin, mounted }: { id: CrawlRowId; crawl: SeoCrawl; origin: string | null; mounted: boolean }) {
   // A date only after mount: the manager's own time zone, never the server's.
   const day = (iso: string | null | undefined) => (mounted ? dayText(iso) : '')
@@ -283,7 +308,7 @@ function CardBody({ id, crawl, origin, mounted }: { id: CrawlRowId; crawl: SeoCr
     case 'visits':
       return <VisitsCard crawl={crawl} />
     case 'listed':
-      return <ListedCard crawl={crawl} day={day} />
+      return <ListedCard crawl={crawl} origin={origin} day={day} />
   }
 }
 
@@ -561,7 +586,7 @@ function VisitsCard({ crawl }: { crawl: SeoCrawl }) {
 
 /* ── 5. listed on Google and Bing ── */
 
-function ListedCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null | undefined) => string }) {
+function ListedCard({ crawl, origin, day }: { crawl: SeoCrawl; origin: string | null; day: (iso: string | null | undefined) => string }) {
   const g = Array.isArray(crawl.listing.google) ? crawl.listing.google : null
   const b = Array.isArray(crawl.listing.bing) ? crawl.listing.bing : null
   return (
@@ -579,11 +604,13 @@ function ListedCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null 
           >
             {g.map((e, i) => {
               const w = googleWord(e)
+              const ask = googleNotListed(e) ? requestIndexingHref(origin, e.path) : null
               return (
                 <tr key={`${e.path}-${i}`} data-page={e.path}>
                   <td className={cx(TD, MONO, 'text-ink')}>{e.path}</td>
                   <td className={TD}>
                     <Mark mark={w.mark} word={w.word} />
+                    {ask ? <AskGoogleLink href={ask} path={e.path} /> : null}
                   </td>
                   <td className={cx(TD, MONO, 'whitespace-nowrap')}>{day(e.lastCrawl)}</td>
                 </tr>

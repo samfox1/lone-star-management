@@ -1250,8 +1250,8 @@ async function profileRevision(supabase: SupabaseClient, artistId: string, publi
  * first without the second. One statement is all of it or none of it, under one timestamp.
  *
  * All reads happen first, in one wave (the log once, every type's working rows, the profile).
- * Returns the CONTENT rows written; the profile row, when asked for, is written but not
- * counted, as `publishAll` never counted it.
+ * Returns the CONTENT rows written; the profile row, when asked for, is written (only when it
+ * changed, or on the first publish) but not counted, as `publishAll` never counted it.
  */
 export async function publishTogether(
   supabase: SupabaseClient,
@@ -1271,7 +1271,14 @@ export async function publishTogether(
   const latest = (latestRes.data ?? []) as LatestRow[]
 
   const content = specs.flatMap((s, i) => revisionRows(s.type, artistId, rowsByPart[i], latest, by, s.slice))
-  const revisions = profileRow ? [...content, profileRow] : content
+  // The profile, like every content row, only when it changed. A profile revision moves the
+  // sitemap date of every page that shows the artist (get_public_site `changed_at`, bridge
+  // 0.45), and the editor's only Publish carries the profile, so re-stamping it unchanged made
+  // every restyle look like new content to Google. The first publish always writes it: a site
+  // is live once its profile snapshot exists.
+  const lastProfile = latest.find((r) => r.entity_type === 'artist')
+  const profileChanged = !!profileRow && (!lastProfile || stableJson(lastProfile.data) !== stableJson(profileRow.data))
+  const revisions = profileChanged ? [...content, profileRow!] : content
   if (revisions.length === 0) return 0
   const { error } = await supabase.from('revisions').insert(revisions)
   if (error) throw new Error(error.message)

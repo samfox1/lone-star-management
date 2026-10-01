@@ -928,36 +928,137 @@ export type SitemapEntry = {
 }
 
 /**
- * When the page last changed: the newest publish, or the newest show that has since
- * passed (Upcoming → Past moves the page with no publish). No clock: a site that passes
- * the same payload and `today` gets the same lastmod, which is the whole point.
+ * Every kind of thing lone-star publishes (its `revisions.entity_type`), and whether a
+ * change to it changes what a page SAYS (`content`) or only how it LOOKS (`look`). The
+ * sitemap's per-page dates (0.45.0) move on content only: Google learns to ignore a
+ * lastmod that moves on every restyle.
+ *
+ * A record, so a kind added here must be given a side. A kind NOT here (lone-star added
+ * one before this bridge learned it) counts as content on every page: a date that moves
+ * once too often is harmless, one that silently stops moving is not.
  */
-export function lastModifiedFrom(payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates'>, today?: string): Date | undefined {
-  const candidates: string[] = []
-  if (payload.published_at) candidates.push(payload.published_at)
-  if (today) {
-    for (const s of payload.tour_dates ?? []) {
-      // Strictly before today: on the day itself the page still lists the show as
-      // upcoming (isUpcoming is `>= today`), so nothing has changed yet.
-      if (s.date && s.date.slice(0, 10) < today) candidates.push(s.date.slice(0, 10))
-    }
+export type ChangeClass = 'content' | 'look'
+function classify<T extends Record<string, ChangeClass>>(kinds: T): Readonly<T> {
+  return kinds
+}
+export const CHANGE_KINDS = classify({
+  artist: 'content',
+  site_content: 'content',
+  track: 'content',
+  release: 'content',
+  tour_date: 'content',
+  merch: 'content',
+  link: 'content',
+  media: 'content',
+  video: 'content',
+  site_styles: 'look',
+  artist_font: 'look',
+  brand_color: 'look',
+  theme_color: 'look',
+})
+export type ChangeKind = keyof typeof CHANGE_KINDS
+/** What a page can declare it shows: `sitemapEntries(…, { pages: [{ path, shows }] })`. */
+export type ContentKind = { [K in ChangeKind]: (typeof CHANGE_KINDS)[K] extends 'content' ? K : never }[ChangeKind]
+export const CONTENT_KINDS: readonly ContentKind[] = (Object.keys(CHANGE_KINDS) as ChangeKind[]).filter(
+  (k): k is ContentKind => CHANGE_KINDS[k] === 'content',
+)
+
+/** A page beyond the homepage. A plain path is dated like the homepage (every content
+ *  kind); `{ path, shows }` is dated by the kinds that page renders, and nothing else. */
+export type SitemapPage = string | { path: string; shows: readonly ContentKind[] }
+
+function isKnownKind(kind: string): kind is ChangeKind {
+  return Object.prototype.hasOwnProperty.call(CHANGE_KINDS, kind)
+}
+
+/** The shows that have passed by `today`: Upcoming → Past moves a page with no publish.
+ *  Strictly before today: on the day itself the page still lists the show as upcoming
+ *  (isUpcoming is `>= today`), so nothing has changed yet. */
+function passedShows(payload: Pick<PublicSitePayload, 'tour_dates'>, today?: string): string[] {
+  if (!today) return []
+  const out: string[] = []
+  for (const s of payload.tour_dates ?? []) {
+    if (s.date && s.date.slice(0, 10) < today) out.push(s.date.slice(0, 10))
   }
+  return out
+}
+
+function newest(candidates: readonly string[]): Date | undefined {
   const stamps = candidates.map((c) => Date.parse(c)).filter((n) => Number.isFinite(n))
   return stamps.length ? new Date(Math.max(...stamps)) : undefined
 }
 
+/**
+ * When the page last changed: the newest publish, or the newest show that has since
+ * passed (Upcoming → Past moves the page with no publish). No clock: a site that passes
+ * the same payload and `today` gets the same lastmod, which is the whole point.
+ *
+ * The site-wide date: what every page got before 0.45.0, and still gets against a
+ * database that sends no `changed_at`.
+ */
+export function lastModifiedFrom(payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates'>, today?: string): Date | undefined {
+  return newest([...(payload.published_at ? [payload.published_at] : []), ...passedShows(payload, today)])
+}
+
+/** `changed_at` when it is one; null = an older database that sends none. */
+function changeMap(payload: Pick<PublicSitePayload, 'changed_at'>): Record<string, unknown> | null {
+  const changed = payload.changed_at
+  return changed && typeof changed === 'object' && !Array.isArray(changed) ? changed : null
+}
+
+/** The change times of the content kinds a page shows ('all': every content kind). */
+function contentTimes(changed: Record<string, unknown>, shows: 'all' | readonly ContentKind[]): string[] {
+  const out: string[] = []
+  for (const kind of Object.keys(changed)) {
+    const at = changed[kind]
+    if (typeof at !== 'string') continue
+    if (!isKnownKind(kind)) out.push(at) // unknown → content, on every page
+    else if (CHANGE_KINDS[kind] === 'look') continue
+    else if (shows === 'all' || (shows as readonly string[]).includes(kind)) out.push(at)
+  }
+  return out
+}
+
+/**
+ * When the site's CONTENT last changed: the newest content kind in `changed_at` (a restyle
+ * does not count). Undefined on an older database (no `changed_at`) or when none is known.
+ * The homepage's sitemap date is this, or a show that has passed since; lone-star's "is the
+ * site showing the latest publish?" check reads the same function, so the two never disagree.
+ */
+export function contentChangedAt(payload: Pick<PublicSitePayload, 'changed_at'>): Date | undefined {
+  const changed = changeMap(payload)
+  return changed ? newest(contentTimes(changed, 'all')) : undefined
+}
+
+/** One page's date. `shows` = 'all' for the homepage and a plain-path page. */
+function pageLastModified(
+  payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates' | 'changed_at'>,
+  shows: 'all' | readonly ContentKind[],
+  today?: string,
+): Date | undefined {
+  const changed = changeMap(payload)
+  // An older database sends no `changed_at`: exactly the 0.44 date, on every page.
+  if (!changed) return lastModifiedFrom(payload, today)
+  const candidates = contentTimes(changed, shows)
+  if (shows === 'all' || shows.includes('tour_date')) candidates.push(...passedShows(payload, today))
+  return newest(candidates)
+}
+
 export function sitemapEntries(
-  payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates'>,
-  opts: { origin: string; pages?: readonly string[]; today?: string },
+  payload: Pick<PublicSitePayload, 'published_at' | 'tour_dates' | 'changed_at'>,
+  opts: { origin: string; pages?: readonly SitemapPage[]; today?: string },
 ): SitemapEntry[] {
   // `pages` is what a site chooses to list beyond the homepage — /about when the bio
   // lives there, /faqsheet when any question is answered. Listed, but never linked from
   // the site's own navigation: that is the whole point of the sheet.
-  const lastModified = lastModifiedFrom(payload, opts.today)
-  const stamp = lastModified ? { lastModified } : {}
+  const entry = (path: string, shows: 'all' | readonly ContentKind[], priority: number): SitemapEntry => {
+    const lastModified = pageLastModified(payload, shows, opts.today)
+    return { url: `${opts.origin}${path.startsWith('/') ? path : `/${path}`}`, ...(lastModified ? { lastModified } : {}), changeFrequency: 'weekly', priority }
+  }
   return [
-    { url: `${opts.origin}/`, ...stamp, changeFrequency: 'weekly', priority: 1 },
-    ...(opts.pages ?? []).map((p) => ({ url: `${opts.origin}${p.startsWith('/') ? p : `/${p}`}`, ...stamp, changeFrequency: 'weekly' as const, priority: 0.8 })),
+    entry('/', 'all', 1),
+    // A plain path, or a `{ path }` with no usable `shows` (a plain-JS site), is dated like home.
+    ...(opts.pages ?? []).map((p) => (typeof p === 'string' ? entry(p, 'all', 0.8) : entry(p.path, Array.isArray(p.shows) ? p.shows : 'all', 0.8))),
   ]
 }
 

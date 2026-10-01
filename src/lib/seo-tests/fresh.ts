@@ -3,16 +3,24 @@
  * its pages for ~60 s (ISR, `export const revalidate = 60` in CONNECTING.md §6), so a test run
  * right after Publish can read the OLD page and report a stale result as if it were today's.
  *
- * THE MARKER. A bridge site's sitemap stamps every page with `lastModified` =
- * `payload.published_at` (the bridge's `sitemapEntries` / `lastModifiedFrom`, CONNECTING.md: "never
- * `new Date()`"), and `published_at` is max(revisions.published_at): the exact moment of a
- * publish. So the sitemap names WHICH publish the site last read:
+ * THE MARKER. A bridge site's sitemap stamps its pages from the payload, never the clock
+ * (CONNECTING.md §10), and the newest stamp names WHICH publish the site last read:
+ *   • bridge 0.44 or older: every page is `published_at`, max(revisions.published_at), the
+ *     exact moment of the latest publish, restyles included;
+ *   • bridge 0.45: the homepage is `contentChangedAt(payload)`, the newest CONTENT change
+ *     (a restyle moves no date), or a show that has passed since. `contentAt` below is that
+ *     same function over the same door payload (known.ts), so the two cannot disagree.
+ * The line is the last CONTENT change (`contentAt`; `publishedAt` on a database too old to
+ * send `changed_at`), because what the tests read is content:
  *
- *   true   its lastmod is the latest publish moment (within 1 s: Postgres keeps microseconds,
- *          a JS Date keeps milliseconds)
- *   false  its lastmod is an OLDER publish moment: confirmed stale
+ *   true   the newest lastmod is `contentAt`, `publishedAt`, or any publish moment at or after
+ *          the line (within 1 s: Postgres keeps microseconds, a JS Date milliseconds). After a
+ *          Brand-only publish a 0.45 site still says `contentAt`, and that IS fresh: nothing a
+ *          test reads has changed since.
+ *   false  it is a publish moment BEFORE the line: confirmed stale
  *   null   anything else: no sitemap, no timed lastmod, a date-only lastmod, or a stamp that is
- *          no publish we made (a past show's date, a site that stamps the time of the request).
+ *          no publish we made (a site that stamps the time of the request; a passed show's
+ *          midnight, which a stale site shows just the same, so it can never prove fresh).
  *          "Couldn't tell" is never reported as fresh.
  *
  * WHAT IT CANNOT PROVE. Each page is cached on its own. A fresh sitemap proves the site has read
@@ -39,21 +47,26 @@ function stampsOf(lastmods: readonly (string | null | undefined)[] | null | unde
 
 /**
  * The verdict for one look at the site's sitemap lastmods. `moments` is every publish moment
- * for the artist (publish_moments), newest or not; `publishedAt` is the latest.
+ * for the artist (publish_moments), newest or not; `publishedAt` is the latest; `contentAt` the
+ * last CONTENT change (known.ts), null on a database that sends no `changed_at`. See THE MARKER.
  */
 export function siteFreshness(
   lastmods: readonly (string | null | undefined)[] | null | undefined,
   publishedAt: string | null | undefined,
   moments: readonly string[] = [],
+  contentAt?: string | null,
 ): boolean | null {
   const latest = publishedAt ? Date.parse(publishedAt) : NaN
   if (!Number.isFinite(latest)) return null
+  const content = contentAt ? Date.parse(contentAt) : NaN
+  const line = Number.isFinite(content) ? content : latest
   const stamps = stampsOf(lastmods)
   if (stamps.length === 0) return null
   const newest = Math.max(...stamps)
-  if (Math.abs(newest - latest) <= SAME_MOMENT_MS) return true
-  const older = moments.map((m) => Date.parse(m)).filter((m) => Number.isFinite(m) && m < latest - SAME_MOMENT_MS)
-  if (older.some((m) => Math.abs(newest - m) <= SAME_MOMENT_MS)) return false
+  const same = (m: number) => Math.abs(newest - m) <= SAME_MOMENT_MS
+  const at = moments.map((m) => Date.parse(m)).filter((m) => Number.isFinite(m))
+  if (same(latest) || same(line) || at.some((m) => m >= line - SAME_MOMENT_MS && same(m))) return true
+  if (at.some((m) => m < line - SAME_MOMENT_MS && same(m))) return false
   return null
 }
 
@@ -130,6 +143,8 @@ export type FreshWait = {
 export type WaitOptions = {
   origin: string
   publishedAt: string | null | undefined
+  /** The last CONTENT change (known.ts `contentAt`); null/absent = judge by `publishedAt`. */
+  contentAt?: string | null
   moments?: readonly string[]
   fetcher?: typeof fetch
   sleep?: (ms: number) => Promise<void>
@@ -189,7 +204,7 @@ export async function waitForFreshSite(o: WaitOptions): Promise<FreshWait> {
       if (stop()) return stopped()
       const [map] = await Promise.all([guardedFetch(`${origin}/sitemap.xml`, { ...base, maxBytes: 512 * 1024 }).catch(() => null), poke()])
       const lastmods = map && map.status === 200 ? sitemapLastmods(map.text) : []
-      const verdict = siteFreshness(lastmods, o.publishedAt, o.moments ?? [])
+      const verdict = siteFreshness(lastmods, o.publishedAt, o.moments ?? [], o.contentAt)
       if (verdict !== null) sawMarker = true
       if (verdict === true) {
         await sleep(settleMs)

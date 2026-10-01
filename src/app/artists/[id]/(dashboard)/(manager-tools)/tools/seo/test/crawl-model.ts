@@ -41,6 +41,20 @@ export type Words = (string | { code: string })[]
 export const SEARCH_CONSOLE = { label: 'Open Google Search Console', href: 'https://search.google.com/search-console' }
 export const BING_WEBMASTER = { label: 'Open Bing Webmaster Tools', href: 'https://www.bing.com/webmasters' }
 
+/** A page Google doesn't list: its link to Search Console's inspect page, where "Request indexing" is. */
+export const ASK_GOOGLE = 'Ask Google'
+const SEARCH_CONSOLE_INSPECT = 'https://search.google.com/search-console/inspect'
+
+/**
+ * Search Console's inspect page for one of the site's pages. https and the host are fixed here; only
+ * the two values vary, both encoded: the property (`origin` + "/", the address Tapir registered)
+ * and the page (`origin` + `path`). null without an origin, or for a path not from the root.
+ */
+export function requestIndexingHref(origin: string | null | undefined, path: string): string | null {
+  if (!origin || !path.startsWith('/')) return null
+  return `${SEARCH_CONSOLE_INSPECT}?resource_id=${encodeURIComponent(`${origin}/`)}&id=${encodeURIComponent(`${origin}${path}`)}`
+}
+
 /* ── is there one to show ───────────────────────────────────────────────────────────── */
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -348,11 +362,30 @@ type BingEntry = NonNullable<SeoCrawl['listing']['bing']>[number]
  *  covers harmless states ("Page with redirect", "Alternate page with proper canonical tag"): a
  *  ring, not red. Only FAIL ("Error") is red. */
 export function googleWord(e: Pick<GoogleEntry, 'answered' | 'verdict' | 'coverage'>): { word: string; mark: CrawlMark } {
-  if (!e.answered || e.verdict == null || e.verdict === 'VERDICT_UNSPECIFIED') return { word: 'no answer', mark: 'unknown' }
-  if (e.verdict === 'PASS' || e.verdict === 'PARTIAL') return { word: 'Listed', mark: 'ok' }
+  const says = googleSays(e)
+  if (says === 'no-answer') return { word: 'no answer', mark: 'unknown' }
+  if (says === 'listed') return { word: 'Listed', mark: 'ok' }
   const word = e.coverage ? `Not listed: ${e.coverage}` : 'Not listed'
   return { word, mark: e.verdict === 'FAIL' ? 'bad' : 'unknown' }
 }
+
+/** Google's answer in three: it lists the page, it answered and doesn't, or no answer. */
+function googleSays(e: Pick<GoogleEntry, 'answered' | 'verdict'>): 'listed' | 'not-listed' | 'no-answer' {
+  if (!e.answered || e.verdict == null || e.verdict === 'VERDICT_UNSPECIFIED') return 'no-answer'
+  return e.verdict === 'PASS' || e.verdict === 'PARTIAL' ? 'listed' : 'not-listed'
+}
+
+/** Google's states where asking won't help: the page points somewhere else on purpose ("Page with
+ *  redirect", "Alternate page with proper canonical tag", "Duplicate, Google chose different
+ *  canonical than user"), the site keeps Google out ("Excluded by 'noindex' tag", "Blocked by
+ *  robots.txt"), or the page is gone ("Not found (404)", "Soft 404"). Fix the page instead;
+ *  Request indexing changes nothing. */
+const ASKING_WONT_HELP = /redirect|canonical|noindex|robots\.txt|404/i
+
+/** Google answered and doesn't list the page (the "Not listed" word), for a reason asking can fix:
+ *  the page gets `ASK_GOOGLE`. */
+export const googleNotListed = (e: Pick<GoogleEntry, 'answered' | 'verdict' | 'coverage'>): boolean =>
+  googleSays(e) === 'not-listed' && !ASKING_WONT_HELP.test(e.coverage ?? '')
 
 /** Bing's answer for one page. Only when it last visited: never "listed". Asked but no answer =
  *  "no answer", never "no visit on record" (which is Bing saying it has none). */

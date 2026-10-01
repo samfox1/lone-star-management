@@ -35,6 +35,7 @@
     "src/lib/search-engines/bing.ts",
     "src/lib/search-engines/google.ts",
     "src/lib/search-engines/register.ts",
+    "src/lib/search-engines/resubmit.ts",
     "src/lib/analytics-major-cities.ts",
     "src/lib/analytics-map.ts",
     "src/lib/analytics-places.ts",

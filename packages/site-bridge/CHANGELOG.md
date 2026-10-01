@@ -79,6 +79,50 @@ Nothing yet.
 
 ---
 
+## 0.45.0 — each page in the sitemap gets its own date
+
+*Built 2026-09-30; not yet published. Each site redeploys WITHOUT build cache to pick it up.*
+
+**Order:** lone-star's migration `20261001130000` and its new freshness check go live FIRST, then
+this release, then the sites. Older lone-star code reading a 0.45 site calls it stale after a
+restyle.
+
+**Site action: say what each extra page shows, in `sitemap.ts`** (CONNECTING.md §10):
+
+```ts
+import { sitemapEntries } from '@samfox1/site-bridge/seo'
+// …
+pages: ['/faqsheet', { path: '/about', shows: ['artist', 'site_content', 'media', 'link'] }],
+```
+
+A plain path still works: it is dated like the homepage. Nothing else to write.
+
+**Why.** Every page got the one site-wide `published_at`, and that moves on a restyle too.
+Google learns to ignore a lastmod that always moves, and moves together.
+
+**What's new:** `PublicSitePayload.changed_at`, when each kind last changed (`revisions.entity_type`
+→ its newest revision time, deletions included; lone-star migration 20261001130000's door).
+`sitemapEntries` now dates:
+
+- the homepage, and a plain-path page: the newest change to ANY content kind, or the newest show
+  that has passed;
+- a `{ path, shows }` page: the newest change to a kind it shows (a passed show only if it shows
+  `tour_date`).
+
+`CHANGE_KINDS` says which kinds are content (the artist, site text, songs, releases, shows, merch,
+links, images, videos) and which are only the look (styles, fonts, brand colours, the browser-bar
+colour). A look change moves no date. A kind this bridge does not know counts as content on every
+page, so a kind lone-star adds later can never stop a date moving. Exported for `shows`:
+`ContentKind`, `CONTENT_KINDS`, `SitemapPage`. Also `contentChangedAt(payload)`, the newest
+content change: the homepage's date is built from it, and lone-star's "is the site showing the
+latest publish?" check reads it too, so the two cannot disagree. Sites don't need it.
+
+**A database with no `changed_at`** (older than that migration) gets exactly the 0.44 sitemap:
+`published_at` or the newest passed show, on every page. **A site on 0.44 or older** keeps its one
+date and ignores `changed_at`. Nothing breaks either way: `pages` only got wider.
+
+---
+
 ## 0.44.0 — Google and Bing can confirm the site is Tapir's
 
 *Published 2026-09-30 (GitHub Packages). Includes 0.43.0, which was never published on its own.

@@ -15,6 +15,7 @@
  *           • tags: canonical itself / elsewhere / none; noindex by tag or header
  *           • visits: a refused visit is red, no answer is a ring
  *           • listing: Google PASS / not listed / not asked; Bing's words; neither registered
+ *           • the "Ask Google" link: a fixed https host, only its two values vary, both encoded
  *           • dayText: a date with no time is the same day in every zone
  * Not here: drawing any of it (tests/components/manager-tools/seo/crawl-section.test.tsx).
  * Fixtures: healthyCrawl() (tests/components/manager-tools/seo/crawl-fixture.ts), its crawler
@@ -24,6 +25,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoCrawl } from '@/lib/seo-tests/types'
 import {
+  googleNotListed,
   bingWord,
   byCompany,
   canonicalState,
@@ -35,6 +37,7 @@ import {
   fineCount,
   googleWord,
   listingFace,
+  requestIndexingHref,
   robotsFace,
   robotsLead,
   sitemapFace,
@@ -204,6 +207,30 @@ describe('listed on Google and Bing', () => {
     for (const e of [{ answered: false, verdict: null, coverage: null }, { answered: true, verdict: null, coverage: null }]) {
       expect(googleWord(e)).toEqual({ word: 'no answer', mark: 'unknown' })
     }
+  })
+  // "Ask Google" goes to Search Console and nowhere else: the host is fixed, and a page's address
+  // (text from the site) is one encoded value that can't add a parameter or leave the host.
+  it('requestIndexingHref: a fixed https host, the property and the page encoded', () => {
+    const path = '/about?x=1&resource_id=https://evil.test/#top'
+    const href = requestIndexingHref(ORIGIN, path)!
+    expect(href).toContain('?resource_id=https%3A%2F%2Fwww.example-artist.com%2F&id=https%3A%2F%2Fwww.example-artist.com%2Fabout%3F')
+    const u = new URL(href)
+    expect(`${u.origin}${u.pathname}`).toBe('https://search.google.com/search-console/inspect')
+    expect([...u.searchParams.keys()]).toEqual(['resource_id', 'id'])
+    expect(u.searchParams.get('resource_id')).toBe(`${ORIGIN}/`)
+    expect(u.searchParams.get('id')).toBe(`${ORIGIN}${path}`)
+    expect(u.hash).toBe('')
+    expect(requestIndexingHref(null, '/about')).toBeNull()
+  })
+  // "Ask Google" only where asking can help: not for a page that points elsewhere on purpose.
+  it('googleNotListed: a waiting page yes, a redirect or an alternate canonical no', () => {
+    const e = (coverage: string) => ({ answered: true, verdict: 'NEUTRAL', coverage })
+    expect(googleNotListed(e('Discovered - currently not indexed'))).toBe(true)
+    expect(googleNotListed(e('Page with redirect'))).toBe(false)
+    expect(googleNotListed(e('Alternate page with proper canonical tag'))).toBe(false)
+    expect(googleNotListed(e("Excluded by 'noindex' tag"))).toBe(false)
+    expect(googleNotListed(e('Blocked by robots.txt'))).toBe(false)
+    expect(googleNotListed(e('Soft 404'))).toBe(false)
   })
   // Every page listed on Google: fine. One not: red. Neither registered: a ring.
   it('listingFace', () => {

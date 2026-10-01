@@ -18,7 +18,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { EDITOR_RESTORE, PUBLISHABLE, publishAll, type TableEntity } from '@/lib/content'
+import { ARTIST_SNAPSHOT, EDITOR_RESTORE, PUBLISHABLE, publishAll, type TableEntity } from '@/lib/content'
 
 type Row = Record<string, unknown>
 
@@ -29,7 +29,7 @@ type Row = Record<string, unknown>
  * recorded. `failOn` makes any insert carrying that entity type fail, standing in for a
  * refused row; like Postgres, a refused statement writes NONE of its rows.
  */
-function stubClient(failOn?: string) {
+function stubClient(failOn?: string, latest: Row[] = []) {
   const writes: string[] = []
   const inserts: string[][] = []
   const from = (table: string) => {
@@ -64,7 +64,7 @@ function stubClient(failOn?: string) {
       // The tombstone sweep reads the log through the latest_revisions RPC now
       // (uncapped, 2026-08-11). An empty log: this suite pins WRITE ordering, and a
       // sweep with nothing published tombstones nothing.
-      rpc: async () => ({ data: [], error: null }),
+      rpc: async () => ({ data: latest, error: null }),
     } as unknown as SupabaseClient,
     writes,
     inserts,
@@ -89,6 +89,31 @@ describe('publishAll is one write', () => {
     const { client, writes } = stubClient('media')
     await expect(publishAll(client, 'a1')).rejects.toThrow('media insert failed')
     expect(writes).toEqual([])
+  })
+})
+
+describe('the profile is re-published only when it changed (2026-09-30)', () => {
+  // The stub's `artists` row, as profileRevision snapshots it (every ARTIST_SNAPSHOT column).
+  const profile = Object.fromEntries(ARTIST_SNAPSHOT.map((k) => [k, ({ id: 'artists-1', artist_id: 'a1' } as Row)[k] ?? null]))
+  const published = (data: Row) => [{ entity_type: 'artist', entity_id: 'a1', data }]
+
+  // STRICT: a profile revision moves the date of every sitemap page that shows the artist
+  // (get_public_site changed_at, bridge 0.45), so a restyle that left the profile alone must not
+  // re-stamp it. The editor's only Publish is publishAll with the profile, so this is every restyle.
+  it('CRITICAL: an unchanged profile writes no artist revision', async () => {
+    const { client, inserts } = stubClient(undefined, published(profile))
+    await publishAll(client, 'a1')
+    expect(inserts[0]).not.toContain('artist')
+  })
+
+  // The live gate: a site is live once its profile snapshot exists, so the FIRST publish, and a
+  // changed profile, always write it.
+  it('CRITICAL: the first publish and a changed profile still write it', async () => {
+    for (const latest of [[], published({ ...profile, name: 'An older name' })]) {
+      const { client, inserts } = stubClient(undefined, latest)
+      await publishAll(client, 'a1')
+      expect(inserts[0]).toContain('artist')
+    }
   })
 })
 

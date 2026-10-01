@@ -6,6 +6,7 @@ import { renameMedia } from '@/lib/media-rename'
 import { artistFactUpdate } from '@/lib/artist-facts'
 import { ensureIndexNowKey, scheduleIndexNowPing } from '@/lib/indexnow'
 import { scheduleSeoTestRun } from '@/lib/seo-tests/after-publish'
+import { scheduleSitemapResubmit } from '@/lib/search-engines/resubmit'
 
 /**
  * Content server actions for one artist's dashboard. Generic over content type
@@ -1231,7 +1232,9 @@ async function verifyPasswordGate(
  *
  * A successful publish then schedules ONE IndexNow ping (src/lib/indexnow.ts) for after the
  * response: it cannot slow or fail the publish, and it checks for itself whether the site
- * can be pinged at all. `indexNow: false` skips it (Brand: nothing a search engine reads).
+ * can be pinged at all. Beside it, ONE sitemap resend to Google Search Console
+ * (src/lib/search-engines/resubmit.ts, only for a site Tapir registered), and the SEO / GEO
+ * test run. `indexNow: false` skips all three (Brand: nothing a search engine reads).
  */
 async function publishGated(
   artistId: string,
@@ -1252,6 +1255,13 @@ async function publishGated(
   revalidatePath(`/artists/${artistId}`, 'layout')
   if (indexNow) {
     scheduleIndexNowPing(supabase, artistId)
+    // Google has no IndexNow: resend the sitemap to Search Console instead, for a site Tapir
+    // registered (lib/search-engines/resubmit). Same gate; it never throws into the publish.
+    try {
+      scheduleSitemapResubmit(artistId)
+    } catch (e) {
+      console.warn('[sitemap-resubmit] not scheduled:', e instanceof Error ? e.message : e)
+    }
     // The SEO / GEO tests, once the live site shows this publish (lib/seo-tests/after-publish).
     // Same gate as the ping: a publish that changes no page's words (Brand) tests nothing new.
     // The publish is already live: nothing here may turn it into a reported failure.

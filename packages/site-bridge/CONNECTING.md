@@ -474,9 +474,19 @@ import { fetchPublicReleases } from '@samfox1/site-bridge'
   per dated upcoming show, one `MusicAlbum` per release with its songs, and the photos
   and artworks the manager listed (`media.kind`, `media.alt`). Nothing in it is invented.
 - **`sitemap.ts` / `robots.ts`** — `sitemapEntries(payload, { origin, pages, today })`
-  and `robotsRules(origin)`. `lastModified` is `published_at` (or the newest show that
-  has passed), never `new Date()`: a lastmod that changes every request is one Google
-  learns to ignore.
+  and `robotsRules(origin)`. Each extra page declares what it shows (0.45.0), and its
+  `lastModified` is the newest change to one of those kinds (or a show that has since
+  passed, if it shows `tour_date`); the homepage moves with every kind. A restyle moves
+  nothing. Never `new Date()`: a lastmod that changes every request, or on every change
+  at once, is one Google learns to ignore.
+
+  ```ts
+  pages: [{ path: '/about', shows: ['artist', 'site_content', 'media', 'link'] },
+          { path: '/faqsheet', shows: ['artist', 'site_content', 'tour_date', 'release'] }]
+  ```
+
+  `shows` takes `ContentKind`s (`CONTENT_KINDS` lists them). A plain `'/path'` is dated
+  like the homepage.
 - **Headings** — one `h1`, and an `h2` in every section (visually hidden is fine: it is
   the section's NAME, structure you own, not editor copy).
 - **Images** — a plain `<img>` in server html, `src` straight at the storage URL (the

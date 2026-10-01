@@ -87,6 +87,7 @@ export async function testAfterPublish(
     const wait = await (deps.wait ?? waitForFreshSite)({
       origin: known.siteUrl,
       publishedAt: mine,
+      contentAt: known.published?.contentAt ?? null,
       moments: await moments(),
       fetcher: deps.fetcher,
       sleep: deps.sleep,

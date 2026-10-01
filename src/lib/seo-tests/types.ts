@@ -163,6 +163,10 @@ export type SeoKnown = {
     releases: { title: string; releasedOn: string | null }[]
     photos: { url: string; alt: string | null }[]
     publishedAt: string | null
+    /** When the CONTENT last changed (a restyle does not count): the bridge's
+     *  `contentChangedAt` over the door payload. null/absent on a database with no
+     *  `changed_at`; the stale-site check then judges by `publishedAt` alone. */
+    contentAt?: string | null
     /** The Facts "Region" (`fact_region`), as the bridge reads it (`siteFacts`): '' → null. */
     region: string | null
     /** The Facts "Country" (`fact_country`): the bridge table's spelling when it knows the

@@ -17,6 +17,7 @@
  *             Google's and Bing's answers)
  *           • a blocked crawler: the robots.txt row is red, and the crawler's row shows its rule
  *           • not registered with Google or Bing: no answers, and the links to their own tools
+ *           • a page Google answered and doesn't list gets "Ask Google"; a listed page doesn't
  *           • Bing's wording never says "listed"
  * Not here: the rules behind each mark and value (tests/unit/manager-tools/seo/crawl-model.test.ts);
  *           the rest of the tab (test-tab.test.tsx); how it looks (checked by screenshot).
@@ -29,7 +30,7 @@ import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoCrawl } from '@/lib/seo-tests/types'
 import { TestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab'
 import type { TestTabData } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
-import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, type CrawlRowId } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-model'
+import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, requestIndexingHref, type CrawlRowId } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-model'
 import { ORIGIN, PAGES, healthyCrawl, withBot } from './crawl-fixture'
 import { fixtureHistory, fixtureRun } from './seo-run-fixture'
 
@@ -168,6 +169,21 @@ it('not registered with Google or Bing: no answers, and links to their own tools
     expect(a.getAttribute('target')).toBe('_blank')
     expect(a.getAttribute('rel')).toContain('noopener')
   }
+})
+
+// A page Google answered and doesn't list: a link to Search Console's inspect page for it (where
+// "Request indexing" is), in a new tab. A listed page has none.
+it('a page Google does not list gets "Ask Google"; a listed page does not', () => {
+  const crawl = healthyCrawl()
+  const google = crawl.listing.google!.map((g) => (g.path === '/about' ? { ...g, verdict: 'NEUTRAL', coverage: 'Discovered - currently not indexed' } : g))
+  show({ ...crawl, listing: { ...crawl.listing, google } })
+  const card = part(open('listed'), 'google')
+  const asks = card.querySelectorAll('a[target="_blank"]')
+  expect(asks).toHaveLength(1)
+  const a = card.querySelector('[data-page="/about"] a')!
+  expect(a.getAttribute('href')).toBe(requestIndexingHref(ORIGIN, '/about'))
+  expect(a.getAttribute('rel')).toBe('noopener noreferrer')
+  expect(card.querySelector('[data-page="/"] a')).toBeNull()
 })
 
 describe('Bing is never "listed"', () => {

@@ -355,6 +355,12 @@ export type PublicSitePayload = {
   /** When the site last changed: max(revisions.published_at) for the artist
    *  (20260826150000). Absent on a door older than that — read with `?? null`. */
   published_at?: string | null
+  /** When each KIND last changed (0.45.0): `revisions.entity_type` → its newest revision
+   *  time, deletions included; `{}` when nothing is published. ABSENT on a door older than
+   *  that. Don't read it yourself: `sitemapEntries` in ./seo dates each page by the kinds it
+   *  shows (`CHANGE_KINDS` says which kinds are content), and falls back to `published_at`
+   *  when it is absent. Keys are open: a kind this bridge doesn't know may appear. */
+  changed_at?: Record<string, string> | null
   tracks: SiteTrack[]
   tour_dates: SiteTourDate[]
   merch: SiteMerch[]

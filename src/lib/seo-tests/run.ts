@@ -438,7 +438,7 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
           }
         }
         if (got.timedOut) notes.push('Part of the check ran out of time.')
-        const verdict = siteFreshness(got.evidence.sitemap?.lastmods, known.published?.publishedAt ?? null, moments)
+        const verdict = siteFreshness(got.evidence.sitemap?.lastmods, known.published?.publishedAt ?? null, moments, known.published?.contentAt ?? null)
         siteFresh = verdict ?? deps.freshness?.fresh ?? null
         if (siteFresh === false && !deps.note) notes.push('Your site was still showing an older publish when we tested.')
         // Google / Bing, only where the site is registered. Nothing here can sink the run.
