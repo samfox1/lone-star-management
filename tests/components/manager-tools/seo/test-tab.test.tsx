@@ -166,6 +166,20 @@ describe('done', () => {
     expect(rowButtons()).toHaveLength(0)
     expect(againButton().disabled).toBe(false)
   })
+  // The outside bios (Profiles tab): one quiet line to them, outside the score; none when all are fine.
+  it('outside bios: one line to the Profiles tab with the count, the score untouched; nothing at 0', () => {
+    const run = fixtureRun()
+    const header = () => document.querySelector('header')!.textContent!.replace(/Outside bios.*$/, '')
+    render(<TestTab artistId="a1" data={ready(run)} currentSite={ORIGIN} biosToCheck={3} />)
+    const line = document.querySelector<HTMLAnchorElement>('[data-bios-line]')!
+    expect(line.getAttribute('href')).toBe('/artists/a1/tools/seo/profiles')
+    expect(line.textContent).toContain('3')
+    const withLine = header()
+    cleanup()
+    render(<TestTab artistId="a1" data={ready(run)} currentSite={ORIGIN} biosToCheck={0} />)
+    expect(document.querySelector('[data-bios-line]')).toBeNull()
+    expect(header()).toBe(withLine)
+  })
 })
 
 describe('the card under a row', () => {

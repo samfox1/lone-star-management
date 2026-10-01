@@ -23,7 +23,8 @@ import type { PackPhoto } from './load'
  * The CC is the artist's own address, typed here and kept nowhere (Tapir doesn't store it, and
  * the booking email is often an agent's). Only one valid address is ever used (`ccAddress`).
  * Under it, `outside`: the live Discogs and Wikidata rows (outside-rows.tsx), then the profiles
- * still to come, greyed.
+ * still to come, greyed. Under the group, `bios`: the Outside bios and their "updated" ticks
+ * (bio-rows.tsx).
  */
 
 const LATER = ['Bandsintown shows', 'Resident Advisor'] as const
@@ -42,6 +43,8 @@ export type ProfilesTabProps = {
   marksOk: boolean
   /** The live Discogs and Wikidata rows, streamed in by the page (outside-rows.tsx). */
   outside?: ReactNode
+  /** The Outside bios group, under everything (bio-rows.tsx). */
+  bios?: ReactNode
 }
 
 /** "sent Sep 30", in the manager's own time zone. */
@@ -56,7 +59,7 @@ function downloadHref(url: string, fileName: string): string {
   return url.includes('/storage/v1/object/public/') ? `${url}?download=${encodeURIComponent(fileName)}` : url
 }
 
-export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, marksOk, outside }: ProfilesTabProps) {
+export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, marksOk, outside, bios }: ProfilesTabProps) {
   const cardId = useId()
   const [sentAt, setSentAt] = useState<string | null>(initialSent)
   const [open, setOpen] = useState(!initialSent)
@@ -96,6 +99,7 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
         ))}
       </div>
       <div className="mt-2.5 text-center font-space text-[12px] text-ink-faint">Xperi writes the bio · usually takes months</div>
+      {bios}
     </div>
   )
 }

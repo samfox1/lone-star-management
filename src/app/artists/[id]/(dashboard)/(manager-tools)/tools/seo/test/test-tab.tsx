@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
@@ -44,7 +45,8 @@ import { rowButtonId, TestRowItem, type RowContext } from './test-row'
  *            being scanned beside who we visit as, and a small clock. No heading, no list, and
  *            no ticks: the drawing is decoration, never progress.
  *   DONE     a stored run: the headline (model.ts `runHeadline`),
- *            when it ran, "Test again", the quiet notices, then the four groups and their rows
+ *            when it ran, "Test again", the quiet notices, the outside bios line (how many the
+ *            Profiles tab asks to look at; never in the score), then the four groups and their rows
  *            (test-row.tsx). When a run lands in this session the rows rise in one after another
  *            and their marks pop; a page load shows them still.
  *
@@ -61,6 +63,7 @@ const COPY = {
   lede: 'See how Google, ChatGPT and other AI tools see your site.',
   go: 'Test my site',
   again: 'Test again',
+  bios: (n: number) => `Outside bios · ${n} to check`,
   retry: 'Try again',
   off: 'Site tests are coming soon',
   offSub: 'Nothing for you to do.',
@@ -113,6 +116,7 @@ export function TestTab({
   currentSite,
   artistName = '',
   initialOpen = null,
+  biosToCheck = 0,
 }: {
   artistId: string
   data: TestTabData
@@ -122,6 +126,9 @@ export function TestTab({
   artistName?: string
   /** A test to open on arrival (`?open=`). */
   initialOpen?: SeoTestId | null
+  /** Outside bios the Profiles tab asks to look at (profiles/bio-rows.tsx). Not a test: it
+   *  never changes the score, and 0 shows nothing. */
+  biosToCheck?: number
 }) {
   const router = useRouter()
   const ready = data.state === 'ready' ? data : null
@@ -392,6 +399,16 @@ export function TestTab({
           <QuietLink icon="refresh" label={COPY.again} muted onClick={() => void run()} disabled={!canRun} />
         </div>
         <Notices list={notices} />
+        {biosToCheck > 0 ? (
+          <Link
+            href={`/artists/${artistId}/tools/seo/profiles`}
+            data-bios-line=""
+            className={cx('group/bios mt-3 inline-flex items-center gap-1.5 rounded-md font-space text-[12px] text-ink-muted transition-colors hover:text-accent', FOCUS_RING, 'focus-visible:outline-offset-2')}
+          >
+            {COPY.bios(biosToCheck)}
+            <Icon name="chevronRight" size={13} aria-hidden="true" className="transition-transform duration-200 group-hover/bios:translate-x-[3px]" />
+          </Link>
+        ) : null}
       </header>
 
       {showRows ? (

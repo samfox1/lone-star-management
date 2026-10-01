@@ -44,6 +44,7 @@
     "src/lib/artist-facts.ts",
     "src/lib/manager-tools/brand/brand-colors.ts",
     "src/lib/manager-tools/profiles/marks.ts",
+    "src/lib/manager-tools/profiles/bio-state.ts",
     "src/lib/manager-tools/profiles/outside.ts",
     "src/lib/manager-tools/profiles/outside-check.ts",
     "src/lib/brand.ts",

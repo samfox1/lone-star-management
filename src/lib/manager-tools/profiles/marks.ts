@@ -1,20 +1,27 @@
 /**
  * Profile marks: which outside-profile jobs a manager has done for an artist (the SEO tool's
- * Profiles tab, "Mark as sent"). One row in `public.profile_marks` = done; no row = not done.
+ * Profiles tab: "Mark as sent", and each outside bio's "updated" tick). One row in
+ * `public.profile_marks` = done; no row = not done.
  *
- * PRIVATE to the artist's managers (supabase/migrations/20261001150000_profile_marks.sql):
- * never published, never in get_public_site. Every call here runs on the caller's own
- * session, so RLS decides whose marks it can see or change.
+ * PRIVATE to the artist's managers (supabase/migrations/20261001150000_profile_marks.sql,
+ * 20261001160000_profile_marks_bios.sql): never published, never in get_public_site. Every
+ * call here runs on the caller's own session, so RLS decides whose marks it can see or change.
  *
  * The database stamps `done_at` and `done_by` itself. A manager's role may only INSERT
- * `artist_id` and `item` (column grant), so nothing here sends either stamp: a payload that
- * did would be refused with 42501.
+ * `artist_id` and `item`, and only UPDATE `done_at`, which a trigger then overwrites with
+ * now() and the caller (column grants + profile_marks_stamp). So nothing here can pick a date
+ * or a name: a payload that tried would be refused (42501) or restamped.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isMissingTable } from '@/lib/seo-tests/store'
+import { BIO_ITEMS } from './bios'
 
-/** Mirrors the table's CHECK (profile_marks_item_check). Widen both together. */
-export const PROFILE_ITEMS = ['allmusic_bio'] as const
+/**
+ * Every item a mark can be for: the AllMusic bio email, then one "updated" tick per outside bio
+ * (bios.ts). The table's CHECK (profile_marks_item_check, newest migration) lists exactly these;
+ * a unit test reads the migrations and fails if they drift. Widen both together.
+ */
+export const PROFILE_ITEMS = ['allmusic_bio', ...BIO_ITEMS] as const
 export type ProfileItem = (typeof PROFILE_ITEMS)[number]
 
 /** When each done item was marked (ISO timestamp), by item. A missing key = not done. */
@@ -44,13 +51,28 @@ export async function readProfileMarks(supabase: SupabaseClient, artistId: strin
 }
 
 /**
+ * The value sent as done_at on a re-confirm. Postgres reads the string 'now' as the current
+ * time, so it means "now" even on its own, but it is never what decides the date: the table's
+ * BEFORE UPDATE trigger (profile_marks_stamp) overwrites done_at and done_by on every update.
+ */
+const NOW = 'now'
+
+/**
  * Mark an item done, or undo it.
  *
- * Done: insert with ON CONFLICT DO NOTHING, so marking twice keeps the FIRST stamp and needs
- * no UPDATE grant (managers have none). Undo: delete the row.
+ * Done: first RE-CONFIRM, an update of this artist's row for this item, which the trigger
+ * stamps with now() and the caller, so ticking "updated" again moves the date. If no row
+ * matched, it is a first mark: insert artist_id + item with ON CONFLICT DO NOTHING (a double
+ * click racing it is not an error). Undo: delete the row.
  *
- * A denied DELETE is row-filtered (no error, zero rows), so callers must check ownership
- * first; the server action does.
+ * Until 20261001160000 is pushed, managers hold no UPDATE grant, so the update fails with 42501
+ * and the mark falls back to the insert alone (the old rule: a re-mark keeps the first stamp).
+ * After the push a 42501 here only means that grant went missing. Remove the fallback at push
+ * time (that migration's checklist, step 4).
+ *
+ * A denied UPDATE or DELETE is row-filtered (no error, zero rows), so callers must check
+ * ownership first; the server action does. (A denied update then tries the insert, which RLS
+ * refuses with an error.)
  */
 export async function setProfileMark(
   supabase: SupabaseClient,
@@ -59,12 +81,27 @@ export async function setProfileMark(
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isProfileItem(item)) return { ok: false, error: 'Unknown item.' }
-  const { error } = done
-    ? await supabase
-        .from('profile_marks')
-        .upsert({ artist_id: artistId, item }, { onConflict: 'artist_id,item', ignoreDuplicates: true })
-    : await supabase.from('profile_marks').delete().eq('artist_id', artistId).eq('item', item)
-  if (!error) return { ok: true }
-  if (isMissingTable(error)) return { ok: false, error: 'Marking is not switched on yet.' }
-  return { ok: false, error: done ? 'Could not save the mark.' : 'Could not clear the mark.' }
+  const fail = (error: { code?: string; message?: string }) =>
+    isMissingTable(error)
+      ? { ok: false, error: 'Marking is not switched on yet.' }
+      : { ok: false, error: done ? 'Could not save the mark.' : 'Could not clear the mark.' }
+
+  if (!done) {
+    const { error } = await supabase.from('profile_marks').delete().eq('artist_id', artistId).eq('item', item)
+    return error ? fail(error) : { ok: true }
+  }
+
+  const re = await supabase
+    .from('profile_marks')
+    .update({ done_at: NOW })
+    .eq('artist_id', artistId)
+    .eq('item', item)
+    .select('item')
+  if (re.error && re.error.code !== '42501') return fail(re.error)
+  if (!re.error && (re.data?.length ?? 0) > 0) return { ok: true }
+
+  const { error } = await supabase
+    .from('profile_marks')
+    .upsert({ artist_id: artistId, item }, { onConflict: 'artist_id,item', ignoreDuplicates: true })
+  return error ? fail(error) : { ok: true }
 }

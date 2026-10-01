@@ -1,6 +1,9 @@
 import { Suspense } from 'react'
+import { bioRows } from '@/lib/manager-tools/profiles/bio-state'
 import { readProfileMarks } from '@/lib/manager-tools/profiles/marks'
 import { loadSeoBase } from '../load'
+import { BioRows } from './bio-rows'
+import { loadOutsideBios } from './bios-load'
 import { loadBioPack } from './load'
 import { loadOutsideChecks } from './outside-load'
 import { OutsideRows } from './outside-rows'
@@ -11,7 +14,8 @@ type Base = Awaited<ReturnType<typeof loadSeoBase>>
 /**
  * PROFILES: the artist's profiles on other services (Sam, 2026-09-30). The Apple Music & Amazon
  * bio email (profiles-tab.tsx), then the live Discogs and Wikidata checks (outside-rows.tsx); the
- * rest are still to come.
+ * rest are still to come. Under them, the Outside bios (bio-rows.tsx): which bios may be out of
+ * date since the artist's facts last changed on Publish.
  *
  * Every read is RLS-scoped and runs after loadSeoBase's ownership gate. The marks are read
  * apart: if that read fails, the row says nothing rather than "not sent" (marks.ts). The two
@@ -21,7 +25,11 @@ type Base = Awaited<ReturnType<typeof loadSeoBase>>
 export default async function SeoProfilesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const base = await loadSeoBase(id)
-  const [{ input, photos }, marks] = await Promise.all([loadBioPack(base), readProfileMarks(base.supabase, id).catch(() => null)])
+  const [{ input, photos }, marks, bios] = await Promise.all([
+    loadBioPack(base),
+    readProfileMarks(base.supabase, id).catch(() => null),
+    loadOutsideBios(base.supabase, base.artist),
+  ])
   return (
     <ProfilesTab
       artistId={id}
@@ -34,6 +42,7 @@ export default async function SeoProfilesPage({ params }: { params: Promise<{ id
           <OutsideLive base={base} links={input.links ?? []} />
         </Suspense>
       }
+      bios={<BioRows artistId={id} rows={bioRows(bios, new Date())} change={bios.change} />}
     />
   )
 }
