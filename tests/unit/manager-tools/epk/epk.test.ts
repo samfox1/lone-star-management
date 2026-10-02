@@ -17,6 +17,7 @@ import {
   cleanPressPitch,
   cleanPressQuotes,
   parsePressQuotes,
+  pressKitFormData,
   readPressQuotesFromForm,
 } from '@/lib/epk'
 
@@ -114,6 +115,22 @@ describe('readPressQuotesFromForm', () => {
 
   it('is empty when the form carries no rows at all', () => {
     expect(readPressQuotesFromForm(new FormData())).toEqual([])
+  })
+})
+
+describe('pressKitFormData (what the press kit autosave sends, Batch 3)', () => {
+  it('CRITICAL: reads back through readPressQuotesFromForm with each source and link on its own quote', () => {
+    // A half-typed row first (a source, no quote yet): it must still fill all three lists, or
+    // the zip shifts and "Unmissable." comes back credited to NME.
+    const fd = pressKitFormData({
+      pitch: 'Austin four-piece.',
+      rows: [
+        { quote: '', source: 'NME', url: 'https://nme.com/x' },
+        { quote: 'Unmissable.', source: 'Pitchfork', url: 'https://pitchfork.com/y' },
+      ],
+    })
+    expect(fd.get('press_pitch')).toBe('Austin four-piece.')
+    expect(readPressQuotesFromForm(fd)).toEqual([{ quote: 'Unmissable.', source: 'Pitchfork', url: 'https://pitchfork.com/y' }])
   })
 })
 

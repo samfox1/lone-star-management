@@ -5,7 +5,8 @@ import { dashboardDiff, requireArtist } from '../../_data'
 import { SiteRiser } from './site-riser'
 
 /**
- * The site Publish bar with what is waiting (site-riser.tsx), for the SEO / GEO tabs and Profile.
+ * The site Publish bar with what is waiting (site-riser.tsx), for the SEO / GEO tabs, Profile and
+ * Connections (Batch 3, 2026-10-02: a link edited in a connection's pop-up waits here).
  * Moved out of tools/seo/layout.tsx when Profile shared it (2026-10-02). Render it inside its own
  * <Suspense>, so the pending check never holds up the page above it.
  *

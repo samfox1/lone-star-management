@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Settings: three rows — one you can click to edit, two you cannot.
+// Settings · General: three ledger rows, one field you type into, two you cannot.
 /**
- * SettingsView (2026-09-13). What has to hold:
+ * SettingsView (2026-09-13; Brand's ledger since Batch 3, 2026-10-02). What has to hold:
  *
- *   - Site and Address are text, not controls: nothing to click, no input ever;
- *   - Booking email saves through its door on blur or Enter, and only when CHANGED;
+ *   - Site and Address are text, not controls: no input, no pencil;
+ *   - Booking email is a field in place: saves through its door on blur or Enter, and only
+ *     when CHANGED;
  *   - a refused save puts the old value back and says why;
  *   - Escape puts the old value back without saving.
  *
@@ -36,58 +37,61 @@ const ROWS: SettingsRow[] = [
 function mount() {
   render(<SettingsView artistId="a1" rows={ROWS} />)
 }
-function edit(label: string, next: string, key: 'blur' | 'Enter' = 'blur') {
-  fireEvent.click(screen.getByRole('button', { name: label }))
-  const input = screen.getByRole('textbox', { name: label })
-  fireEvent.change(input, { target: { value: next } })
-  if (key === 'blur') fireEvent.blur(input)
-  else fireEvent.keyDown(input, { key: 'Enter' })
-  return input
+const field = () => screen.getByRole('textbox', { name: 'Booking email' }) as HTMLInputElement
+function edit(next: string, key: 'blur' | 'Enter' = 'blur') {
+  fireEvent.change(field(), { target: { value: next } })
+  if (key === 'blur') fireEvent.blur(field())
+  else fireEvent.keyDown(field(), { key: 'Enter' })
 }
 
 describe('the rows', () => {
-  it('CRITICAL: Site and Address are text — nothing to click, no input', () => {
+  it('CRITICAL: Site and Address are text — no input, no pencil', () => {
     mount()
     expect(screen.getByText('skeenmusic.com')).toBeInTheDocument()
     expect(screen.getByText('lonestar.site/skeen')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Site' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Address' })).toBeNull()
-    fireEvent.click(screen.getByText('skeenmusic.com'))
-    expect(screen.queryByRole('textbox')).toBeNull()
+    // The ONE field on the page is the booking email.
+    expect(screen.getAllByRole('textbox')).toEqual([field()])
+    expect(screen.queryByRole('button', { name: /site|address/i })).toBeNull()
   })
 
-  it('the editable row is Booking email, and the state line sits under it', () => {
+  it('Booking email is a field holding the address, with the state line under it and a pencil to it', () => {
     mount()
-    expect(screen.getByRole('button', { name: 'Booking email' })).toHaveTextContent('ross@example.com')
-    expect(screen.queryByRole('button', { name: 'Name' })).toBeNull()
+    expect(field().value).toBe('ross@example.com')
     expect(screen.getByText('Enquiries from the site go here')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the booking email' }))
+    expect(document.activeElement).toBe(field())
   })
 })
 
 describe('Booking email', () => {
   it('CRITICAL: saves through its door on blur, with what was typed', async () => {
     mount()
-    edit('Booking email', 'bookings@example.com')
+    edit('bookings@example.com')
     await waitFor(() => expect(saveBookingEmailAction).toHaveBeenCalledWith('a1', 'bookings@example.com'))
-    expect(screen.getByRole('button', { name: 'Booking email' })).toHaveTextContent('bookings@example.com')
+    expect(field().value).toBe('bookings@example.com')
   })
 
-  it('Enter saves too; Escape puts the old value back and saves nothing', async () => {
+  it('Enter saves ONCE; Escape puts the old value back and saves nothing', async () => {
     mount()
-    edit('Booking email', 'bookings@example.com', 'Enter')
-    await waitFor(() => expect(saveBookingEmailAction).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Booking email' }))
-    const input = screen.getByRole('textbox', { name: 'Booking email' })
-    fireEvent.change(input, { target: { value: 'typo' } })
-    fireEvent.keyDown(input, { key: 'Escape' })
+    // Focused, as a person's field is: then Enter and Escape blur it from inside the key
+    // handler, and that blur must not save a second time (or save the Escaped text).
+    field().focus()
+    edit('bookings@example.com', 'Enter')
+    await act(async () => {})
     expect(saveBookingEmailAction).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Booking email' })).toHaveTextContent('bookings@example.com')
+    field().focus()
+    fireEvent.change(field(), { target: { value: 'typo' } })
+    fireEvent.keyDown(field(), { key: 'Escape' })
+    await act(async () => {})
+    expect(saveBookingEmailAction).toHaveBeenCalledTimes(1)
+    expect(field().value).toBe('bookings@example.com')
   })
 
   it('an unchanged value never writes', async () => {
     mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Booking email' }))
-    fireEvent.blur(screen.getByRole('textbox', { name: 'Booking email' }))
+    fireEvent.focus(field())
+    fireEvent.blur(field())
+    edit('ross@example.com ')
     await act(async () => {})
     expect(saveBookingEmailAction).not.toHaveBeenCalled()
   })
@@ -95,14 +99,14 @@ describe('Booking email', () => {
   it('CRITICAL: a refused save puts the old value back and says why', async () => {
     vi.mocked(saveBookingEmailAction).mockResolvedValueOnce({ error: 'That isn’t an email address.' })
     mount()
-    edit('Booking email', 'not-an-email')
+    edit('not-an-email')
     await waitFor(() => expect(toast).toHaveBeenCalledWith('That isn’t an email address.', 'error'))
-    expect(screen.getByRole('button', { name: 'Booking email' })).toHaveTextContent('ross@example.com')
+    expect(field().value).toBe('ross@example.com')
   })
 
   it('clearing it saves a blank and the state line says so', async () => {
     mount()
-    edit('Booking email', '')
+    edit('')
     await waitFor(() => expect(saveBookingEmailAction).toHaveBeenCalledWith('a1', ''))
     await waitFor(() => expect(screen.getByText('No address for enquiries yet')).toBeInTheDocument())
   })

@@ -1,16 +1,19 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { RowIcon, type RowIconProps } from '../../../_ui/row-icon'
-import { CAPS_LABEL, EDIT_TARGET, EYEBROW, MONO_META } from '../../../_ui/styles'
+import { FOCUS_RING } from './focus-ring'
+import { HoverLabel, RowIcon, type RowIconProps } from './row-icon'
+import { CAPS_LABEL, EDIT_TARGET, EYEBROW, MONO_META } from './styles'
 
 /**
- * THE SEO TOOL'S ROW AND CARD ("Dropdown A · Card", Sam 2026-09-29, prototypes/
+ * THE "A" ROW AND CARD ("Dropdown A · Card", Sam 2026-09-29, prototypes/
  * seo_variants_20260929_r10.html), drawn once for every list that opens: the AI test's results
- * (test/test-row.tsx), How crawlers see your site (test/crawl-section.tsx), and, since Batch 2
- * (Sam 2026-10-02, prototypes/batch2_compare_20261002.html §1, "A"), the Profiles tab's three
- * lists (profiles/profiles-tab.tsx, outside-rows.tsx, bio-rows.tsx).
+ * (tools/seo/test/test-row.tsx), How crawlers see your site (test/crawl-section.tsx), since
+ * Batch 2 (Sam 2026-10-02, prototypes/batch2_compare_20261002.html §1, "A") the Profiles tab's
+ * three lists (tools/seo/profiles/), and since Batch 3 (prototypes/batch3_20261002.html) the
+ * enquiry kinds under Settings › Email (enquiries/kind-rows.tsx). Lived in tools/seo/_ui until
+ * that second tool used it.
  *
  *   a group:  mono caps title · a count on the right (when there is one), then its rows
  *   a row:    a full-width button (mark · name · value · chevron); open, it turns grey
@@ -112,6 +115,23 @@ export function QuietItem({ itemData, className, children }: { itemData?: DataAt
   return (
     <div {...itemData} className={cx('rounded-xl', DIVIDER)}>
       <div className={cx('flex items-center gap-3.5 p-3', className)}>{children}</div>
+    </div>
+  )
+}
+
+/** A row that goes somewhere else instead of opening (the press kit's missing photo → Profile,
+ *  Batch 3): the same box, divider, face and grey hover as a row that opens, as a link. `label`
+ *  names where it goes, on hover (a RowFace with `open={false}` gives it the chevron). */
+export function LinkItem({ href, label, itemData, children }: { href: string; label: string; itemData?: DataAttrs; children: ReactNode }) {
+  return (
+    <div {...itemData} className={cx('rounded-xl', DIVIDER)}>
+      <Link
+        href={href}
+        className={cx('group/trow relative flex w-full items-center gap-3.5 rounded-xl p-3 text-left transition-colors hover:bg-surface', FOCUS_RING, 'focus-visible:-outline-offset-2')}
+      >
+        {children}
+        <HoverLabel label={label} />
+      </Link>
     </div>
   )
 }
@@ -225,10 +245,12 @@ export function RowChevron({ open }: { open: boolean }) {
   )
 }
 
-/** The white card under an open row: LABEL | value rows, beside each other from 700px. */
-export function DisclosureCard({ id, labelledBy, children }: { id: string; labelledBy: string; children: ReactNode }) {
+/** The white card under an open row: LABEL | value rows, beside each other from 700px. It sits
+ *  under the row's name (past the 20px mark); `noMark`, for a list whose rows carry none (the
+ *  enquiry kinds), starts it at the row's own edge instead. */
+export function DisclosureCard({ id, labelledBy, noMark = false, children }: { id: string; labelledBy: string; noMark?: boolean; children: ReactNode }) {
   return (
-    <div id={id} role="region" aria-labelledby={labelledBy} className="px-3 pb-3 pt-0.5 sm:pb-[22px] sm:pl-[46px] sm:pr-3.5">
+    <div id={id} role="region" aria-labelledby={labelledBy} className={cx('px-3 pb-3 pt-0.5 sm:pb-[22px] sm:pr-3.5', noMark ? 'sm:pl-3' : 'sm:pl-[46px]')}>
       <div className="grid grid-cols-1 gap-y-1.5 rounded-xl border border-hairline bg-paper px-5 py-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.03)] min-[700px]:grid-cols-[100px_minmax(0,1fr)] min-[700px]:gap-x-5 min-[700px]:gap-y-5">
         {children}
       </div>

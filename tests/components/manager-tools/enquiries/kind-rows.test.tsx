@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The per-kind recipient lists: what each kind reaches, and who is added on top.
 /**
- * KindRows — the routing half of the Enquiries page (2026-09-22).
+ * KindRows — who receives each kind of enquiry, Settings › Email (2026-09-22; Batch 3,
+ * 2026-10-02: "A" rows that open in place, several addresses per kind through AddRow).
  *
  * WHAT MATTERS HERE, and why each of these would fail silently in production:
  *
@@ -11,14 +12,14 @@
  *   - `other` cannot be deleted (a database trigger refuses it — it is the fallback every
  *     unrecognised purpose lands on). Offering a Delete button that always fails is worse
  *     than offering none, and the "is it offered" decision lives only here.
- *   - A chip edit sends the WHOLE list. A partial write would drop whoever the client
+ *   - A list edit sends the WHOLE list. A partial write would drop whoever the client
  *     happened not to mention, and nothing downstream would notice.
- *   - A refused save must put the chips back. An optimistic list that survives a rejection
+ *   - A refused save must put the list back. An optimistic list that survives a rejection
  *     tells the manager someone is copied in when the database says otherwise — the exact
  *     shape of "tests that pass while the guard does nothing" this repo keeps finding.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/kind-rows'
 import {
   addEnquiryKindAction,
@@ -61,10 +62,22 @@ function renderRows(kinds: EnquiryKindRow[], primary: string | null = PRIMARY) {
   return render(<KindRows artistId="a1" kinds={kinds} primary={primary} />)
 }
 
-/** Open a kind's card by clicking its row. */
+/** Open a kind's card (in place) by clicking its row. */
 function openCard(label: string) {
   fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
-  return screen.getByRole('dialog')
+  return screen.getByRole('region', { name: new RegExp(label) })
+}
+/** The open card, wherever it is. (The ledger's <section> is a region too; the card is the
+ *  one drawn as a div.) */
+const card = () => {
+  const el = document.querySelector<HTMLElement>('div[role="region"]')
+  if (!el) throw new Error('no card is open')
+  return el
+}
+/** "+ Add email" in the open card, then type an address into its field. */
+function typeAddress(c: HTMLElement, email: string) {
+  fireEvent.click(within(c).getByRole('button', { name: 'Add email' }))
+  fireEvent.change(within(c).getByLabelText('Email address'), { target: { value: email } })
 }
 
 beforeEach(() => {
@@ -104,66 +117,115 @@ describe('the rows', () => {
 })
 
 describe('the card', () => {
+  it('opens IN PLACE under its row, not as a modal, and closes on a second click', () => {
+    // Batch 3 (Sam, 2026-10-02): the modal kit went; the card opens where the row is.
+    renderRows([kind(), kind({ id: 'k-demo', slug: 'demo', label: 'Demo' })])
+    const c = openCard('Booking')
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(within(c).getByLabelText('Name')).toHaveValue('Booking')
+    expect(screen.getByRole('button', { name: /^Booking/ })).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Booking/ }))
+    expect(document.querySelector('div[role="region"]')).toBeNull()
+  })
+
   it('shows the SLUG, which is the word the site has to post', () => {
     // The slug is immutable and invisible everywhere else. If the manager ever has to make
     // their site agree with a kind, this is the only place that tells them what to send.
     renderRows([kind()])
     openCard('Booking')
 
-    // Rendered by the header, not by any row — the row shows the label.
-    expect(within(screen.getByRole('dialog')).getByText('booking')).toBeTruthy()
+    // Rendered in the card beside the name, not by the row — the row shows the label.
+    expect(within(card()).getByText('booking')).toBeTruthy()
   })
 
   it('offers no Delete for the fallback kind', () => {
     // A trigger refuses to delete 'other'; a button that always fails is worse than none.
     renderRows([kind({ id: 'k-other', slug: 'other', label: 'Contact' })])
-    const card = openCard('Contact')
+    const c = openCard('Contact')
 
-    expect(within(card).queryByRole('button', { name: /^Delete/ })).toBeNull()
+    expect(within(c).queryByRole('button', { name: /^Delete/ })).toBeNull()
   })
 
   it('offers Delete for a kind the artist invented', () => {
     // The other half of the rule. Without this, "no Delete button" would pass even if the
     // button had been removed from every kind.
     renderRows([kind({ id: 'k-press', slug: 'press', label: 'Press' })])
-    const card = openCard('Press')
+    const c = openCard('Press')
 
-    expect(within(card).getByRole('button', { name: /^Delete/ })).toBeTruthy()
+    expect(within(c).getByRole('button', { name: /^Delete/ })).toBeTruthy()
     expect(deleteKind).not.toHaveBeenCalled()
+  })
+
+  it('Delete asks first, then deletes and the row goes', async () => {
+    // The question CardModal used to ask moved here with the trash. Answering it is what
+    // deletes; the trash alone must not.
+    renderRows([kind({ id: 'k-press', slug: 'press', label: 'Press' }), kind()])
+    const c = openCard('Press')
+
+    fireEvent.click(within(c).getByRole('button', { name: 'Delete kind' }))
+    const question = await screen.findByRole('dialog', { name: /Delete “Press”/ })
+    expect(deleteKind).not.toHaveBeenCalled()
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole('button', { name: 'Delete' }))
+    })
+
+    expect(deleteKind).toHaveBeenCalledWith('a1', 'k-press')
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Press/ })).toBeNull())
+    expect(screen.getByRole('button', { name: /^Booking/ })).toBeTruthy()
   })
 })
 
-describe('the chips', () => {
+describe('the list', () => {
   it('sends the WHOLE list when someone is added', async () => {
     // Not a delta. The action replaces the list, so a partial payload silently drops
     // whoever the client did not mention.
     renderRows([kind({ recipients: [{ id: 'r1', email: 'skeen@x.com', label: 'Skeen' }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), {
-      target: { value: 'mgr@x.com' },
-    })
-    fireEvent.change(within(card).getByLabelText('Who this is'), { target: { value: 'Manager' } })
+    typeAddress(c, 'mgr@x.com')
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).toHaveBeenCalledWith('a1', 'k-booking', [
       { email: 'skeen@x.com', label: 'Skeen' },
-      { email: 'mgr@x.com', label: 'Manager' },
+      { email: 'mgr@x.com', label: null },
     ])
   })
 
-  it('adds on ✓ the same as on Enter', async () => {
-    // The shared chips (batch 2) gave the two fields a ✓; it must run the same checked commit.
+  it('CRITICAL: holds SEVERAL addresses — a second add keeps the first', async () => {
+    // Sam, 2026-10-02: "Make sure you can add multiple emails for one slot."
     renderRows([kind()])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'mgr@x.com' } })
+    typeAddress(c, 'one@x.com')
     await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: 'Add' }))
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
+    })
+    typeAddress(card(), 'two@x.com')
+    await act(async () => {
+      fireEvent.keyDown(within(card()).getByLabelText('Email address'), { key: 'Enter' })
+    })
+
+    expect(setRecipients).toHaveBeenLastCalledWith('a1', 'k-booking', [
+      { email: 'one@x.com', label: null },
+      { email: 'two@x.com', label: null },
+    ])
+    expect(within(card()).getByText('one@x.com')).toBeTruthy()
+    expect(within(card()).getByText('two@x.com')).toBeTruthy()
+    expect(screen.getByText('+2')).toBeTruthy()
+  })
+
+  it('adds on ✓ the same as on Enter', async () => {
+    renderRows([kind()])
+    const c = openCard('Booking')
+
+    typeAddress(c, 'mgr@x.com')
+    await act(async () => {
+      fireEvent.click(within(c).getByRole('button', { name: 'Add' }))
     })
 
     expect(setRecipients).toHaveBeenCalledWith('a1', 'k-booking', [{ email: 'mgr@x.com', label: null }])
@@ -178,10 +240,10 @@ describe('the chips', () => {
         ],
       }),
     ])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
     await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: 'Remove Skeen' }))
+      fireEvent.click(within(c).getByRole('button', { name: 'Remove Skeen' }))
     })
 
     expect(setRecipients).toHaveBeenCalledWith('a1', 'k-booking', [
@@ -189,35 +251,35 @@ describe('the chips', () => {
     ])
   })
 
-  it('shows the address when there is no label, so a chip is never blank', async () => {
+  it('shows the address even when there is no label, so a line is never blank', async () => {
     renderRows([kind({ recipients: [{ id: 'r1', email: 'nameless@x.com', label: null }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    expect(within(card).getByText('nameless@x.com')).toBeTruthy()
+    expect(within(c).getByText('nameless@x.com')).toBeTruthy()
   })
 
-  it('puts the chips BACK when the save is refused', async () => {
+  it('puts the list BACK when the save is refused', async () => {
     // The guard this whole file exists for. An optimistic list that survives a rejection
     // tells the manager someone is copied in when the database says they are not — and the
     // cap, the address CHECK and the per-kind uniqueness all reject from the server.
     setRecipients.mockResolvedValue({ error: 'enquiry recipient cap reached' })
     renderRows([kind({ recipients: [{ id: 'r1', email: 'skeen@x.com', label: 'Skeen' }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
     await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: 'Remove Skeen' }))
+      fireEvent.click(within(c).getByRole('button', { name: 'Remove Skeen' }))
     })
 
-    expect(within(screen.getByRole('dialog')).getByText('Skeen')).toBeTruthy()
+    expect(within(card()).getByText('Skeen')).toBeTruthy()
   })
 
-  it('ignores an empty address instead of sending a blank chip', async () => {
+  it('ignores an empty address instead of sending a blank line', async () => {
     renderRows([kind()])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
+    fireEvent.click(within(c).getByRole('button', { name: 'Add email' }))
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).not.toHaveBeenCalled()
@@ -255,7 +317,7 @@ describe('adding a kind', () => {
   })
 })
 
-describe('the chips — guards added after the 2026-09-22 review', () => {
+describe('the list — guards added after the 2026-09-22 review', () => {
   it('shows the list the SERVER returned, not the one it sent', async () => {
     // The action returns rows as stored (ids, order). If the UI kept its optimistic copy,
     // client-minted ids would outlive the save and a later remove would name a row the
@@ -264,42 +326,41 @@ describe('the chips — guards added after the 2026-09-22 review', () => {
       rows: [{ id: 'srv-0', email: 'skeen@x.com', label: 'Skeen (as stored)' }],
     })
     renderRows([kind()])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'skeen@x.com' } })
+    typeAddress(c, 'skeen@x.com')
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
-    expect(within(screen.getByRole('dialog')).getByText('Skeen (as stored)')).toBeTruthy()
+    expect(within(card()).getByText('Skeen (as stored)')).toBeTruthy()
   })
 
-  it('refuses a bad address BEFORE calling the action', async () => {
+  it('refuses a bad address BEFORE calling the action, and keeps it in the field', async () => {
     // `bob` used to reach the server, fail the CHECK after the delete, and wipe the list.
     renderRows([kind({ recipients: [{ id: 'r1', email: 'skeen@x.com', label: 'Skeen' }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'bob' } })
+    typeAddress(c, 'bob')
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).not.toHaveBeenCalled()
-    expect(within(screen.getByRole('dialog')).getByText('Skeen')).toBeTruthy()
+    expect(within(card()).getByText('Skeen')).toBeTruthy()
+    // AddRow stays open with what was typed: a refusal never wipes it unsaved.
+    expect(within(card()).getByLabelText('Email address')).toHaveValue('bob')
     // A refusal is an ERROR toast, not a green tick with a complaint in it.
     expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringMatching(/email address/i), 'error')
   })
 
   it('refuses a duplicate address in another case, without a round trip', async () => {
     renderRows([kind({ recipients: [{ id: 'r1', email: 'skeen@x.com', label: 'Skeen' }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'SKEEN@X.COM' } })
+    typeAddress(c, 'SKEEN@X.COM')
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).not.toHaveBeenCalled()
@@ -308,12 +369,11 @@ describe('the chips — guards added after the 2026-09-22 review', () => {
   it('refuses an eleventh person without a round trip', async () => {
     const ten = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, email: `p${i}@x.com`, label: null }))
     renderRows([kind({ recipients: ten })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'eleventh@x.com' } })
+    typeAddress(c, 'eleventh@x.com')
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).not.toHaveBeenCalled()
@@ -337,11 +397,11 @@ describe('the chips — guards added after the 2026-09-22 review', () => {
         ],
       }),
     ])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
     await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: 'Remove A' }))
-      fireEvent.click(within(card).getByRole('button', { name: 'Remove B' }))
+      fireEvent.click(within(c).getByRole('button', { name: 'Remove A' }))
+      fireEvent.click(within(c).getByRole('button', { name: 'Remove B' }))
     })
 
     expect(setRecipients).toHaveBeenCalledTimes(1)
@@ -373,7 +433,7 @@ describe('gaps the 2026-09-23 review named', () => {
   })
 
   it('keeps a typed address when a save is still in flight, instead of wiping it', async () => {
-    // commit() used to clear the inputs even when send() refused to start, so the address
+    // The add used to clear the field even when the save refused to start, so the address
     // the manager typed vanished without being saved.
     let release!: () => void
     setRecipients.mockImplementationOnce(
@@ -382,17 +442,16 @@ describe('gaps the 2026-09-23 review named', () => {
       }),
     )
     renderRows([kind({ recipients: [{ id: 'r1', email: 'a@x.com', label: 'A' }] })])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
-    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'new@x.com' } })
+    typeAddress(c, 'new@x.com')
     await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: 'Remove A' }))
-      fireEvent.keyDown(within(card).getByLabelText('Email address'), { key: 'Enter' })
+      fireEvent.click(within(c).getByRole('button', { name: 'Remove A' }))
+      fireEvent.keyDown(within(c).getByLabelText('Email address'), { key: 'Enter' })
     })
 
     expect(setRecipients).toHaveBeenCalledTimes(1)
-    expect((within(card).getByLabelText('Email address') as HTMLInputElement).value).toBe('new@x.com')
+    expect(within(c).getByLabelText('Email address')).toHaveValue('new@x.com')
     await act(async () => release())
   })
 
@@ -400,16 +459,17 @@ describe('gaps the 2026-09-23 review named', () => {
     // The action saves label.slice(0, LABEL_MAX); the card used to show the full text
     // until a reload, so the screen and the email subjects disagreed.
     renderRows([kind()])
-    const card = openCard('Booking')
+    const c = openCard('Booking')
     const long = 'x'.repeat(LABEL_MAX + 10)
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Booking' }))
-    fireEvent.change(within(card).getByLabelText('Name'), { target: { value: long } })
+    fireEvent.change(within(c).getByLabelText('Name'), { target: { value: long } })
     await act(async () => {
-      fireEvent.keyDown(within(card).getByLabelText('Name'), { key: 'Enter' })
+      fireEvent.keyDown(within(c).getByLabelText('Name'), { key: 'Enter' })
     })
 
-    expect(within(card).queryAllByText(long)).toHaveLength(0)
-    expect(within(card).getAllByText('x'.repeat(LABEL_MAX)).length).toBeGreaterThan(0)
+    expect(within(card()).getByLabelText('Name')).toHaveValue('x'.repeat(LABEL_MAX))
+    expect(screen.queryAllByText(long)).toHaveLength(0)
+    // The row's own name, too.
+    expect(screen.getAllByText('x'.repeat(LABEL_MAX)).length).toBeGreaterThan(0)
   })
 })

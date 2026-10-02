@@ -4,10 +4,11 @@ import { BrandCheckFailed, BrandRiser } from './_ui/brand-riser'
 
 /**
  * BRAND (Sam, 2026-09-23, BRAND_PAGE_PLAN.md): four tabs — Logos · Colors · Fonts · Tab
- * icon — share this frame. The ledger fills the width up to ~1180px; the one Publish bar
- * rises from the bottom when a real change is waiting. `pb-28` is the room under the last
- * row; while the bar is up it adds its OWN measured height on top (PublishRiser's in-flow
- * spacer, review 2 2026-09-24 — a fixed pb-28 left the bottom colour panel under the bar).
+ * icon — share this layout. The page's width and the room under its last row are the tools
+ * shell's one frame now (TOOL_FRAME, _shell/tools-rail.tsx: Brand's 1180px, set once for every
+ * tool in Batch 3); the one Publish bar rises from the bottom when a real change is waiting,
+ * and while it is up it adds its OWN measured height on top (PublishRiser's in-flow spacer,
+ * review 2 2026-09-24 — a fixed pb-28 left the bottom colour panel under the bar).
  * No brand-kit download button (Sam, 2026-09-24: removed; the kit route stays,
  * unlinked, for a later home).
  *
@@ -17,13 +18,13 @@ import { BrandCheckFailed, BrandRiser } from './_ui/brand-riser'
 export default async function BrandLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params
   return (
-    <div className="max-w-[1180px] pb-28">
+    <>
       {children}
       {/* Its own boundary, so the pending check never holds up the tab it sits under. */}
       <Suspense fallback={null}>
         <PendingBar artistId={id} />
       </Suspense>
-    </div>
+    </>
   )
 }
 

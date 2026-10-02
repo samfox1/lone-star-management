@@ -9,7 +9,7 @@ import { FieldError } from '../../../_ui/field-error'
 import { useNow } from '../_ui/clock'
 import { ConnectionMark } from '../../../connections/connection-mark'
 import { markProfileItemAction } from './actions'
-import { CardAction, CardActions, CardField, DisclosureGroup, RowMark, SentenceAction, type RowMarkKind } from '../_ui/disclosure'
+import { CardAction, CardActions, CardField, DisclosureGroup, RowMark, SentenceAction, type RowMarkKind } from '../../../_ui/disclosure'
 import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
 
 /**

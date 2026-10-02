@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
-// The typed half of the press kit, and the form shape the server zips back together by index.
+// The press kit's typed half saves itself (Batch 3): an edit reaches the existing action, whole and aligned.
 /**
- * PressKitForm — the hand-typed half of the press kit.
+ * PressKitForm: Pitch and Quotes in Brand's ledger, with NO Save button (Sam, 2026-10-02,
+ * prototypes/batch3_20261002.html). Every edit saves itself half a second later through the
+ * same action the old Save button posted.
  *
- * What matters here is the CONTRACT WITH THE SERVER, not the markup: the three quote
- * fields post as three parallel lists that `readPressQuotesFromForm` zips by index. If
- * a row ever rendered its inputs out of order, or an added row posted only some of its
- * fields, a quote would silently acquire someone else's source. These tests submit the
- * real form and read back the FormData the action received.
+ * LIGHT on the look (it is still settling); what is pinned is the main path and the CONTRACT
+ * WITH THE SERVER: the action receives the whole kit, and the three quote lists stay aligned
+ * (`readPressQuotesFromForm` zips them by index), so a removed row takes its source and link
+ * with it. The FormData's shape itself is pinned in tests/unit/manager-tools/epk/epk.test.ts.
  */
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PressKitForm } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/press-kit-form'
 import { savePressKitAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/actions'
 
@@ -21,69 +22,74 @@ vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
 const mockedSave = vi.mocked(savePressKitAction)
 
-/** The FormData the bound action was called with on the most recent submit. */
-function submitted(): FormData {
-  const call = mockedSave.mock.calls.at(-1)
-  if (!call) throw new Error('the action was never called')
-  return call[1] as FormData
-}
-
-beforeEach(() => mockedSave.mockClear())
-afterEach(cleanup)
-
 const QUOTES = [
   { quote: 'A blistering live act.', source: 'NME', url: 'https://nme.com/x' },
   { quote: 'Unmissable.', source: 'Pitchfork', url: null },
 ]
 
-describe('PressKitForm', () => {
-  it('posts the existing pitch and quotes unchanged', async () => {
-    render(<PressKitForm artistId="a1" pitch="Austin four-piece." quotes={QUOTES} />)
-    fireEvent.submit(screen.getByRole('button', { name: 'Save press kit' }).closest('form')!)
+/** Past the 500ms pause, and every save it started settled. */
+const settle = () => act(async () => void (await vi.advanceTimersByTimeAsync(600)))
 
-    const fd = submitted()
+/** The FormData the most recent save sent. */
+function sent(): FormData {
+  const call = mockedSave.mock.calls.at(-1)
+  if (!call) throw new Error('the action was never called')
+  return call[1] as FormData
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  mockedSave.mockClear()
+})
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+describe('PressKitForm saves itself', () => {
+  it('an edit to the pitch saves the whole kit once, after the pause, with no Save button', async () => {
+    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
+    expect(screen.queryByRole('button', { name: /save/i })).toBeNull()
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'One-line pitch' }), { target: { value: 'Austin four-piece.' } })
+    expect(mockedSave).not.toHaveBeenCalled()
+    await settle()
+
+    expect(mockedSave).toHaveBeenCalledTimes(1)
+    expect(mockedSave.mock.calls[0][0]).toBe('a1')
+    const fd = sent()
     expect(fd.get('press_pitch')).toBe('Austin four-piece.')
+    // The quotes ride along unchanged: the action writes both columns from one form.
     expect(fd.getAll('quote')).toEqual(['A blistering live act.', 'Unmissable.'])
     expect(fd.getAll('source')).toEqual(['NME', 'Pitchfork'])
     expect(fd.getAll('quote_url')).toEqual(['https://nme.com/x', ''])
   })
 
-  it('CRITICAL: the three lists stay aligned when a row is added', async () => {
+  it('CRITICAL: removing the first quote takes its source and link with it', async () => {
     render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Add quote' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0])
+    await settle()
 
-    fireEvent.submit(screen.getByRole('button', { name: 'Save press kit' }).closest('form')!)
-
-    // A new blank row must contribute an entry to EVERY list, or the zip shifts.
-    expect(submitted().getAll('quote')).toHaveLength(3)
-    expect(submitted().getAll('source')).toHaveLength(3)
-    expect(submitted().getAll('quote_url')).toHaveLength(3)
-  })
-
-  it('CRITICAL: removing the first row removes its source and url too', async () => {
-    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove quote 1' }))
-    fireEvent.submit(screen.getByRole('button', { name: 'Save press kit' }).closest('form')!)
-
-    const fd = submitted()
+    const fd = sent()
     expect(fd.getAll('quote')).toEqual(['Unmissable.'])
     expect(fd.getAll('source')).toEqual(['Pitchfork'])
+    expect(fd.getAll('quote_url')).toEqual([''])
   })
 
-  it('starts with one empty row when there are no quotes yet', () => {
-    render(<PressKitForm artistId="a1" pitch="" quotes={[]} />)
-    expect(screen.getAllByPlaceholderText('What the reviewer said')).toHaveLength(1)
-  })
+  it('Add quote opens a row at "Who said it", and what is typed there saves with its own quote', async () => {
+    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add quote' }))
+    const who = screen.getAllByRole('textbox', { name: 'Who said it' })[2]
+    expect(who).toHaveFocus()
 
-  it('removing the only row leaves an empty one rather than nothing to type in', () => {
-    render(<PressKitForm artistId="a1" pitch="" quotes={[QUOTES[0]]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove quote 1' }))
-    expect(screen.getAllByPlaceholderText('What the reviewer said')).toHaveLength(1)
-  })
+    fireEvent.change(who, { target: { value: 'Mixmag' } })
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'The quote' })[2], { target: { value: 'A warmer room.' } })
+    await settle()
 
-  it('stops offering Add quote at the cap', () => {
-    const many = Array.from({ length: 8 }, (_, i) => ({ quote: `q${i}`, source: '', url: null }))
-    render(<PressKitForm artistId="a1" pitch="" quotes={many} />)
-    expect(screen.queryByRole('button', { name: 'Add quote' })).toBeNull()
+    expect(mockedSave).toHaveBeenCalledTimes(1)
+    const fd = sent()
+    expect(fd.getAll('quote')).toEqual(['A blistering live act.', 'Unmissable.', 'A warmer room.'])
+    expect(fd.getAll('source')).toEqual(['NME', 'Pitchfork', 'Mixmag'])
+    expect(fd.getAll('quote_url')).toEqual(['https://nme.com/x', '', ''])
   })
 })

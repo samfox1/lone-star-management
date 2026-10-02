@@ -263,6 +263,19 @@ function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: To
   )
 }
 
+/**
+ * ONE PAGE WIDTH FOR EVERY TOOL (Batch 3, Sam 2026-10-02, prototypes/batch3_20261002.html
+ * "Width": "I like all of your proposed ones"). Brand's frame, set HERE once: up to 1180px,
+ * left-aligned beside the rail, and `pb-28` of room under the last row (a page's rising Publish
+ * bar adds its own measured height on top, publish-riser.tsx). Six widths before this (768
+ * centred, 800, 1000, 660, none…), each page carrying its own. Pages set no width of their own
+ * now; one narrower only where reading is the job (the AI test's start, centred in this frame).
+ *
+ * On the page's own column, not a wrapper inside it: flex-1 grows to the cap and stops, so
+ * the frame sits left with no extra element between the shell and the page.
+ */
+export const TOOL_FRAME = 'max-w-[1180px] pb-28'
+
 /** Wraps the dashboard's page: on a tool route, the rail plus the page; elsewhere the
  *  page alone. One place, so every tool gets the rail and no tool can forget it. A tool
  *  with sub-tabs collapses the rail and adds the second panel. */
@@ -278,7 +291,9 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
     return (
       <div className="flex gap-8">
         <ToolsRail artistId={artistId} active={tool.seg} tools={tools} />
-        <div className="min-w-0 flex-1">{children}</div>
+        <div data-tool-frame="" className={cx('min-w-0 flex-1', TOOL_FRAME)}>
+          {children}
+        </div>
       </div>
     )
   }
@@ -301,7 +316,7 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
         <ToolsRail artistId={artistId} active={tool.seg} collapsed tools={tools} />
         <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} />
       </div>
-      <div className="min-w-0 flex-1">
+      <div data-tool-frame="" className={cx('min-w-0 flex-1', TOOL_FRAME)}>
         <SubTabStrip artistId={artistId} tool={tool} activeSeg={tab.seg} />
         {children}
       </div>

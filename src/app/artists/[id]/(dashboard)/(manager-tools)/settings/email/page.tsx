@@ -7,11 +7,12 @@ export const metadata = { title: 'Email — Settings — Lone Star Management' }
 
 /**
  * SETTINGS → EMAIL (Sam, 2026-09-22). Who receives each kind of enquiry: one row per kind,
- * the modal kit on click. This lived above the inbox on the Enquiries page for one day;
+ * opening in place onto its card (Batch 3, 2026-10-02; was the modal kit). This lived above
+ * the inbox on the Enquiries page for one day;
  * Sam wanted the inbox to have the whole page and the editing to sit with the booking
  * address, which General already holds — so all routing is under Settings, in one place.
  *
- * No heading, no caption: the second panel names the tab (no-instruction-copy).
+ * No caption: the ledger's section word and the second panel name the tab (no-instruction-copy).
  */
 export default async function EmailSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -35,9 +36,6 @@ export default async function EmailSettingsPage({ params }: { params: Promise<{ 
   const kinds = toKindRows(kindRows as RawKindRow[] | null)
   const current = ((preview ?? []) as { to_email: string }[])[0]
 
-  return (
-    <div className="mt-2">
-      <KindRows artistId={id} kinds={kinds} primary={current?.to_email ?? null} />
-    </div>
-  )
+  // No width of its own: ToolsShell sets one for every tool (Batch 3, 2026-10-02).
+  return <KindRows artistId={id} kinds={kinds} primary={current?.to_email ?? null} />
 }

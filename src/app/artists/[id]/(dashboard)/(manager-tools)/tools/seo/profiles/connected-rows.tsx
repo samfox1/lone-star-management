@@ -4,7 +4,7 @@ import { useId, useState } from 'react'
 import { cx } from '@/lib/cx'
 import type { DatabasePage, ProfileLink } from '@/lib/manager-tools/seo/profiles/connected'
 import { shortLink } from '@/lib/manager-tools/format'
-import { CardField, RowMark, SentenceAction } from '../_ui/disclosure'
+import { CardField, RowMark, SentenceAction } from '../../../_ui/disclosure'
 import { PlatformMark } from '../_ui/mark'
 import { OutLink, ProfileCard, ProfileRow, VALUE } from './_ui/profile-row'
 

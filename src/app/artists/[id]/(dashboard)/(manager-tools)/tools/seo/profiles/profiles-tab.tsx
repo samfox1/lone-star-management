@@ -10,7 +10,7 @@ import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { FieldError } from '../../../_ui/field-error'
 import { MONO_META } from '../../../_ui/styles'
 import { useNow } from '../_ui/clock'
-import { CardAction, CardActions, CardField, DisclosureGroup, RowMark } from '../_ui/disclosure'
+import { CardAction, CardActions, CardField, DisclosureGroup, RowMark } from '../../../_ui/disclosure'
 import { ProfileCard, ProfileRow, QuietRow } from './_ui/profile-row'
 import { markProfileItemAction } from './actions'
 import type { PackPhoto } from './load'
@@ -69,8 +69,9 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
   const now = useNow(false)
 
   return (
-    // pt-3.5 + the group's own 26px: the title sits where it did (40px down).
-    <div className="mx-auto max-w-[800px] pt-3.5">
+    // pt-3.5 + the group's own 26px: the title sits where it did (40px down). No width of its
+    // own: the tools shell's one frame (TOOL_FRAME, Batch 3) sets it, as for every tool.
+    <div className="pt-3.5">
       <DisclosureGroup title="Outside profiles">
         <ProfileRow
           id={id}

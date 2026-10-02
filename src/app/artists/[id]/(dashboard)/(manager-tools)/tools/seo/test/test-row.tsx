@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/icons'
 import type { SeoTestStatus } from '@/lib/seo-tests/types'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { CAPS_VALUE } from '../../../_ui/styles'
-import { CardField, DisclosureCard, DisclosureItem, QuietItem, RowFace as Face, RowMark, RowValue, SentenceAction, type RowMarkKind } from '../_ui/disclosure'
+import { CardField, DisclosureCard, DisclosureItem, QuietItem, RowFace as Face, RowMark, RowValue, SentenceAction, type RowMarkKind } from '../../../_ui/disclosure'
 import { checkItYourself, editHref, evidenceRows, leadOf, safeHttps, sentenceOf, type TestRow } from '@/lib/manager-tools/seo/test-model'
 
 /**

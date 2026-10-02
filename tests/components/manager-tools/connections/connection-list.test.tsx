@@ -12,12 +12,15 @@
  *     whose catalog was never pulled offers Sync (never "Connect" — the check beside it
  *     already says it is), a plain social says nothing;
  *   - Remove is the modal footer's: it asks first, then removes the link AND the source;
- *   - Sync / Pull now pull that connection and report what came back.
+ *   - Sync / Pull now pull that connection and report what came back;
+ *   - Brand's grammar (Batch 3, Sam 2026-10-02): a quiet "+ Connect" ends the list and opens
+ *     the same grid, and the list has no Publish of its own (the page's rising bar,
+ *     tests/components/manager-tools/shared/site-pending.test.tsx).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ConnectionList } from '@/app/artists/[id]/(dashboard)/(manager-tools)/connections/connection-list'
-import { publishEntityAction, setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { setOnSiteAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { disconnectConnectionAction, pullConnectionAction, syncProfileAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { connectionByKey, type ConnectionRow } from '@/lib/connections'
@@ -50,8 +53,8 @@ const ROWS: ConnectionRow[] = [
   { def: def('instagram'), key: 'instagram', label: 'Instagram', linkId: 'l-ig', url: 'https://www.instagram.com/skeen/', state: 'none' },
 ]
 
-function mount(rows = ROWS, dirty = false) {
-  render(<ConnectionList artistId="a1" rows={rows} dirty={dirty} />)
+function mount(rows = ROWS) {
+  render(<ConnectionList artistId="a1" rows={rows} />)
 }
 /** The row: the button named for its platform. */
 const rowOf = (label: string) => screen.getByRole('button', { name: label })
@@ -237,7 +240,8 @@ describe('the chip’s own actions', () => {
 })
 
 describe('Connect', () => {
-  it('opens the Connect dialog with the rows already on the page marked as connected', () => {
+  // The quiet "+ Connect" after the last row opens the same multi-select grid the solid button did.
+  it('"+ Connect" opens the Connect grid, the rows already on the page marked as connected', () => {
     mount()
     fireEvent.click(screen.getByRole('button', { name: /^Connect$/ }))
     const dialog = screen.getByRole('dialog', { name: 'Connect' })
@@ -247,15 +251,9 @@ describe('Connect', () => {
 })
 
 describe('Publish', () => {
-  it('is the floating bar every content page has, and it publishes the LINK snapshot', async () => {
-    mount(ROWS, false)
-    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled()
-    cleanup()
-    mount(ROWS, true)
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
-    const pw = screen.getByPlaceholderText('Your password')
-    fireEvent.change(pw, { target: { value: 'hunter2' } })
-    fireEvent.submit(pw.closest('form')!)
-    await waitFor(() => expect(publishEntityAction).toHaveBeenCalledWith('link', 'a1', 'hunter2'))
+  // The floating Publish is gone: the page renders the shared rising bar, so the list must not draw a second one.
+  it('the list has no Publish of its own (the page’s rising bar publishes)', () => {
+    mount()
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
   })
 })

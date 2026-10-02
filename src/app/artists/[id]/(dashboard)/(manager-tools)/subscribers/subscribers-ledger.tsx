@@ -50,9 +50,6 @@ export const STICKY_TOP = ['top-[calc(59px+env(safe-area-inset-top,0px))]', 'md:
 /** How long a copy's check stays up. */
 const FLASH_MS = 1400
 
-/** A centred column as wide as the list was beside Brand's empty column (~1000px). */
-const FRAME = 'mx-auto w-full max-w-[1000px]'
-
 /** Row icons are faint until their row is hovered — with a MOUSE. A touch screen has no
  *  hover, so there they are always fully visible. */
 const TOUCH_VISIBLE = 'pointer-coarse:opacity-100'
@@ -152,11 +149,10 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
   )
 
   return (
-    // md:pr-8 mirrors the 32px the tools shell puts between the rail and the page (gap-8,
-    // tools-rail.tsx), so the list is centred on what the eye sees: rail edge to window edge.
-    // Below md the rail is hidden and there is no such gap.
-    <div className="pb-16 md:pr-8">
-      <div data-subscribers-frame="" className={FRAME}>
+    // No width or bottom room of its own (it was a centred 1000px column): the tools shell's one
+    // frame sets both for every tool (TOOL_FRAME, _shell/tools-rail.tsx, Batch 3 2026-10-02).
+    <div>
+      <div data-subscribers-frame="">
         <div className="min-w-0">
           {rows.length === 0 ? (
             <p className={QUIET}>No subscribers yet.</p>

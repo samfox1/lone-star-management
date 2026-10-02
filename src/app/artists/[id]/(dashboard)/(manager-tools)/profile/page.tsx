@@ -22,7 +22,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const { id } = await params
   const p = await loadProfile(id)
   return (
-    <div className="max-w-[1180px] pb-28">
+    <>
       <ProfileView
         artistId={id}
         artistName={p.artist.name as string}
@@ -40,6 +40,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
       <Suspense fallback={null}>
         <SitePendingBar artistId={id} />
       </Suspense>
-    </div>
+    </>
   )
 }

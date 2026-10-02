@@ -1,125 +1,138 @@
 'use client'
 
-import { cx } from '@/lib/cx'
-import { useState } from 'react'
-import { PITCH_MAX, QUOTES_MAX, QUOTE_MAX, SOURCE_MAX, type PressQuote } from '@/lib/epk'
+import { useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
-import { buttonClass, inputClass } from '@/components/ui/ui'
-import { SaveForm } from '../../save-form'
+import { cx } from '@/lib/cx'
+import { PITCH_MAX, QUOTES_MAX, QUOTE_MAX, SOURCE_MAX, pressKitFormData, type PressKitDraft, type PressQuote } from '@/lib/epk'
+import { SAVE_FAILED } from '@/lib/manager-tools/format'
+import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
+import { toast } from '../../toast'
+import { ADD_BUTTON } from '../_ui/add-row'
+import { AreaField, LineField } from '../_ui/fields'
+import { END_SLOT, LEDGER_ROW_GRID, LedgerRow, LedgerSection } from '../_ui/ledger'
+import { RowIcon } from '../_ui/row-icon'
 import { savePressKitAction } from './actions'
-import { BLOCK_LABEL, MONO_META } from '../_ui/styles'
 
-/** A row needs a key that survives reordering/removal, and a quote's text is not one
- *  (two blank rows would collide). A counter is, and it never leaves the client. */
-type Row = PressQuote & { key: number }
+/** A row needs a key that survives removal, and a quote's text is not one (two blank rows
+ *  would collide). A counter is, and it never leaves the client. */
+type Row = PressKitDraft['rows'][number] & { key: number }
 
-const blank = (key: number): Row => ({ key, quote: '', source: '', url: null })
+/** What one save sends: everything the form holds, because the action writes both columns. */
+type PressKit = { pitch: string; rows: readonly Row[] }
 
 /**
- * The only hand-typed part of the press kit: a one-line pitch and the review quotes.
+ * The hand-typed half of the press kit, in Brand's ledger (Batch 3, Sam 2026-10-02): Pitch and
+ * Quotes. NO SAVE BUTTON: every edit saves itself to the draft half a second after the last
+ * keystroke (useDebouncedFieldSave, the editor panels' own: serialized, flushed on leaving),
+ * through the same action the old Save button posted. One key for the whole form, because the
+ * action writes the pitch and the quotes together: two keys would race two whole copies.
  *
- * Rows are client state so "Add quote" doesn't need a round trip, but nothing about the
- * ROW COUNT is persisted — the server zips the three field lists by index and drops
- * anything with no quote text (`readPressQuotesFromForm`). That is why clearing a
- * quote's text is the delete gesture, and why the remove button below is a convenience
- * rather than the mechanism.
- *
- * Draft until the profile is published, like the bio it sits next to.
+ * Draft until the profile is published (the page's rising Publish bar). A save says nothing on
+ * success; a refusal is an error toast.
  */
-export function PressKitForm({
-  artistId,
-  pitch,
-  quotes,
-}: {
-  artistId: string
-  pitch: string
-  quotes: PressQuote[]
-}) {
-  const [rows, setRows] = useState<Row[]>(() =>
-    quotes.length ? quotes.map((q, i) => ({ ...q, key: i })) : [blank(0)],
-  )
-  const [nextKey, setNextKey] = useState(rows.length)
+export function PressKitForm({ artistId, pitch: savedPitch, quotes }: { artistId: string; pitch: string; quotes: PressQuote[] }) {
+  // Plain state, seeded once: the refresh after each save sends the server's (cleaned) copy
+  // back, and re-seeding from it would undo whatever was typed while the save was out.
+  const [pitch, setPitch] = useState(savedPitch)
+  const [rows, setRows] = useState<Row[]>(() => quotes.map((q, i) => ({ key: i, quote: q.quote, source: q.source, url: q.url ?? '' })))
+  const nextKey = useRef(quotes.length)
+  /** The row "Add quote" just made: its first field takes focus once it mounts. */
+  const focusKey = useRef<number | null>(null)
 
-  function addRow() {
-    setRows((r) => [...r, blank(nextKey)])
-    setNextKey((k) => k + 1)
+  const saver = useDebouncedFieldSave<PressKit>({
+    persist: async (_key, kit) => {
+      const res = await savePressKitAction(artistId, pressKitFormData(kit)).catch(() => ({ error: SAVE_FAILED }))
+      if (res.error) toast(res.error, 'error')
+      return res
+    },
+  })
+
+  const commit = (next: PressKit) => {
+    setPitch(next.pitch)
+    setRows([...next.rows])
+    saver.save('press', next)
+  }
+  const editRow = (key: number, patch: Partial<Omit<Row, 'key'>>) => commit({ pitch, rows: rows.map((r) => (r.key === key ? { ...r, ...patch } : r)) })
+  const removeRow = (key: number) => commit({ pitch, rows: rows.filter((r) => r.key !== key) })
+  /** A blank row changes nothing the server keeps, so adding one saves nothing. */
+  const addRow = () => {
+    const key = nextKey.current++
+    focusKey.current = key
+    setRows((r) => [...r, { key, quote: '', source: '', url: '' }])
   }
 
   return (
-    <SaveForm
-      action={savePressKitAction.bind(null, artistId)}
-      savedMessage="Press kit saved"
-      className="space-y-8"
-    >
-      <label className="block">
-        <span className={BLOCK_LABEL}>
-          One-line pitch
-        </span>
-        <input
-          name="press_pitch"
-          defaultValue={pitch}
-          maxLength={PITCH_MAX}
-          placeholder="Austin four-piece with a debut out this autumn"
-          className={`mt-1.5 ${inputClass} w-full`}
-        />
-        <span className={cx('mt-1 block', MONO_META)}>
-          One sentence a journalist can quote straight into a piece.
-        </span>
-      </label>
+    <>
+      <LedgerSection label="Pitch">
+        <LedgerRow title="One-line pitch" guide="One sentence a journalist can quote.">
+          <LineField
+            label="One-line pitch"
+            value={pitch}
+            placeholder="Add a pitch"
+            onChange={(v) => commit({ pitch: v.slice(0, PITCH_MAX), rows })}
+            className="w-[440px] max-w-full min-[900px]:text-right"
+          />
+        </LedgerRow>
+      </LedgerSection>
 
-      <div className="space-y-3">
-        <span className={BLOCK_LABEL}>
-          Press quotes
-        </span>
-
-        {rows.map((row, i) => (
-          <div key={row.key} className="space-y-2 rounded-xl border border-hairline p-3">
-            <div className="flex items-start gap-2">
-              <input
-                name="quote"
-                defaultValue={row.quote}
-                maxLength={QUOTE_MAX}
-                placeholder="What the reviewer said"
-                className={`${inputClass} w-full flex-1`}
-              />
-              <button
-                type="button"
-                aria-label={`Remove quote ${i + 1}`}
-                title="Remove this quote"
-                onClick={() => setRows((r) => (r.length > 1 ? r.filter((x) => x.key !== row.key) : [blank(row.key)]))}
-                className="mt-1 text-ink-faint transition-colors hover:text-ink"
-              >
-                <Icon name="trash" size={15} />
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                name="source"
-                defaultValue={row.source}
-                maxLength={SOURCE_MAX}
+      <LedgerSection label="Quotes">
+        {rows.map((r) => (
+          // The ledger row's grid, with fields where a built-in row has its fixed title.
+          <div key={r.key} data-ledger-row="" data-quote-row="" className={LEDGER_ROW_GRID}>
+            <div className="flex min-w-0 flex-col">
+              <LineField
+                ref={(el) => {
+                  if (el && focusKey.current === r.key) {
+                    focusKey.current = null
+                    el.focus()
+                  }
+                }}
+                label="Who said it"
+                value={r.source}
                 placeholder="Who said it"
-                className={`${inputClass} w-1/2`}
+                onChange={(v) => editRow(r.key, { source: v.slice(0, SOURCE_MAX) })}
+                className="w-full max-w-[320px] font-medium"
               />
-              <input
-                name="quote_url"
-                defaultValue={row.url ?? ''}
-                placeholder="Link to the review (optional)"
-                className={`${inputClass} w-1/2`}
+              <AreaField
+                label="The quote"
+                value={r.quote}
+                placeholder="What they said"
+                rows={1}
+                small
+                tone="muted"
+                // It wraps to show a long quote whole, but it is one line: no line breaks.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault()
+                }}
+                onChange={(v) => editRow(r.key, { quote: v.replace(/\s*[\r\n]+\s*/g, ' ').slice(0, QUOTE_MAX) })}
+                className="mt-0.5 w-full max-w-[40ch]"
               />
+            </div>
+            <div className="flex min-w-0 items-center justify-start gap-2.5 min-[900px]:justify-end">
+              <LineField
+                mono
+                label="Link to the review"
+                value={r.url}
+                placeholder="Link"
+                onChange={(v) => editRow(r.key, { url: v })}
+                className="w-[280px] max-w-full min-[900px]:text-right"
+              />
+              <div data-ledger-end="remove" className={cx(END_SLOT, 'flex')}>
+                <RowIcon icon="trash" label="Remove" tone="danger" onClick={() => removeRow(r.key)} />
+              </div>
             </div>
           </div>
         ))}
-
-        {rows.length < QUOTES_MAX && (
-          <button type="button" onClick={addRow} className={buttonClass('ghost')}>
-            Add quote
-          </button>
-        )}
-      </div>
-
-      <button type="submit" className={buttonClass('ghost')}>
-        Save press kit
-      </button>
-    </SaveForm>
+        {rows.length < QUOTES_MAX ? (
+          // `data-ledger-add`: the list can grow a row with a trash, so it reserves the column.
+          <div data-ledger-add="" className="pt-2.5">
+            <button type="button" onClick={addRow} className={ADD_BUTTON}>
+              <Icon name="plus" size={16} />
+              Add quote
+            </button>
+          </div>
+        ) : null}
+      </LedgerSection>
+    </>
   )
 }

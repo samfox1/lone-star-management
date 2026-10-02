@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CONNECTIONS, buildConnectionRows, isProfileLink, type ConnectionSection, type SourceCounts } from '@/lib/connections'
 import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/integrations-registry'
@@ -8,7 +9,8 @@ import { youtubeOAuthConfigured, youtubeReturnNotice } from '@/lib/youtube-oauth
 import { eventbriteOAuthConfigured, eventbriteReturnNotice, eventbriteSignedInState } from '@/lib/eventbrite-oauth'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
-import { dashboardDiff, getEventbriteSignedIn, getShopifyDomain, requireArtist } from '../../_data'
+import { getEventbriteSignedIn, getShopifyDomain, requireArtist } from '../../_data'
+import { SitePendingBar } from '../_ui/site-pending'
 import { ConnectionList } from './connection-list'
 import { EventbriteReturnNotice, ShopifyReturnNotice, YouTubeReturnNotice } from './shopify-return'
 
@@ -18,6 +20,11 @@ export const metadata = { title: 'Connections — Lone Star Management' }
  * CONNECTIONS — one page for every outside platform (Sam, 2026-09-13). It replaced the
  * Links page and the Integrations hub; see lib/connections.ts for the model, and the
  * list component for the rows. No heading: the rail names the tool.
+ *
+ * Brand's grammar since Batch 3 (Sam, 2026-10-02): the tools frame sets the page width, and
+ * the Publish is the shared rising bar (_ui/site-pending.tsx, as on Profile and SEO / GEO),
+ * up only while something is waiting. It publishes EVERYTHING waiting, the site's words and
+ * photos with the links (Sam OK'd it), not the links alone as the floating button did.
  *
  * "Synced" is PROVEN, not assumed: a source counts as synced only when rows written by
  * it exist. A connected id that pulled nothing reads as a failure on the page, because
@@ -68,13 +75,12 @@ export default async function ConnectionsPage({
   const youtubeReturn = youtubeReturnNotice(query)
   const eventbriteReturn = eventbriteReturnNotice(query)
   const supabase = await createClient()
-  const [artist, shopifyDomain, eventbriteStored, links, counts, diff, { data: facts }] = await Promise.all([
+  const [artist, shopifyDomain, eventbriteStored, links, counts, { data: facts }] = await Promise.all([
     requireArtist(id),
     getShopifyDomain(id),
     getEventbriteSignedIn(id),
     listContent(supabase, 'link', id),
     sourceCounts(supabase, id),
-    dashboardDiff(id),
     // The SEO facts, for the MusicBrainz seed below (RLS-scoped like the rest).
     supabase.from('artists').select('location, schema_type').eq('id', id).single(),
   ])
@@ -103,8 +109,6 @@ export default async function ConnectionsPage({
         }),
       }
 
-  // The floating Publish lights up on unpublished link EDITS — the same flag behind the
-  // nav's pending dot, so the two always agree (the tour page's rule).
   // `shopifyApp` / `youtubeApp` / `eventbriteApp` are the one thing about each app the browser
   // learns: whether it is set up. The ids and the secrets stay on the server.
   return (
@@ -115,12 +119,15 @@ export default async function ConnectionsPage({
       <ConnectionList
         artistId={id}
         rows={rows}
-        dirty={diff.link.dirty}
         shopifyApp={shopifyAppConfigured()}
         youtubeApp={youtubeOAuthConfigured()}
         eventbriteApp={eventbriteOAuthConfigured()}
         createPages={createPages}
       />
+      {/* Its own boundary, so the pending check never holds up the list above it. */}
+      <Suspense fallback={null}>
+        <SitePendingBar artistId={id} />
+      </Suspense>
     </>
   )
 }

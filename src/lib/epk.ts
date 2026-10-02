@@ -100,6 +100,28 @@ export function readPressQuotesFromForm(formData: FormData): PressQuote[] {
   )
 }
 
+/** The press-kit form as typed: the pitch and every quote row, a blank link as ''. */
+export type PressKitDraft = { pitch: string; rows: readonly { quote: string; source: string; url: string }[] }
+
+/**
+ * THE FORM `readPressQuotesFromForm` READS, built from what the manager typed: the pitch, then
+ * one `quote` / `source` / `quote_url` entry per row, in row order. The press kit autosaves
+ * (epk/press-kit-form.tsx, Batch 3) through the same action the old Save button posted, so it
+ * sends exactly what that form did. Every row contributes to ALL THREE lists, or the zip shifts
+ * and a quote acquires someone else's source. A half-typed row is safe to send: one with no
+ * quote text is dropped on the way in (`cleanPressQuotes`).
+ */
+export function pressKitFormData({ pitch, rows }: PressKitDraft): FormData {
+  const fd = new FormData()
+  fd.set('press_pitch', pitch)
+  for (const r of rows) {
+    fd.append('quote', r.quote)
+    fd.append('source', r.source)
+    fd.append('quote_url', r.url)
+  }
+  return fd
+}
+
 /* ── Press documents ────────────────────────────────────────────────────────────── */
 
 /** The storage folder press documents live under, in the PRIVATE `documents` bucket. */

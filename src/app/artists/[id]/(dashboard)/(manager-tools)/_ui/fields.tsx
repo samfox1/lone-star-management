@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useRef, useState, type ReactNode, type TextareaHTMLAttributes } from 'react'
+import { forwardRef, useRef, useState, type KeyboardEventHandler, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { HoverLabel, RowIcon } from './row-icon'
@@ -36,7 +36,8 @@ type Tone = 'ink' | 'muted' | 'faint'
 const TONE: Record<Tone, string> = { ink: 'text-ink', muted: 'text-ink-muted focus:text-ink', faint: 'text-ink-faint focus:text-ink' }
 
 /** One line of text, read as text until focused. `mono` is the small Space Mono line (a file
- *  name); `invalid` turns it red. */
+ *  name); `mono="value"` is an address read as the row's value (13px, Settings' booking email);
+ *  `invalid` turns it red. */
 export const LineField = forwardRef<
   HTMLInputElement,
   {
@@ -47,13 +48,14 @@ export const LineField = forwardRef<
     /** Width and alignment only. */
     className?: string
     invalid?: boolean
-    mono?: boolean
+    mono?: boolean | 'value'
     tone?: Tone
-    inputMode?: 'numeric' | 'text'
+    inputMode?: 'numeric' | 'text' | 'email'
     onFocus?: () => void
     onBlur?: () => void
+    onKeyDown?: KeyboardEventHandler<HTMLInputElement>
   }
->(function LineField({ label, value, onChange, placeholder, className, invalid, mono, tone = 'ink', inputMode, onFocus, onBlur }, ref) {
+>(function LineField({ label, value, onChange, placeholder, className, invalid, mono, tone = 'ink', inputMode, onFocus, onBlur, onKeyDown }, ref) {
   return (
     <input
       ref={ref}
@@ -66,7 +68,13 @@ export const LineField = forwardRef<
       onChange={(e) => onChange(e.target.value)}
       onFocus={onFocus}
       onBlur={onBlur}
-      className={cx(FIELD, mono ? 'font-space text-[11px] leading-5' : 'text-[15px] leading-6', invalid ? 'text-accent-red' : TONE[tone], className)}
+      onKeyDown={onKeyDown}
+      className={cx(
+        FIELD,
+        mono === 'value' ? 'font-space text-[13px] leading-6' : mono ? 'font-space text-[11px] leading-5' : 'text-[15px] leading-6',
+        invalid ? 'text-accent-red' : TONE[tone],
+        className,
+      )}
     />
   )
 })

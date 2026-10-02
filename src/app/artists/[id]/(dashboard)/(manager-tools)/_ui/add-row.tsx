@@ -6,6 +6,14 @@ import { cx } from '@/lib/cx'
 import { FOCUS_RING } from './focus-ring'
 import { RowIcon } from './row-icon'
 
+/** The quiet "+ Add …" that ends a list: grey words beside a 16px plus, black on hover, no
+ *  box. AddRow's closed state, and Connections' "+ Connect", which opens a picker instead of a
+ *  name field (Batch 3, Sam 2026-10-02). Render it with `<Icon name="plus" size={16} />`. */
+export const ADD_BUTTON = cx(
+  'inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-offset-2 motion-reduce:transition-none',
+  FOCUS_RING,
+)
+
 /**
  * THE ADD FLOW, every Brand list (Sam, 2026-09-23, BRAND_PAGE_PLAN.md):
  *
@@ -30,8 +38,10 @@ export function AddRow({
 }: {
   /** "logo" → "Add logo". */
   noun: string
-  /** The trimmed, non-empty name. The parent adds the row and focuses its note. */
-  onAdd: (name: string) => void
+  /** The trimmed, non-empty name. The parent adds the row and focuses its note. Returning
+   *  `false` refuses it: the field stays open with the text still in it, so a refused entry
+   *  (an address the list can't take, a save still in flight) is never wiped unsaved. */
+  onAdd: (name: string) => boolean | void
   /** Colours: "Color N", pre-selected so typing replaces it. */
   prefill?: string
   /** The name field's hint, e.g. "Tertiary logo". */
@@ -69,9 +79,13 @@ export function AddRow({
     const next = name.trim()
     if (!next || done.current) return
     done.current = true
+    if (onAdd(next) === false) {
+      done.current = false
+      input.current?.focus()
+      return
+    }
     setOpen(false)
     setName('')
-    onAdd(next)
   }
 
   function cancel() {
@@ -90,7 +104,7 @@ export function AddRow({
           ref={addButton}
           type="button"
           onClick={start}
-          className={cx('inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-offset-2 motion-reduce:transition-none', FOCUS_RING)}
+          className={ADD_BUTTON}
         >
           <Icon name="plus" size={16} />
           {`Add ${noun}`}

@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { displayAddress } from '@/lib/settings'
 import { Icon } from '@/components/ui/icons'
-import { buttonClass, listRowClass } from '@/components/ui/ui'
 import type { ConnectionRow } from '@/lib/connections'
-import { publishEntityAction } from '../../actions'
-import { PublishBar } from '../../publish-bar'
 import { toast } from '../../toast'
+import { ADD_BUTTON } from '../_ui/add-row'
+import { RowChevron } from '../_ui/disclosure'
+import { FOCUS_RING } from '../_ui/focus-ring'
+import { LedgerSection } from '../_ui/ledger'
 import { useSeeded } from '../_ui/use-seeded'
 import { ConnectModal } from './connect-modal'
 import { ConnectionMark } from './connection-mark'
@@ -19,12 +20,17 @@ import { pullConnectionAction, syncProfileAction } from './actions'
 /**
  * THE CONNECTIONS LIST (Sam, 2026-09-13): "one organized list with all of the current
  * platform accounts hooked up". One row per platform — mark, name, handle, and on the
- * right what it pulls in. No headings: the rail names the tool.
+ * right what it pulls in, then a chevron.
  *
- * Rows follow the tour list: no hairlines, the rhythm is the rows' own spacing, the
- * handle truncates before it can touch the chip beside it, and THE ROW IS THE BUTTON —
- * click it to open the connection's modal (Sam: "remove the 2 dots… You click on the row
- * and then you can edit it"). The chip's own actions stop the click there.
+ * Brand's grammar since Batch 3 (Sam, 2026-10-02, prototypes/batch3_20261002.html): one
+ * ledger section, rows split by a soft hairline, and a quiet "+ Connect" ending the list
+ * that opens the SAME multi-select Connect grid the solid button did. THE ROW IS THE
+ * BUTTON and it still opens the connection's POP-UP (Sam: "I would like for the pop up to
+ * stay for connections"); the chip's own actions stop the click there. Hover is colour
+ * only: the handle and chevron darken, the row neither grows nor greys.
+ *
+ * No width and no Publish of its own: the tools frame sets the one page width, and the
+ * page renders the shared rising Publish bar (page.tsx).
  *
  * No on-site ring (Sam, 2026-09-28: asked where a button is switched on and off, "Only in
  * the editor"). A connection is an account; the editor's Socials makes a site button from
@@ -33,7 +39,6 @@ import { pullConnectionAction, syncProfileAction } from './actions'
 export function ConnectionList({
   artistId,
   rows: initial,
-  dirty = false,
   shopifyApp = false,
   youtubeApp = false,
   eventbriteApp = false,
@@ -41,7 +46,6 @@ export function ConnectionList({
 }: {
   artistId: string
   rows: ConnectionRow[]
-  dirty?: boolean
   /** The Shopify app is set up: Shopify connects by going to Shopify (a server-made boolean). */
   shopifyApp?: boolean
   /** The Google app is set up: YouTube can connect by signing in to Google (a server-made boolean). */
@@ -57,25 +61,10 @@ export function ConnectionList({
   const [rows, setRows] = useSeeded(initial)
   const [connect, setConnect] = useState(false)
 
-  async function publish(password: string) {
-    // Snapshot only — whether a link is a button is the editor's live toggle; publish
-    // pushes the edits made here.
-    const res = await publishEntityAction('link', artistId, password)
-    if (res.ok) router.refresh()
-    return res
-  }
-
   return (
-    // The tour list's width (Sam, 2026-09-13: "these rows can be less wide"), and room
-    // at the bottom for the floating Publish.
-    <div className="mx-auto max-w-3xl pb-24">
-      <div className="flex items-center justify-end">
-        <button type="button" onClick={() => setConnect(true)} className={buttonClass('solid')}>
-          <Icon name="plus" size={12} /> Connect
-        </button>
-      </div>
-
-      <div className="mt-6">
+    <LedgerSection label="Connected">
+      {/* Pulled out 12px, so the rows' padding lines the marks up with the ledger's column. */}
+      <div className="-mx-3">
         {rows.map((r) => (
           <ConnectionRowView
             key={r.key}
@@ -86,6 +75,13 @@ export function ConnectionList({
             onChange={(next) => setRows((all) => (next ? all.map((x) => (x.key === r.key ? next : x)) : all.filter((x) => x.key !== r.key)))}
           />
         ))}
+      </div>
+
+      <div className="pt-2.5">
+        <button type="button" onClick={() => setConnect(true)} className={ADD_BUTTON}>
+          <Icon name="plus" size={16} />
+          Connect
+        </button>
       </div>
 
       {connect && (
@@ -100,11 +96,13 @@ export function ConnectionList({
           onDone={() => router.refresh()}
         />
       )}
-
-      <PublishBar pendingCount={0} dirty={dirty} onPublish={publish} noun="connections" />
-    </div>
+    </LedgerSection>
   )
 }
+
+/** The soft line between two rows (a shadow, so it takes no room), none above the first:
+ *  the disclosure rows' divider (_ui/disclosure.tsx), which never opens here. */
+const ROW_DIVIDER = '[&:not(:first-child)]:shadow-[0_-1px_0_var(--color-hairline-soft)]'
 
 function ConnectionRowView({
   artistId,
@@ -159,26 +157,35 @@ function ConnectionRowView({
             setOpen(true)
           }
         }}
-        className={`group ${listRowClass} gap-4 py-3`}
+        // `group/trow`: the chevron (RowChevron) darkens with its row, as the disclosure rows' does.
+        className={cx('group/trow flex w-full cursor-pointer items-center gap-3.5 rounded-xl p-3 text-left', ROW_DIVIDER, FOCUS_RING, 'focus-visible:-outline-offset-2')}
       >
         <span className="flex w-5 flex-none justify-center text-ink">
           <ConnectionMark def={row.def} size={16} />
         </span>
-        <span className="w-28 flex-none truncate text-sm font-semibold">{row.label}</span>
-        <span className={cx('block h-6 min-w-0 flex-1 truncate font-space text-[13px] leading-6 text-ink-muted group-hover:text-ink', !shown && 'text-hairline')}>
-          {shown || '—'}
+        {/* On a phone the handle drops under the name; from `sm` up it is a 380px column. */}
+        <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
+          <span className="min-w-0 flex-1 text-[15px] font-medium leading-[1.35] text-ink [overflow-wrap:anywhere] sm:min-w-[120px]">{row.label}</span>
+          <span
+            className={cx(
+              'block min-w-0 truncate font-space text-[12px] text-ink-muted transition-colors duration-150 group-hover/trow:text-ink sm:flex-[0_1_380px]',
+              !shown && 'text-hairline',
+            )}
+          >
+            {shown || '—'}
+          </span>
         </span>
 
-        <span className="flex w-40 flex-none items-center justify-end">
+        <span className="flex min-w-[84px] flex-none items-center justify-end">
           {/* Just the word (Sam, 2026-09-13: "It either says synced or connect"). */}
           {row.state === 'synced' && (
-            <span className="inline-flex items-center gap-1.5 font-space text-[10.5px] text-ink-muted">
+            <span className="inline-flex items-center gap-1.5 font-space text-[11px] text-ink-muted">
               <Icon name="refresh" size={11} className={cx(pulling && 'animate-spin')} />
               synced
             </span>
           )}
           {row.state === 'failed' && (
-            <span className="inline-flex items-center gap-1.5 font-space text-[10.5px] text-accent-red">
+            <span className="inline-flex items-center gap-1.5 font-space text-[11px] text-accent-red">
               <Icon name="alert" size={11} />
               Couldn’t connect ·
               <button type="button" onClick={pull} disabled={pulling} className="text-ink hover:text-accent disabled:opacity-50">
@@ -194,12 +201,13 @@ function ConnectionRowView({
               onClick={pull}
               disabled={pulling}
               aria-label={`Sync ${row.label}`}
-              className="inline-flex items-center gap-1.5 font-space text-[10.5px] text-ink-faint hover:text-ink disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 font-space text-[11px] text-ink-faint transition-colors hover:text-ink disabled:opacity-50"
             >
               <Icon name="refresh" size={11} className={cx(pulling && 'animate-spin')} /> {pulling ? 'Syncing…' : 'Sync'}
             </button>
           )}
         </span>
+        <RowChevron open={false} />
       </div>
 
       <ConnectionModal

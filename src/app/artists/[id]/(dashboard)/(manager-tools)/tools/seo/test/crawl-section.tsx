@@ -7,7 +7,7 @@ import type { SeoCrawl, SeoTestStatus } from '@/lib/seo-tests/types'
 import { shortLink } from '@/lib/manager-tools/format'
 import { CAPS_LABEL, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useMounted } from '../_ui/clock'
-import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowFace, RowValue, SentenceAction } from '../_ui/disclosure'
+import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowFace, RowValue, SentenceAction } from '../../../_ui/disclosure'
 import {
   ASK_GOOGLE,
   BING_WEBMASTER,

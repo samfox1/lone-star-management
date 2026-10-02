@@ -9,7 +9,8 @@ export const metadata = { title: 'Settings — Lone Star Management' }
  * SETTINGS (2026-09-13). Three rows, instant: the booking email, the site's address, the
  * platform address (the name moved to Profile, 2026-10-02). Was a redirect to the Overview
  * for months — a tool in the rail that led nowhere. See lib/settings.ts for the rows and the
- * view for the layout.
+ * view for the layout (Brand's ledger since Batch 3, 2026-10-02). No width of its own:
+ * ToolsShell sets one for every tool.
  */
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

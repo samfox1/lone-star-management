@@ -5,7 +5,7 @@ import { cx } from '@/lib/cx'
 import type { DiscogsCheck, OutsideChecks, WikidataCheck } from '@/lib/manager-tools/seo/profiles/outside'
 import { shortLink } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { CardField, RowMark, SentenceAction } from '../_ui/disclosure'
+import { CardField, RowMark, SentenceAction } from '../../../_ui/disclosure'
 import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
 
 /**

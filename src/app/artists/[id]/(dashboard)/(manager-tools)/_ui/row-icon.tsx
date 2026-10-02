@@ -33,7 +33,8 @@ export type RowIconVariant =
   /** A BARE GLYPH (Sam dislikes icons in a box): ink, no padding, no background, blue on
    *  hover (a + on keyboard focus too). The AI test's "what to do" ↗ / pencil / wrench at the
    *  end of a sentence, and the Profiles cards' actions. Callers place it (`className`) and
-   *  size it (`glyphSize`); it takes no other tone. */
+   *  size it (`glyphSize`). One other tone: `danger`, red on hover instead of blue (a card's
+   *  trash, Batch 3: Settings › Email's Delete kind). */
   | 'bare'
 
 export type RowIconProps = {
@@ -92,7 +93,7 @@ const VARIANT: Record<RowIconVariant, string> = {
 
 /** The bare glyph, whole: its own transition and disabled look, none of the boxed base's
  *  centring or padding (test-row.tsx's and the Profiles cards' glyphs, as they were drawn). */
-const BARE = cx('relative inline-flex rounded text-ink transition-[opacity,color] hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
+const BARE = cx('relative inline-flex rounded text-ink transition-[opacity,color] disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
 
 const BOX: Record<NonNullable<RowIconProps['size']>, { cls: string; glyph: number }> = {
   md: { cls: 'h-11 w-11', glyph: 22 },
@@ -271,7 +272,7 @@ export function RowIcon({
   const toned = tone ?? (icon === 'plus' ? 'accent' : 'default')
   const cls =
     variant === 'bare'
-      ? cx(BARE, toned === 'accent' && TONE.accent, reveal && REVEAL_ON_HOVER, className)
+      ? cx(BARE, toned === 'danger' ? TONE.danger : toned === 'accent' ? TONE.accent : 'hover:text-accent', reveal && REVEAL_ON_HOVER, className)
       : cx(
           'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
           // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.

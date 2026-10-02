@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-// The press-kit download gate as the manager sees it: what is missing, and how to fix it.
+// The press-kit download gate as the manager sees it: what is missing, and where to fix it.
 /**
  * The download gate as the manager experiences it.
  *
  * `epkReadiness` decides; this pins what the page does with the decision. Two things
  * matter and neither is visible from a unit test on the rule:
  *
- *  1. An unmet requirement must show its HINT. The checklist is the only place a manager
- *     learns why the button is off, and "you have not published it yet" is the usual
- *     answer — invisible otherwise, since the dashboard shows them their draft.
+ *  1. An unmet requirement must say where it is fixed. Since Batch 3 (Sam, 2026-10-02, Brand's
+ *     ledger, minimal text) its ✓ row is a LINK there (a missing photo → Profile), and its hint
+ *     ("…, then publish") is read to a screen reader; the page's Publish bar says when a fix is
+ *     still waiting to be published.
  *  2. When the gate is closed there must be NO usable download link. A disabled-looking
  *     button that is still an anchor is a link somebody will right-click and copy.
  */
@@ -25,6 +26,9 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/epk/press-kit-form', () 
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/epk/document-upload', () => ({
   DocumentUpload: ({ label }: { label: string }) => <div>{label}</div>,
+}))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-pending', () => ({
+  SitePendingBar: ({ artistId }: { artistId: string }) => <div data-testid="site-bar" data-artist={artistId} />,
 }))
 
 let releases: unknown[] = []
@@ -64,7 +68,7 @@ describe('EPK page — the gate', () => {
     releases = [{ title: 'First Light' }]
     await renderPage()
 
-    const link = screen.getByRole('link', { name: 'Download press kit' })
+    const link = screen.getByRole('link', { name: 'Download' })
     expect(link).toHaveAttribute('href', '/artists/a1/epk/download')
   })
 
@@ -74,15 +78,26 @@ describe('EPK page — the gate', () => {
     releases = []
     await renderPage()
 
-    expect(screen.queryByRole('link', { name: 'Download press kit' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Download press kit' })).toBeDisabled()
+    expect(screen.queryByRole('link', { name: 'Download' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled()
   })
 
-  it('CRITICAL: shows the hint for anything missing — the only place the reason appears', async () => {
+  it('CRITICAL: a missing requirement links to where it is fixed, its reason read to a screen reader', async () => {
     mockedSite.mockResolvedValue(fullSite)
     releases = []
     await renderPage()
-    expect(screen.getByText(/Publish a release on the Music page/)).toBeInTheDocument()
+    const row = screen.getByRole('link', { name: /At least one release/ })
+    expect(row).toHaveAttribute('href', '/artists/a1/music')
+    expect(row).toHaveTextContent(/Publish a release on the Music page/)
+  })
+
+  it('a missing photo links to Profile (Sam\u2019s mock, 2026-10-02)', async () => {
+    mockedSite.mockResolvedValue({ ...(fullSite as object), media: [] } as never)
+    releases = [{ title: 'First Light' }]
+    await renderPage()
+    expect(screen.getByRole('link', { name: /A photo/ })).toHaveAttribute('href', '/artists/a1/profile')
+    // Met requirements are not links: there is nothing to go and do.
+    expect(screen.queryByRole('link', { name: /A bio/ })).toBeNull()
   })
 
   it('does not show hints for requirements already met', async () => {
@@ -97,7 +112,7 @@ describe('EPK page — the gate', () => {
     releases = [{ title: 'First Light' }]
     await renderPage()
 
-    expect(screen.queryByRole('link', { name: 'Download press kit' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Download' })).toBeNull()
     // All four listed as outstanding, so the manager sees the whole job, not the first blocker.
     expect(screen.getAllByText(/still needed/)).toHaveLength(4)
   })
@@ -106,7 +121,7 @@ describe('EPK page — the gate', () => {
     mockedSite.mockResolvedValue(fullSite)
     releases = [{ title: 'First Light' }]
     await renderPage()
-    expect(screen.getAllByText(/^(done|still needed)$/)).toHaveLength(4)
+    expect(screen.getAllByText(/^, (done|still needed)/)).toHaveLength(4)
   })
 
   it('offers both document slots', async () => {
@@ -115,5 +130,12 @@ describe('EPK page — the gate', () => {
     await renderPage()
     expect(screen.getByText('Stage plot')).toBeInTheDocument()
     expect(screen.getByText('Tech rider')).toBeInTheDocument()
+  })
+
+  it('carries the site Publish bar for this artist: the pitch, quotes and documents reach the PDF only once published', async () => {
+    mockedSite.mockResolvedValue(fullSite)
+    releases = [{ title: 'First Light' }]
+    await renderPage()
+    expect(screen.getByTestId('site-bar')).toHaveAttribute('data-artist', 'a1')
   })
 })

@@ -1,25 +1,41 @@
-import Link from 'next/link'
-import { epkReadiness, parsePressQuotes } from '@/lib/epk'
+import { Suspense } from 'react'
+import { epkReadiness, parsePressQuotes, type EpkRequirement } from '@/lib/epk'
+import { PROFILE_SEG } from '@/lib/manager-tools/profile/route'
 import { getPublishedSite } from '@/lib/site'
 import { createClient } from '@/lib/supabase/server'
-import { Icon } from '@/components/ui/icons'
-import { buttonClass } from '@/components/ui/ui'
 import { requireArtist } from '../../_data'
+import { LedgerRow, LedgerSection } from '../_ui/ledger'
+import { RowIcon } from '../_ui/row-icon'
+import { LinkItem, QuietItem, RowFace, RowMark, RowValue } from '../_ui/disclosure'
+import { SitePendingBar } from '../_ui/site-pending'
 import { DocumentUpload } from './document-upload'
 import { PressKitForm } from './press-kit-form'
-import { BLOCK_LABEL } from '../_ui/styles'
+
+/** Where each requirement is fixed, and the word its row says on hover. */
+const FIX: Record<EpkRequirement['key'], { seg: string; label: string }> = {
+  bio: { seg: PROFILE_SEG, label: 'Profile' },
+  photo: { seg: PROFILE_SEG, label: 'Profile' },
+  contact: { seg: 'settings', label: 'Settings' },
+  release: { seg: 'music', label: 'Music' },
+}
 
 /**
- * Press kit (EPK).
+ * Press kit (EPK), in Brand's ledger (Batch 3, Sam 2026-10-02, prototypes/batch3_20261002.html):
+ * no cards, no Save button. PDF (download and the public page, two bare glyphs) · Needs (the
+ * readiness checklist as ✓ rows; a missing one links to where it is fixed) · Pitch · Quotes ·
+ * Documents (the stage plot and the tech rider) · the rising Publish bar.
  *
- * Three things live here: the two press-only fields the manager types, the two documents
- * they upload, and the generated PDF.
+ * Every field saves itself to the DRAFT (press-kit-form.tsx, document-upload.tsx, through the
+ * same two actions as before). The pitch, the quotes and both documents ride the profile
+ * snapshot (ARTIST_SNAPSHOT), so they only reach the PDF and /[slug]/epk once published: the bar
+ * (_ui/site-pending.tsx, Profile's and SEO / GEO's) makes that visible and ships it, with
+ * everything else that is waiting for the site (Sam OK'd, 2026-10-02).
  *
- * The checklist reads PUBLISHED data, which is the whole reason it is trustworthy. The
- * PDF is built from published content so it can never disagree with the public link, so a
- * checklist reading working rows would switch the button on while the file came out empty.
- * That also means the honest answer to "why is my bio not counted?" is usually "you have
- * not published it", and the hints say so.
+ * The checklist reads PUBLISHED data, which is the whole reason it is trustworthy. The PDF is
+ * built from published content so it can never disagree with the public link, so a checklist
+ * reading working rows would switch the download on while the file came out empty. A missing
+ * row's hint ("…, then publish") is read to a screen reader; on screen the row links to where it
+ * is fixed, and the bar says when a fix is still waiting to be published.
  */
 export default async function EpkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -27,11 +43,7 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
   const supabase = await createClient()
 
   const [{ data: press }, site] = await Promise.all([
-    supabase
-      .from('artists')
-      .select('press_pitch, press_quotes, tech_rider_path, stage_plot_path')
-      .eq('id', id)
-      .single(),
+    supabase.from('artists').select('press_pitch, press_quotes, tech_rider_path, stage_plot_path').eq('id', id).single(),
     getPublishedSite(supabase, artist.slug as string),
   ])
 
@@ -40,6 +52,7 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
     site,
     releaseCount: ((releaseRows as unknown[] | null) ?? []).length,
   })
+  const met = requirements.filter((q) => q.met).length
 
   const row = press as {
     press_pitch: string | null
@@ -49,65 +62,48 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
   } | null
 
   return (
-    <div className="max-w-3xl space-y-10">
-
-      {/* The gate. It states what is missing and why, because this is the only place the
-          manager finds out why the button is off. */}
-      <section className="rounded-xl border border-hairline p-4">
-        <h2 className={BLOCK_LABEL}>
-          {ready ? 'Ready to send' : 'Before you can download'}
-        </h2>
-        <ul className="mt-3 space-y-2">
-          {requirements.map((q) => (
-            <li key={q.key} className="flex items-start gap-2">
-              {/* `text-accent` (the blue), not a green — this palette has no green token,
-                  and an undefined Tailwind colour is silently dropped rather than failing. */}
-              <span className={q.met ? 'text-accent' : 'text-ink-faint'} aria-hidden>
-                <Icon name={q.met ? 'check' : 'minus'} size={15} />
-              </span>
-              <span className="font-space text-xs leading-relaxed">
-                <span className={q.met ? 'text-ink-muted' : 'font-bold text-ink'}>{q.label}</span>
-                {!q.met && <span className="text-ink-faint"> — {q.hint}</span>}
-              </span>
-              <span className="sr-only">{q.met ? 'done' : 'still needed'}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-4 flex items-center gap-3">
+    <>
+      <LedgerSection label="PDF">
+        <LedgerRow title="Press kit" meta={`${met} of ${requirements.length} ready`}>
           {ready ? (
             // A plain link, not a fetch: the browser handles the download, so a slow build
             // shows normal browser progress instead of a spinner we would have to invent.
-            <a href={`/artists/${id}/epk/download`} className={buttonClass('solid')} download>
-              Download press kit
-            </a>
+            <RowIcon icon="download" label="Download" variant="bare" href={`/artists/${id}/epk/download`} download="" />
           ) : (
-            <button type="button" disabled className={buttonClass('ghost')} aria-disabled>
-              Download press kit
-            </button>
+            // NO link while the gate is closed: a disabled-looking anchor is still a link
+            // somebody can right-click, copy and share.
+            <RowIcon icon="download" label="Download" variant="bare" disabled />
           )}
-          <Link href={`/${artist.slug}/epk`} className={buttonClass('ghost')}>
-            View online
-          </Link>
-        </div>
-      </section>
+          <RowIcon icon="external" label="View online" variant="bare" href={`/${artist.slug}/epk`} link="external" className="ml-[18px]" />
+        </LedgerRow>
+      </LedgerSection>
 
-      <PressKitForm
-        artistId={id}
-        pitch={row?.press_pitch ?? ''}
-        quotes={parsePressQuotes(row?.press_quotes)}
-      />
-
-      <section className="space-y-4 border-t border-hairline pt-8">
-        <div>
-          <h2 className={BLOCK_LABEL}>
-            Stage plot & tech rider
-          </h2>
-          <p className="mt-2 font-space text-xs leading-relaxed text-ink-faint">
-            PDFs, up to 10 MB. They are private — nobody can reach them by link. They only
-            leave here stapled to the back of the press kit.
-          </p>
+      <LedgerSection label="Needs">
+        {/* Pulled out 12px like every A-row list, so a row's grey reaches past the text column. */}
+        <div className="-mx-3">
+          {requirements.map((q) =>
+            q.met ? (
+              <QuietItem key={q.key} itemData={{ 'data-need': q.key }}>
+                <RowFace mark={<RowMark kind="check" />} name={q.label} srWord="done" />
+              </QuietItem>
+            ) : (
+              <LinkItem key={q.key} href={`/artists/${id}/${FIX[q.key].seg}`} label={FIX[q.key].label} itemData={{ 'data-need': q.key }}>
+                <RowFace
+                  mark={<RowMark kind="red-ring" />}
+                  name={q.label}
+                  srWord={`still needed. ${q.hint}`}
+                  value={<RowValue bad>missing</RowValue>}
+                  open={false}
+                />
+              </LinkItem>
+            ),
+          )}
         </div>
+      </LedgerSection>
+
+      <PressKitForm artistId={id} pitch={row?.press_pitch ?? ''} quotes={parsePressQuotes(row?.press_quotes)} />
+
+      <LedgerSection label="Documents">
         <DocumentUpload
           artistId={id}
           kind="stage_plot"
@@ -115,14 +111,13 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
           hint="Where each player stands and what they need plugged in."
           present={!!row?.stage_plot_path}
         />
-        <DocumentUpload
-          artistId={id}
-          kind="tech_rider"
-          label="Tech rider"
-          hint="Gear, mics and sound requirements."
-          present={!!row?.tech_rider_path}
-        />
-      </section>
-    </div>
+        <DocumentUpload artistId={id} kind="tech_rider" label="Tech rider" hint="Gear, mics and sound requirements." present={!!row?.tech_rider_path} />
+      </LedgerSection>
+
+      {/* Its own boundary, so the pending check never holds up the page above it. */}
+      <Suspense fallback={null}>
+        <SitePendingBar artistId={id} />
+      </Suspense>
+    </>
   )
 }

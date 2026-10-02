@@ -7,7 +7,8 @@ import { FOCUS_RING } from './focus-ring'
  * in changes no pixel. Before writing one of these by hand, use it: a copy drifts.
  *
  * The AI test's and the Profiles tab's rows and cards are ONE look (Batch 2, Sam 2026-10-02),
- * drawn by one component: tools/seo/_ui/disclosure.tsx.
+ * drawn by one component: _ui/disclosure.tsx (lifted from tools/seo/_ui when Settings › Email
+ * became its second tool, Batch 3, 2026-10-02).
  */
 
 /** The keyboard ring (focus-ring.ts, which says why it needs its own `outline-solid`), set

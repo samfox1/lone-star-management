@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RowIcon, type RowIconVariant } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/row-icon'
 import { LedgerRow } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/ledger'
-import { CardActions, CardField, SentenceAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/_ui/disclosure'
+import { CardActions, CardField, SentenceAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/disclosure'
 import { KvField } from '@/app/artists/[id]/(dashboard)/modal-kit'
 import { Icon } from '@/components/ui/icons'
 

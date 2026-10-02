@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { FOCUS_RING } from '../../../../_ui/focus-ring'
-import { DisclosureCard, DisclosureItem, QuietItem, RowFace, RowMark, RowValue } from '../../_ui/disclosure'
+import { DisclosureCard, DisclosureItem, QuietItem, RowFace, RowMark, RowValue } from '../../../../_ui/disclosure'
 
 /**
  * THE PROFILES TAB'S ROWS, in the AI test's row and card (Batch 2, Sam 2026-10-02,
- * prototypes/batch2_compare_20261002.html §1 "A"): the look is tools/seo/_ui/disclosure.tsx's;
+ * prototypes/batch2_compare_20261002.html §1 "A"): the look is _ui/disclosure.tsx's;
  * this file only puts its pieces together for the tab's three lists, the Apple Music & Amazon
  * bio (profiles-tab.tsx), Discogs and Wikidata (outside-rows.tsx), and the Outside bios
  * (bio-rows.tsx).
