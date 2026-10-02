@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import { OUTSIDE_BIOS } from '@/lib/manager-tools/profiles/bios'
-import { bioRows, connectedBios, factChanges } from '@/lib/manager-tools/profiles/bio-state'
+import { bioRows, connectedBios, dayLabel, factChanges } from '@/lib/manager-tools/profiles/bio-state'
 import { BioRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bio-rows'
 import { markProfileItemAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actions'
 
@@ -27,11 +27,16 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actio
 
 afterEach(cleanup)
 
+const CHANGED = '2026-09-29T12:00:00.000Z'
+/** The date as the row writes it, in THIS machine's zone and against today (dayLabel, as the row
+ *  calls it): 12:00Z is Sep 30 east of UTC+12, and a later year adds ", 2026". */
+const since = () => dayLabel(CHANGED, Date.now())
+
 /** Instagram, ticked Aug 15; its facts changed Sep 29. */
 function staleInstagram() {
   const bios = connectedBios([{ id: 'l6', label: 'Instagram', url: 'https://www.instagram.com/skeeeeeeen/', role: null }], {})
   const changes = factChanges([
-    { published_at: '2026-09-29T12:00:00.000Z', data: { name: 'Skeen', bio: 'New bio.', location: 'Detroit' } },
+    { published_at: CHANGED, data: { name: 'Skeen', bio: 'New bio.', location: 'Detroit' } },
     { published_at: '2026-08-01T12:00:00.000Z', data: { name: 'Skeen', bio: 'Old bio.', location: 'Chicago' } },
   ])
   return bioRows({ bios, marks: { bio_instagram: '2026-08-15T12:00:00.000Z' }, factsKnown: true, changes }, Date.parse('2026-10-01T12:00:00.000Z'))
@@ -43,7 +48,8 @@ describe('the outside bios', () => {
     render(<BioRows artistId="a1" rows={staleInstagram()} />)
 
     const row = screen.getByRole('button', { name: /Instagram/ })
-    expect(row.textContent).toContain('may be out of date since Sep 29')
+    expect(since()).toMatch(/^Sep (29|30)/)
+    expect(row.textContent).toContain(`may be out of date since ${since()}`)
     fireEvent.click(row)
     expect(screen.getByText(/Bio and city/)).toBeTruthy()
     const edit = screen.getByRole('link', { name: 'Edit on Instagram' })
@@ -65,6 +71,6 @@ describe('the outside bios', () => {
     expect(html).toContain('may be out of date')
     expect(html).not.toContain('Sep')
     render(<BioRows artistId="a1" rows={staleInstagram()} />)
-    expect(screen.getByRole('button', { name: /Instagram/ }).textContent).toContain('since Sep 29')
+    expect(screen.getByRole('button', { name: /Instagram/ }).textContent).toContain(`since ${since()}`)
   })
 })

@@ -7,6 +7,22 @@ import { BIO_FACTS, connectedBios, factChanges, type BiosInput, type ProfileRevi
  *  is years of history; the oldest row of a full window is never taken for the first (factChanges). */
 const REVISION_CAP = 300
 
+/** One row's facts, read back from their JSON text. A fact the snapshot doesn't carry (SQL null)
+ *  is LEFT OUT, never null: factChanges compares a fact only when both snapshots carry it. */
+function factsOf(row: Record<string, unknown>): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  for (const f of BIO_FACTS) {
+    const raw = row[f]
+    if (typeof raw !== 'string') continue
+    try {
+      data[f] = JSON.parse(raw)
+    } catch {
+      data[f] = raw
+    }
+  }
+  return data
+}
+
 /**
  * What the Outside bios rows are built from (lib/manager-tools/profiles/bio-state.ts): the
  * artist's links (which platforms are connected), the "updated" ticks, and the published
@@ -37,8 +53,10 @@ export async function loadOutsideBios(
     marksRead ?? readProfileMarks(supabase, id).catch(() => null),
     supabase
       .from('revisions')
-      // `name:data->name, …`: the facts only, never the whole snapshot (the press kit rides it).
-      .select(['published_at', ...BIO_FACTS.map((f) => `${f}:data->${f}`)].join(', '))
+      // `name:data->name::text, …`: the facts only, never the whole snapshot (the press kit rides
+      // it), each as its JSON TEXT so a missing key (SQL null) is not a present null (the text
+      // 'null'). `data->name` alone answers null for both.
+      .select(['published_at', ...BIO_FACTS.map((f) => `${f}:data->${f}::text`)].join(', '))
       .eq('artist_id', id)
       .eq('entity_type', 'artist')
       .order('published_at', { ascending: false })
@@ -48,7 +66,7 @@ export async function loadOutsideBios(
         () => null,
       ),
   ])
-  const rows: ProfileRevision[] | null = revisions?.map(({ published_at, ...data }) => ({ published_at: String(published_at), data })) ?? null
+  const rows: ProfileRevision[] | null = revisions?.map((r) => ({ published_at: String(r.published_at), data: factsOf(r) })) ?? null
   return {
     bios: links ? connectedBios(links, artist) : null,
     marks,

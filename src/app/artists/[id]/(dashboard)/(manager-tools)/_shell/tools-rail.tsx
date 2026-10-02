@@ -56,8 +56,11 @@ export { TOOLS, tabFor, toolFor, toolsFor }
  * the scroll the sticky panel was pushed up by it (measured: up to half a pixel). Rounded
  * the same way, the lane ends exactly where the page does, and never past it, so it adds
  * no scroll of its own.
+ *
+ * `bottom-0` stays as the FALLBACK: a browser without CSS round() drops that height as
+ * invalid, and top + bottom size the lane. Where round() works, the height wins over bottom.
  */
-export const RAIL_LANE = 'absolute top-0 h-[round(100%,1px)]'
+export const RAIL_LANE = 'absolute top-0 bottom-0 h-[round(100%,1px)]'
 /**
  * The manager tools as a 84px icon rail — the ASSETS rail, one to one (Sam,
  * 2026-08-28: "mimic the side panel used on the assets page"). Icons stacked and

@@ -3,16 +3,19 @@
  *
  *   1. Address   the live site decides (address.ts): https://www.example.com/
  *   2. Taken?    another artist already registered under it → stop
- *   3. Codes     Google's META token; Bing: AddSite, then this site's AuthenticationCode
+ *   3. Codes     Google's META token; Bing: AddSite, then this site's AuthenticationCode.
+ *                No Google code → stop here: it is made for this site alone (checked live
+ *                2026-09-30), so it is the only proof of WHICH artist a site serves. Bing's is the
+ *                same on every site of the account: another artist's page shows it too.
  *   4. Store     upsert both into site_verifications (the SERVICE client: the table is closed to
  *                every signed-in user, admins included); get_public_site serves them at once
  *   5. Live?     read the home page until both <meta> tags are there (ISR: about a minute)
- *                Not there in time → the rows THIS run created are removed (a typo or the wrong
- *                artist must not keep holding the address), and it stops.
- *   6. Connect   the site is attached to the artist only now, after THIS artist's GOOGLE code
- *                was seen on it (different for every site, checked live 2026-09-30; Bing's is the same on every site of
- *                the account, so it proves nothing about which artist). Before verify: the live
- *                page is the proof, verify only asks Google and Bing to look too.
+ *                Until they are seen, whatever ends the run (not there in time, Ctrl-C via
+ *                `signal`, a call that throws) puts the rows back as they were: a typo or the
+ *                wrong artist must not keep holding the address.
+ *   6. Connect   the site is attached to the artist only now, after THIS artist's Google code
+ *                was seen on it. Before verify: the live page is the proof, verify only asks
+ *                Google and Bing to look too.
  *   7. Google    verify (with the owner email) → add the property → send the sitemap
  *   8. Bing      verify → send the sitemap as a feed
  * Every Google and Bing call tolerates repeats, so "try again" is running it again. One
@@ -37,6 +40,8 @@ export type RegisterStore = {
   remove(artistId: string, providers: Provider[]): Promise<void>
   /** Put rows back exactly as they were (a failed run must not leave them on an unproven address). */
   restore(artistId: string, rows: Row[]): Promise<void>
+  /** Verified stamps verified_at; not verified CLEARS it (a refused verify on a row verified
+   *  before must not keep the sitemap resend going). Either way error_code is set. */
   mark(artistId: string, provider: Provider, result: { verified: boolean; error_code: string | null }): Promise<void>
   siteOf(artistId: string): Promise<{ site_kind: string | null; custom_site_url: string | null } | null>
   connect(artistId: string, origin: string): Promise<void>
@@ -57,6 +62,8 @@ export type RegisterDeps = {
   waitMs?: number
   pollMs?: number
   log?: (line: string) => void
+  /** Stop early (the CLI's Ctrl-C). During the wait, the rows this run stored are put back first. */
+  signal?: AbortSignal
 }
 
 export type StepResult = { step: string; ok: boolean; reason?: string; detail?: string }
@@ -68,7 +75,8 @@ export function metaTags(html: string): Map<string, string[]> {
   const out = new Map<string, string[]>()
   const head = html.split(/<\/head\s*>/i)[0]
   for (const tag of head.match(/<meta\b[^>]*>/gi) ?? []) {
-    const attr = (n: string) => tag.match(new RegExp(`\\b${n}\\s*=\\s*("([^"]*)"|'([^']*)')`, 'i'))
+    // `(?:^|\s)`, not `\b`: data-name= and data-content= are other attributes.
+    const attr = (n: string) => tag.match(new RegExp(`(?:^|\\s)${n}\\s*=\\s*("([^"]*)"|'([^']*)')`, 'i'))
     const name = attr('name')
     const content = attr('content')
     if (!name || !content) continue
@@ -115,13 +123,16 @@ export async function registerSite(artistId: string, address: string, deps: Regi
     return done(false, siteUrl)
   }
 
-  // 3. Codes
-  const codes: Partial<Record<Provider, string>> = {}
-  if (deps.google) {
-    const g = await deps.google.getMetaToken(siteUrl)
-    if (g.ok) codes.google = g.value
-    say({ step: 'google code', ok: g.ok, ...(g.ok ? {} : { reason: g.reason, detail: g.detail }) })
+  // 3. Codes. Google's first, and without it nothing goes further (see the header): Bing isn't
+  //    even asked, so no site is added to Tapir's Bing account for an address that can't be proven.
+  const google = deps.google
+  const g = google ? await google.getMetaToken(siteUrl) : null
+  if (g) say({ step: 'google code', ok: g.ok, ...(g.ok ? {} : { reason: g.reason, detail: g.detail }) })
+  if (!google || !g?.ok) {
+    say({ step: 'stopped', ok: false, reason: 'no_google_code', detail: 'only Google’s code proves which artist a site serves (Bing’s is the same on every site)' })
+    return done(false, siteUrl)
   }
+  const codes: { google: string; bing?: string } = { google: g.value }
   if (deps.bing) {
     // AddSite on a site already on the account is refused (AlreadyExists); the code is what
     // matters, so it is always read, and AddSite's reason is shown only if that fails too.
@@ -132,50 +143,61 @@ export async function registerSite(artistId: string, address: string, deps: Regi
     say({ step: 'bing code', ok: b.ok, ...(why && !why.ok ? { reason: why.reason, detail: why.detail } : {}) })
   }
   const providers = Object.keys(codes) as Provider[]
-  if (!providers.length) return done(false, siteUrl)
 
   // 4. Store (a changed code or address un-verifies the row until it is verified again)
   const before = new Map((await deps.store.rowsOf(artistId)).map((r) => [r.provider, r]))
   const created = providers.filter((p) => !before.has(p))
-  await deps.store.upsert(
-    artistId,
-    providers.map((p) => ({ provider: p, site_url: siteUrl, code: codes[p]!, reset: before.get(p)?.code !== codes[p] || before.get(p)?.site_url !== siteUrl })),
-  )
-  say({ step: `stored ${providers.join(' + ')}`, ok: true })
-
-  // 5. Live?
-  const waitMs = deps.waitMs ?? 300_000
-  const pollMs = deps.pollMs ?? 10_000
-  const until = now() + waitMs
-  let live = false
-  for (;;) {
-    live = tagsLive(await deps.fetchHome(siteUrl), codes)
-    if (live || now() >= until) break
-    await sleep(pollMs)
-  }
-  if (!live) {
-    // Leave nothing on an address this run couldn't prove: remove what it created, and put older
-    // rows back exactly as they were (a rerun with a typo mustn't move them), marked not_live.
+  // Remove what this run created, and put older rows back exactly as they were (a rerun with a
+  // typo mustn't move them, nor lose their verified time), with `error_code` when one is given.
+  const putBack = async (error_code?: string) => {
     if (created.length) await deps.store.remove(artistId, created)
-    const older = providers.filter((q) => !created.includes(q)).map((q) => ({ ...before.get(q)!, error_code: 'not_live' }))
+    const older = providers.filter((q) => !created.includes(q)).map((q) => ({ ...before.get(q)!, ...(error_code ? { error_code } : {}) }))
     if (older.length) await deps.store.restore(artistId, older)
-    say({ step: 'tags live on the site', ok: false, reason: 'not_live', detail: `not seen within ${Math.round(waitMs / 1000)} s` })
-    return done(false, siteUrl)
+  }
+
+  // From the write until the tags are seen live, the rows sit on an address nothing has proven.
+  // EVERY way out of that stretch puts them back: not live in time (marked not_live), a stop
+  // (Ctrl-C), a call that throws (the upsert included: its answer can be lost after it landed).
+  const STOP = Symbol('stop')
+  const stopped = new Promise<typeof STOP>((r) => (deps.signal?.aborted ? r(STOP) : deps.signal?.addEventListener('abort', () => r(STOP), { once: true })))
+  let live = false
+  let notLive = false
+  try {
+    await deps.store.upsert(
+      artistId,
+      providers.map((p) => ({ provider: p, site_url: siteUrl, code: codes[p]!, reset: before.get(p)?.code !== codes[p] || before.get(p)?.site_url !== siteUrl })),
+    )
+    say({ step: `stored ${providers.join(' + ')}`, ok: true })
+
+    // 5. Live? A stop never waits out a look or a sleep: each races it.
+    const waitMs = deps.waitMs ?? 300_000
+    const pollMs = deps.pollMs ?? 10_000
+    const until = now() + waitMs
+    for (;;) {
+      if (deps.signal?.aborted) break
+      const html = await Promise.race([deps.fetchHome(siteUrl), stopped])
+      if (html === STOP) break
+      live = tagsLive(html, codes)
+      if (live || now() >= until) break
+      if ((await Promise.race([sleep(pollMs), stopped])) === STOP) break
+    }
+    if (!live) {
+      notLive = !deps.signal?.aborted
+      say(notLive ? { step: 'tags live on the site', ok: false, reason: 'not_live', detail: `not seen within ${Math.round(waitMs / 1000)} s` } : { step: 'stopped', ok: false, reason: 'interrupted', detail: 'stored codes put back' })
+      return done(false, siteUrl)
+    }
+  } finally {
+    if (!live) await putBack(notLive ? 'not_live' : undefined)
   }
   say({ step: 'tags live on the site', ok: true })
 
-  // 6. Connect, now that this artist's codes are on the site. Only Google's code proves WHICH
-  //    artist the site serves: it is made for this site alone, while Bing's is the same on every
-  //    site of the account. So without Google's code seen live, nothing is connected.
+  // 6. Connect, now that this artist's Google code is on the site.
   const origin = siteUrl.replace(/\/$/, '')
   const current = await deps.store.siteOf(artistId)
   const already = current?.site_kind === 'custom' && (current.custom_site_url ?? '').replace(/\/+$/, '').toLowerCase() === origin
-  let connected = already
   if (already) say({ step: 'already connected to the artist', ok: true })
-  else if (!codes.google) say({ step: 'connect', ok: false, reason: 'no_google_proof', detail: 'only Google’s code proves which artist a site serves' })
   else {
     await deps.store.connect(artistId, origin)
-    connected = true
     say({ step: `connected to the artist as ${origin}`, ok: true })
   }
 
@@ -195,14 +217,11 @@ export async function registerSite(artistId: string, address: string, deps: Regi
     await deps.store.mark(artistId, p, { verified: true, error_code: null })
     verified.push(p)
   }
-  if (codes.google && deps.google) {
-    const g = deps.google
-    await finish('google', [() => g.verify(siteUrl, deps.owners), () => g.addSite(siteUrl), () => g.submitSitemap(siteUrl, sitemap)], ['verified', 'property added', 'sitemap sent'])
-  }
+  await finish('google', [() => google.verify(siteUrl, deps.owners), () => google.addSite(siteUrl), () => google.submitSitemap(siteUrl, sitemap)], ['verified', 'property added', 'sitemap sent'])
   if (codes.bing && deps.bing) {
     const b = deps.bing
     await finish('bing', [() => b.verify(siteUrl), () => b.submitFeed(siteUrl, sitemap)], ['verified', 'sitemap sent'])
   }
   // ok only when every step went through (a provider verified but its sitemap refused is not ok).
-  return done(steps.every((st) => st.ok), siteUrl, verified, connected)
+  return done(steps.every((st) => st.ok), siteUrl, verified, true)
 }

@@ -9,7 +9,11 @@
  *
  * Needs in .env.local: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (the table is written
  * only by the service role), GOOGLE_SEARCH_SERVICE_ACCOUNT_B64, BING_WEBMASTER_API_KEY,
- * TAPIR_SEARCH_OWNER_EMAIL. Missing Google or Bing credentials skip that provider, loudly.
+ * TAPIR_SEARCH_OWNER_EMAIL. No Google key stops it (Google's code is the only proof of which
+ * artist a site serves); a missing Bing key skips Bing, loudly.
+ *
+ * Ctrl-C once: it stops, putting back any codes stored on an address not yet proven live.
+ * Ctrl-C twice: quits at once, and may leave them (run with --check to see what is stored).
  *
  * Prints only step names, reason codes and Google's / Bing's own short messages: never a key.
  * Safe to run again: every call tolerates repeats ("try again" = run it again).
@@ -67,7 +71,7 @@ async function main() {
   }
 
   const creds = googleCredsFromEnv(process.env.GOOGLE_SEARCH_SERVICE_ACCOUNT_B64)
-  if (!creds) console.warn('! GOOGLE_SEARCH_SERVICE_ACCOUNT_B64 missing or broken: Google is skipped.')
+  if (!creds) die('GOOGLE_SEARCH_SERVICE_ACCOUNT_B64 missing or broken: without Google’s code nothing proves which artist the site serves.')
   const bingKey = process.env.BING_WEBMASTER_API_KEY?.trim()
   if (!bingKey) console.warn('! BING_WEBMASTER_API_KEY missing: Bing is skipped.')
   // Server config only, never a request: a typo here would hand a stranger ownership of the site.
@@ -76,9 +80,27 @@ async function main() {
   if (owners.length !== listed.length) die('TAPIR_SEARCH_OWNER_EMAIL holds something that is not an email address.')
   if (!owners.length) console.warn('! TAPIR_SEARCH_OWNER_EMAIL missing: only the robot account will own the site at Google.')
 
+  // The first Ctrl-C asks registerSite to stop, and it puts back what it stored on an unproven
+  // address before returning; quitting at once would leave a typo'd address held, or an older
+  // row's verified time lost. A second Ctrl-C quits at once. ONE press arrives here twice (the
+  // terminal signals the whole group and tsx relays it again: seen 2026-10-01), so a repeat within
+  // a second is the same press.
+  const stop = new AbortController()
+  let firstAt = 0
+  process.on('SIGINT', () => {
+    if (stop.signal.aborted && Date.now() - firstAt < 1000) return
+    if (stop.signal.aborted) {
+      console.error('\n✖ quit before putting anything back: run with --check to see what is stored.')
+      process.exit(130)
+    }
+    console.error('\n! stopping: putting back anything stored on an unproven address (Ctrl-C again to quit at once)')
+    firstAt = Date.now()
+    stop.abort()
+  })
+
   const out = await registerSite(artist.id, target, {
     store,
-    google: creds ? googleClient(creds) : null,
+    google: googleClient(creds),
     bing: bingKey ? bingClient(bingKey) : null,
     resolveAddress: (input) => resolveSiteAddress(input),
     // Exactly the address Google and Bing will fetch (no cache-busting query: on a prerendered
@@ -96,7 +118,9 @@ async function main() {
     },
     owners,
     log: (line) => console.log(`  ${line}`),
+    signal: stop.signal,
   })
+  if (stop.signal.aborted) process.exit(130)
   console.log(out.ok ? `✔ done: verified with ${out.verified.join(' + ')}` : `✖ not finished: verified with ${out.verified.join(' + ') || 'nothing'}. Run it again to retry.`)
   if (!out.ok) process.exit(1)
 }

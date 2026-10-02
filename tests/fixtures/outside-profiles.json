@@ -1,7 +1,22 @@
 {
-  "_about": "Real answers, fetched 2026-09-30 (US time) with Tapir's User-Agents; trimmed: Discogs' profile text, images, members and aliases are left out (we never show them). See tests/unit/manager-tools/seo/outside-profiles.test.ts.",
+  "_about": "Real answers, fetched 2026-09-30 (US time) with Tapir's User-Agents; trimmed: Discogs' profile text, images, members and aliases are left out (we never show them). See tests/unit/manager-tools/seo/outside-profiles.test.ts. search_P856_only_thebeatles was fetched 2026-10-01: the exact search Tapir sends with no MusicBrainz id (haswbstatement: the 8 spellings of thebeatles.com as P856, OR'd), so the website alone finds the item.",
   "wikidata": {
     "search_P434_or_P856_thebeatles": {
+      "batchcomplete": "",
+      "query": {
+        "searchinfo": {
+          "totalhits": 1
+        },
+        "search": [
+          {
+            "ns": 0,
+            "title": "Q1299",
+            "pageid": 1683
+          }
+        ]
+      }
+    },
+    "search_P856_only_thebeatles": {
       "batchcomplete": "",
       "query": {
         "searchinfo": {

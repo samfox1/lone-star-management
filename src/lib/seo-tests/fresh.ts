@@ -13,15 +13,19 @@
  * The line is the last CONTENT change (`contentAt`; `publishedAt` on a database too old to
  * send `changed_at`), because what the tests read is content:
  *
- *   true   the newest lastmod is `contentAt`, `publishedAt`, or any publish moment at or after
- *          the line (within 1 s: Postgres keeps microseconds, a JS Date milliseconds). After a
+ *   true   ANY lastmod is `contentAt`, `publishedAt`, or a publish moment at or after the line
+ *          (within 1 s: Postgres keeps microseconds, a JS Date milliseconds). Any, not the
+ *          newest: on tour, a show that passed after the last content change dates the 0.45
+ *          homepage, and only a page that shows no tour (/about) still names the change. A
+ *          stale site's pages are all older than the line, so none of them can match. After a
  *          Brand-only publish a 0.45 site still says `contentAt`, and that IS fresh: nothing a
  *          test reads has changed since.
- *   false  it is a publish moment BEFORE the line: confirmed stale
- *   null   anything else: no sitemap, no timed lastmod, a date-only lastmod, or a stamp that is
- *          no publish we made (a site that stamps the time of the request; a passed show's
- *          midnight, which a stale site shows just the same, so it can never prove fresh).
- *          "Couldn't tell" is never reported as fresh.
+ *   false  no lastmod matches, and the NEWEST is a publish moment BEFORE the line: confirmed
+ *          stale (an older stamp alone proves nothing: a bio page unchanged for months)
+ *   null   anything else: no sitemap, no timed lastmod, a date-only lastmod, or a newest stamp
+ *          that is no publish we made (a site that stamps the time of the request; a passed
+ *          show's midnight, which a stale site shows just the same, so it can never prove
+ *          fresh). "Couldn't tell" is never reported as fresh.
  *
  * WHAT IT CANNOT PROVE. Each page is cached on its own. A fresh sitemap proves the site has read
  * the new publish from the database; the home page and /about regenerate on their own 60 s
@@ -62,11 +66,15 @@ export function siteFreshness(
   const line = Number.isFinite(content) ? content : latest
   const stamps = stampsOf(lastmods)
   if (stamps.length === 0) return null
-  const newest = Math.max(...stamps)
-  const same = (m: number) => Math.abs(newest - m) <= SAME_MOMENT_MS
+  const near = (a: number, b: number) => Math.abs(a - b) <= SAME_MOMENT_MS
   const at = moments.map((m) => Date.parse(m)).filter((m) => Number.isFinite(m))
-  if (same(latest) || same(line) || at.some((m) => m >= line - SAME_MOMENT_MS && same(m))) return true
-  if (at.some((m) => m < line - SAME_MOMENT_MS && same(m))) return false
+  const current = at.filter((m) => m >= line - SAME_MOMENT_MS)
+  // ANY stamp: on tour a passed show's midnight dates the homepage, and only a page that shows
+  // no tour (/about) still names the content change.
+  if (stamps.some((s) => near(s, latest) || near(s, line) || current.some((m) => near(s, m)))) return true
+  // Stale only on the NEWEST stamp: an older page (a bio unchanged for months) proves nothing.
+  const newest = Math.max(...stamps)
+  if (at.some((m) => m < line - SAME_MOMENT_MS && near(newest, m))) return false
   return null
 }
 

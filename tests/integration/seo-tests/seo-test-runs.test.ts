@@ -3,11 +3,7 @@
  * the two service-role functions are the only way to write one, and they enforce cool-downs,
  * coalescing, per-person limits, the size cap, retention and immutability.
  *
- * ┌──────────────────────────────────────────────────────────────────────────────────────────┐
- * │ NOT RUN until the migration is pushed. Flip MIGRATION_PUSHED to true in the SAME change  │
- * │ as `npm run db:push`, then run this file (and `npm run audit:grants`).                   │
- * │ The crawl block has its own gate: CRAWL_MIGRATION_PUSHED, for 20261001120000.            │
- * └──────────────────────────────────────────────────────────────────────────────────────────┘
+ * Both migrations are LIVE (20260929140000; 20261001120000, the crawl block).
  *
  * Code:     supabase/migrations/20260929140000_seo_test_runs.sql (the seo_test_runs table, its
  *           RLS and grants, seo_test_claim, seo_test_finish) and 20261001120000_seo_test_crawl.sql
@@ -52,7 +48,7 @@ import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 const MIGRATION_PUSHED = true
-/** 20261001120000_seo_test_crawl.sql. Flip in the same change as its push, then run this file. */
+/** 20261001120000_seo_test_crawl.sql (live). */
 const CRAWL_MIGRATION_PUSHED = true
 
 const results = (fails: number): SeoTestResult[] =>

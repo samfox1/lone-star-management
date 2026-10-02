@@ -8,13 +8,19 @@
  *           "Round 3")
  * Tier:     STRICT (AGENTS.md "Test depth"): it builds addresses from the artist's data and
  *           decides what the artist is told to do on another service.
- * Covers:   • the site's spellings (Wikidata's match is exact) and the one search built from them
+ * Covers:   • which site is asked about: the custom site by the AI test's rule, path kept; a
+ *             template artist's `<app>/<slug>` page is no site (its host is every artist's)
+ *           • the site's spellings (Wikidata's match is exact), on the site's own path, and the
+ *             one search built from them
+ *           • "the same site": host AND, for a site on a path, that path (another page on a
+ *             shared host is someone else's)
  *           • the ids Tapir already knows: Connections links, and the AI test's MusicBrainz page
  *             (a pass only)
- *           • Wikidata: found through the search, with which of P856 / P434 the item carries; no
- *             item; a 429 given up at once; a linked item that is gone falls back to the search
+ *           • Wikidata: found through the search (by the website alone, too), with which of P856 /
+ *             P434 the item carries; no item; a 429 given up at once; a linked item that is gone
+ *             falls back to the search; no site and no MusicBrainz id is "no site", nothing asked
  *           • Discogs: lists the site (any spelling) / site missing / no page there / no page
- *             linked (nothing asked) / couldn't check
+ *             linked or no site (nothing asked) / couldn't check
  *           • each service gets its own User-Agent
  * Not here: the Discogs and Wikidata link parsers (tests/unit/manager-tools/connections/identity-only.test.ts);
  *           guardedFetch's address and redirect rules (tests/unit/safe-fetching/); the rows'
@@ -22,13 +28,15 @@
  *           (outside-load.ts, Next's unstable_cache).
  * Fixtures: tests/fixtures/outside-profiles.json: REAL answers from Wikidata (Q1299, The Beatles,
  *           P856 https://thebeatles.com) and Discogs (82730 The Beatles; 1230117, the OTHER
- *           "Skeen"), fetched 2026-09-30 and trimmed. `fakeSite` serves them; nothing reaches the
- *           network.
+ *           "Skeen"), fetched 2026-09-30 and trimmed; `search_P856_only_thebeatles` is the exact
+ *           search Tapir sends with no MusicBrainz id (the 8 spellings, OR'd), fetched 2026-10-01:
+ *           Wikidata DOES find an item by its website alone. `fakeSite` serves them; nothing
+ *           reaches the network.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { connectedIds, knownMbid, siteSpellings, wikidataSearchUrl } from '@/lib/manager-tools/profiles/outside'
+import { connectedIds, isSameSite, knownMbid, profileSiteUrl, siteSpellings, wikidataSearchUrl } from '@/lib/manager-tools/profiles/outside'
 import { checkDiscogs, checkWikidata } from '@/lib/manager-tools/profiles/outside-check'
 import { fakeSite, type FakeAnswer, type FakeRequest } from '@tests/unit/seo-tests/fake-site'
 
@@ -42,17 +50,22 @@ const STATEMENTS = (q: string, p: string) => `https://www.wikidata.org/w/rest.ph
 const clausesOf = (url: string) => (new URL(url).searchParams.get('srsearch') ?? '').replace(/^haswbstatement:/, '').split('|')
 
 /** Wikidata as it answers for The Beatles: the search finds Q1299 when asked for ANY clause
- *  that item really carries (its P856 is stored as `https://thebeatles.com`, exactly). */
+ *  that item really carries (its P856 is stored as `https://thebeatles.com`, exactly). A search
+ *  by the website alone gets the real answer to exactly that search. */
 function beatlesWikidata(p856: unknown = FIX.wikidata.Q1299_P856) {
   return fakeSite(
     { [STATEMENTS('Q1299', 'P856')]: json(p856), [STATEMENTS('Q1299', 'P434')]: json(FIX.wikidata.Q1299_P434) },
     (req: FakeRequest) => {
       if (!req.url.startsWith(`${SEARCH}?`)) return undefined
-      const hit = clausesOf(req.url).some((c) => c === 'P856=https://thebeatles.com' || c === `P434=${BEATLES_MBID}`)
-      return json(hit ? FIX.wikidata.search_P434_or_P856_thebeatles : FIX.wikidata.search_none)
+      const clauses = clausesOf(req.url)
+      if (!clauses.some((c) => c === 'P856=https://thebeatles.com' || c === `P434=${BEATLES_MBID}`)) return json(FIX.wikidata.search_none)
+      return json(clauses.every((c) => c.startsWith('P856=')) ? FIX.wikidata.search_P856_only_thebeatles : FIX.wikidata.search_P434_or_P856_thebeatles)
     },
   )
 }
+
+/** A site that lives on a path of a host other artists share. */
+const PATH_SITE = 'https://www.facebook.com/thebeatles'
 
 describe('what is asked', () => {
   // Wikidata matches P856 exactly, so every common spelling of the homepage is asked: missing
@@ -64,6 +77,41 @@ describe('what is asked', () => {
     ])
     expect(siteSpellings('https://thebeatles.com/')).toContain('https://www.thebeatles.com/')
     for (const bad of [null, '', 'mailto:a@b.com', 'ftp://x.com', 'http://localhost:3000', 'not a url']) expect(siteSpellings(bad)).toEqual([])
+  })
+
+  // The site asked about is the custom site, by the AI test's own rule (seoSiteOrigin), with its
+  // path. A template artist's page is `<this app>/<slug>`: asking for that host would find any
+  // artist's, so it is no site. A local or private address is none either.
+  it('asks about the custom site, path kept; a template page or a private address is no site', () => {
+    expect(profileSiteUrl({ site_kind: 'custom', custom_site_url: 'https://www.skeenmusic.com/' })).toBe('https://www.skeenmusic.com')
+    expect(profileSiteUrl({ site_kind: 'custom', custom_site_url: ' https://linktr.ee/skeen/ ' })).toBe('https://linktr.ee/skeen')
+    for (const row of [
+      { site_kind: 'template', custom_site_url: null },
+      { site_kind: 'template', custom_site_url: 'https://www.skeenmusic.com' },
+      { site_kind: 'custom', custom_site_url: 'http://localhost:3004' },
+      { site_kind: 'custom', custom_site_url: 'http://10.0.0.7/skeen' },
+      null,
+    ]) expect(profileSiteUrl(row), JSON.stringify(row)).toBeNull()
+  })
+
+  // A site on a path is spelled on that path, never as the bare host: P856=https://www.facebook.com/
+  // would match every artist whose website is Facebook's home page. A `|` in the path would add a
+  // clause of its own to the OR, so such a path is not asked about.
+  it('spells a site that lives on a path on that path, and never the bare host', () => {
+    expect(siteSpellings(PATH_SITE)).toEqual([
+      'https://www.facebook.com/thebeatles/', 'https://www.facebook.com/thebeatles', 'http://www.facebook.com/thebeatles/', 'http://www.facebook.com/thebeatles',
+      'https://facebook.com/thebeatles/', 'https://facebook.com/thebeatles', 'http://facebook.com/thebeatles/', 'http://facebook.com/thebeatles',
+    ])
+    expect(clausesOf(wikidataSearchUrl(`${PATH_SITE}/`, null)!).every((c) => c.includes('facebook.com/thebeatles'))).toBe(true)
+    expect(siteSpellings('https://x.com/a|P434=b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d')).toEqual([])
+  })
+
+  // The same site: host (give or take www. and the scheme) and, for a site on a path, that path
+  // or a page under it. A root site owns its whole host.
+  it('the same site: the host, and the path for a site that lives on one', () => {
+    for (const same of ['https://facebook.com/thebeatles', 'http://www.facebook.com/thebeatles/', 'https://www.facebook.com/thebeatles/videos']) expect(isSameSite(same, PATH_SITE), same).toBe(true)
+    for (const other of ['https://www.facebook.com/', 'https://www.facebook.com/someoneelse', 'https://www.facebook.com/thebeatles2', 'https://thebeatles.com/']) expect(isSameSite(other, PATH_SITE), other).toBe(false)
+    expect(isSameSite('https://www.thebeatles.com/shop', 'https://thebeatles.com')).toBe(true)
   })
 
   // ONE search, every clause OR'd: the MusicBrainz id (lower-cased, and only a real one) and
@@ -118,9 +166,19 @@ describe('Wikidata', () => {
     expect(await checkWikidata({ siteUrl: 'https://thebeatles.com', mbid: BEATLES_MBID, item: null }, { fetcher: beatlesWikidata(old) })).toMatchObject({ kind: 'found', hasSite: false, hasMbid: true })
   })
 
+  // No MusicBrainz id: the website alone finds the item (the real answer to exactly this search).
+  // No site but a MusicBrainz id: the item is found and the site is not asked about (null), so
+  // the row never says "site missing" to an artist who has none.
+  it('finds the item by the website alone, and says nothing about a site the artist doesn’t have', async () => {
+    const web = beatlesWikidata()
+    expect(await checkWikidata({ siteUrl: 'https://www.thebeatles.com', mbid: null, item: null }, { fetcher: web })).toEqual({ kind: 'found', item: 'Q1299', url: 'https://www.wikidata.org/wiki/Q1299', hasSite: true, hasMbid: true })
+    expect(clausesOf(web.calls[0].url).every((c) => c.startsWith('P856='))).toBe(true)
+    expect(await checkWikidata({ siteUrl: null, mbid: BEATLES_MBID, item: null }, { fetcher: beatlesWikidata() })).toMatchObject({ kind: 'found', item: 'Q1299', hasSite: null, hasMbid: true })
+  })
+
   // No item lists the site: "no item yet". A 429 is given up at once (one request, no retry).
   // A linked item Wikidata no longer has falls back to the search. Nothing to ask by: no request.
-  it('says no item, gives up on a 429, falls back from a gone item, and asks nothing without a site', async () => {
+  it('says no item, gives up on a 429, falls back from a gone item, and asks nothing with no site and no ID', async () => {
     expect(await checkWikidata({ siteUrl: 'https://www.skeenmusic.com', mbid: null, item: null }, { fetcher: beatlesWikidata() })).toEqual({ kind: 'none', byMbid: false })
 
     const busy = fakeSite({}, () => json({ error: 'slow down' }, 429, { 'retry-after': '30' }))
@@ -133,7 +191,7 @@ describe('Wikidata', () => {
     expect(await checkWikidata({ siteUrl: 'https://thebeatles.com', mbid: null, item: 'Q999999990' }, { fetcher: viaGone })).toMatchObject({ kind: 'found', item: 'Q1299', hasSite: true })
 
     const silent = fakeSite({})
-    expect(await checkWikidata({ siteUrl: null, mbid: null, item: null }, { fetcher: silent })).toEqual({ kind: 'unknown' })
+    expect(await checkWikidata({ siteUrl: null, mbid: null, item: null }, { fetcher: silent })).toEqual({ kind: 'nosite' })
     expect(silent.calls.length).toBe(0)
   })
 })
@@ -162,6 +220,15 @@ describe('Discogs', () => {
 
     const none = discogsWeb()
     expect(await checkDiscogs({ siteUrl: 'https://www.skeenmusic.com', id: null }, { fetcher: none })).toEqual({ kind: 'unlinked' })
+    // A linked page but no site: nothing to look for, so nothing is asked ("no site", not "couldn't check").
+    expect(await checkDiscogs({ siteUrl: null, id: '82730' }, { fetcher: none })).toEqual({ kind: 'nosite', id: '82730', url: 'https://www.discogs.com/artist/82730' })
     expect(none.calls.length).toBe(0)
+  })
+
+  // The Beatles' real page lists https://www.facebook.com/thebeatles. A site at ANOTHER path on
+  // Facebook is not on it: the host alone would have said "lists your site".
+  it('a site on a shared host is listed only at its own path', async () => {
+    expect(await checkDiscogs({ siteUrl: PATH_SITE, id: '82730' }, { fetcher: discogsWeb() })).toMatchObject({ kind: 'listed' })
+    expect(await checkDiscogs({ siteUrl: 'https://www.facebook.com/someoneelse', id: '82730' }, { fetcher: discogsWeb() })).toMatchObject({ kind: 'missing' })
   })
 })

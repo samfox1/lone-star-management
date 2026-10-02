@@ -11,13 +11,17 @@
  *           • a rerun: same codes keep their verified state; a new code or address resets it
  *           • tags never live: the rows this run created are removed, older ones marked
  *             not_live, nothing connected, nothing verified
+ *           • stopped (Ctrl-C, mid-sleep) or a call throwing during the wait: rows put back exactly
  *           • an address another artist holds, a bad address: stop before any code is made
+ *           • no Google code (no key, or refused): stop before storing anything or asking Bing
  *           • one provider failing never stops the other; each failure is stored as its code;
- *             verified-but-sitemap-refused is verified with the reason kept
- *           • neither provider, or one not set up, or one giving no code: handled, never stored
- *             without a code; a moved address resets verification
+ *             a refused verify un-verifies a row verified before; verified-but-sitemap-refused is
+ *             verified with the reason kept
+ *           • Bing not set up or giving no code: left out, never stored without a code; a moved
+ *             address resets verification
  *           • an already-connected artist isn't rewritten (slash, case); anyone else is connected;
- *             the live check reads real <meta> tags and ignores ones without a name or content
+ *             the live check reads real <meta> tags (never data-name / data-content) and ignores
+ *             ones without a name or content
  * Not here: the Supabase store's queries (tests/integration/site/site-register-store.test.ts);
  *           the Google and Bing calls themselves (google.test.ts, bing.test.ts).
  * Fixtures: an in-memory store, fake Google and Bing clients, and a scripted home page.
@@ -58,7 +62,7 @@ function memStore(init: { rows?: Row[]; holder?: string | null; site?: { site_ki
     mark: async (_a, p, r) => {
       const row = rows.get(p)!
       row.error_code = r.error_code
-      if (r.verified) row.verified_at = 'now'
+      row.verified_at = r.verified ? 'now' : null
       events.push(`mark ${p} ${r.verified ? 'verified' : 'not'} ${r.error_code ?? ''}`.trim())
     },
     siteOf: async () => site,
@@ -129,6 +133,13 @@ describe('the live check reads real <meta> tags', () => {
     const html = `<meta charset="utf-8"><meta name="viewport"><meta property="og:title" content="x">${page(G, B)}`
     expect(tagsLive(html, { google: G, bing: B })).toBe(true)
     expect(metaTags('<meta name="a">').size).toBe(0)
+  })
+
+  // `data-name` / `data-content` are other attributes: they neither stand in for name and content
+  // nor hide the real ones written after them.
+  it('reads name and content, never data-name or data-content', () => {
+    expect(tagsLive(`<head><meta data-name="google-site-verification" data-content="${G}"></head>`, { google: G })).toBe(false)
+    expect(tagsLive(`<head><meta data-name="x" data-content="y" name="google-site-verification" content="${G}"></head>`, { google: G })).toBe(true)
   })
 
   // The wrong code, a missing tag, or no page at all is not live.
@@ -210,6 +221,24 @@ describe('registerSite', () => {
     expect(mem.events).toContain('restore google')
   })
 
+  // Ctrl-C mid-wait, or a call that throws before the tags are seen: the rows go back exactly as
+  // they were (no typo'd address held, an older row's verified time not lost), nothing connected.
+  it('puts the rows back when the wait is stopped or a call throws', async () => {
+    const old: Row = { provider: 'google', site_url: 'https://old.example/', code: 'oldCode', verified_at: 'earlier', error_code: 'google_add' }
+    const stop = new AbortController()
+    const mem = memStore({ rows: [old] })
+    // Stopped while sleeping between looks; a sleep that never ends proves the stop doesn't wait it out.
+    const out = await registerSite(ARTIST, SITE, deps(mem, { signal: stop.signal, fetchHome: async () => page(null, null), sleep: () => (stop.abort(), new Promise(() => {})) }))
+    expect(out).toMatchObject({ ok: false, connected: false, verified: [] })
+    expect(out.steps.at(-1)).toMatchObject({ ok: false, reason: 'interrupted' })
+    expect([...mem.rows.values()]).toEqual([old])
+    expect(mem.events.some((e) => e.startsWith('connect') || e.includes(' verify'))).toBe(false)
+
+    const mem2 = memStore({ rows: [old] })
+    await expect(registerSite(ARTIST, SITE, deps(mem2, { fetchHome: async () => { throw new Error('dns down') } }))).rejects.toThrow('dns down')
+    expect([...mem2.rows.values()]).toEqual([old])
+  })
+
   // A row that existed before this run is kept (it may be live elsewhere) and marked not_live.
   it('removes nothing when every row predates the run', async () => {
     const mem = memStore({ rows: [
@@ -276,7 +305,8 @@ describe('registerSite', () => {
 
   // Google refusing never stops Bing, and the refusal is stored as its code.
   it('carries on with Bing when Google fails, and stores Google’s reason', async () => {
-    const mem = memStore()
+    // Verified on an earlier run, same code and address: a refused verify still un-verifies it.
+    const mem = memStore({ rows: [{ provider: 'google', site_url: SITE, code: G, verified_at: 'earlier', error_code: null }] })
     const out = await registerSite(ARTIST, SITE, deps(mem, {}, { google: { verify: () => ({ ok: false, reason: 'google_verify', detail: 'token not found' }) } }))
     expect(out).toMatchObject({ ok: false, verified: ['bing'] })
     expect(mem.rows.get('google')).toMatchObject({ verified_at: null, error_code: 'google_verify' })
@@ -292,15 +322,6 @@ describe('registerSite', () => {
     expect(out.verified).toEqual(['google', 'bing'])
     expect(out.ok).toBe(false)
     expect(mem.rows.get('bing')).toMatchObject({ verified_at: 'now', error_code: 'bing_feed' })
-  })
-
-  // Only the provider that produced a code is stored and waited for.
-  it('goes on with one provider when the other can’t give a code', async () => {
-    const mem = memStore()
-    const out = await registerSite(ARTIST, SITE, deps(mem, { fetchHome: async () => page(null, B) }, { google: { token: () => ({ ok: false, reason: 'google_auth', detail: 'bad key' }) } }))
-    expect([...mem.rows.keys()]).toEqual(['bing'])
-    expect(out.verified).toEqual(['bing'])
-    expect(out.steps.find((st) => st.step === 'google code')).toEqual({ step: 'google code', ok: false, reason: 'google_auth', detail: 'bad key' })
   })
 
   // A site already on the Bing account: AddSite is refused (AlreadyExists), the code is still read.
@@ -327,34 +348,29 @@ describe('registerSite', () => {
     expect(mem.events).not.toContain('bing verify')
   })
 
-  // Neither provider gave a code: nothing stored, nothing looked at, not ok.
-  it('stops when neither provider gives a code', async () => {
-    const mem = memStore()
-    const out = await registerSite(ARTIST, SITE, deps(mem, {}, { google: { token: () => ({ ok: false, reason: 'google_auth' }) }, bing: { addSite: () => ({ ok: false, reason: 'bing_auth' }), code: () => ({ ok: false, reason: 'bing_auth' }) } }))
-    expect(out).toMatchObject({ ok: false, connected: false, verified: [] })
-    expect(mem.events.filter((e) => !e.startsWith('google') && !e.startsWith('bing'))).toEqual([])
+  // Google's code is made for this site alone; Bing's is the same on every site of the account, so
+  // another artist's page showing it proves nothing. No Google code (no key, or Google refused):
+  // nothing stored, Bing not asked, nothing connected.
+  it('stops before storing anything without Google’s code', async () => {
+    for (const d of [
+      (m: ReturnType<typeof memStore>) => deps(m, { fetchHome: async () => page(null, B) }, { google: { token: () => ({ ok: false, reason: 'google_auth', detail: 'bad key' }) } }),
+      (m: ReturnType<typeof memStore>) => deps(m, { google: null, fetchHome: async () => page(null, B) }),
+    ]) {
+      const mem = memStore()
+      const out = await registerSite(ARTIST, SITE, d(mem))
+      expect(out).toMatchObject({ ok: false, connected: false, verified: [] })
+      expect(out.steps.at(-1)).toMatchObject({ ok: false, reason: 'no_google_code' })
+      expect(mem.events.filter((e) => e !== 'google token')).toEqual([])
+      expect(mem.rows.size).toBe(0)
+    }
   })
 
   // A provider with no credentials is skipped entirely, and the other runs on its own.
-  it('skips a provider that isn’t set up', async () => {
+  it('skips Bing when it isn’t set up', async () => {
     const mem = memStore()
-    const out = await registerSite(ARTIST, SITE, deps(mem, { google: null, fetchHome: async () => page(null, B) }))
-    expect(out).toMatchObject({ verified: ['bing'] })
-    expect(mem.events.some((e) => e.startsWith('google'))).toBe(false)
-    const mem2 = memStore()
-    const out2 = await registerSite(ARTIST, SITE, deps(mem2, { bing: null, fetchHome: async () => page(G, null) }))
-    expect(out2).toMatchObject({ ok: true, verified: ['google'] })
-    expect(mem2.events.some((e) => e.startsWith('bing'))).toBe(false)
-  })
-
-  // Bing's code is the same on every site of the account, so it proves nothing about WHICH artist
-  // a site serves: with no Google code seen, nothing is connected.
-  it('connects nothing without Google’s code as proof', async () => {
-    const mem = memStore()
-    const out = await registerSite(ARTIST, SITE, deps(mem, { google: null, fetchHome: async () => page(null, B) }))
-    expect(out).toMatchObject({ ok: false, connected: false, verified: ['bing'] })
-    expect(mem.events.some((e) => e.startsWith('connect'))).toBe(false)
-    expect(out.steps.find((st) => st.step === 'connect')).toMatchObject({ ok: false, reason: 'no_google_proof' })
+    const out = await registerSite(ARTIST, SITE, deps(mem, { bing: null, fetchHome: async () => page(G, null) }))
+    expect(out).toMatchObject({ ok: true, verified: ['google'] })
+    expect(mem.events.some((e) => e.startsWith('bing'))).toBe(false)
   })
 
   // Skeen is already connected at this address (the column has no trailing slash, or has one;

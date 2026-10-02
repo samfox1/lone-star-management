@@ -393,9 +393,10 @@ const TWO_PAGES = (): SitePages => pages({
     { path: '/about', finalUrl: `${ORIGIN}/about`, status: 200, headers: {}, html: '<html></html>' },
   ],
 })
-/** Registered addresses: the BARE spelling, on purpose, so a call made with the connected site
- *  (www, known.siteUrl) instead of the registered one shows. */
-const REG = 'https://example-artist.com/'
+/** Registered addresses: the spelling the site ANSWERS on (www), written as the property is
+ *  (with its trailing slash), so a call made with the connected address (known.siteUrl, no
+ *  slash) instead of the registered one shows. Registered at another spelling: not asked (below). */
+const REG = `${ORIGIN}/`
 const reg = (...providers: SeoRegistration['provider'][]): SeoRegistration[] => providers.map((provider) => ({ provider, siteUrl: REG }))
 
 type GoogleAnswer = GoogleResult<GoogleInspection> | Promise<GoogleResult<GoogleInspection>>
@@ -469,7 +470,7 @@ describe('the listing: asked only where the site is registered', () => {
       const l = fakeListing({ google: INDEXED, bing: CRAWLED })
       const f = world()
       await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg(only), listingClients: l.make })
-      const asked = TWO_PAGES().paths.map((p) => [REG, `https://example-artist.com${p}`])
+      const asked = TWO_PAGES().paths.map((p) => [REG, `${ORIGIN}${p}`])
       const other = only === 'google' ? 'bing' : 'google'
       expect(l.calls[only], only).toEqual(asked)
       expect(l.calls[other], only).toEqual([])
@@ -494,7 +495,7 @@ describe('the listing: asked only where the site is registered', () => {
     const l = fakeListing({ google: INDEXED })
     const f = world()
     await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => pages({ paths: seven }) }), readKnown: async () => known(), readRegistered: async () => reg('google'), listingClients: l.make })
-    expect(l.calls.google.map(([, u]) => u)).toEqual(seven.slice(0, 5).map((p) => `https://example-artist.com${p}`))
+    expect(l.calls.google.map(([, u]) => u)).toEqual(seven.slice(0, 5).map((p) => `${ORIGIN}${p}`))
   })
 
   // Tests load .env.local, so the real clients must refuse under vitest: a test that forgot to
@@ -547,6 +548,59 @@ describe('the listing: asked only where the site is registered', () => {
     expect(crawlSent()?.listing.google).toEqual(TWO_PAGES().paths.map(NULL_G))
   })
 
+  // Pages are asked about where the site ANSWERED. Registered as the bare spelling while the site
+  // lives on www, Google would call every page "Page with redirect" ("0 of 5 on Google"): such a
+  // registration is not asked at all, and its rows say "couldn't ask", never "not listed".
+  it('CRITICAL: registered at another spelling than the site answered on: not asked, every row “no answer”', async () => {
+    const bare = 'https://example-artist.com/'
+    const l = fakeListing({ google: INDEXED, bing: CRAWLED })
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), {
+      engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(),
+      readRegistered: async () => [{ provider: 'google', siteUrl: bare }, { provider: 'bing', siteUrl: bare }], listingClients: l.make,
+    })
+    expect(l.calls).toEqual({ google: [], bing: [] })
+    expect(crawlSent()?.listing).toEqual({ google: TWO_PAGES().paths.map(NULL_G), bing: TWO_PAGES().paths.map(NULL_B) })
+    // The spelling it ANSWERED on decides, not the one it was connected as: connected bare,
+    // answering on www, registered on www: asked, on www.
+    const m = fakeListing({ google: INDEXED })
+    const g = world()
+    await runSeoTests(g.client, A, 'manual', WHO(g), {
+      engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known({ siteUrl: bare }),
+      readRegistered: async () => reg('google'), listingClients: m.make,
+    })
+    expect(m.calls.google).toEqual(TWO_PAGES().paths.map((p) => [REG, `${ORIGIN}${p}`]))
+  })
+
+  // The deadline ENDS the work, not just the wait: a hung Google / Bing request is aborted (its
+  // socket freed) when the run's time is up, and a registration read that never answers can't
+  // hold the run open either.
+  it('the run’s deadline aborts hung Google / Bing requests, and bounds the registration read', async () => {
+    let signal: AbortSignal | undefined
+    let stopped = 0
+    const hang = () => new Promise<never>((_, reject) => signal?.addEventListener('abort', () => (stopped++, reject(new Error('aborted')))))
+    const make = async (o?: { signal?: AbortSignal }): Promise<ListingClients> => {
+      signal = o?.signal
+      return { google: { inspectUrl: hang }, bing: { urlInfo: hang } }
+    }
+    const f = world()
+    const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ gatherSiteEvidence: async () => TWO_PAGES() }), readKnown: async () => known(), readRegistered: async () => reg('google', 'bing'), listingClients: make, budgetMs: 60 })
+    expect(out.ok).toBe(true)
+    expect(signal?.aborted).toBe(true)
+    expect(stopped).toBe(2) // the first page of each provider was in flight; both were told to stop
+    expect(crawlSent()?.listing).toEqual({ google: TWO_PAGES().paths.map(NULL_G), bing: TWO_PAGES().paths.map(NULL_B) })
+
+    // A registration read that never answers: the run still finishes (it would otherwise hang
+    // forever, so any bound tells), with nothing asked.
+    const g = world()
+    const never = vi.fn(async (): Promise<ListingClients> => ({ google: null, bing: null }))
+    const run = runSeoTests(g.client, A, 'manual', WHO(g), { engine: engine(), readKnown: async () => known(), readRegistered: () => new Promise<SeoRegistration[]>(() => {}), listingClients: never, budgetMs: 60 })
+    const hung = new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 10_000))
+    expect(await Promise.race([run, hung])).toMatchObject({ ok: true })
+    expect(never).not.toHaveBeenCalled()
+    expect(crawlSent()?.listing).toEqual({ google: null, bing: null })
+  })
+
   // The registrations live in a table closed to managers: they are read through the WRITER
   // (service role), never the manager's session, and only a VERIFIED row counts.
   it('CRITICAL: registrations are read through the writer, and only verified rows count', async () => {
@@ -563,7 +617,7 @@ describe('the listing: asked only where the site is registered', () => {
     const read = writer.calls.find((c) => c.table === 'site_verifications')
     expect(read?.op).toBe('select')
     expect(read?.filters).toContainEqual(['eq', 'artist_id', A])
-    expect(l.calls.google).toEqual([[REG, 'https://example-artist.com/']])
+    expect(l.calls.google).toEqual([[REG, `${ORIGIN}/`]])
     expect(l.calls.bing).toEqual([])
   })
 

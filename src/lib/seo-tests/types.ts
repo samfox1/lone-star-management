@@ -119,6 +119,10 @@ export type SeoBot = {
   /** Tokens the bot falls back to when robots.txt has no group for its own token, in order
    *  (Applebot follows Googlebot's group when there is no Applebot group: Apple's doc). */
   robotsFallback?: readonly string[]
+  /** true = when robots.txt has no group for its token, the vendor says it follows the rules
+   *  given to OTHER search bots, without saying which (Amazon's Amzn-SearchBot). A `*` rule that
+   *  keeps it out while another crawler's group lets that crawler in is then "couldn't tell". */
+  followsOtherSearchBots?: true
   /** For a token-only entry (`fetches` false): the key of the bot that does the visiting. */
   visitsAs?: string
   /** true = the vendor says it can run a page's scripts (so an empty-until-scripts page is

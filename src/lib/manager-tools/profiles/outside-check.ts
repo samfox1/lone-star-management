@@ -59,6 +59,7 @@ async function readItem(item: string, siteUrl: string | null, mbid: string | nul
 /**
  * Does the artist have a Wikidata item, and does it carry the site and the MusicBrainz id? The
  * item linked in Connections is read first; one that no longer exists falls back to the search.
+ * No site and no MusicBrainz id: nothing to search by (`nosite`), and nothing is asked.
  */
 export async function checkWikidata(input: { siteUrl: string | null; mbid: string | null; item: string | null }, opts: Opts = {}): Promise<WikidataCheck> {
   if (input.item) {
@@ -66,7 +67,7 @@ export async function checkWikidata(input: { siteUrl: string | null; mbid: strin
     if (linked !== 'missing') return linked
   }
   const search = wikidataSearchUrl(input.siteUrl, input.mbid)
-  if (!search) return UNKNOWN
+  if (!search) return { kind: 'nosite' }
   const r = await getJson(search, WIKIDATA_UA, 'https://www.wikidata.org/w/api.php?', opts)
   const hits = r.status === 200 ? searchHits(r.json) : null
   if (!hits) return UNKNOWN
@@ -75,12 +76,12 @@ export async function checkWikidata(input: { siteUrl: string | null; mbid: strin
   return found === 'missing' ? UNKNOWN : found
 }
 
-/** Does the Discogs page linked in Connections list the site? No link: nothing is asked. */
+/** Does the Discogs page linked in Connections list the site? No link, or no site: nothing is asked. */
 export async function checkDiscogs(input: { siteUrl: string | null; id: string | null }, opts: Opts = {}): Promise<DiscogsCheck> {
   if (!input.id) return { kind: 'unlinked' }
   const api = discogsApiUrl(input.id)
   if (!api) return { kind: 'unlinked' }
-  if (!input.siteUrl) return { kind: 'unknown', url: discogsPageUrl(input.id) }
+  if (!input.siteUrl) return { kind: 'nosite', id: input.id, url: discogsPageUrl(input.id) }
   const r = await getJson(api, DISCOGS_UA, 'https://api.discogs.com/artists/', opts)
   return readDiscogs(input.id, r.status, r.json, input.siteUrl)
 }

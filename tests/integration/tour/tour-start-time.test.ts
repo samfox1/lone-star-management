@@ -5,39 +5,38 @@
  * snapshot list; this pins what only the database can say: the column exists, its CHECK
  * holds the same rule, and the value travels table → snapshot → revision → public door.
  *
- * NOT PUSHED YET. Flip START_TIME_PUSHED after `npm run db:push` (the migration's AT PUSH
- * TIME list, step 4) and run this file. Until then it would fail on a missing column.
+ * The migration is LIVE. The show lives on a THROWAWAY artist (AGENTS.md rule 6): Publish
+ * commits that artist's whole tour list, and dropping the artist removes every row it made.
+ * get_public_site answers only once the profile has been published, so beforeAll does that.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createContent, publishContent, updateContent } from '@/lib/content'
-import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createContent, publishContent, publishProfile, updateContent } from '@/lib/content'
+import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
+import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-const START_TIME_PUSHED = true
-
-let artistA: string
+let artist: ThrowawayArtist
 let asA: SupabaseClient
 let id: string
 const svc = serviceClient()
 
-describe.skipIf(!START_TIME_PUSHED)('tour date start time', () => {
+describe('tour date start time', () => {
   beforeAll(async () => {
-    artistA = await artistIdBySlug(SEED.artistASlug)
     asA = await signInAs(SEED.managerA)
-    const row = await createContent(asA, 'tour_date', artistA, { date: '2026-11-06', venue: 'Start Time Test Hall' })
+    artist = await createThrowawayArtist(svc, 'tour start time', asA)
+    await publishProfile(asA, artist.id)
+    const row = await createContent(asA, 'tour_date', artist.id, { date: '2026-11-06', venue: 'Start Time Test Hall' })
     id = row.id as string
   })
 
   afterAll(async () => {
-    if (!id) return
-    await svc.from('revisions').delete().eq('artist_id', artistA).eq('entity_id', id)
-    await svc.from('tour_dates').delete().eq('id', id)
+    await deleteThrowawayArtist(svc, artist)
   })
 
   it('CRITICAL: rides to the public door as HH:MM, and the column refuses anything else', async () => {
     await updateContent(asA, 'tour_date', id, { start_time: '20:30' })
-    await publishContent(asA, 'tour_date', artistA)
-    const { data } = await anonClient().rpc('get_public_site', { p_slug: SEED.artistASlug })
+    await publishContent(asA, 'tour_date', artist.id)
+    const { data } = await anonClient().rpc('get_public_site', { p_slug: artist.slug })
     const live = (data as { tour_dates: { id: string; start_time?: string | null }[] }).tour_dates.find((d) => d.id === id)
     expect(live, 'the show is on the public site').toBeDefined()
     expect(live?.start_time).toBe('20:30')

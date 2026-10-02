@@ -18,6 +18,7 @@
 import { discogs } from '@/lib/manager-tools/connections/services/discogs'
 import { musicbrainz } from '@/lib/manager-tools/connections/services/musicbrainz'
 import { wikidata } from '@/lib/manager-tools/connections/services/wikidata'
+import { seoSiteOrigin } from '@/lib/seo-tests/known'
 
 /** Wikimedia's policy: a name with "bot" in it and a way to reach us (no email). */
 export const WIKIDATA_UA = 'TapirBot/1.0 (https://tapirwebsites.com)'
@@ -31,15 +32,20 @@ const DISCOGS_ID = /^[1-9]\d{0,11}$/
 const HOST = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/
 
 export type WikidataCheck =
-  /** An item lists the site or the MusicBrainz id (or the manager linked it). */
-  | { kind: 'found'; item: string; url: string; hasSite: boolean; hasMbid: boolean }
+  /** An item lists the site or the MusicBrainz id (or the manager linked it). `hasSite` null:
+   *  the artist has no site to look for. */
+  | { kind: 'found'; item: string; url: string; hasSite: boolean | null; hasMbid: boolean }
   /** No item lists either. `byMbid`: the MusicBrainz id was asked about too. */
   | { kind: 'none'; byMbid: boolean }
+  /** No site, no MusicBrainz id and no linked item: nothing to ask by, so nothing was asked. */
+  | { kind: 'nosite' }
   | { kind: 'unknown' }
 
 export type DiscogsCheck =
   | { kind: 'listed' | 'missing' | 'gone'; id: string; url: string }
   | { kind: 'unlinked' }
+  /** A page is linked, but the artist has no site to look for on it: nothing was asked. */
+  | { kind: 'nosite'; id: string; url: string }
   | { kind: 'unknown'; url: string | null }
 
 export type OutsideChecks = { wikidata: WikidataCheck; discogs: DiscogsCheck }
@@ -84,7 +90,20 @@ export function knownMbid(links: readonly LinkRow[], mb: { status: string; evide
 
 /* ── the site's spellings ──────────────────────────────────────────────────────────── */
 
-function hostOf(url: string): string | null {
+/**
+ * The artist's site as these checks ask about it: the CUSTOM site, by the same rule the AI test
+ * fetches by (`seoSiteOrigin`: a custom site at a public address), with its path kept and no
+ * trailing slash. A template artist's page is `<this app>/<slug>`: the host is Tapir's, shared by
+ * every artist, so it is no site here (asking Wikidata for P856=<this app> would find anyone's).
+ */
+export function profileSiteUrl(row: { site_kind?: string | null; custom_site_url?: string | null } | null | undefined): string | null {
+  if (!seoSiteOrigin(row)) return null
+  const u = new URL(String(row?.custom_site_url).trim())
+  return `${u.origin}${u.pathname.replace(/\/+$/, '')}`
+}
+
+/** A site's host (as `URL` writes it) and its path without trailing slashes ('' at the root). */
+function siteParts(url: string): { host: string; path: string } | null {
   const s = url.trim()
   let u: URL
   try {
@@ -93,28 +112,36 @@ function hostOf(url: string): string | null {
     return null
   }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
-  return HOST.test(u.hostname) ? u.hostname : null
+  return HOST.test(u.hostname) ? { host: u.hostname, path: u.pathname.replace(/\/+$/, '') } : null
 }
 
 /**
  * Every way a homepage is commonly written, for a search whose match is exact: https and http,
- * with and without `www.`, with and without the trailing slash. The site's own host first. At
- * most eight; none for an address that isn't a real web host.
+ * with and without `www.`, with and without the trailing slash, on the site's own path (a site
+ * that lives at `host/name` is spelled `host/name`, never the bare host). The site's own host
+ * first. At most eight; none for an address that isn't a real web host, or whose path holds a `|`.
  */
 export function siteSpellings(siteUrl: string | null): string[] {
-  const host = siteUrl ? hostOf(siteUrl) : null
-  if (!host) return []
+  const site = siteUrl ? siteParts(siteUrl) : null
+  // `|` is the search's own OR: one inside a path would add a clause of its own.
+  if (!site || site.path.includes('|')) return []
+  const { host, path } = site
   const bare = host.replace(/^www\./, '')
   const out: string[] = []
-  for (const h of [host, host === bare ? `www.${bare}` : bare]) for (const scheme of ['https', 'http']) for (const slash of ['/', '']) out.push(`${scheme}://${h}${slash}`)
+  for (const h of [host, host === bare ? `www.${bare}` : bare]) for (const scheme of ['https', 'http']) for (const slash of ['/', '']) out.push(`${scheme}://${h}${path}${slash}`)
   return out
 }
 
-/** Does `url` point at the artist's site? The same host, give or take `www.` and the scheme. */
+/**
+ * Does `url` point at the artist's site? The same host, give or take `www.` and the scheme, and
+ * for a site that lives on a path, that path or a page under it (`host/skeen` is not
+ * `host/skeen-2`, nor `host/other`).
+ */
 export function isSameSite(url: string, siteUrl: string): boolean {
-  const a = hostOf(url)
-  const b = hostOf(siteUrl)
-  return !!a && !!b && a.replace(/^www\./, '') === b.replace(/^www\./, '')
+  const a = siteParts(url)
+  const b = siteParts(siteUrl)
+  if (!a || !b || a.host.replace(/^www\./, '') !== b.host.replace(/^www\./, '')) return false
+  return !b.path || a.path === b.path || a.path.startsWith(`${b.path}/`)
 }
 
 /* ── Wikidata ──────────────────────────────────────────────────────────────────────── */
@@ -158,7 +185,7 @@ export function wikidataFound(item: string, p856: readonly string[], p434: reado
     kind: 'found',
     item,
     url: wikidataItemUrl(item),
-    hasSite: !!siteUrl && p856.some((v) => isSameSite(v, siteUrl)),
+    hasSite: siteUrl ? p856.some((v) => isSameSite(v, siteUrl)) : null,
     hasMbid: isMbid(mbid) ? p434.some((v) => v.toLowerCase() === mbid.toLowerCase()) : p434.length > 0,
   }
 }

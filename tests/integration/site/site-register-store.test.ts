@@ -9,7 +9,7 @@
  *           upsert on (artist_id, provider) so a rerun is clean, a failed run's rows removable.
  *           Every row lives on a throwaway artist (rule 6).
  * Covers:   • upsert twice is one row per provider; `reset` nulls verified_at, no reset keeps it
- *           • mark: verified stamps verified_at and clears or keeps the reason code
+ *           • mark: verified stamps verified_at, not verified clears it; the reason code is set
  *           • restore puts a row back exactly; remove deletes only the providers named
  *           • holderOf finds another artist on the address, never the artist itself
  *           • connect attaches the site (the service role passes the address guard)
@@ -69,6 +69,15 @@ describe('supabaseStore', () => {
     expect((await row(a.id, 'google'))!.verified_at).toBe(before)
     await store.upsert(a.id, [{ provider: 'google', site_url: site, code: G2, reset: true }])
     expect(await row(a.id, 'google')).toMatchObject({ code: G2, verified_at: null, error_code: null })
+  })
+
+  // A refused verify on a row verified before (same code, same address) un-verifies it: the
+  // sitemap resend reads only verified rows, and must not keep sending for a site Google refused.
+  it('clears verified_at when a verify fails on a row verified before', async () => {
+    await store.mark(a.id, 'google', { verified: true, error_code: null })
+    expect((await row(a.id, 'google'))!.verified_at).toEqual(expect.any(String))
+    await store.mark(a.id, 'google', { verified: false, error_code: 'google_verify' })
+    expect(await row(a.id, 'google')).toMatchObject({ verified_at: null, error_code: 'google_verify' })
   })
 
   // Another artist on the same address is found; the artist itself never counts.

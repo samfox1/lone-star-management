@@ -202,6 +202,18 @@ export function checkRobots(parsed: ParsedRobots, tokens: string | readonly stri
   return { allowed: best ? best.allow : true, group, rule: best }
 }
 
+/**
+ * Does a group named for some OTHER crawler (not `*`, not one of `tokens`) let that crawler
+ * visit `path`? For a crawler that, unnamed, follows "the directives given to other search bots"
+ * without saying which (bots.ts `followsOtherSearchBots`).
+ */
+export function anotherGroupAllows(robotsBody: string, tokens: readonly string[], path: string): boolean {
+  const parsed = parseRobots(robotsBody)
+  const own = new Set(tokens.map((t) => t.toLowerCase()))
+  const others = new Set(parsed.groups.flatMap((g) => g.agents).filter((a) => a && a !== '*' && !own.has(a)))
+  return [...others].some((agent) => checkRobots(parsed, agent, path).allowed)
+}
+
 export function isAllowed(robotsBody: string, token: string | readonly string[], path: string): boolean {
   return checkRobots(parseRobots(robotsBody), token, path).allowed
 }

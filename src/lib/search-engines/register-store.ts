@@ -44,7 +44,7 @@ export function supabaseStore(svc: SupabaseClient): RegisterStore {
     async mark(artistId, provider, result) {
       const { error } = await svc
         .from('site_verifications')
-        .update({ error_code: result.error_code, ...(result.verified ? { verified_at: new Date().toISOString() } : {}) })
+        .update({ error_code: result.error_code, verified_at: result.verified ? new Date().toISOString() : null })
         .eq('artist_id', artistId)
         .eq('provider', provider)
       fail('mark', error)

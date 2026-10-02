@@ -7,9 +7,10 @@
  * Feature:  Test runs · the run after a publish, and "is the site showing the latest publish?"
  * Tier:     STRICT (AGENTS.md "Test depth"): it runs on Publish, and a wrong "fresh" would store
  *           an old site's verdict as today's truth.
- * Covers:   • fresh ONLY when the sitemap names the latest publish, the last CONTENT change, or a
- *             publish after it (µs vs ms tolerated; a Brand-only publish moves no 0.45 date);
- *             stale ONLY when it names a publish of ours before that change; else null
+ * Covers:   • fresh ONLY when some lastmod names the latest publish, the last CONTENT change, or a
+ *             publish after it (µs vs ms tolerated; a Brand-only publish moves no 0.45 date; on
+ *             tour the homepage carries a passed show and /about still names the change);
+ *             stale ONLY when the newest names a publish of ours before that change; else null
  *           • the wait polls the sitemap and "/", returns as soon as the site turns, gives up at
  *             the cap, waits a fixed time when there is no marker, stops when told to, and every
  *             poll stays on the site (its www twin allowed)
@@ -120,8 +121,8 @@ describe('is the live site showing the latest publish? (siteFreshness)', () => {
     expect(siteFreshness([null, '2026-09-28T21:14:03.123Z'], null, MOMENTS)).toBeNull()
   })
 
-  // The newest stamp decides: one stray old page date doesn't make the site look stale.
-  it('the NEWEST lastmod decides (pages share one stamp; a stray old one does not)', () => {
+  // One stamp naming the publish is enough: a stray old page date doesn't make the site look stale.
+  it('any lastmod naming the publish makes it fresh; a stray old one does not make it stale', () => {
     expect(siteFreshness(['2026-09-20T10:00:00.500Z', '2026-09-28T21:14:03.123Z'], LATEST, MOMENTS)).toBe(true)
   })
 
@@ -157,6 +158,25 @@ describe('is the live site showing the latest publish? (siteFreshness)', () => {
     const show: Wire = { ...payload, changed_at: { artist: OLDER, site_styles: LATEST }, tour_dates: [{ id: 's', date: '2026-09-25', venue: 'V', city: 'C', country: null, ticket_url: null }] }
     expect(lastmods(show)[0]).toBe('2026-09-25T00:00:00.000Z')
     expect(siteFreshness(lastmods(show), LATEST, ALL, contentChangedAt(show)?.toISOString())).toBeNull()
+  })
+
+  // On tour: a show that passed after the last content change dates the HOMEPAGE, but /about
+  // (the bio, no shows) still names that change. Any stamp naming it proves fresh; the homepage's
+  // midnight, which a stale site shows too, proves nothing either way.
+  it('CRITICAL: on tour, a passed show dates the homepage and /about names the last content change: fresh; its stale twin never is', () => {
+    type Wire = Pick<PublicSitePayload, 'published_at' | 'tour_dates' | 'changed_at'>
+    const BIO = '2026-09-22T10:00:00.000001+00:00'
+    const show = { id: 's', date: '2026-09-25', venue: 'V', city: 'C', country: null, ticket_url: null }
+    const lastmods = (p: Wire) =>
+      sitemapEntries(p, { origin: ORIGIN, pages: [{ path: '/about', shows: ['artist'] }], today: '2026-09-28' }).map((e) => e.lastModified?.toISOString())
+    const fresh: Wire = { published_at: LATEST, tour_dates: [show], changed_at: { artist: BIO, site_content: OLDER, site_styles: LATEST } }
+    const line = contentChangedAt(fresh)?.toISOString()
+    const moments = [LATEST, BIO, OLDER]
+    expect(lastmods(fresh)[0]).toBe('2026-09-25T00:00:00.000Z') // the show outranks the bio on home
+    expect(siteFreshness(lastmods(fresh), LATEST, moments, line)).toBe(true)
+    // The same site still on the publish before the bio: home shows the same midnight, /about the older bio.
+    const stale: Wire = { published_at: OLDER, tour_dates: [show], changed_at: { artist: OLDER, site_content: OLDER } }
+    expect(siteFreshness(lastmods(stale), LATEST, moments, line)).not.toBe(true)
   })
 })
 

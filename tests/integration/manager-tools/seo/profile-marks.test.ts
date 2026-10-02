@@ -13,11 +13,10 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): RLS, grants and isolation. Every denial has a planted
  *           witness (rule 2), every refused write is checked by row STATE through the service
  *           client (rule 3), and every row lives on a throwaway artist (rule 6).
- * Covers:   • a manager marks, reads back, the stamp is theirs, marking again moves the stamp
- *             stamp; undo deletes the row
+ * Covers:   • a manager marks and reads back, and the stamp is theirs; undo deletes the row
  *           • another artist's manager cannot read, add or remove a mark
  *           • anon has no grant at all (the wording says GRANT, not policy)
- *           • a manager cannot set done_at/done_by or update a mark (column grant, no UPDATE)
+ *           • a manager cannot set done_at/done_by on insert (column grant: artist_id + item)
  *           • the CHECK refuses an unknown item; deleting the artist deletes its marks
  *           • (20261001160000) every item marks; ticking again moves done_at to now and done_by
  *             to the ticker; a forged done_at (past or future) is restamped, done_by/artist_id

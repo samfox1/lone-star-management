@@ -24,7 +24,9 @@ function short(url: string): string {
   return url.replace(/^https:\/\/(www\.)?/, '')
 }
 
-function Row({ name, ok, status, children }: { name: string; ok: boolean | null; status: string; children?: ReactNode }) {
+/** One row. No `children`: a quiet row with nothing to open (still checking, no site). `note`: a
+ *  small link under the status, outside the button (a link can't sit inside one). */
+function Row({ name, ok, status, note, children }: { name: string; ok: boolean | null; status: string; note?: ReactNode; children?: ReactNode }) {
   const cardId = useId()
   const [open, setOpen] = useState(false)
   if (!children) {
@@ -38,14 +40,17 @@ function Row({ name, ok, status, children }: { name: string; ok: boolean | null;
   }
   return (
     <>
-      <button type="button" aria-expanded={open} aria-controls={cardId} onClick={() => setOpen((o) => !o)} className={cx(ROW, 'transition-colors hover:bg-surface-hover', FOCUS_RING, 'focus-visible:-outline-offset-2')}>
-        <span aria-hidden="true" className={cx('flex h-4 w-4 flex-none items-center justify-center rounded-full border-[1.5px] border-ink', ok && 'bg-ink text-paper')}>
-          {ok ? <Icon name="check" size={10} /> : null}
-        </span>
-        <span className="flex-1 text-[15px]">{name}</span>
-        <span className="font-space text-[12px] text-ink-muted">{status}</span>
-        <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
-      </button>
+      <div className="relative">
+        <button type="button" aria-expanded={open} aria-controls={cardId} onClick={() => setOpen((o) => !o)} className={cx(ROW, 'transition-colors hover:bg-surface-hover', FOCUS_RING, 'focus-visible:-outline-offset-2')}>
+          <span aria-hidden="true" className={cx('flex h-4 w-4 flex-none items-center justify-center rounded-full border-[1.5px] border-ink', ok && 'bg-ink text-paper')}>
+            {ok ? <Icon name="check" size={10} /> : null}
+          </span>
+          <span className="flex-1 text-[15px]">{name}</span>
+          <span className="font-space text-[12px] text-ink-muted">{status}</span>
+          <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
+        </button>
+        {note ? <span className="absolute bottom-1 right-10 leading-none">{note}</span> : null}
+      </div>
       {open ? (
         <div id={cardId} className="mb-[18px] mt-1.5 rounded-[14px] border border-hairline bg-paper px-6 py-[22px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           {children}
@@ -75,7 +80,10 @@ function ToConnections({ artistId }: { artistId: string }) {
   )
 }
 
-const DISCOGS_STATUS: Record<DiscogsCheck['kind'], string> = {
+/** No site to look for: nothing was asked, and there is nothing to open. */
+const NO_SITE = 'no site'
+
+const DISCOGS_STATUS: Record<Exclude<DiscogsCheck['kind'], 'nosite'>, string> = {
   listed: 'lists your site',
   missing: 'site missing',
   unlinked: 'no page linked',
@@ -83,7 +91,7 @@ const DISCOGS_STATUS: Record<DiscogsCheck['kind'], string> = {
   unknown: 'couldn’t check',
 }
 
-const DISCOGS_NEXT: Record<DiscogsCheck['kind'], string | null> = {
+const DISCOGS_NEXT: Record<Exclude<DiscogsCheck['kind'], 'nosite'>, string | null> = {
   listed: null,
   missing: 'Add your site under Sites on Discogs.',
   unlinked: 'Link your Discogs artist page in Connections.',
@@ -91,11 +99,22 @@ const DISCOGS_NEXT: Record<DiscogsCheck['kind'], string | null> = {
   unknown: 'Discogs didn’t answer. Try again later.',
 }
 
+/** Discogs' terms: what we show from its API carries this link beside it, open or closed. */
+function DiscogsCredit() {
+  return (
+    <a href="https://www.discogs.com/" target="_blank" rel="noopener noreferrer" className={cx('font-space text-[10px] text-ink-faint hover:text-ink', FOCUS_RING)}>
+      Data provided by Discogs
+    </a>
+  )
+}
+
 export function DiscogsRow({ artistId, check }: { artistId: string; check: DiscogsCheck }) {
+  if (check.kind === 'nosite') return <Row name="Discogs" ok={null} status={NO_SITE} />
   const url = check.kind === 'unlinked' ? null : check.url
   const next = DISCOGS_NEXT[check.kind]
+  const fromDiscogs = check.kind === 'listed' || check.kind === 'missing' || check.kind === 'gone'
   return (
-    <Row name="Discogs" ok={check.kind === 'listed'} status={DISCOGS_STATUS[check.kind]}>
+    <Row name="Discogs" ok={check.kind === 'listed'} status={DISCOGS_STATUS[check.kind]} note={fromDiscogs ? <DiscogsCredit /> : null}>
       <Field label="Page">{url ? <Out href={url}>{short(url)}</Out> : <span className={VALUE}>None linked</span>}</Field>
       {check.kind === 'listed' || check.kind === 'missing' ? (
         <Field label="Your site">
@@ -114,43 +133,43 @@ export function DiscogsRow({ artistId, check }: { artistId: string; check: Disco
           </a>
         ) : null}
         {check.kind === 'unlinked' || check.kind === 'gone' ? <ToConnections artistId={artistId} /> : null}
-        {/* Discogs' terms: what we show from its API carries this link beside it. */}
-        {check.kind === 'listed' || check.kind === 'missing' || check.kind === 'gone' ? (
-          <a href="https://www.discogs.com/" target="_blank" rel="noopener noreferrer" className={cx('ml-auto font-space text-[11px] text-ink-faint hover:text-ink', FOCUS_RING)}>
-            Data provided by Discogs
-          </a>
-        ) : null}
       </Glyphs>
     </Row>
   )
 }
 
-function wikidataStatus(check: WikidataCheck): string {
+/** `hasSite` null (no site to look for) counts as nothing missing: only the ID is asked about. */
+function wikidataStatus(check: Exclude<WikidataCheck, { kind: 'nosite' }>): string {
   if (check.kind === 'none') return 'no item yet'
   if (check.kind === 'unknown') return 'couldn’t check'
-  if (check.hasSite && check.hasMbid) return 'item found'
-  if (!check.hasSite && !check.hasMbid) return 'site, ID missing'
-  return check.hasSite ? 'MusicBrainz ID missing' : 'site missing'
+  const site = check.hasSite !== false
+  if (site && check.hasMbid) return 'item found'
+  if (!site && !check.hasMbid) return 'site, ID missing'
+  return site ? 'MusicBrainz ID missing' : 'site missing'
 }
 
 export function WikidataRow({ check }: { check: WikidataCheck }) {
+  if (check.kind === 'nosite') return <Row name="Wikidata" ok={null} status={NO_SITE} />
   const found = check.kind === 'found' ? check : null
+  const complete = !!found && found.hasSite !== false && found.hasMbid
   const next =
     check.kind === 'none'
       ? 'Wikidata needs press first; then the artist can create an item.'
       : check.kind === 'unknown'
         ? 'Wikidata didn’t answer. Try again later.'
-        : found && !(found.hasSite && found.hasMbid)
+        : found && !complete
           ? 'Add what’s missing on Wikidata, with a source.'
           : null
   return (
-    <Row name="Wikidata" ok={!!found?.hasSite && !!found.hasMbid} status={wikidataStatus(check)}>
+    <Row name="Wikidata" ok={complete} status={wikidataStatus(check)}>
       <Field label="Item">{found ? <Out href={found.url}>{short(found.url)}</Out> : <span className={VALUE}>{check.kind === 'none' ? 'None yet' : '—'}</span>}</Field>
       {found ? (
         <>
-          <Field label="Your site">
-            <span className={VALUE}>{found.hasSite ? 'Listed' : 'Missing'}</span>
-          </Field>
+          {found.hasSite !== null ? (
+            <Field label="Your site">
+              <span className={VALUE}>{found.hasSite ? 'Listed' : 'Missing'}</span>
+            </Field>
+          ) : null}
           <Field label="MusicBrainz">
             <span className={VALUE}>{found.hasMbid ? 'Listed' : 'Missing'}</span>
           </Field>

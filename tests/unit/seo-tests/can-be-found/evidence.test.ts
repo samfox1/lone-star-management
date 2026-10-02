@@ -396,18 +396,23 @@ describe('being polite', () => {
   })
   // The whole run stops at its time budget: what it didn't reach is "out-of-time" (a no answer
   // the tests read as couldn't check), never a pass, and never mistaken for the site timing out.
+  // The bound is the hang's only other way out, its own 10 s limit, not a guess at how fast this
+  // machine is: a budget that doesn't cut the hang lands past it, however busy the machine.
   it('the run stops at its time budget: what it didn’t reach is out-of-time', async () => {
+    const PER_REQUEST_MS = 10_000
     const t = Date.now()
-    const e = await gather({ [`${O}/about`]: { hang: true }, [`${O}/faqsheet`]: { hang: true } }, { budgetMs: 300, timeoutMs: 10_000 })
-    expect(Date.now() - t).toBeLessThan(2000)
+    const e = await gather({ [`${O}/about`]: { hang: true }, [`${O}/faqsheet`]: { hang: true } }, { budgetMs: 300, timeoutMs: PER_REQUEST_MS })
+    expect(Date.now() - t).toBeLessThan(PER_REQUEST_MS)
     expect(plainAt(e, '/about')).toMatchObject({ status: null, error: 'out-of-time' })
     expect(e.byBot.gptbot.find((p) => p.path === '/about')?.status).toBeNull()
   })
-  // Each request gives up at its own time limit, and the rest of the run carries on.
+  // Each request gives up at its own time limit, and the rest of the run carries on. "timeout",
+  // not "out-of-time", says the request's own limit ended it before the run's budget did.
   it('each request gives up at its own time limit, and the rest carries on', async () => {
+    const BUDGET_MS = 15_000
     const t = Date.now()
-    const e = await gather({ [`${O}/about`]: { hang: true } }, { timeoutMs: 100 })
-    expect(Date.now() - t).toBeLessThan(3000)
+    const e = await gather({ [`${O}/about`]: { hang: true } }, { timeoutMs: 100, budgetMs: BUDGET_MS })
+    expect(Date.now() - t).toBeLessThan(BUDGET_MS)
     expect(plainAt(e, '/about')).toMatchObject({ status: null, error: 'timeout' })
     expect(plainAt(e, '/faqsheet')).toMatchObject({ status: 200 })
   })

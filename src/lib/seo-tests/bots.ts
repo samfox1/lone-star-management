@@ -137,11 +137,13 @@ export const SEO_BOTS: readonly SeoBot[] = [
   // Alexa. Amazon: "By permitting Amzn-SearchBot access to your website, your content is eligible
   // to appear in search experiences such as Alexa", and it "does not crawl content for generative
   // AI model training". "Each user agent setting is independent of the others" (so Amazonbot's
-  // rules don't reach it). UNCONFIRMED: Amazon also says that when robots.txt doesn't mention it
-  // "but allow[s] other search bots", it follows "the robots.txt directives given to other search
-  // bots", without naming which, so no fallback is set: it is judged by its own group or `*`.
+  // rules don't reach it). Amazon also says that when robots.txt doesn't mention it "but allow[s]
+  // other search bots", it follows "the robots.txt directives given to other search bots",
+  // without naming which. So no fallback can be set: it is judged by its own group or `*`, and a
+  // `*` rule that keeps it out while another crawler's group lets that one in is "couldn't tell"
+  // (`followsOtherSearchBots`), never a fail.
   {
-    key: 'amzn-searchbot', who: 'Alexa', company: 'Amazon', robotsToken: 'Amzn-SearchBot', fetches: true, test: 'others',
+    key: 'amzn-searchbot', who: 'Alexa', company: 'Amazon', robotsToken: 'Amzn-SearchBot', fetches: true, test: 'others', followsOtherSearchBots: true,
     userAgent: `Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/${CHROME} Safari/537.36`,
     docUrl: AMAZON_DOC, uaDocumented: true,
   },

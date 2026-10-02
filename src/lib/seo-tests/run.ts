@@ -19,8 +19,10 @@
  *     crawl.ts from the same evidence, plus two things only the run can find out, both inside the
  *     budget and neither able to sink the run: the site's OTHER SPELLING (www ↔ bare, checked
  *     once) and whether GOOGLE / BING list the opened pages, asked only where the site is
- *     registered (site_verifications, verified, read through the writer) at the registered
- *     address. No site, or a gather that failed, stores no crawl.
+ *     registered (site_verifications, verified, read through the writer), and only when the
+ *     registered address is the one the site ANSWERED on (else "no answer"). The registration
+ *     read and the questions end at the run's deadline, which also aborts their requests. No
+ *     site, or a gather that failed, stores no crawl.
  *
  * The engine (the evidence gatherers and the 24 tests, written beside this file by other hands)
  * is INJECTED: `deps.engine`, else `./engine` loaded on first use. Unit tests run on fakes. The
@@ -84,8 +86,9 @@ export type RunDeps = {
    *  site_verifications through the WRITER (the table is closed to every signed-in user). */
   readRegistered?: (writer: SupabaseClient, artistId: string) => Promise<SeoRegistration[]>
   /** The clients the listing asks. Default: `listingClientsFromEnv` (the server's keys), built
-   *  only when a registration exists. */
-  listingClients?: () => Promise<ListingClients>
+   *  only when a registration exists. `signal` aborts at the run's deadline: their requests
+   *  must listen to it. */
+  listingClients?: (opts: { signal: AbortSignal }) => Promise<ListingClients>
 }
 
 /**
@@ -291,22 +294,43 @@ export async function readRegistered(writer: SupabaseClient, artistId: string): 
 }
 
 /** The clients, from the server's keys: a missing key is that provider's null. Loaded lazily, so
- *  a run with nothing registered never reads a key. */
-export async function listingClientsFromEnv(): Promise<ListingClients> {
+ *  a run with nothing registered never reads a key. Every request they make also listens to
+ *  `signal` (the clients take a fetcher, not a signal), so the run's deadline aborts it. */
+export async function listingClientsFromEnv(opts: { signal?: AbortSignal } = {}): Promise<ListingClients> {
   // Tests load .env.local (vitest.setup.ts), so a test that forgot to inject its own clients would
   // call the real Google and Bing with the real keys. Under vitest this refuses instead.
   if (process.env.VITEST) throw new Error('listingClientsFromEnv is not for tests: inject deps.listingClients')
   const [{ googleClient, googleCredsFromEnv }, { bingClient }] = await Promise.all([import('@/lib/search-engines/google'), import('@/lib/search-engines/bing')])
   const creds = googleCredsFromEnv(process.env.GOOGLE_SEARCH_SERVICE_ACCOUNT_B64)
   const key = process.env.BING_WEBMASTER_API_KEY?.trim()
-  return { google: creds ? googleClient(creds) : null, bing: key ? bingClient(key) : null }
+  const stop = opts.signal
+  // Google's and Bing's own API hosts, never an artist's address: the plain fetch, as the clients use.
+  const fetcher = stop
+    ? ((input: string | URL | Request, init?: RequestInit) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, stop]) : stop })) as typeof fetch
+    : undefined
+  return { google: creds ? googleClient(creds, { fetcher }) : null, bing: key ? bingClient(key, { fetcher }) : null }
 }
 
-/** `p`'s value, or `fallback` once the deadline passes or if it throws. */
-function beforeDeadline<T>(p: () => Promise<T>, fallback: T, deadline: number, now: () => number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
+/** A signal that aborts at `deadline`; `done()` aborts it now (stragglers stop) and clears the timer. */
+function deadlineSignal(deadline: number, now: () => number): { signal: AbortSignal; done: () => void } {
+  const c = new AbortController()
+  const timer = setTimeout(() => c.abort(), Math.max(0, deadline - now()))
+  return {
+    signal: c.signal,
+    done: () => {
+      clearTimeout(timer)
+      c.abort()
+    },
+  }
+}
+
+/** `p`'s value, or `fallback` once `stop` aborts or if it throws. */
+function untilStopped<T>(p: () => Promise<T>, fallback: T, stop: AbortSignal): Promise<T> {
+  if (stop.aborted) return Promise.resolve(fallback)
+  let onAbort = () => {}
   const late = new Promise<T>((resolve) => {
-    timer = setTimeout(() => resolve(fallback), Math.max(0, deadline - now()))
+    onAbort = () => resolve(fallback)
+    stop.addEventListener('abort', onAbort, { once: true })
   })
   let run: Promise<T>
   try {
@@ -314,7 +338,16 @@ function beforeDeadline<T>(p: () => Promise<T>, fallback: T, deadline: number, n
   } catch {
     run = Promise.resolve(fallback)
   }
-  return Promise.race([run, late]).finally(() => clearTimeout(timer))
+  return Promise.race([run, late]).finally(() => stop.removeEventListener('abort', onAbort))
+}
+
+/** The scheme + host a URL lives on, lower-cased by URL itself; null when it doesn't parse. */
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
 }
 
 /** Ask one provider about each page: the first alone (its sign-in is then cached), the rest
@@ -336,42 +369,49 @@ async function askPages<R, E>(paths: string[], ask: (path: string) => Promise<{ 
 /**
  * Whether Google and Bing list the opened pages. A provider the site isn't registered with is
  * null (it couldn't be asked); a registered one gives one entry per page, with nulls where the
- * answer failed, the key is missing or the budget ran out. Never throws.
+ * answer failed, the key is missing or the time ran out (`stop` aborted: the run's deadline,
+ * which also aborts the clients' requests). Never throws.
+ *
+ * A registration is asked only when it is the address the site ANSWERED on (`answeredOrigin`):
+ * the pages are the answered origin's, and a property for the other spelling (bare when the site
+ * lives on www) would answer "Page with redirect" for every one ("0 of 5 on Google"), which says
+ * nothing about whether the site is listed. Its rows are "no answer" instead.
  */
-export async function askListing(registered: SeoRegistration[], openedPaths: string[], makeClients: () => Promise<ListingClients>, deadline: number, now: () => number): Promise<SeoCrawl['listing']> {
+export async function askListing(registered: SeoRegistration[], openedPaths: string[], answeredOrigin: string, makeClients: (opts: { signal: AbortSignal }) => Promise<ListingClients>, stop: AbortSignal): Promise<SeoCrawl['listing']> {
   const google = registered.find((r) => r.provider === 'google') ?? null
   const bing = registered.find((r) => r.provider === 'bing') ?? null
   if (!google && !bing) return { google: null, bing: null }
   const paths = openedPaths.slice(0, LISTING_PAGES)
+  const answered = originOf(answeredOrigin)
+  const here = (r: SeoRegistration | null): r is SeoRegistration => !!r && answered !== null && originOf(r.siteUrl) === answered
   const pageUrl = (siteUrl: string, path: string) => `${siteUrl.replace(/\/+$/, '')}${path}`
-  // Asked, no answer (failed, timed out, no key): `answered: false`, so the page never reads it as
-  // "not listed" or "no visit on record".
+  // Asked, no answer (failed, timed out, no key, registered elsewhere): `answered: false`, so the
+  // page never reads it as "not listed" or "no visit on record".
   const nullG = (path: string) => ({ path: crawlPath(path), answered: false, verdict: null, coverage: null, lastCrawl: null })
   const nullB = (path: string) => ({ path: crawlPath(path), answered: false, lastCrawled: null, status: null })
-  const clients = await beforeDeadline(makeClients, { google: null, bing: null } as ListingClients, deadline, now)
+  const none: ListingClients = { google: null, bing: null }
+  const clients = here(google) || here(bing) ? await untilStopped(() => makeClients({ signal: stop }), none, stop) : none
   const [g, b] = await Promise.all([
     google
-      ? beforeDeadline(
+      ? untilStopped(
           async () => {
             const c = clients.google
-            if (!c) return paths.map(nullG)
+            if (!c || !here(google)) return paths.map(nullG)
             return askPages(paths, (p) => c.inspectUrl(google.siteUrl, pageUrl(google.siteUrl, p)), (p, v) => ({ path: crawlPath(p), answered: true, verdict: v.verdict, coverage: v.coverage, lastCrawl: v.lastCrawl }), nullG)
           },
           paths.map(nullG),
-          deadline,
-          now,
+          stop,
         )
       : null,
     bing
-      ? beforeDeadline(
+      ? untilStopped(
           async () => {
             const c = clients.bing
-            if (!c) return paths.map(nullB)
+            if (!c || !here(bing)) return paths.map(nullB)
             return askPages(paths, (p) => c.urlInfo(bing.siteUrl, pageUrl(bing.siteUrl, p)), (p, v) => ({ path: crawlPath(p), answered: true, lastCrawled: v.lastCrawled, status: v.status }), nullB)
           },
           paths.map(nullB),
-          deadline,
-          now,
+          stop,
         )
       : null,
   ])
@@ -441,10 +481,18 @@ export async function runSeoTests(supabase: SupabaseClient, artistId: string, tr
         const verdict = siteFreshness(got.evidence.sitemap?.lastmods, known.published?.publishedAt ?? null, moments, known.published?.contentAt ?? null)
         siteFresh = verdict ?? deps.freshness?.fresh ?? null
         if (siteFresh === false && !deps.note) notes.push('Your site was still showing an older publish when we tested.')
-        // Google / Bing, only where the site is registered. Nothing here can sink the run.
-        const registered = await (deps.readRegistered ?? readRegistered)(writer, artistId).catch(() => [] as SeoRegistration[])
-        const opened = Array.isArray(got.evidence.paths) ? got.evidence.paths.filter((p): p is string => typeof p === 'string') : []
-        const listing = await askListing(registered, opened, deps.listingClients ?? listingClientsFromEnv, deadline, now).catch(() => ({ google: null, bing: null }))
+        // Google / Bing, only where the site is registered, at the address it answered on, inside
+        // the run's deadline (which also aborts their requests). Nothing here can sink the run.
+        const late = deadlineSignal(deadline, now)
+        let listing: SeoCrawl['listing'] = { google: null, bing: null }
+        try {
+          const registered = await untilStopped(() => (deps.readRegistered ?? readRegistered)(writer, artistId), [] as SeoRegistration[], late.signal)
+          const opened = Array.isArray(got.evidence.paths) ? got.evidence.paths.filter((p): p is string => typeof p === 'string') : []
+          const answeredOn = typeof got.evidence.origin === 'string' && got.evidence.origin ? got.evidence.origin : known.siteUrl
+          listing = await askListing(registered, opened, answeredOn, deps.listingClients ?? listingClientsFromEnv, late.signal).catch(() => listing)
+        } finally {
+          late.done()
+        }
         try {
           crawl = buildCrawl(got.evidence, { otherHost: got.otherHost, listing })
         } catch {

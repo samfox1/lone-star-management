@@ -255,6 +255,10 @@ export function buildBioPack(input: BioPackInput, opts: { cc?: string | null } =
 /** A recipient we send to: one plain address, nothing that could start a query or a list. */
 const isPlainAddress = (s: string) => /^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(s)
 
+/** Over this many characters, some mail apps cut a `mailto:` short without a word (a 150-word bio
+ *  and ten releases is about 2,500), so the card points to Copy instead. */
+export const MAILTO_SAFE_LENGTH = 2000
+
 /** CRLF line breaks, as a mail body wants them. */
 const crlf = (s: string) => s.replace(/\r\n|\r|\n/g, '\r\n')
 

@@ -10,6 +10,7 @@
  * Covers:   • the card shows the pack, and Open in Mail's href is the builder's mailto (with the
  *             CC once a valid one is typed); the CC check shows while the CC is empty
  *           • Mark as sent calls the action with the artist, the item and `true`
+ *           • a mailto over MAILTO_SAFE_LENGTH (a long bio and ten releases) gets a note to use Copy
  * Not here: the email's wording, encoding and CC rules (bio-pack.test.ts); who may mark
  *           (profile-marks tests).
  * Fixtures: the mark action is a mock; the input is shaped like Skeen's get_public_site links and
@@ -17,7 +18,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { buildBioPack, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
+import { BIO_PACK_MAX_RELEASES, MAILTO_SAFE_LENGTH, buildBioPack, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
 import { ProfilesTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/profiles-tab'
 import { markProfileItemAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actions'
 
@@ -60,6 +61,21 @@ describe('the bio card', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Cc' }), { target: { value: 'skeen@gmail.com' } })
     expect(document.querySelector('[data-check="cc"]')).toBeNull()
     expect(mail.getAttribute('href')).toBe(mailtoHref(pack, { cc: 'skeen@gmail.com' }))
+    expect(screen.queryByText(/use Copy/)).toBeNull()
+  })
+
+  // Some mail apps cut a long mailto short without a word: past MAILTO_SAFE_LENGTH the card says
+  // to use Copy. A 150-word bio and the most releases the email lists is past it.
+  it('a mailto too long for some mail apps gets a note to use Copy', () => {
+    const release = INPUT.releases![0]
+    const long = {
+      ...INPUT,
+      artist: { ...INPUT.artist, bio: Array(150).fill('Chicago').join(' ') },
+      releases: Array.from({ length: BIO_PACK_MAX_RELEASES }, (_, i) => ({ ...release, title: `${release.title} ${i + 1}` })),
+    }
+    render(<ProfilesTab artistId="a1" input={long} photos={PHOTOS} sentAt={null} marksOk />)
+    expect(screen.getByRole('link', { name: 'Open in Mail' }).getAttribute('href')!.length).toBeGreaterThan(MAILTO_SAFE_LENGTH)
+    expect(screen.getByText(/use Copy/)).toBeTruthy()
   })
 
   // Mark as sent: the artist, the item, and done = true; the row then says it was sent.

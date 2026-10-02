@@ -472,6 +472,24 @@ describe('others (Gemini, Apple and Common Crawl)', () => {
     expect(r).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/Gemini/) })
     expect(r.sentence).not.toMatch(/Apple|Common Crawl/)
   })
+  // Alexa. Amazon: when robots.txt doesn't name Amzn-SearchBot but lets other search bots in, it
+  // follows "the robots.txt directives given to other search bots", without saying which. A file
+  // that lets every other crawler in by name and keeps `*` out can't be read for Alexa: couldn't
+  // tell, never a fail. The groups come from the bot list, so a crawler added there is named too.
+  it('CRITICAL: other crawlers let in by name, everyone else kept out: Alexa is “couldn’t tell”, not a fail', () => {
+    const alexa = SEO_BOTS.find((b) => b.robotsToken === 'Amzn-SearchBot')!
+    const named = [...new Set(SEO_BOTS.filter((b) => b !== alexa).map((b) => b.robotsToken))]
+    const body = `${named.map((t) => `User-agent: ${t}\nAllow: /\n`).join('\n')}\nUser-agent: *\nDisallow: /\n`
+    const r = run('others', { robots: { status: 200, body } })
+    expect(r).toMatchObject({ status: 'unknown', sentence: expect.stringMatching(/Alexa/) })
+    expect(r.sentence).not.toMatch(/stay away/)
+    // The witness: the same file naming Alexa and keeping it out IS a fail, for Alexa.
+    const namedOut = run('others', { robots: { status: 200, body: `${body}\nUser-agent: ${alexa.robotsToken}\nDisallow: /\n` } })
+    expect(namedOut).toMatchObject({ status: 'fail', sentence: expect.stringMatching(/ask Alexa to stay away/) })
+    // …and when no other crawler is let in there either, whichever rules Alexa follows keep it out.
+    const allOut = `${named.map((t) => `User-agent: ${t}\nAllow: /\nDisallow: /about\n`).join('\n')}\nUser-agent: *\nDisallow: /about\n`
+    expect(details(run('others', { robots: { status: 200, body: allOut } }))).toContain('ask Alexa to stay away from your page /about')
+  })
   // Common Crawl asked to stay away by a rule: "Almost", with no made-up "Common Crawl search"
   // and a value that doesn't read as "nothing opened". (verify-found F6)
   it('Common Crawl asked to stay away: “Almost”, without “Crawl search” or “0 of”', () => {

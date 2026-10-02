@@ -126,15 +126,27 @@ export function reachOf(v: unknown): SeoRunReach | null {
 }
 
 /**
+ * The answers that mean the database turned the call WITH a crawl down, so nothing was written:
+ *   PGRST202  no seo_test_finish takes `p_crawl` (20261001120000 not pushed yet)
+ *   42883     the same, from Postgres when PostgREST's schema cache is behind
+ *   23514     a CHECK refused it (seo_test_runs_crawl: not an object, or over 64 KB)
+ *   22P02 / 22P05  jsonb refused a character in it (a lone surrogate, a NUL)
+ */
+const CRAWL_REFUSED = new Set(['PGRST202', '42883', '23514', '22P02', '22P05'])
+
+/**
  * Finish a running run with its results: one call to `seo_test_finish` (service role). `true`
  * back means a RUNNING run was finished; `false` (abandoned, pruned, already finished) is not
  * reported as saved.
  *
  * The crawl rides along as `p_crawl` (capped by `capCrawl`), and only when there is one: a
  * database from before 20261001120000 has no such argument. It is extra, never the run: when
- * the call WITH a crawl fails (that migration not pushed yet, or a crawl the table refuses), the
- * run is finished again without it, so its results are never lost to the crawl. A failed call
- * changes nothing (the function is one statement), so the second call is the only write.
+ * the database REFUSES the call with a crawl (`CRAWL_REFUSED`: that migration not pushed yet, or
+ * a crawl the table refuses), the run is finished again without it, so its results are never
+ * lost to the crawl. A refused call changes nothing (the function is one statement), so the
+ * second call is the only write. Any other error (a dropped connection, a timeout) is NOT
+ * retried: the first call may have finished the run, and a second would find it no longer
+ * running and report the results as lost.
  */
 export async function finishRun(writer: SupabaseClient, runId: string, input: FinishInput): Promise<{ ok: true } | { ok: false; error: string }> {
   const fail = { ok: false as const, error: 'The test finished but its results weren’t saved.' }
@@ -151,7 +163,7 @@ export async function finishRun(writer: SupabaseClient, runId: string, input: Fi
     }
     const crawl = capCrawl(input.crawl)
     let { data, error } = await writer.rpc('seo_test_finish', crawl ? { ...args, p_crawl: crawl } : args)
-    if (error && crawl) ({ data, error } = await writer.rpc('seo_test_finish', args))
+    if (error && crawl && CRAWL_REFUSED.has(error.code ?? '')) ({ data, error } = await writer.rpc('seo_test_finish', args))
     return !error && data === true ? { ok: true } : fail
   } catch {
     return fail

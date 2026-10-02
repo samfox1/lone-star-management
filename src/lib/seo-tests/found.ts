@@ -34,7 +34,7 @@ import { trimTrailingSlashes } from '@/lib/url'
 import { SEO_BOTS, botsForTest, robotsTokensOf } from './bots'
 import { sameSite } from './evidence'
 import { collapse, decodeEntities, parseAttrs, parsePage, wordsOf, type Page } from './html'
-import { describeRule, robotsVerdict, type RobotsVerdict } from './robots-txt'
+import { anotherGroupAllows, describeRule, robotsVerdict, type RobotsVerdict } from './robots-txt'
 import type { SeoBot, SeoEvidence, SeoKnown, SeoPageFetch, SeoTest, SeoTestId, SeoTestResult } from './types'
 
 type FoundId = 'google' | 'bing' | 'chatgpt' | 'claude' | 'perplexity' | 'others' | 'allowed' | 'list' | 'words' | 'bingwm'
@@ -739,6 +739,12 @@ function botTest(test: BotTestId): Inner {
               } else findings.push({ level: 'unknown', path: null, training: false, sentence: robotsUnread(e, v, who) })
             }
             if (v.why === 'server-error') paths.forEach((p) => badPaths.add(p))
+            continue
+          }
+          // Unnamed and kept out by `*` while another crawler is let in by name: this bot then
+          // follows "other search bots'" rules, its vendor won't say whose (bots.ts). Not a fail.
+          if (bot.followsOtherSearchBots && v.check?.group === '*' && anotherGroupAllows(e.robots?.body ?? '', tokens, path)) {
+            findings.push({ level: 'unknown', path: null, training: false, sentence: `your site’s settings for search engines don’t mention ${bot.who}, and ${bot.company ?? bot.who} doesn’t say which other search engine’s rules it then follows, so we can’t tell if ${bot.who} is let in.` })
             continue
           }
           badPaths.add(path)

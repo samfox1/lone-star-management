@@ -401,6 +401,24 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
     expect(bare.args).toHaveLength(1)
   })
 
+  // Sent again ONLY when the database REFUSED the call (nothing was written). A lost answer (a
+  // dropped connection, a timeout) may have finished the run with its crawl: a second call would
+  // find it no longer running, and the artist would be told the results weren't saved.
+  it('CRITICAL: the finish is sent again without the crawl only when the database refused it, never after a lost answer', async () => {
+    for (const code of ['PGRST202', '23514', '22P02', '22P05']) {
+      const { out, args } = await finishWith(realCrawl(), (a) => ('p_crawl' in a ? { error: { code, message: 'refused' } } : { data: true }))
+      expect(out, code).toEqual({ ok: true })
+      expect(args, code).toHaveLength(2)
+    }
+    // supabase-js reports a dropped connection as code '' ("TypeError: fetch failed"); 57014 is a
+    // statement cut off by its timeout.
+    for (const error of [{ code: '', message: 'TypeError: fetch failed' }, { message: 'AbortError: The operation was aborted.' }, { code: '57014', message: 'canceling statement due to statement timeout' }]) {
+      const { out, args } = await finishWith(realCrawl(), (a) => ('p_crawl' in a ? { error } : { data: false }))
+      expect(out, error.message).toMatchObject({ ok: false })
+      expect(args, error.message).toHaveLength(1)
+    }
+  })
+
   // Only a WHOLE v:1 crawl is stored or shown: each broken piece makes the whole crawl null, on
   // the way in (capCrawl) and on the way out (crawlOf, what the reader uses).
   it.each<[string, (c: Record<string, any>) => void]>([ // eslint-disable-line @typescript-eslint/no-explicit-any

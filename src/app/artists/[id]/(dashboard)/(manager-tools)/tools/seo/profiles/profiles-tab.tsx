@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { cx } from '@/lib/cx'
 import { slugify } from '@/lib/slug'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
+import { MAILTO_SAFE_LENGTH, buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
 import { dayLabel } from '@/lib/manager-tools/profiles/bio-state'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
@@ -172,6 +172,7 @@ function BioCard({
     [input, photo, dims, cc],
   )
   const ccBad = cc.trim() !== '' && !ccAddress(cc)
+  const mailHref = mailtoHref(pack, { cc })
 
   async function copy() {
     try {
@@ -289,9 +290,11 @@ function BioCard({
         </Field>
       ) : null}
       <div className="mt-1.5 flex flex-wrap items-center gap-4 border-t border-hairline-soft pt-4">
-        <a href={mailtoHref(pack, { cc })} aria-label="Open in Mail" className={GLYPH}>
+        <a href={mailHref} aria-label="Open in Mail" className={GLYPH}>
           <Glyph icon="mailbox" label="Open in Mail" />
         </a>
+        {/* A long mailto can be cut short by the mail app without a word: Copy keeps all of it. */}
+        {mailHref.length > MAILTO_SAFE_LENGTH ? <span className="-ml-2 font-space text-[11px] text-ink-faint">may be cut off · use Copy</span> : null}
         <button type="button" aria-label={copied ? 'Copied' : 'Copy email'} onClick={() => void copy()} className={GLYPH}>
           <Glyph icon={copied ? 'check' : 'copy'} label={copied ? 'Copied' : 'Copy email'} />
         </button>

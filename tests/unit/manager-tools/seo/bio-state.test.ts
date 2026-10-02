@@ -8,8 +8,9 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo.
  * Covers:   • factChanges: every Publish whose facts differ from the one before, newest first;
  *             which facts; the first Publish counts; identical republishes and non-fact changes
- *             (template, press kit, JSON-LD type, the hero banner) never count; a fact missing
- *             from an older snapshot equals an empty one; a capped read never guesses its oldest
+ *             (template, press kit, JSON-LD type, the hero banner) never count; a fact one of two
+ *             snapshots doesn't carry (it joined the snapshot later) is not compared, even when
+ *             it arrives with a value; a capped read never guesses its oldest
  *           • bioState: each of the four states; the 6-month edge; a change after the tick
  *             wins over the 6 months
  *           • connectedBios: only bios whose platform is connected, from OUTSIDE_BIOS (never
@@ -22,8 +23,8 @@
  *           itself (profile-marks.test.ts).
  * Fixtures: SKEEN_HISTORY is Skeen's real profile history (the hosted `revisions` rows, entity
  *           'artist', read 2026-10-01): its timestamps, which keys each snapshot carries (genre
- *           and location joined the snapshot 2026-08-26) and when each fact changed; the bio
- *           text is shortened. SKEEN_LINKS are Skeen's real `links` rows (label, url, role).
+ *           and location joined the snapshot 2026-08-26, so Aug 28 is their first Publish, not
+ *           a change) and when each fact changed; the bio text is shortened. SKEEN_LINKS are Skeen's real `links` rows (label, url, role).
  */
 import { describe, expect, it } from 'vitest'
 import { OUTSIDE_BIOS, bioItem } from '@/lib/manager-tools/profiles/bios'
@@ -59,7 +60,7 @@ const SKEEN_HISTORY: ProfileRevision[] = [
   { published_at: '2026-09-29T02:38:24.152066+00:00', data: facts(BIO.v5) },
   { published_at: '2026-09-28T15:34:01.458713+00:00', data: facts(BIO.v5) },
   { published_at: '2026-09-09T18:34:14.863126+00:00', data: facts(BIO.v5) },
-  { published_at: '2026-08-28T17:15:41.909228+00:00', data: facts(BIO.v5) }, // genre + city set
+  { published_at: '2026-08-28T17:15:41.909228+00:00', data: facts(BIO.v5) }, // genre + city JOIN the snapshot
   { published_at: '2026-08-22T00:22:53.661278+00:00', data: docs(BIO.v5) },
   { published_at: '2026-08-19T16:28:13.392434+00:00', data: docs(BIO.v5) },
   { published_at: '2026-08-06T17:24:22.140293+00:00', data: docs(BIO.v5) },
@@ -72,12 +73,12 @@ const SKEEN_HISTORY: ProfileRevision[] = [
   { published_at: '2026-07-16T16:11:31.086449+00:00', data: early(BIO.v2, HERO) }, // bio
   { published_at: '2026-07-14T23:30:37.451623+00:00', data: early(BIO.v1, HERO) }, // first
 ]
-const SKEEN_CHANGED = '2026-08-28T17:15:41.909228+00:00'
+const SKEEN_CHANGED = '2026-07-16T17:29:17.449282+00:00'
 
-/** Skeen's fact changes, newest first. The Jul 29 Publish cleared the hero banner only: not a fact. */
+/** Skeen's fact changes, newest first. The Jul 29 Publish cleared the hero banner only: not a
+ *  fact. Aug 28 is the first snapshot to CARRY genre and city: not a change either. */
 const SKEEN_CHANGES = [
-  { at: SKEEN_CHANGED, fields: ['location', 'genre'], first: false },
-  { at: '2026-07-16T17:29:17.449282+00:00', fields: ['bio'], first: false },
+  { at: SKEEN_CHANGED, fields: ['bio'], first: false },
   { at: '2026-07-16T16:14:45.165854+00:00', fields: ['bio'], first: false },
   { at: '2026-07-16T16:13:35.12744+00:00', fields: ['bio'], first: false },
   { at: '2026-07-16T16:11:31.086449+00:00', fields: ['bio'], first: false },
@@ -88,7 +89,8 @@ const SKEEN_CHANGES = [
 const republish = (at: string, data: Record<string, unknown>): ProfileRevision[] => [{ published_at: at, data }, ...SKEEN_HISTORY]
 
 describe('factChanges', () => {
-  // Skeen's real history: four bio rewrites on Jul 16, then genre and city joining the profile.
+  // Skeen's real history: four bio rewrites on Jul 16. Genre and city joining the snapshot on
+  // Aug 28 is not a change: the snapshots before it never said what they were.
   it('Skeen: every fact change, newest first, with what each changed', () => {
     expect(factChanges(SKEEN_HISTORY)).toEqual(SKEEN_CHANGES)
   })
@@ -138,18 +140,26 @@ describe('factChanges', () => {
     expect(factChanges(SKEEN_HISTORY.slice(-1))).toEqual([{ at: '2026-07-14T23:30:37.451623+00:00', fields: ['name', 'bio'], first: true }])
   })
 
-  // A column that joined the snapshot later is ABSENT from older revisions. Absent, null, ''
-  // and whitespace are all "nothing", so that day is not a change unless a value appeared.
-  it('a fact missing from an older snapshot equals an empty one; trimmed text compares equal', () => {
+  // CRITICAL: a fact that JOINS the snapshot (a new BIO_FACTS column) is ABSENT from every older
+  // revision. Its first Publish arrives with a value, and reading "absent" as "empty" would date a
+  // change there and mark every ticked bio out of date. Compared only once both sides carry it;
+  // null, '' and spaces are all "nothing", and text compares trimmed.
+  it('CRITICAL: a fact joining the snapshot with a value is not a change; once carried, it is compared', () => {
     const history: ProfileRevision[] = [
-      { published_at: '2026-10-01T09:00:00.000Z', data: { ...early(` ${BIO.v5}\n`, ''), genre: null, location: '  ' } },
+      { published_at: '2026-12-01T09:00:00.000Z', data: early(BIO.v5, null) }, // genre + city leave: not a change
+      { published_at: '2026-11-01T09:00:00.000Z', data: { ...early(BIO.v5, null), genre: 'Techno', location: '  ' } }, // genre changed
+      { published_at: '2026-10-01T09:00:00.000Z', data: { ...early(` ${BIO.v5}\n`, ''), genre: 'House', location: null } }, // both JOIN
       { published_at: '2026-09-01T09:00:00.000Z', data: early(BIO.v5, null) },
       { published_at: '2026-08-01T09:00:00.000Z', data: early(BIO.v1, null) },
     ]
     expect(factChanges(history).map((c) => [c.at, c.fields])).toEqual([
+      ['2026-11-01T09:00:00.000Z', ['genre']],
       ['2026-09-01T09:00:00.000Z', ['bio']],
       ['2026-08-01T09:00:00.000Z', ['name', 'bio']],
     ])
+    // So a bio ticked before the new fact joined stays current.
+    const changes = factChanges(history.slice(2))
+    expect(bioState({ confirmedAt: '2026-09-15T09:00:00.000Z', factsChangedAt: changes[0]?.at ?? null, now: Date.parse('2026-10-02T09:00:00.000Z') })).toBe('current')
   })
 
   // Rows in any order give the same answer.
@@ -163,7 +173,7 @@ describe('factChanges', () => {
     const window = SKEEN_HISTORY.slice(0, 3) // three identical republishes
     expect(factChanges(window, { complete: false })).toEqual([])
     expect(factChanges(window)).toEqual([{ at: '2026-09-09T18:34:14.863126+00:00', fields: ['name', 'bio', 'location', 'genre'], first: true }])
-    expect(factChanges(SKEEN_HISTORY.slice(0, 6), { complete: false })).toEqual([SKEEN_CHANGES[0]])
+    expect(factChanges(SKEEN_HISTORY.slice(0, 12), { complete: false })).toEqual([SKEEN_CHANGES[0]])
   })
 
   // No Publish yet: no change. A row with no snapshot or a bad date is skipped, not trusted.
@@ -297,7 +307,7 @@ describe('bioRows and biosToCheck', () => {
 
   // Each row reads ITS bio_<key> tick, never another item's.
   it('each row reads its own tick: bio_<key>', () => {
-    const marks = { [bioItem('spotify')]: '2026-09-01T00:00:00.000Z', [bioItem('instagram')]: '2026-08-01T00:00:00.000Z', allmusic_bio: '2026-01-01T00:00:00.000Z' }
+    const marks = { [bioItem('spotify')]: '2026-09-01T00:00:00.000Z', [bioItem('instagram')]: '2026-07-15T00:00:00.000Z', allmusic_bio: '2026-01-01T00:00:00.000Z' }
     const rows = bioRows(input({ marks }), now)!
     const state = Object.fromEntries(rows.map((r) => [r.key, r.state]))
     expect(state.spotify).toBe('current')
@@ -326,7 +336,7 @@ describe('bioRows and biosToCheck', () => {
   it('the count: every row not current; nothing for a fine set', () => {
     const allTicked = Object.fromEntries(bios.map((b) => [bioItem(b.key), '2026-09-30T00:00:00.000Z']))
     expect(biosToCheck(bioRows(input({ marks: allTicked }), now))).toBe(0)
-    const old = { ...allTicked, [bioItem('x')]: '2025-01-01T00:00:00.000Z', [bioItem('tiktok')]: '2026-08-01T00:00:00.000Z' }
+    const old = { ...allTicked, [bioItem('x')]: '2025-01-01T00:00:00.000Z', [bioItem('tiktok')]: '2026-07-15T00:00:00.000Z' }
     expect(biosToCheck(bioRows(input({ marks: old }), now))).toBe(2) // recheck + stale
     expect(biosToCheck(bioRows(input(), now))).toBe(bios.length) // none ticked
   })

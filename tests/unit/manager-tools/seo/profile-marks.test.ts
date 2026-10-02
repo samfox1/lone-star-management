@@ -17,10 +17,10 @@
  *           • readProfileMarks: rows by item; `{}` while the table is missing (PGRST205, 42P01);
  *             any other error throws
  *           • setProfileMark: marking an item already marked RE-CONFIRMS it (an update the
- *             table's trigger stamps); a first mark inserts artist_id + item; until
- *             20261001160000 is pushed (no UPDATE grant) it falls back to the insert; undo is
- *             filtered by artist AND item; a refused write is never `ok`; an unknown item never
- *             reaches the table
+ *             table's trigger stamps); a first mark inserts artist_id + item; a refused
+ *             re-confirm (42501 included) is a failure, never a fall back to the insert; undo
+ *             is filtered by artist AND item; a refused write is never `ok`; an unknown item
+ *             never reaches the table
  *           • markProfileItemAction: an unknown item or a non-boolean flag never reaches the
  *             session; a good call writes artist_id + item only (the database stamps the rest)
  * Not here: RLS, grants, the CHECK and the stamping trigger in a real database

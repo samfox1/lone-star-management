@@ -35,7 +35,8 @@ export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', l
 export const RECHECK_AFTER_DAYS = 183
 export const RECHECK_AFTER_MS = RECHECK_AFTER_DAYS * 24 * 60 * 60 * 1000
 
-/** One published profile, shaped like a `revisions` row of entity_type 'artist'. */
+/** One published profile, shaped like a `revisions` row of entity_type 'artist'. A fact the
+ *  snapshot doesn't carry is ABSENT from `data`, never null (bios-load.ts keeps them apart). */
 export type ProfileRevision = { published_at: string; data: Record<string, unknown> | null }
 
 /** One Publish that changed a fact, and which. `first`: the artist's first Publish. */
@@ -45,8 +46,7 @@ export type BioState = 'unconfirmed' | 'stale' | 'recheck' | 'current'
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
-/** One fact as compared: trimmed text, and nothing (missing, null, '', spaces) as null. A
- *  column that joined the snapshot later is MISSING from older revisions; that is not a change. */
+/** One fact as compared: trimmed text, and nothing (null, '', spaces) as null. */
 function factValue(v: unknown): string | null {
   if (v === null || v === undefined) return null
   if (typeof v === 'string') return v.trim() || null
@@ -58,6 +58,10 @@ function factValue(v: unknown): string | null {
  * The first Publish counts (it is when the facts first went out), naming the facts it set. A
  * republish with the same facts never counts: an editor restyle re-publishes the profile, and
  * must not nudge anyone.
+ *
+ * A fact is compared only when BOTH snapshots carry it. A column that joined the snapshot later
+ * is MISSING from older rows: the first Publish that carries it says nothing about whether it
+ * changed, so it must not mark every ticked bio out of date.
  *
  * `complete: false` says the rows are a capped window, not the whole history: the oldest row
  * read has an unknown Publish before it, so it is never treated as the first Publish (no guess).
@@ -72,7 +76,7 @@ export function factChanges(revisions: readonly ProfileRevision[], { complete = 
   rows.forEach((row, i) => {
     const before = rows[i + 1]
     if (before) {
-      const fields = BIO_FACTS.filter((f) => factValue(row.data[f]) !== factValue(before.data[f]))
+      const fields = BIO_FACTS.filter((f) => Object.hasOwn(row.data, f) && Object.hasOwn(before.data, f) && factValue(row.data[f]) !== factValue(before.data[f]))
       if (fields.length) changes.push({ at: row.published_at, fields, first: false })
     } else if (complete) {
       changes.push({ at: row.published_at, fields: BIO_FACTS.filter((f) => factValue(row.data[f]) !== null), first: true })
