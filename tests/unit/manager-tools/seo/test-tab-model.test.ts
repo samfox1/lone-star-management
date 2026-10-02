@@ -2,7 +2,7 @@
  * The Test tab's rules: every count, headline, word and link the manager reads there, and how
  * the tab tells "not switched on yet" from "couldn't read" from "never tested".
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model.ts,
+ * Code:     src/lib/manager-tools/seo/test-model.ts,
  *           test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
  * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), all 24 SEO
  *           tests in their four groups
@@ -23,8 +23,8 @@
  *           • the open row's card: evidence as plain strings, a repeated label said once; the
  *             running clock
  * Not here: drawing the tab (tests/components/manager-tools/seo/test-tab.test.tsx); the server
- *           action around the read (tests/unit/seo-tests/runs/actions.test.ts).
- * Fixtures: results from the REAL engine (tests/components/manager-tools/seo/seo-run-fixture.ts);
+ *           action around the read (tests/unit/manager-tools/seo/test-actions.test.ts).
+ * Fixtures: results from the REAL engine (tests/helpers/seo/run-fixture.ts);
  *           test lists derived from SEO_TEST_IDS / SEO_TEST_DEFS / SEO_TEST_GROUPS, never hand-
  *           listed; a query-builder fake for the read that answers every chain the same way.
  */
@@ -60,12 +60,12 @@ import {
   secondsLeft,
   sentenceOf,
   whenText,
-} from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model'
-import { SEO_EDIT_TARGETS, SEO_SECTIONS, seoTabSeg } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
+} from '@/lib/manager-tools/seo/test-model'
+import { SEO_EDIT_TARGETS, SEO_SECTIONS, seoTabSeg } from '@/lib/manager-tools/seo/sections'
 import { TOOLS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_shell/tools-registry'
 import { loadTestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
 import { isMissingTable } from '@/lib/seo-tests/store'
-import { SCENARIO_NAMES, engineResults, fixtureResults } from '@tests/components/manager-tools/seo/seo-run-fixture'
+import { SCENARIO_NAMES, engineResults, fixtureResults } from '@tests/helpers/seo/run-fixture'
 
 describe('counts', () => {
   // Counts: `na` is out of both sides of "N of M"; unknown is neither a pass nor a fail.

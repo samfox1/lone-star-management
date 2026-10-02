@@ -18,7 +18,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
  * KEEPING IT HONEST: the include list below is a NEGATIVE filter (everything except the
  * DB suites), so a new DB-free test file is picked up automatically. A new DB-backed
  * file must be excluded, or the run gets slow and starts writing to the live project.
- * The guard is `tests/mutation-config.test.ts`, which fails if any included file imports
+ * The guard is `tests/unit/harness/mutation-config.test.ts`, which fails if any included file imports
  * the Supabase test helpers.
  */
 export default defineConfig({

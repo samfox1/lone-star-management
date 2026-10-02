@@ -1,7 +1,7 @@
 /**
  * A fake web for the SEO / GEO tests: every address answers from a table, with no network.
  *
- * Code:     src/lib/seo-tests/evidence.ts (gatherSiteEvidence) and src/lib/seo-tests/guarded-fetch.ts
+ * Code:     src/lib/seo-tests/evidence.ts (gatherSiteEvidence) and src/lib/guarded-fetch.ts
  *           (guardedFetch): what it is fed to
  * Feature:  the site visit behind the "Can be found" tests, and safe fetching
  * Tier:     STRICT support file (AGENTS.md "Test depth"): the code it feeds fetches addresses a
@@ -14,7 +14,7 @@
  *             it is aborted, a dropped connection
  *           • `calls` (every request, with its User-Agent) and `maxInFlight()` (the most requests
  *             open at once), to check what was asked for and how politely
- * Not here: the evidence the ten tests themselves read (tests/unit/seo-tests/found-fixtures.ts).
+ * Not here: the evidence the ten tests themselves read (tests/unit/seo-tests/_found-fixtures.ts).
  *           Used by tests/unit/seo-tests/can-be-found/evidence.test.ts and tests/unit/safe-fetching/.
  * Fixtures: like a real client, it FOLLOWS a redirect itself unless told `redirect: 'manual'`, so
  *           code that stops walking redirects by hand (to check each hop) fails a test.

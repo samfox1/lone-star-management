@@ -17,7 +17,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { brandPending, brandPendingMessage, brandSubjects, restoreBrandToPublished } from '@/lib/brand'
 import { diffEntities, publicSnapshot, type ContentRow } from '@/lib/content'
-import { fakeClient, type Call } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call } from '@tests/helpers/fake-client'
 
 /** loadBrandPending's request client (only the last describe reaches it). */
 let serverClient: unknown = null

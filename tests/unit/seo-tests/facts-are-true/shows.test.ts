@@ -14,12 +14,12 @@
  *             with no city is left out and said
  *           • unknown when the card can't be read or today's date isn't known
  * Not here: nothing published, a home page cut at the read cap, or unreachable (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site whose card lists one upcoming show, Oct 15 2026,
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site whose card lists one upcoming show, Oct 15 2026,
  *           matching Tour; today is 2026-09-28); `event` builds a show. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
-import { evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, rowOf, type Graph } from '@tests/unit/seo-tests/_page-fixture'
+import { evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, rowOf, type Graph } from '@tests/helpers/seo/page-fixture'
 
 const s = FACTS_TESTS.shows
 const withGraph = (graph: Graph, more: Parameters<typeof evidence>[0] = {}) => evidence({ home: homeHtml({ ld: [graphBlock(graph)] }), ...more })

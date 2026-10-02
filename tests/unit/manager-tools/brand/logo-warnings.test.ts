@@ -1,12 +1,12 @@
 // What the logo editor says after an upload, and which icons go when a logo is removed.
 /**
- * logos/warnings.ts and the pure half of logos/remove.ts. The logo editor's component tests
- * reach both, but only through a white box, a gradient and a small transparent mark — a
+ * src/lib/manager-tools/brand/logo-warnings.ts and the pure half of brand/logos/remove.ts. The
+ * logo editor's component tests reach both, but only through a white box, a gradient and a small transparent mark — a
  * 2026-09-23 mutation run left "black", "colored", "very large", every warning key, and the
  * "no logo → no icons" rule unwatched. Each is pinned here, at its boundary.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { logoWarnings, NOT_FLAT_TEXT } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/warnings'
+import { logoWarnings, NOT_FLAT_TEXT } from '@/lib/manager-tools/brand/logo-warnings'
 import type { LogoAnalysis } from '@/lib/manager-tools/brand/image-checks'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions', () => ({

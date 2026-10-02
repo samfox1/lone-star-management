@@ -20,7 +20,7 @@
  *           • odd answers, a thrown fetch, a private site or nothing to ask: `looked: false`
  * Not here: the create-page link builder (tests/unit/manager-tools/connections/musicbrainz-seed.test.ts);
  *           a hostile profile link timed (tests/unit/safe-fetching/slow-parsers.test.ts).
- * Fixtures: _page-fixture.ts (`known`, `evidence`); `mbFetch` fakes MusicBrainz's replies in
+ * Fixtures: tests/helpers/seo/page-fixture.ts (`known`, `evidence`); `mbFetch` fakes MusicBrainz's replies in
  *           order and records what was asked; `noWait` makes the one-a-second gate instant.
  *           Nothing reaches the network.
  */
@@ -28,7 +28,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { lookupMusicBrainz, musicBrainzForms, resetMusicBrainzGate } from '@/lib/seo-tests/musicbrainz'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
 import type { SeoEvidence, SeoKnown } from '@/lib/seo-tests/types'
-import { evidence, expectPlainWords, known, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { evidence, expectPlainWords, known, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const MBID = 'b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d'
 const OTHER = '0383dadf-2a4e-4d10-a46a-e9e041da8eb3'

@@ -14,13 +14,13 @@
  *           • a page we couldn't read, or have no Google or Bing copy of, is "couldn't check"
  * Not here: the plain-words and never-throws rules shared by all ten tests (contract.test.ts);
  *           each bot's own "don't list me" and settings rules (bots.test.ts).
- * Fixtures: ../found-fixtures.ts: a healthy two-page site whose pages name themselves as their
+ * Fixtures: ../_found-fixtures.ts: a healthy two-page site whose pages name themselves as their
  *           main address; each case swaps one page, header or settings file. No network.
  */
 import { describe, expect, it } from 'vitest'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoPageFetch } from '@/lib/seo-tests/types'
-import { ABOUT, HOME, O, ROBOTS_OK, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/found-fixtures'
+import { ABOUT, HOME, O, ROBOTS_OK, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/_found-fixtures'
 
 const html = { 'content-type': 'text/html' }
 const withMeta = (page: string, name: string, content: string) => page.replace('<head>', `<head><meta name="${name}" content="${content}">`)

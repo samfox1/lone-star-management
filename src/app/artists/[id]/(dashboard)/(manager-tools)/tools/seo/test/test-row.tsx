@@ -6,7 +6,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import type { SeoTestStatus } from '@/lib/seo-tests/types'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { checkItYourself, editHref, evidenceRows, leadOf, safeHttps, sentenceOf, type TestRow } from './model'
+import { checkItYourself, editHref, evidenceRows, leadOf, safeHttps, sentenceOf, type TestRow } from '@/lib/manager-tools/seo/test-model'
 
 /**
  * ONE TEST: its row, and the CARD that opens under it (Sam, 2026-09-29, round 10's "Dropdown
@@ -183,7 +183,7 @@ function Card({ row, ctx }: { row: TestRow; ctx: RowContext }) {
             <CardLabel>What we saw</CardLabel>
             <div data-card="seen" className="min-w-0">
               {seen.length ? (
-                // One label, then its values: a repeated label is said once (model.ts evidenceRows).
+                // One label, then its values: a repeated label is said once (test-model.ts evidenceRows).
                 <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2">
                   {seen.map((e, i) => (
                     <Evidence key={i} label={e.repeat ? null : e.label} value={e.value} />

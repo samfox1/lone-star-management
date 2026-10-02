@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
-import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/profiles/marks'
-import { BIO_FACTS, connectedBios, factChanges, type BiosInput, type ProfileRevision } from '@/lib/manager-tools/profiles/bio-state'
+import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
+import { BIO_FACTS, connectedBios, factChanges, type BiosInput, type ProfileRevision } from '@/lib/manager-tools/seo/profiles/bio-state'
 
 /** The newest profile Publishes read. A Publish only writes the profile when it changed, so this
  *  is years of history; the oldest row of a full window is never taken for the first (factChanges). */
@@ -24,7 +24,7 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * What the Outside bios rows are built from (lib/manager-tools/profiles/bio-state.ts): the
+ * What the Outside bios rows are built from (lib/manager-tools/seo/profiles/bio-state.ts): the
  * artist's links (which platforms are connected), the "updated" ticks, and the published
  * profiles, newest first, reading ONLY the fact fields out of each snapshot.
  *

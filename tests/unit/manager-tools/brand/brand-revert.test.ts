@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { restoreBrandToPublished } from '@/lib/brand'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
-import { fakeClient, filterValue, type Call } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, type Call } from '@tests/helpers/fake-client'
 
 const A = 'a1'
 

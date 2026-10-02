@@ -18,7 +18,7 @@
  *             trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
  * Not here: the engine's own tests (tests/unit/seo-tests/).
  * Fixtures: each scenario is a made-up site built with the engine's own page fixture
- *           (tests/unit/seo-tests/_page-fixture.ts). It RUNS the engine on import, so when a
+ *           (tests/helpers/seo/page-fixture.ts). It RUNS the engine on import, so when a
  *           test's words change the page's tests read the new words: tests built on it assert
  *           states and counts, never a sentence copied from here.
  */
@@ -27,7 +27,7 @@ import { runAllTests } from '@/lib/seo-tests/run'
 import { FETCHING_BOTS } from '@/lib/seo-tests/bots'
 import { capResults, type StoredSeoRun } from '@/lib/seo-tests/store'
 import { SEO_TEST_IDS, type SeoEvidence, type SeoPageFetch, type SeoTestHistory, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
-import { LONG_BIO, ORIGIN, aboutHtml, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known } from '@tests/unit/seo-tests/_page-fixture'
+import { LONG_BIO, ORIGIN, aboutHtml, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known } from '@tests/helpers/seo/page-fixture'
 
 export { ORIGIN }
 

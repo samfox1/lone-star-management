@@ -14,14 +14,14 @@
  *           • region, country, artist type and the Spotify id read exactly as the fact card states them
  * Not here: fetching the site safely (tests/unit/safe-fetching/); what each SEO test does with
  *           these facts (tests/unit/seo-tests/).
- * Fixtures: a PostgREST fake (brand/_fake-client) that answers the artist row and both doors, and
+ * Fixtures: a PostgREST fake (tests/helpers/fake-client.ts) that answers the artist row and both doors, and
  *           a draft row for anything else (so a draft read would show); a hand-made door payload.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { publishedFromPayload, readKnown, seoSiteOrigin } from '@/lib/seo-tests/known'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import { FACT_CONTENT_KEYS, artistPlace, sameAsFrom } from '@samfox1/site-bridge/seo'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const A = 'artist-1'
 

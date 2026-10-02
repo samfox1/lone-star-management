@@ -31,7 +31,7 @@ import {
   uprightWeights,
 } from '@/lib/google-fonts'
 import { MAX_FONTS_PER_ARTIST, addGoogleFont } from '@/lib/fonts'
-import { fakeClient, isOwnershipRead, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, isOwnershipRead, type Call, type Reply } from '@tests/helpers/fake-client'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 let fake = fakeClient()

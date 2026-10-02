@@ -18,7 +18,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
-import { fakeClient, type Call } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call } from '@tests/helpers/fake-client'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 // The password gate signs in on a throwaway client; here it always says yes.

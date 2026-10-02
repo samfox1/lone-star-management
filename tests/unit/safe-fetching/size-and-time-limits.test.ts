@@ -2,7 +2,7 @@
  * Nothing the server fetches can fill its memory or hold a request open: every read stops at a
  * byte cap, and every fetch ends at its time limit.
  *
- * Code:     src/lib/seo-tests/guarded-fetch.ts (guardedFetch: maxBytes, timeoutMs, deadlineMs),
+ * Code:     src/lib/guarded-fetch.ts (guardedFetch: maxBytes, timeoutMs, deadlineMs),
  *           src/lib/seo-audit.ts (fetchGuarded), src/lib/og.ts (fetchOpenGraph), src/lib/net-guard.ts
  *           (createSafeFetch: idle timeout, abort signal)
  * Feature:  safe fetching: the SEO/GEO checks, the old live check, IndexNow, and the Add modal's
@@ -21,16 +21,16 @@
  * Not here: parsers that are slow on hostile text (slow-parsers.test.ts); the SEO checks' own run
  *           budget across many pages (tests/unit/seo-tests).
  * Fixtures: hand-made streams that count what was pulled, or drip a byte every 20 ms; the fake web
- *           (tests/unit/seo-tests/fake-site.ts) with delays and a server that never answers; a real
+ *           (tests/helpers/seo/fake-site.ts) with delays and a server that never answers; a real
  *           loopback server whose /slow page never finishes (_loopback-server.ts).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSafeFetch } from '@/lib/net-guard'
-import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import { fetchGuarded } from '@/lib/seo-audit'
 import { fetchOpenGraph } from '@/lib/og'
 import { fakeDns } from '@tests/helpers/fake-dns'
-import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+import { fakeSite } from '@tests/helpers/seo/fake-site'
 import { startLoopbackServer, type LoopbackServer } from '@tests/unit/safe-fetching/_loopback-server'
 
 const SITE = 'https://www.example.com/'

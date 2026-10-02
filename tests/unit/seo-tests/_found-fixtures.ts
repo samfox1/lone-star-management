@@ -14,7 +14,7 @@
  *             page and "Access denied" page, a Next.js 404 served as 200, a page empty until its
  *             scripts run, a password page
  *           • `run(id, f)` and `details(r)`: run one test on a fixture; its "Show the details" rows as text
- * Not here: fetching a real site (tests/unit/seo-tests/fake-site.ts fakes the web for evidence.ts).
+ * Not here: fetching a real site (tests/helpers/seo/fake-site.ts fakes the web for evidence.ts).
  * Fixtures: the html is what real sites and real firewalls serve, not what the code under test
  *           looks for, so a test cannot pass by matching its own fixture.
  */

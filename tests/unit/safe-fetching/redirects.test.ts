@@ -2,7 +2,7 @@
  * Redirects are followed by hand, one hop at a time, so every hop is checked like the first
  * address; a redirect loop ends, and each redirect's body is let go.
  *
- * Code:     src/lib/net-guard.ts (createSafeFetch never follows), src/lib/seo-tests/guarded-fetch.ts
+ * Code:     src/lib/net-guard.ts (createSafeFetch never follows), src/lib/guarded-fetch.ts
  *           (guardedFetch walks the hops), src/lib/seo-audit.ts (fetchGuarded, which uses that walk)
  * Feature:  safe fetching: every server fetch of an outside address (SEO/GEO checks, the old live
  *           check, IndexNow)
@@ -19,17 +19,17 @@
  *             not hang the walk
  * Not here: the refusal of a private FIRST address (blocked-before-connecting.test.ts); the
  *           time limit on a slow chain of hops (size-and-time-limits.test.ts).
- * Fixtures: a fake web (tests/unit/seo-tests/fake-site.ts) that follows redirects itself unless
+ * Fixtures: a fake web (tests/helpers/seo/fake-site.ts) that follows redirects itself unless
  *           told `redirect: 'manual'`, so dropping that option fails a test; hand-made responses
  *           whose bodies record being cancelled; a fake DNS (tests/helpers/fake-dns.ts); a real
  *           loopback server for the transport (_loopback-server.ts).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSafeFetch } from '@/lib/net-guard'
-import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import { fetchGuarded } from '@/lib/seo-audit'
 import { fakeDns } from '@tests/helpers/fake-dns'
-import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+import { fakeSite } from '@tests/helpers/seo/fake-site'
 import { startLoopbackServer, type LoopbackServer } from '@tests/unit/safe-fetching/_loopback-server'
 
 const SITE = 'https://www.example.com/'

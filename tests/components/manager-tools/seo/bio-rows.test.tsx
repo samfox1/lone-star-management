@@ -18,8 +18,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
-import { OUTSIDE_BIOS } from '@/lib/manager-tools/profiles/bios'
-import { bioRows, connectedBios, dayLabel, factChanges } from '@/lib/manager-tools/profiles/bio-state'
+import { OUTSIDE_BIOS } from '@/lib/manager-tools/seo/profiles/bios'
+import { bioRows, connectedBios, dayLabel, factChanges } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { BioRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bio-rows'
 import { markProfileItemAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actions'
 

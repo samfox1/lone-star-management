@@ -6,7 +6,7 @@ import { weightName } from '@/lib/font-weight'
 import { googleWeights, loadGoogleFonts } from '@/lib/google-fonts'
 import { FOCUS_RING } from '../../_ui/focus-ring'
 import { BrandModal } from '../_ui/brand-modal'
-import { previewStartWeight } from './face'
+import { previewStartWeight } from '@/lib/manager-tools/brand/font-face'
 import { useSampleStyle } from './font-sample'
 
 /**

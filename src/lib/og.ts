@@ -10,7 +10,7 @@
  */
 import net from 'node:net'
 import { lookup as dnsLookup } from 'node:dns/promises'
-import { guardedFetch } from './seo-tests/guarded-fetch'
+import { guardedFetch } from './guarded-fetch'
 
 /** Minimal HTML entity decode for meta content (the few that actually show up). */
 function decodeEntities(s: string): string {
@@ -136,7 +136,7 @@ type FetchOpts = { fetchImpl?: typeof fetch; maxBytes?: number; timeoutMs?: numb
  * Fetch a public URL's HTML and parse its Open-Graph tags. Returns null when the URL is
  * blocked, the request fails, or the response isn't HTML.
  *
- * A thin wrapper over the SEO tests' `guardedFetch` (lib/seo-tests/guarded-fetch): redirects
+ * A thin wrapper over the shared `guardedFetch` (lib/guarded-fetch): redirects
  * are walked by hand and every hop is re-checked, here against isPublicHttpUrl AND a DNS
  * pre-check (the `allow` rule), then by net-guard's transport at connect; the body is read
  * only up to `maxBytes` and only until the timeout. The old version read the WHOLE body and

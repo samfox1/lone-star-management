@@ -7,7 +7,7 @@
  * no canvas, so the maths is pinned here, on the pure function all three samples use.
  */
 import { describe, expect, it } from 'vitest'
-import { faceOf, fittedFontSize, previewStartWeight, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/fonts/face'
+import { faceOf, fittedFontSize, previewStartWeight, SAMPLE_CAP_PX, SAMPLE_MAX_PX, SAMPLE_MIN_PX } from '@/lib/manager-tools/brand/font-face'
 
 describe('fittedFontSize', () => {
   it('gives a short-capped face a bigger size than a tall-capped one, to the same cap height', () => {

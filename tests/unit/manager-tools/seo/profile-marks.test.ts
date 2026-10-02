@@ -2,8 +2,8 @@
  * Profile marks without a database: which items exist, reading the marks before and after the
  * migration is pushed, and the server action refusing bad input before it opens a session.
  *
- * Code:     src/lib/manager-tools/profiles/marks.ts (PROFILE_ITEMS, isProfileItem,
- *           readProfileMarks, setProfileMark), src/lib/manager-tools/profiles/bios.ts
+ * Code:     src/lib/manager-tools/seo/profiles/marks.ts (PROFILE_ITEMS, isProfileItem,
+ *           readProfileMarks, setProfileMark), src/lib/manager-tools/seo/profiles/bios.ts
  *           (OUTSIDE_BIOS, BIO_ITEMS), tools/seo/profiles/actions.ts (markProfileItemAction),
  *           and the newest `profile_marks_item_check` in supabase/migrations
  * Feature:  SEO tool · Profiles tab · "Mark as sent" and the outside bios' "updated" ticks
@@ -33,8 +33,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { BIO_ITEMS, OUTSIDE_BIOS } from '@/lib/manager-tools/profiles/bios'
-import { PROFILE_ITEMS, isProfileItem, readProfileMarks, setProfileMark, type ProfileItem } from '@/lib/manager-tools/profiles/marks'
+import { BIO_ITEMS, OUTSIDE_BIOS } from '@/lib/manager-tools/seo/profiles/bios'
+import { PROFILE_ITEMS, isProfileItem, readProfileMarks, setProfileMark, type ProfileItem } from '@/lib/manager-tools/seo/profiles/marks'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 

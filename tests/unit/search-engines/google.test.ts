@@ -1,5 +1,7 @@
-// Tapir's robot account signs in to Google and registers a site: the exact calls, and nothing leaked.
 /**
+ * Tapir's robot account signs in to Google and registers a site: the exact calls, and nothing
+ * leaked.
+ *
  * Code:     src/lib/search-engines/google.ts (googleCredsFromEnv, googleClient)
  * Feature:  Add website · registering a site with Google (ADD_WEBSITE_PLAN.md step 4)
  * Tier:     STRICT (AGENTS.md "Test depth"): a service-account key that owns every client site in

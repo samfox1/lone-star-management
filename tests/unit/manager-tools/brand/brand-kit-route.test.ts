@@ -4,7 +4,7 @@
  * the site — the published logos, the tab and home-screen icons, the font files for
  * published slots — plus colors.txt from the PUBLISHED palette (the door's `brand.colors`).
  *
- * The Supabase client is the PostgREST-shaped fake (`_fake-client.ts`) and storage is a
+ * The Supabase client is the PostgREST-shaped fake (`tests/helpers/fake-client.ts`) and storage is a
  * stubbed global `fetch`, so what this file pins is the route's DECISIONS: the ownership
  * gate, that the published door (not the working rows) decides what ships, the names the
  * zip entries get, and the size cap. The zip itself is unzipped with fflate's own reader,
@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { strFromU8, unzipSync } from 'fflate'
-import { fakeClient, isOwnershipRead, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, isOwnershipRead, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const ORIGIN = 'https://proj.example'
 
@@ -278,7 +278,7 @@ describe('brand kit route — what it leaves out, and says so', () => {
   })
 
   it('CRITICAL: the total is capped — an object that would overflow is skipped and reported, smaller ones still fit', async () => {
-    const { MAX_KIT_BYTES } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries')
+    const { MAX_KIT_BYTES } = await import('@/lib/manager-tools/brand/kit-entries')
     objects.set('media/a1/brand/primary.png', new Uint8Array(MAX_KIT_BYTES + 1))
     const res = await call()
     expect(res.status).toBe(200)
@@ -302,7 +302,7 @@ describe('brand kit route — what it leaves out, and says so', () => {
     // is "what is left" or the whole cap. Two 60%-of-cap logos tell them apart: the second
     // must be left out, or the response body passes the platform limit and the whole
     // download is refused.
-    const { MAX_KIT_BYTES } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries')
+    const { MAX_KIT_BYTES } = await import('@/lib/manager-tools/brand/kit-entries')
     const big = Math.floor(MAX_KIT_BYTES * 0.6)
     objects.set('media/a1/brand/primary.png', new Uint8Array(big))
     objects.set('media/a1/brand/secondary.webp', new Uint8Array(big))
@@ -317,7 +317,7 @@ describe('brand kit route — what it leaves out, and says so', () => {
   it('a DECLARED length over the cap is refused before a single byte is read', async () => {
     // The streaming check would catch it too, but only after buffering up to the cap —
     // the header check is what keeps a huge object from being read at all.
-    const { MAX_KIT_BYTES } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries')
+    const { MAX_KIT_BYTES } = await import('@/lib/manager-tools/brand/kit-entries')
     let pulled = false
     const body = new ReadableStream<Uint8Array>(
       {
@@ -472,7 +472,7 @@ describe('brand kit route — the edges a mutation run found unwatched (2026-09-
   })
 
   it('CRITICAL: an object that exactly fills the cap ships; once the cap is full, the rest are not even fetched', async () => {
-    const { MAX_KIT_BYTES } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries')
+    const { MAX_KIT_BYTES } = await import('@/lib/manager-tools/brand/kit-entries')
     objects.set('media/a1/brand/primary.png', new Uint8Array(MAX_KIT_BYTES))
     const res = await call()
     const entries = await unzip(res)

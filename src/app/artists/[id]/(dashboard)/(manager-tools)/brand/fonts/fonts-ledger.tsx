@@ -28,7 +28,7 @@ import {
   setFontSlotAction,
   setFontSlotMetaAction,
 } from '../actions'
-import { BOLD_FROM } from './face'
+import { BOLD_FROM } from '@/lib/manager-tools/brand/font-face'
 import { FontSample } from './font-sample'
 import { FontMenu } from './font-menu'
 import { FontPreview } from './font-preview'

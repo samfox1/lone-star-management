@@ -18,7 +18,7 @@
  * Not here: each test's own rules: bots.test.ts, allowed.test.ts, list.test.ts, words.test.ts and
  *           bingwm.test.ts in this folder. How the site is fetched: evidence.test.ts. The
  *           "in Tapir:" label rule across all 24 tests: ../honesty.test.ts.
- * Fixtures: ../found-fixtures.ts builds the evidence: a healthy two-page site (home + /about) with
+ * Fixtures: ../_found-fixtures.ts builds the evidence: a healthy two-page site (home + /about) with
  *           single visits swapped for real error, firewall and parked pages. No network.
  *
  * Why one file for all ten: the sweeps below read the list of tests from the code (FOUND_TESTS),
@@ -32,7 +32,7 @@ import { FOUND_NAMES, FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoEvidence, SeoTestResult } from '@/lib/seo-tests/types'
 import {
   ABOUT, HOME, HOME_WITH_CF_SCRIPTS, KNOWN, O, SITEMAP_OK, doc, evidence, run, type Fixture, type FoundId,
-} from '@tests/unit/seo-tests/found-fixtures'
+} from '@tests/unit/seo-tests/_found-fixtures'
 
 const IDS = Object.keys(FOUND_TESTS) as FoundId[]
 /** The six bot tests, read from the bot list (bots.ts). */

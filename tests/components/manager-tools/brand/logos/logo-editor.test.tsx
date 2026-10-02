@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { LogoEditor, type LogoTarget } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/logo-editor'
 import { BOARD_BACKGROUNDS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/modal-board'
-import { NOT_FLAT_TEXT } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/warnings'
+import { NOT_FLAT_TEXT } from '@/lib/manager-tools/brand/logo-warnings'
 import {
   cutOutLogoAction,
   replaceLogoFileAction,

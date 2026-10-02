@@ -4,7 +4,7 @@
  * evidence shown as plain text, and the quiet states (busy, cool-down, failed, no site...).
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab.tsx,
- *           test/test-row.tsx, test/scan-art.tsx (drawn from test/model.ts)
+ *           test/test-row.tsx, test/scan-art.tsx (drawn from src/lib/manager-tools/seo/test-model.ts)
  * Feature:  SEO / GEO page · AI test tab, all 24 SEO tests in their four groups (Sam, 2026-09-29:
  *           round 10, prototypes/seo_variants_20260929_r10.html, "Dropdown A · Card")
  * Tier:     LIGHT (AGENTS.md "Test depth": a UI still being designed) for the steps, the card and
@@ -26,9 +26,9 @@
  *             again), cool-down, a failed run, the lines under the header
  * Not here: the counts, headline, evidence rows and refusal rules themselves
  *           (tests/unit/manager-tools/seo/test-tab-model.test.ts); the actions on the server
- *           (tests/unit/seo-tests/runs/actions.test.ts); how the drawings move (decoration,
+ *           (tests/unit/manager-tools/seo/test-actions.test.ts); how the drawings move (decoration,
  *           checked by eye).
- * Fixtures: runs from the REAL engine over made-up sites (seo-run-fixture.ts), so every
+ * Fixtures: runs from the REAL engine over made-up sites (tests/helpers/seo/run-fixture.ts), so every
  *           expectation is DERIVED from those results, never a sentence copied from them; the two
  *           actions and the router are mocks; notices are found by their `data-notice` key, not
  *           their words.
@@ -39,10 +39,10 @@ import { SEO_TEST_GROUPS } from '@/lib/seo-tests/defs'
 import { SEO_TEST_IDS, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
 import { TestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab'
 import type { TestTabData } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
-import { editHref, leadOf, runHeadline, sentenceOf } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model'
+import { editHref, leadOf, runHeadline, sentenceOf } from '@/lib/manager-tools/seo/test-model'
 import { applySeoFixAction, runSeoTestsAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions'
 import { Toaster } from '@/app/artists/[id]/(dashboard)/toast'
-import { HOSTILE_IMG, HOSTILE_SCRIPT, ORIGIN, engineResults, fixtureHistory, fixtureResults, fixtureRun, type Scenario } from './seo-run-fixture'
+import { HOSTILE_IMG, HOSTILE_SCRIPT, ORIGIN, engineResults, fixtureHistory, fixtureResults, fixtureRun, type Scenario } from '@tests/helpers/seo/run-fixture'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions', () => ({
   runSeoTestsAction: vi.fn(),

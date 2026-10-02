@@ -13,11 +13,11 @@
  *           • characters are counted after decoding entities
  * Not here: an unreachable or cut-short home page (../honesty.test.ts); the shared summary
  *           (../looks-right-when-shared/link-preview.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site; each case changes the description). Nothing is fetched.
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site; each case changes the description). Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
-import { evidence, expectPlainWords, homeHtml } from '@tests/unit/seo-tests/_page-fixture'
+import { evidence, expectPlainWords, homeHtml } from '@tests/helpers/seo/page-fixture'
 
 const d = WHO_TESTS.desc
 const withDesc = (description: string | null) => d(evidence({ home: homeHtml({ description }) }))

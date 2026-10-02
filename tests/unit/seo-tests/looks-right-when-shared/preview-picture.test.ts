@@ -19,7 +19,7 @@
  *             cut file keeps its format but no size; svg, avif and heic are named
  * Not here: the safe fetch's own redirect, address and size rules (tests/unit/safe-fetching/);
  *           an unreachable home page (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site whose picture is a 1200 × 630 PNG); `withImg`
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site whose picture is a 1200 × 630 PNG); `withImg`
  *           swaps what the fetch found; real header bytes are built by hand below; `fakeFetch`
  *           answers each address as told. Nothing reaches the network.
  */
@@ -27,7 +27,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fetchShareImage, readImageHeader, SHARE_MAX_BYTES } from '@/lib/seo-tests/share-image'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
 import type { SeoEvidence } from '@/lib/seo-tests/types'
-import { OG_IMAGE, ORIGIN, evidence, expectPlainWords, homeHtml, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { OG_IMAGE, ORIGIN, evidence, expectPlainWords, homeHtml, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const s = SHARED_TESTS.share
 type Img = NonNullable<SeoEvidence['shareImage']>

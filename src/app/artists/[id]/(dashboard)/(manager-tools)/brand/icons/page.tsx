@@ -4,7 +4,7 @@ import { mediaUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
 import { requireArtist } from '../../../_data'
 import { IconRows, type IconRowData } from './icon-rows'
-import { iconLogoOptions, resolveIconSource } from './icon-sources'
+import { iconLogoOptions, resolveIconSource } from '@/lib/manager-tools/brand/icon-sources'
 
 export const metadata = { title: 'Tab icon — Brand — Lone Star Management' }
 

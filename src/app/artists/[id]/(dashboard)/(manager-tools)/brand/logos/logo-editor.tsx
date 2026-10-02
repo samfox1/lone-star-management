@@ -16,7 +16,7 @@ import { RowIcon } from '../../_ui/row-icon'
 import { addLogoAction, cutOutLogoAction, replaceLogoFileAction, setBrandAssetAction } from '../actions'
 import { decodeLogo, encodePng, loadStoredLogo, objectUrl, revokeUrl } from './pixels'
 import { removeLogo, removeQuestion, type BuiltInPurpose, type DerivedIcon } from './remove'
-import { logoWarnings, NOT_FLAT_TEXT } from './warnings'
+import { logoWarnings, NOT_FLAT_TEXT } from '@/lib/manager-tools/brand/logo-warnings'
 
 /** What the editor is open on: a built-in slot (maybe empty), an added logo, or an added
  *  row that has no file yet (client-only until its upload lands). */

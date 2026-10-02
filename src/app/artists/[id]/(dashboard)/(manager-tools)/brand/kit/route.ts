@@ -4,7 +4,7 @@ import { buildBrandKitZip, type BrandKitFile } from '@/lib/manager-tools/brand/b
 import { publicObjectUrl } from '@/lib/storage-url'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from '../../../_owns'
-import { MAX_KIT_BYTES, liveColors, nameSlug, planBrandKit, skippedTxt, type KitSkip, type LiveBrand } from './kit-entries'
+import { MAX_KIT_BYTES, liveColors, nameSlug, planBrandKit, skippedTxt, type KitSkip, type LiveBrand } from '@/lib/manager-tools/brand/kit-entries'
 
 /** A storage object that has not answered in this long is left out, not waited on. */
 const FETCH_TIMEOUT_MS = 8000

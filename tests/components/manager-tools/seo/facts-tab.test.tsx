@@ -21,7 +21,7 @@
  *             it shows" offering only what can take effect
  *           • profiles: how many reach the fact card; MusicBrainz's own editor, or what is linked
  * Not here: the save rules themselves (tests/unit/manager-tools/seo/save-rules.test.ts); how the
- *           page reads the stored facts (tests/unit/manager-tools/seo/facts-tab-model.test.ts).
+ *           page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts).
  * Fixtures: the three save actions and the router are mocks; the refusal words asserted are the
  *           validator's own (`cleanFactValue`), read from it, never copied.
  */
@@ -32,7 +32,7 @@ import { REGIONS } from '@/lib/seo-regions'
 import { cleanFactValue, thisYearAt } from '@/lib/seo-facts'
 import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { FactsTab, type FactsTabProps } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/facts/facts-tab'
-import { SEO_EDIT_TARGETS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
+import { SEO_EDIT_TARGETS } from '@/lib/manager-tools/seo/sections'
 import { saveArtistFactAction, saveEditorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({

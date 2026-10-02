@@ -8,7 +8,7 @@ import { DetailsTab } from './details/details-tab'
  * the Listing tab at /tools/seo/listing, which now redirects here): how the artist shows up when
  * found or shared (round 2 mock: Google · Share · Photos; the share image is called the "preview
  * picture" since 2026-09-29). The ids `share` and `alt` are where a test's pencil lands
- * (sections.ts SEO_EDIT_TARGETS) and where the old /logo and /alt routes redirect:
+ * (lib/manager-tools/seo/sections.ts SEO_EDIT_TARGETS) and where the old /logo and /alt routes redirect:
  * details/details-tab.tsx keeps them on the rows that hold those settings, and landing on one
  * opens its editor.
  */

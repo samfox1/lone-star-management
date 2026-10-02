@@ -4,7 +4,7 @@
  * the white card each one opens.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-section.tsx,
- *           wired in test/test-tab.tsx (words and marks from test/crawl-model.ts)
+ *           wired in test/test-tab.tsx (words and marks from src/lib/manager-tools/seo/crawl-model.ts)
  * Feature:  SEO / GEO page · AI test tab · How crawlers see your site (Sam, 2026-09-30, round 11,
  *           prototypes/seo_variants_20260930_r11.html)
  * Tier:     LIGHT (AGENTS.md "Test depth": a UI still being designed): one test per main path,
@@ -21,8 +21,8 @@
  *           • Bing's wording never says "listed"
  * Not here: the rules behind each mark and value (tests/unit/manager-tools/seo/crawl-model.test.ts);
  *           the rest of the tab (test-tab.test.tsx); how it looks (checked by screenshot).
- * Fixtures: healthyCrawl() (crawl-fixture.ts), its crawler list derived from bots.ts; the tab's
- *           run from seo-run-fixture.ts; the two actions and the router are mocks.
+ * Fixtures: healthyCrawl() (tests/helpers/seo/crawl-fixture.ts), its crawler list derived from bots.ts; the tab's
+ *           run from tests/helpers/seo/run-fixture.ts; the two actions and the router are mocks.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -30,9 +30,9 @@ import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoCrawl } from '@/lib/seo-tests/types'
 import { TestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab'
 import type { TestTabData } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
-import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, requestIndexingHref, type CrawlRowId } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-model'
-import { ORIGIN, PAGES, healthyCrawl, withBot } from './crawl-fixture'
-import { fixtureHistory, fixtureRun } from './seo-run-fixture'
+import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, requestIndexingHref, type CrawlRowId } from '@/lib/manager-tools/seo/crawl-model'
+import { ORIGIN, PAGES, healthyCrawl, withBot } from '@tests/helpers/seo/crawl-fixture'
+import { fixtureHistory, fixtureRun } from '@tests/helpers/seo/run-fixture'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions', () => ({
   runSeoTestsAction: vi.fn(),

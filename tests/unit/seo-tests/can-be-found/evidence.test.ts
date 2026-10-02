@@ -20,7 +20,7 @@
  * Not here: what the tests conclude from this evidence (the other files in this folder); how
  *           robots.txt rules are read (robots-txt.test.ts); the fetch guard itself, byte caps and
  *           slow parsers of other readers (tests/unit/safe-fetching/).
- * Fixtures: a fake web (../fake-site.ts): each address answers from a table with a real Response,
+ * Fixtures: a fake web (tests/helpers/seo/fake-site.ts): each address answers from a table with a real Response,
  *           and redirects are followed only if the code asks. No network. The bots and their names
  *           come from the bot list (bots.ts), never typed out here.
  */
@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest'
 import { BROWSER_UA, FETCHING_BOTS } from '@/lib/seo-tests/bots'
 import { gatherSiteEvidence, parseSitemap, sameSite, type GatheredSite } from '@/lib/seo-tests/evidence'
 import type { SeoEvidence } from '@/lib/seo-tests/types'
-import { fakeSite, type FakeAnswer, type Route } from '@tests/unit/seo-tests/fake-site'
+import { fakeSite, type FakeAnswer, type Route } from '@tests/helpers/seo/fake-site'
 
 const O = 'https://www.example.com'
 const page = (title: string, body = '') => `<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1><p>${body || `Words about ${title} for people to read.`}</p></body></html>`

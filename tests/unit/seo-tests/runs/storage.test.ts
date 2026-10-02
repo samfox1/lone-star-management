@@ -23,7 +23,7 @@
  * Not here: the database's own rules (cool-down, busy, limits, retention, immutability, the crawl's
  *           64 KB check): the migrations, pinned in tests/integration/seo-tests/seo-test-runs.test.ts;
  *           running the tests (runs/running.test.ts); building the crawl (run.ts).
- * Fixtures: a PostgREST fake (brand/_fake-client) answers each call; `pgJsonbTextBytes` below
+ * Fixtures: a PostgREST fake (tests/helpers/fake-client.ts) answers each call; `pgJsonbTextBytes` below
  *           rebuilds Postgres's own jsonb text so the byte budget is the table's measure;
  *           `realCrawl` is a crawl as a run makes one, built from the crawler registry (bots.ts).
  */
@@ -31,7 +31,7 @@ import { describe, expect, it } from 'vitest'
 import { CRAWL_MAX_BYTES, capCrawl, capResult, capResults, claimRun, crawlOf, currentRun, failRun, finishRun, historyFor, latestRun, recentRuns, seoScore } from '@/lib/seo-tests/store'
 import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoCrawl, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
-import { fakeClient, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Reply } from '@tests/helpers/fake-client'
 
 const A = 'artist-1'
 

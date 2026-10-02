@@ -4,7 +4,7 @@
  * only when it is waiting, and it is gone when nothing waits.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/seo-riser.tsx,
- *           tools/seo/pending.ts (pendingMessage)
+ *           src/lib/manager-tools/seo/pending.ts (pendingMessage)
  * Feature:  SEO / GEO page · the Publish bar shared by every tab
  * Tier:     STRICT (AGENTS.md "Test depth"): publishing is what the live site receives.
  * Covers:   • hidden means gone (invisible and inert) while nothing waits
@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SeoRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/seo-riser'
-import { pendingMessage } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/pending'
+import { pendingMessage } from '@/lib/manager-tools/seo/pending'
 import { publishEntityAction, publishSiteWithPasswordAction } from '@/app/artists/[id]/(dashboard)/actions'
 import type { UnpublishedDiff } from '@/lib/content'
 

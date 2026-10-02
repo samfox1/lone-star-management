@@ -17,12 +17,12 @@
  *           • every page read is checked; a block broken only by the read cap is "couldn't check"
  * Not here: whether the facts in the card are TRUE (profiles, shows, releases, genre, place
  *           each have their own file); an unreachable home page (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy card: artist, website, one show, three albums);
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy card: artist, website, one show, three albums);
  *           `graphWith` swaps or removes one node. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
-import { artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, ldScript, page, rowOf, type Graph } from '@tests/unit/seo-tests/_page-fixture'
+import { artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, ldScript, page, rowOf, type Graph } from '@tests/helpers/seo/page-fixture'
 
 const c = FACTS_TESTS.card
 const withGraph = (graph: Graph) => evidence({ home: homeHtml({ ld: [graphBlock(graph)] }) })

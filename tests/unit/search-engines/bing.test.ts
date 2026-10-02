@@ -1,5 +1,6 @@
-// Tapir's Bing account adds and verifies a site: the exact calls, and the key never leaks.
 /**
+ * Tapir's Bing account adds and verifies a site: the exact calls, and the key never leaks.
+ *
  * Code:     src/lib/search-engines/bing.ts (bingClient)
  * Feature:  Add website · registering a site with Bing (ADD_WEBSITE_PLAN.md step 4)
  * Tier:     STRICT (AGENTS.md "Test depth"): Bing's API key rides in every request URL

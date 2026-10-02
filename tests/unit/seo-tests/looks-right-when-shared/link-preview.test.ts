@@ -15,11 +15,11 @@
  *           • the address passes with or without www, a trailing slash, or relative
  * Not here: the preview picture (preview-picture.test.ts); the page title
  *           (../says-who-you-are/title.test.ts); an unreachable home page (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site); `withOg` changes the share tags. Nothing is fetched.
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site); `withOg` changes the share tags. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
-import { evidence, expectPlainWords, homeHtml, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { evidence, expectPlainWords, homeHtml, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const p = SHARED_TESTS.preview
 const withOg = (og: Record<string, string | null>) => p(evidence({ home: homeHtml({ og }) }))

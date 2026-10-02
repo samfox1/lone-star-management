@@ -16,12 +16,12 @@
  *           • `sameAs` as one string, a list, or {"@id": url} is read
  * Not here: nothing published, a home page cut at the read cap, or unreachable
  *           (../honesty.test.ts); how two spellings of a link are matched (../page-reading/html.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site whose card lists 4 profiles, the same 4 Tapir
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site whose card lists 4 profiles, the same 4 Tapir
  *           published plus a booking mailto); `graphWith` swaps one node. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
-import { PROFILES, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, ldScript, rowOf, type Graph } from '@tests/unit/seo-tests/_page-fixture'
+import { PROFILES, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, ldScript, rowOf, type Graph } from '@tests/helpers/seo/page-fixture'
 
 const p = FACTS_TESTS.profiles
 const withGraph = (graph: Graph, more: Parameters<typeof evidence>[0] = {}) => evidence({ home: homeHtml({ ld: [graphBlock(graph)] }), ...more })

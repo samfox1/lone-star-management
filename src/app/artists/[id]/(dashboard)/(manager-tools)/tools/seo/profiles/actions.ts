@@ -9,7 +9,7 @@
  * check is there because a denied DELETE is row-filtered and would otherwise report success.
  */
 import { revalidatePath } from 'next/cache'
-import { isProfileItem, setProfileMark } from '@/lib/manager-tools/profiles/marks'
+import { isProfileItem, setProfileMark } from '@/lib/manager-tools/seo/profiles/marks'
 import { createClient } from '@/lib/supabase/server'
 import { callerOwns } from '../../../../_owns'
 

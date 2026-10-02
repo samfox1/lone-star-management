@@ -15,11 +15,11 @@
  *           • `na` for an artist published as a visual artist, whatever the card says; a
  *             Person card for a musician is the card's fault; unknown with nothing published
  * Not here: an unreachable home page, or a card cut at the read cap (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site; each case swaps the fact card). Nothing is fetched.
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site; each case swaps the fact card). Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
-import { ORIGIN, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, ldScript, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { ORIGIN, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, ldScript, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const g = WHO_TESTS.genre
 const withArtist = (over: Record<string, unknown>, more: Parameters<typeof evidence>[0] = {}) => evidence({ home: homeHtml({ ld: [graphBlock([artistNode(over)])] }), ...more })

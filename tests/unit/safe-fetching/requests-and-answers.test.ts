@@ -3,7 +3,7 @@
  * body, hands back the answer (unzipped), and turns any failure into a value instead of a crash.
  *
  * Code:     src/lib/net-guard.ts (createSafeFetch: the bridge from node:http to a web Response),
- *           src/lib/seo-tests/guarded-fetch.ts (guardedFetch: what it sends and returns)
+ *           src/lib/guarded-fetch.ts (guardedFetch: what it sends and returns)
  * Feature:  safe fetching: the transport under every server fetch of an outside address
  * Tier:     STRICT (AGENTS.md "Test depth"): security code, and the SEO/GEO checks read their
  *           evidence (a bot's 403 page, a share picture's bytes) from exactly what this returns.
@@ -17,13 +17,13 @@
  *           (size-and-time-limits.test.ts).
  * Fixtures: a real loopback server (_loopback-server.ts) reached through a fake DNS
  *           (tests/helpers/fake-dns.ts) with the tests-only `allowLoopback`; the fake web
- *           (tests/unit/seo-tests/fake-site.ts) for guardedFetch.
+ *           (tests/helpers/seo/fake-site.ts) for guardedFetch.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSafeFetch } from '@/lib/net-guard'
-import { TAPIR_CHECK_UA, guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { TAPIR_CHECK_UA, guardedFetch } from '@/lib/guarded-fetch'
 import { fakeDns } from '@tests/helpers/fake-dns'
-import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+import { fakeSite } from '@tests/helpers/seo/fake-site'
 import { startLoopbackServer, type LoopbackServer } from '@tests/unit/safe-fetching/_loopback-server'
 
 const SITE = 'https://www.example.com/'

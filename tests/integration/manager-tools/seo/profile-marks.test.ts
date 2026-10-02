@@ -8,7 +8,7 @@
  * Code:     supabase/migrations/20261001150000_profile_marks.sql (the table, its RLS policies,
  *           its grants, the CHECK, the cascade); 20261001160000_profile_marks_bios.sql (the
  *           widened CHECK, the UPDATE policy + done_at grant, the profile_marks_stamp trigger);
- *           src/lib/manager-tools/profiles/marks.ts
+ *           src/lib/manager-tools/seo/profiles/marks.ts
  * Feature:  SEO tool · Profiles tab · "Mark as sent", the outside bios' "updated" ticks
  * Tier:     STRICT (AGENTS.md "Test depth"): RLS, grants and isolation. Every denial has a planted
  *           witness (rule 2), every refused write is checked by row STATE through the service
@@ -34,8 +34,8 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { BIO_ITEMS } from '@/lib/manager-tools/profiles/bios'
-import { PROFILE_ITEMS, readProfileMarks, setProfileMark } from '@/lib/manager-tools/profiles/marks'
+import { BIO_ITEMS } from '@/lib/manager-tools/seo/profiles/bios'
+import { PROFILE_ITEMS, readProfileMarks, setProfileMark } from '@/lib/manager-tools/seo/profiles/marks'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
@@ -93,6 +93,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
     if (error) throw new Error(error.message)
   })
 
+  // The positive control: manager A's own mark is stored, stamped with A, and read back.
   it('a manager marks and reads back; the stamp is theirs', async () => {
     expect(await setProfileMark(mA, a.id, ITEM, true)).toEqual({ ok: true })
     const [row] = await marksOf(a.id)
@@ -100,6 +101,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
     expect(await readProfileMarks(mA, a.id)).toEqual({ [ITEM]: row.done_at })
   })
 
+  // Unticking removes the row, so a mark can always be taken back.
   it('undo deletes the mark', async () => {
     await plant(a.id)
     expect(await setProfileMark(mA, a.id, ITEM, false)).toEqual({ ok: true })
@@ -107,6 +109,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
   })
 
   describe('another artist’s manager', () => {
+    // Isolation: a planted mark on artist A is invisible to manager B, through the table and the app's read.
     it('cannot read the marks', async () => {
       await plant(a.id)
       const { data, error } = await mB.from('profile_marks').select('item').eq('artist_id', a.id)
@@ -150,6 +153,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
     expect(await marksOf(a.id)).toEqual([])
   })
 
+  // The column grant keeps the stamp honest: a manager cannot forge who marked it or when.
   it('a manager cannot set the stamp on insert (artist_id + item only)', async () => {
     for (const forged of [{ done_by: randomUUID() }, { done_at: '2020-01-01T00:00:00Z' }]) {
       const { error } = await mA.from('profile_marks').insert({ artist_id: a.id, item: ITEM, ...forged })
@@ -177,6 +181,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
       for (const r of rows) expect(r.done_by, r.item).toBe(mAUserId)
     })
 
+    // Re-confirming an old mark restamps it: the date says when it was last checked, by whom.
     it('ticking again moves done_at to now and done_by to whoever ticked', async () => {
       await plant(a.id, BIO, OLD)
       expect(await setProfileMark(mA, a.id, BIO, true)).toEqual({ ok: true })
@@ -229,6 +234,7 @@ describe.skipIf(!PROFILE_MARKS_PUSHED)('profile_marks', () => {
       expect(await marksOf(a.id)).toEqual(before)
     })
 
+    // No grant for anon: a signed-out caller cannot re-confirm a planted mark, and the row stays as it was.
     it('anon has no UPDATE grant', async () => {
       await plant(a.id, BIO, OLD)
       const before = await marksOf(a.id)

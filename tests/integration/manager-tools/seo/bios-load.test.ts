@@ -3,7 +3,7 @@
  * carries as empty, so a fact joining the profile snapshot never marks every ticked bio stale.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bios-load.ts
- *           (`data->f::text`, factsOf), src/lib/manager-tools/profiles/bio-state.ts (factChanges)
+ *           (`data->f::text`, factsOf), src/lib/manager-tools/seo/profiles/bio-state.ts (factChanges)
  * Feature:  SEO tool · Profiles tab · Outside bios, "may be out of date since"
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo, and
  *           only the hosted PostgREST can say what `data->f` answers for a missing key (null, the
@@ -47,6 +47,7 @@ describe('loadOutsideBios: a missing fact is not an empty one', () => {
     await deleteThrowawayArtist(svc, artist)
   })
 
+  // A fact the snapshot did not carry is not an edit; only the real PostgREST can say carried-null from missing.
   it('CRITICAL: genre joining with a value is not a change; the later edits (city from empty too) are', async () => {
     const input = await loadOutsideBios(asA, { id: artist.id })
     expect(input.factsKnown).toBe(true)

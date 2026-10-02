@@ -2,8 +2,8 @@
  * The Profiles tab's Discogs and Wikidata checks ask the right thing, politely, and tell the
  * manager only what the answer says.
  *
- * Code:     src/lib/manager-tools/profiles/outside.ts (what is asked, how an answer is read),
- *           src/lib/manager-tools/profiles/outside-check.ts (the fetching)
+ * Code:     src/lib/manager-tools/seo/profiles/outside.ts (what is asked, how an answer is read),
+ *           src/lib/manager-tools/seo/profiles/outside-check.ts (the fetching)
  * Feature:  SEO / GEO page · Profiles tab · the Discogs and Wikidata rows (VISIBILITY_TOOLKIT.md
  *           "Round 3")
  * Tier:     STRICT (AGENTS.md "Test depth"): it builds addresses from the artist's data and
@@ -36,9 +36,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { connectedIds, isSameSite, knownMbid, profileSiteUrl, siteSpellings, wikidataSearchUrl } from '@/lib/manager-tools/profiles/outside'
-import { checkDiscogs, checkWikidata } from '@/lib/manager-tools/profiles/outside-check'
-import { fakeSite, type FakeAnswer, type FakeRequest } from '@tests/unit/seo-tests/fake-site'
+import { connectedIds, isSameSite, knownMbid, profileSiteUrl, siteSpellings, wikidataSearchUrl } from '@/lib/manager-tools/seo/profiles/outside'
+import { checkDiscogs, checkWikidata } from '@/lib/manager-tools/seo/profiles/outside-check'
+import { fakeSite, type FakeAnswer, type FakeRequest } from '@tests/helpers/seo/fake-site'
 
 const FIX = JSON.parse(readFileSync(join(process.cwd(), 'tests/fixtures/outside-profiles.json'), 'utf8'))
 const BEATLES_MBID = 'b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d'

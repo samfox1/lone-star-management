@@ -14,14 +14,14 @@
  *           • never saying words are missing when a page wasn't opened or couldn't be read
  * Not here: the rules shared by all ten tests (contract.test.ts); a bot's copy missing the
  *           artist's words (bots.test.ts).
- * Fixtures: ../found-fixtures.ts: a healthy two-page site for the artist Skeen (a two-sentence bio,
+ * Fixtures: ../_found-fixtures.ts: a healthy two-page site for the artist Skeen (a two-sentence bio,
  *           two releases, one upcoming and one past show); each case changes a page or what Tapir
  *           has published.
  */
 import { describe, expect, it } from 'vitest'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoKnown } from '@/lib/seo-tests/types'
-import { ABOUT, BIO, HOME, KNOWN, O, SITEMAP_OK, details, doc, evidence, run, type Fixture } from '@tests/unit/seo-tests/found-fixtures'
+import { ABOUT, BIO, HOME, KNOWN, O, SITEMAP_OK, details, doc, evidence, run, type Fixture } from '@tests/unit/seo-tests/_found-fixtures'
 
 type Published = NonNullable<SeoKnown['published']>
 /** What Tapir has published, with some fields changed. */

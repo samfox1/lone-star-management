@@ -14,12 +14,12 @@
  *           • a place that differs from Tapir's, or a country nobody knows, fails
  *           • the advice follows Tapir: "publish" when Tapir has the part, "add" when not
  * Not here: an unreachable home page, or a card cut at the read cap (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site in Chicago, IL, US); `withPlace` swaps the
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site in Chicago, IL, US); `withPlace` swaps the
  *           artist's place. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
-import { artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const p = WHO_TESTS.place
 /** The artist's node with its place set to `loc` (a band's foundingLocation, a person's homeLocation). */

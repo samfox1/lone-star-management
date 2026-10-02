@@ -23,7 +23,7 @@ import {
   setBrandColorNote,
   setSlotColor,
 } from '@/lib/manager-tools/brand/brand-colors'
-import { fakeClient, filterValue, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const A = 'a1'
 /** An error no REFUSALS pattern matches, so the caller's fallback sentence is what shows. */

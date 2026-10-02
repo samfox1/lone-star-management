@@ -4,7 +4,7 @@
  * real answers of 2026-09-29 (prototypes/seo_variants_20260930_r11.html), on the test origin.
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-section.tsx,
- *           test/crawl-model.ts
+ *           src/lib/manager-tools/seo/crawl-model.ts
  * Feature:  SEO / GEO page · AI test tab · How crawlers see your site
  * Tier:     LIGHT, like the section it feeds (AGENTS.md "Test depth"); held to the SeoCrawl type
  *           by `tsc`.
@@ -23,7 +23,7 @@
  */
 import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoCrawl } from '@/lib/seo-tests/types'
-import { ORIGIN } from '@tests/unit/seo-tests/_page-fixture'
+import { ORIGIN } from '@tests/helpers/seo/page-fixture'
 
 export { ORIGIN }
 

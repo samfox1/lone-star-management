@@ -10,7 +10,7 @@
  * Never throws: no answer is `status: null` with the reason in `error` (types.ts).
  */
 import { trimTrailingSlashes } from '@/lib/url'
-import { guardedFetch } from './guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import { metaOf, parsePage } from './html'
 import type { SeoEvidence } from './types'
 

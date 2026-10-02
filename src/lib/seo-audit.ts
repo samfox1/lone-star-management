@@ -8,7 +8,7 @@ import { SEO_RULES, auditGeoFacts, auditJsonLd, auditSeo, type SeoFinding } from
 import { isPublicSiteUrl } from './custom-site'
 import { trimTrailingSlashes } from './url'
 import type { Resolver } from './net-guard'
-import { guardedFetch } from './seo-tests/guarded-fetch'
+import { guardedFetch } from './guarded-fetch'
 
 export type LiveAudit = {
   url: string
@@ -47,7 +47,7 @@ const FETCH_MAX_BYTES = 2 * 1024 * 1024
  * Fetch a url the server was told about by a MANAGER, never following it anywhere it should
  * not go, never reading more than FETCH_MAX_BYTES, never waiting past the deadline.
  *
- * A thin wrapper over the SEO tests' `guardedFetch` (lib/seo-tests/guarded-fetch), so both
+ * A thin wrapper over the shared `guardedFetch` (lib/guarded-fetch), so both
  * guarded fetches share one walk: every hop re-checked against `isPublicSiteUrl` (a public host
  * can 302 straight to `http://169.254.169.254/`), where each NAME points checked at connect by
  * lib/net-guard's transport (the default, and what the global `fetch` is swapped for), a capped

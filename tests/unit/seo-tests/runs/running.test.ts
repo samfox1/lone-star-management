@@ -28,11 +28,11 @@
  *           the database rules themselves (tests/integration/seo-tests/seo-test-runs.test.ts); how
  *           the crawl is built from evidence (how-crawlers-see-your-site/crawl.test.ts); the Google
  *           and Bing calls themselves (tests/unit/search-engines/).
- * Fixtures: a PostgREST fake (brand/_fake-client) answers the claim, finish, publish_moments and
+ * Fixtures: a PostgREST fake (tests/helpers/fake-client.ts) answers the claim, finish, publish_moments and
  *           site_verifications calls; a fake engine whose 24 tests all pass unless a test swaps one
  *           out; what Tapir knows is handed in (`readKnown`), never read; Google and Bing are fake
  *           clients handed in (`listingClients`), so no test reaches the server's keys; the other
- *           spelling is fetched from a fake web (../fake-site.ts).
+ *           spelling is fetched from a fake web (tests/helpers/seo/fake-site.ts).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BingResult, BingUrlInfo } from '@/lib/search-engines/bing'
@@ -42,8 +42,8 @@ import { buildCrawl } from '@/lib/seo-tests/crawl'
 import { checkOtherHost, runAllTests, runSeoTests, type ListingClients, type RunWho, type SeoEngine, type SeoRegistration, type SitePages, listingClientsFromEnv } from '@/lib/seo-tests/run'
 import type { FinishInput } from '@/lib/seo-tests/store'
 import { SEO_TEST_IDS, type SeoCrawl, type SeoEvidence, type SeoKnown, type SeoTest, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
-import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
+import { fakeSite } from '@tests/helpers/seo/fake-site'
 
 /** Every input the run hands finishRun, seen through a pass-through (the real finishRun still runs,
  *  so everything else in this file reads the stored call as before). A plain function, not a mock:

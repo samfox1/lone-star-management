@@ -18,7 +18,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { BIO_PACK_MAX_RELEASES, MAILTO_SAFE_LENGTH, buildBioPack, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
+import { BIO_PACK_MAX_RELEASES, MAILTO_SAFE_LENGTH, buildBioPack, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/profiles/bio-pack'
 import { ProfilesTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/profiles-tab'
 import { markProfileItemAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actions'
 

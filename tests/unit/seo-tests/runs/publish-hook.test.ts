@@ -20,7 +20,7 @@
  *           publish's reads and writes and can refuse the revision insert.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const h = vi.hoisted(() => ({
   schedule: vi.fn(),

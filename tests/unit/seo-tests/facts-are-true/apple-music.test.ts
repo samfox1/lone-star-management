@@ -18,15 +18,15 @@
  *           • the fix: only artist links on Apple's own host, keeps the path, drops the old
  *             language; country codes and names read the common spellings, never "the the"
  * Not here: a home page cut at the read cap, or unreachable (../honesty.test.ts); applying
- *           the fix as a draft (../runs/actions.test.ts).
- * Fixtures: _page-fixture.ts (a healthy US artist whose Apple link is on the US store);
+ *           the fix as a draft (tests/unit/manager-tools/seo/test-actions.test.ts).
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy US artist whose Apple link is on the US store);
  *           `cardApple` and `withLinks` put chosen Apple links and countries on the page and
  *           in Tapir. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { appleStorefrontFix, appleStorefrontOf, countryCode, countryName } from '@/lib/seo-tests/apple-storefront'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
-import { PROFILES, artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, page, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { PROFILES, artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, page, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const a = FACTS_TESTS.apple
 const NORWAY = 'https://music.apple.com/no/artist/skeen/1754431714'

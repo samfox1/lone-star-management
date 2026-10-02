@@ -9,7 +9,7 @@ import { toast } from '../../../toast'
 import { UploadField } from '../../../upload-field'
 import { BrandModal } from '../_ui/brand-modal'
 import { addArtistFontAction } from '../actions'
-import { WEIGHT_CHOICES } from './face'
+import { WEIGHT_CHOICES } from '@/lib/manager-tools/brand/font-face'
 
 /** What the weight question starts on: the weight most single-file fonts are. */
 const DEFAULT_WEIGHT = '400'

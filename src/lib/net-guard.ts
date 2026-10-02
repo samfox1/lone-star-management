@@ -19,7 +19,7 @@
  * `safeFetch` is that transport: a `typeof fetch` built on node:http/https (NOT the global
  * fetch, which Next patches and whose undici dispatcher this repo cannot pin without taking
  * a dependency). It never follows a redirect — the callers walk redirects by hand so every
- * hop is re-checked (lib/seo-tests/guarded-fetch, lib/seo-audit `fetchGuarded`).
+ * hop is re-checked (lib/guarded-fetch, lib/seo-audit `fetchGuarded`).
  *
  * WHAT IT DOES NOT DO. It is not a proxy allowlist; a public host can still be slow or hostile,
  * which the callers' timeouts and byte caps handle. And an INJECTED fetcher is trusted to do

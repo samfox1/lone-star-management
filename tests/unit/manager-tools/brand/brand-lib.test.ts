@@ -33,7 +33,7 @@ import {
   setThemeColor,
 } from '@/lib/brand'
 import type { ContentRow } from '@/lib/content'
-import { fakeClient, filterValue, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const A = 'a1'
 const PATH = `${A}/brand/0a0a0a0a-0000-4000-8000-000000000000.png`

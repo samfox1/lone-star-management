@@ -1,5 +1,7 @@
-// After a publish that changed a page's words, the sitemap is resent to Google: only for a site Tapir registered, never failing the publish.
 /**
+ * After a publish that changed a page's words, the sitemap is resent to Google: only for a site
+ * Tapir registered, never failing the publish.
+ *
  * Code:     src/lib/search-engines/resubmit.ts (resubmitSitemap, scheduleSitemapResubmit, the
  *           two real loaders); wired in actions.ts publishGated (pinned in
  *           tests/unit/seo-tests/runs/publish-hook.test.ts)
@@ -19,7 +21,7 @@
  *           client that records every submit; `after` captured so a test runs it.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeClient, filterValue, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const h = vi.hoisted(() => ({ after: vi.fn() }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: h.after }))

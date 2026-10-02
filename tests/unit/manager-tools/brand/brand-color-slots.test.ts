@@ -24,7 +24,7 @@ import {
   paletteOrder,
   setSlotColor,
 } from '@/lib/manager-tools/brand/brand-colors'
-import { fakeClient } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient } from '@tests/helpers/fake-client'
 
 const row = (id: string, name: string, slot: string | null, sort_order: number) => ({
   id,

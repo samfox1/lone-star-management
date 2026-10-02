@@ -16,11 +16,11 @@
  *           • a huge or broken page is read quickly and never hangs
  * Not here: an unreachable or cut-short home page (../honesty.test.ts); how pages are read
  *           (../page-reading/html.test.ts); the share title (../looks-right-when-shared/link-preview.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site; each case changes one thing). Nothing is fetched.
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site; each case changes one thing). Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
-import { evidence, expectPlainWords, homeHtml, known, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { evidence, expectPlainWords, homeHtml, known, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const t = WHO_TESTS.title
 

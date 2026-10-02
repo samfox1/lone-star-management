@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache'
-import { checkDiscogs, checkWikidata } from '@/lib/manager-tools/profiles/outside-check'
-import { connectedIds, discogsPageUrl, knownMbid, profileSiteUrl, type DiscogsCheck, type OutsideChecks, type WikidataCheck } from '@/lib/manager-tools/profiles/outside'
+import { checkDiscogs, checkWikidata } from '@/lib/manager-tools/seo/profiles/outside-check'
+import { connectedIds, discogsPageUrl, knownMbid, profileSiteUrl, type DiscogsCheck, type OutsideChecks, type WikidataCheck } from '@/lib/manager-tools/seo/profiles/outside'
 import type { loadSeoBase } from '../load'
 
 type Base = Awaited<ReturnType<typeof loadSeoBase>>
@@ -36,7 +36,7 @@ const cachedDiscogs = unstable_cache(
 )
 
 /**
- * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/profiles/outside.ts): what the
+ * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/seo/profiles/outside.ts): what the
  * manager connected, the MusicBrainz id the AI test found, and the artist's custom site, asked of
  * each service. Never throws: anything that fails is "couldn't check".
  *

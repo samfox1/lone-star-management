@@ -6,7 +6,7 @@
  * 429 (or any answer but 200 / 404) is "couldn't check", never a retry loop. Redirects stay on
  * the service's own API path. Never throws: a failure is `unknown`.
  */
-import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import {
   DISCOGS_UA,
   WIKIDATA_UA,

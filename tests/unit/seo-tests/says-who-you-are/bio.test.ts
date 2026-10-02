@@ -18,12 +18,12 @@
  *           • no bio in Tapir is said about Tapir; a page we couldn't read is "couldn't check"
  *           • scripts without spaces are counted; a sentence pasted many times counts once
  * Not here: nothing published, or no page answered (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site with a 133-word bio on /about); `run(text)`
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site with a 133-word bio on /about); `run(text)`
  *           publishes `text` as the bio and shows it on /about. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
-import { LONG_BIO, aboutHtml, artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, page, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { LONG_BIO, aboutHtml, artistNode, evidence, expectPlainWords, graphBlock, homeHtml, known, page, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const b = WHO_TESTS.bio
 const words = (s: string) => [...new Intl.Segmenter('und', { granularity: 'word' }).segment(s)].filter((x) => x.isWordLike).length

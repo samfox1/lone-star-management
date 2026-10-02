@@ -2,7 +2,7 @@
  * The change nudge decides what the artist is told about each outside bio: not confirmed, may
  * be out of date since a date, check it's still current, or updated.
  *
- * Code:     src/lib/manager-tools/profiles/bio-state.ts
+ * Code:     src/lib/manager-tools/seo/profiles/bio-state.ts
  * Feature:  SEO tool · Profiles tab · Outside bios (OUTSIDE_PROFILES_PLAN.md, build step 1, "the
  *           change nudge"), and the AI test's one "to check" line
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo.
@@ -27,7 +27,7 @@
  *           a change) and when each fact changed; the bio text is shortened. SKEEN_LINKS are Skeen's real `links` rows (label, url, role).
  */
 import { describe, expect, it } from 'vitest'
-import { OUTSIDE_BIOS, bioItem } from '@/lib/manager-tools/profiles/bios'
+import { OUTSIDE_BIOS, bioItem } from '@/lib/manager-tools/seo/profiles/bios'
 import {
   BIO_FACTS,
   FACT_WORDS,
@@ -43,7 +43,7 @@ import {
   factChanges,
   type BiosInput,
   type ProfileRevision,
-} from '@/lib/manager-tools/profiles/bio-state'
+} from '@/lib/manager-tools/seo/profiles/bio-state'
 import { CONNECTIONS } from '@/lib/connections'
 
 /* ── Skeen's real profile history, newest first ─────────────────────────────────────── */

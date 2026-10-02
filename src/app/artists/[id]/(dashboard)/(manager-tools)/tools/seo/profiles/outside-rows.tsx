@@ -4,12 +4,12 @@ import { useId, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import type { DiscogsCheck, OutsideChecks, WikidataCheck } from '@/lib/manager-tools/profiles/outside'
+import type { DiscogsCheck, OutsideChecks, WikidataCheck } from '@/lib/manager-tools/seo/profiles/outside'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { Field, GLYPH, Glyph, ROW } from './profiles-tab'
 
 /**
- * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/profiles/outside.ts), read
+ * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/seo/profiles/outside.ts), read
  * live: a round mark (a check when all is well, a ring when something is missing or it's only
  * news), the status in Space Mono, a chevron. Each opens a small card: what we found, the link,
  * and the one thing to do. `checks` null = still asking (the page streams them in).

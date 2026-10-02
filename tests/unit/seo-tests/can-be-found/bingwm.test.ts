@@ -13,13 +13,13 @@
  *           • the details say what the Bing file answered (refused, no answer, not checked)
  * Not here: whether /BingSiteAuth.xml holds a real code (evidence.test.ts reads the file); the
  *           rules shared by all ten tests (contract.test.ts).
- * Fixtures: ../found-fixtures.ts: a healthy two-page site with no Bing code and a 404 for Bing's file;
+ * Fixtures: ../_found-fixtures.ts: a healthy two-page site with no Bing code and a 404 for Bing's file;
  *           each case adds a tag to the home page or changes what the Bing file answered.
  */
 import { describe, expect, it } from 'vitest'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoEvidence } from '@/lib/seo-tests/types'
-import { ABOUT, HOME, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/found-fixtures'
+import { ABOUT, HOME, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/_found-fixtures'
 
 /** The home page carrying Bing's meta tag with `code`. */
 const withCode = (code: string): Fixture => ({ pages: { '/': HOME.replace('<head>', `<head><meta name="msvalidate.01" content="${code}">`), '/about': ABOUT } })

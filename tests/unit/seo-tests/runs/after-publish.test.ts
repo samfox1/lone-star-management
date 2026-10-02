@@ -33,7 +33,7 @@ import { sameSite, siteFreshness, sitemapLastmods, waitForFreshSite } from '@/li
 import { contentChangedAt, sitemapEntries } from '@samfox1/site-bridge/seo'
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import { SEO_TEST_IDS, type SeoKnown } from '@/lib/seo-tests/types'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const h = vi.hoisted(() => ({ after: vi.fn(), admin: null as unknown }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: h.after }))

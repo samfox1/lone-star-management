@@ -19,7 +19,7 @@
  * tests/integration/manager-tools/brand/brand-page.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeClient, filterValue, isOwnershipRead, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, isOwnershipRead, type Call, type Reply } from '@tests/helpers/fake-client'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 

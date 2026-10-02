@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { bioRows, biosToCheck } from '@/lib/manager-tools/profiles/bio-state'
+import { bioRows, biosToCheck } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { seoSiteOrigin } from '@/lib/seo-tests/known'
 import { SEO_TEST_IDS, type SeoTestId } from '@/lib/seo-tests/types'
 import { requireArtist } from '../../../../_data'

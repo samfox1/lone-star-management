@@ -2,7 +2,7 @@
  * A fetch to a private address is refused before any connection opens, whichever server code
  * sends it, including a name that looked public a moment earlier (DNS rebinding).
  *
- * Code:     src/lib/net-guard.ts (createSafeFetch, pickTransport), src/lib/seo-tests/guarded-fetch.ts
+ * Code:     src/lib/net-guard.ts (createSafeFetch, pickTransport), src/lib/guarded-fetch.ts
  *           (guardedFetch), src/lib/seo-audit.ts (fetchGuarded, auditLiveSite), src/lib/indexnow.ts
  *           (pingIndexNow), src/lib/seo-tests/evidence.ts (gatherSiteEvidence), src/lib/og.ts
  *           (fetchOpenGraph)
@@ -53,13 +53,13 @@ vi.mock('node:dns/promises', async (importOriginal) => {
 })
 
 import { createSafeFetch, isBlockedAddressError, resolvePublic } from '@/lib/net-guard'
-import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import { auditLiveSite, fetchGuarded } from '@/lib/seo-audit'
 import { pingIndexNow } from '@/lib/indexnow'
 import { fetchOpenGraph } from '@/lib/og'
 import { gatherSiteEvidence } from '@/lib/seo-tests/evidence'
 import { fakeDns } from '@tests/helpers/fake-dns'
-import { fakeSite } from '@tests/unit/seo-tests/fake-site'
+import { fakeSite } from '@tests/helpers/seo/fake-site'
 import { startLoopbackServer, type LoopbackServer } from '@tests/unit/safe-fetching/_loopback-server'
 
 const SITE = 'https://www.example.com/'

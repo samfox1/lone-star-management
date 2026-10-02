@@ -18,13 +18,13 @@
  *           • `na` with no photos on the pages and none in Tapir; unknown when Tapir has some
  *             (a script may add them) or a page couldn't be read in full
  * Not here: an unreachable home page (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy home page and About page with one described photo
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy home page and About page with one described photo
  *           each, and one hidden); `withBody` adds pictures to the home page, `homeOnly` does
  *           the same with no About page. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
-import { aboutHtml, evidence, expectPlainWords, homeHtml, known, page, rowOf } from '@tests/unit/seo-tests/_page-fixture'
+import { aboutHtml, evidence, expectPlainWords, homeHtml, known, page, rowOf } from '@tests/helpers/seo/page-fixture'
 
 const a = SHARED_TESTS.alt
 const withBody = (body: string, about: string | null = aboutHtml()) => a(evidence({ home: homeHtml({ body }), about }))

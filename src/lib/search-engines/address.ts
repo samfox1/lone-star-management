@@ -14,7 +14,7 @@
  * sitemap's base and the database's `site_verifications.site_url` (whose CHECK it always passes).
  */
 import { pingableOrigin } from '@/lib/indexnow'
-import { guardedFetch, type GuardedOptions } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch, type GuardedOptions } from '@/lib/guarded-fetch'
 // Same site: the same host give or take a leading "www." (both sides are registration forms).
 import { sameSite } from '@/lib/seo-tests/evidence'
 

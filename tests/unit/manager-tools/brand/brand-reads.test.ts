@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { CUSTOM_FONT_SLOTS, FONT_SLOTS, isCustomSlot, loadBrandFonts, nextFreeCustomSlot } from '@/lib/fonts'
 import { MAX_BRAND_COLORS, nextColorName, toStoredHex } from '@/lib/manager-tools/brand/brand-colors'
 import { brandRefusal, cleanLine, cleanNote, loadBrandLogos } from '@/lib/brand'
-import { fakeClient, filterValue } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue } from '@tests/helpers/fake-client'
 
 describe('custom font slots', () => {
   it('are DERIVED from the platform vocabulary: every custom_* slot, nothing else', () => {

@@ -2,7 +2,7 @@
  * The SEO / GEO page has five tabs on the rail, each with its own page, the tool opens on
  * Details, and every old section address still lands on the tab (and the row) that now holds it.
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections.ts,
+ * Code:     src/lib/manager-tools/seo/sections.ts,
  *           tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
  * Feature:  SEO / GEO page · its tabs: Details · Facts · Answers · AI test · Profiles (Profiles
  *           added 2026-09-30, outside profiles; Sam, 2026-09-29:
@@ -32,7 +32,7 @@ import {
   SEO_TABS,
   isSeoSection,
   seoTabSeg,
-} from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
+} from '@/lib/manager-tools/seo/sections'
 import { TOOLS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_shell/tools-registry'
 
 vi.mock('next/navigation', () => ({

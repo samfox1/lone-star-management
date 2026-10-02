@@ -22,7 +22,7 @@
 import { isIdentityProfileUrl } from '@samfox1/site-bridge/seo'
 import { isPublicSiteUrl } from '@/lib/custom-site'
 import { musicbrainz } from '@/lib/manager-tools/connections/services/musicbrainz'
-import { guardedFetch, TAPIR_CHECK_UA } from './guarded-fetch'
+import { guardedFetch, TAPIR_CHECK_UA } from '@/lib/guarded-fetch'
 import { fold, isObj } from './html'
 import type { SeoEvidence, SeoKnown } from './types'
 

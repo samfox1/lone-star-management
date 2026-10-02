@@ -1,6 +1,7 @@
 /**
- * The ONE way the SEO / GEO tests fetch anything. Every address here came from a manager or
- * from a document the server was pointed at (a sitemap, a page's share picture), so every hop
+ * The ONE guarded way the server fetches an address someone else chose: the SEO / GEO tests,
+ * the EPK download, share previews (lib/og), outside profiles and search-engine registration
+ * all go through it. Every address here came from a manager or from a document the server was pointed at (a sitemap, a page's share picture), so every hop
  * is checked before the request leaves:
  *
  *   - `isPublicSiteUrl` on the first address AND on every redirect target. A public host can
@@ -13,7 +14,7 @@
  *     endless answer cannot hold a run open.
  *
  * It never throws. No answer is `status: null` with the reason in `error`, and a test that
- * reads it reports `unknown`, never `pass` (types.ts, honesty rule 1).
+ * reads it reports `unknown`, never `pass` (lib/seo-tests/types.ts, honesty rule 1).
  *
  * The same guard as lib/seo-audit `fetchGuarded`, which the old live check and the IndexNow
  * ping still use; this one adds the visitor's name, the timeout, the cap and bytes.

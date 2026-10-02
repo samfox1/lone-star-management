@@ -1,5 +1,6 @@
-// The one address a site is registered under at Google and Bing, worked out once.
 /**
+ * The one address a site is registered under at Google and Bing, worked out once.
+ *
  * Code:     src/lib/search-engines/address.ts (registrationForm, resolveSiteAddress)
  * Feature:  Add website · registering a site with Google and Bing (ADD_WEBSITE_PLAN.md step 4)
  * Tier:     STRICT (AGENTS.md "Test depth"): a parser of addresses that end up as a Search

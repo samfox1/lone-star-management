@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
-import { faceOf, fittedFontSize, SAMPLE_CAP_PX } from './face'
+import { faceOf, fittedFontSize, SAMPLE_CAP_PX } from '@/lib/manager-tools/brand/font-face'
 
 /**
  * The font's real capital height as a fraction of its font-size, measured from the ink of

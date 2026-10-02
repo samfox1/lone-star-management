@@ -2,7 +2,7 @@
  * "How crawlers see your site": the rules behind each row's mark and value, and the few words
  * that must stay true (a date that doesn't slip a day, Bing never "listed").
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-model.ts
+ * Code:     src/lib/manager-tools/seo/crawl-model.ts
  * Feature:  SEO / GEO page · AI test tab · How crawlers see your site (round 11)
  * Tier:     LIGHT for the values' wording (the design is still moving: values are matched on
  *           their numbers, not their sentences). STRICT for what the manager is told is true:
@@ -18,7 +18,7 @@
  *           • the "Ask Google" link: a fixed https host, only its two values vary, both encoded
  *           • dayText: a date with no time is the same day in every zone
  * Not here: drawing any of it (tests/components/manager-tools/seo/crawl-section.test.tsx).
- * Fixtures: healthyCrawl() (tests/components/manager-tools/seo/crawl-fixture.ts), its crawler
+ * Fixtures: healthyCrawl() (tests/helpers/seo/crawl-fixture.ts), its crawler
  *           list derived from bots.ts; each case changes one fact of it.
  */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -43,8 +43,8 @@ import {
   sitemapFace,
   tagsFace,
   visitsFace,
-} from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/crawl-model'
-import { ORIGIN, PAGES, healthyCrawl, withBot } from '@tests/components/manager-tools/seo/crawl-fixture'
+} from '@/lib/manager-tools/seo/crawl-model'
+import { ORIGIN, PAGES, healthyCrawl, withBot } from '@tests/helpers/seo/crawl-fixture'
 
 const page = (c: SeoCrawl, path: string) => c.pages.find((p) => p.path === path)!
 

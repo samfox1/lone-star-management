@@ -21,8 +21,8 @@
  * Not here: byte caps and time limits on the fetch itself (size-and-time-limits.test.ts); what each
  *           reader finds on a normal page (the SEO checks' own tests under tests/unit/seo-tests).
  * Fixtures: generated hostile text (a unit repeated to the cap); the recorded pages and sitemaps
- *           with their recorded readings (tests/unit/seo-tests/parser-corpus.ts); a site's
- *           evidence built by tests/unit/seo-tests/_page-fixture.ts.
+ *           with their recorded readings (tests/unit/safe-fetching/_parser-corpus.ts); a site's
+ *           evidence built by tests/helpers/seo/page-fixture.ts.
  */
 import { describe, expect, it } from 'vitest'
 import { sitemapLastmods } from '@/lib/seo-tests/fresh'
@@ -31,8 +31,8 @@ import { musicBrainzForms } from '@/lib/seo-tests/musicbrainz'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
 import { firstJsonLd, visibleText } from '@/lib/seo-audit'
 import { trimTrailingSlashes } from '@/lib/url'
-import { PAGES, RECORDED, SITEMAPS } from '@tests/unit/seo-tests/parser-corpus'
-import { ORIGIN, evidence, page } from '@tests/unit/seo-tests/_page-fixture'
+import { PAGES, RECORDED, SITEMAPS } from '@tests/unit/safe-fetching/_parser-corpus'
+import { ORIGIN, evidence, page } from '@tests/helpers/seo/page-fixture'
 
 const KIB = 1024
 const MIB = 1024 * KIB

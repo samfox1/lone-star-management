@@ -29,6 +29,11 @@ so on. A few examples:
 A file is named after the feature it protects (`redirects.test.ts`), never after how its bugs were
 found (no `*-defects.test.ts`).
 
+A support file (a fake, sample data) used by one feature's tests sits in that feature's folder with
+a leading `_` (`tests/unit/seo-tests/_found-fixtures.ts`). One shared across features goes in
+`tests/helpers/` under a plain name (`tests/helpers/seo/page-fixture.ts`). Either way, import it
+through the alias (`@tests/helpers/…`, `@tests/unit/…`), never by a `./` path.
+
 ## What every test file starts with
 
 Every file in the tidied areas opens with this header, same fields, same order:

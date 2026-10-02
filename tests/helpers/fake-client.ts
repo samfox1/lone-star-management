@@ -1,5 +1,5 @@
 /**
- * A PostgREST-shaped fake for the Brand page's DB-free tests.
+ * A PostgREST-shaped fake for DB-free tests (Brand, publish, the SEO runs, search engines).
  *
  * Every builder call is recorded as one `Call`, and a test-supplied `respond` decides what
  * each awaited chain returns. One rule is enforced here rather than left to each test,

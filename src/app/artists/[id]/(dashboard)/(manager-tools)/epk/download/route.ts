@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { buildEpkPdf } from '@/lib/manager-tools/epk/epk-pdf'
 import { DOCUMENTS_BUCKET, epkReadiness } from '@/lib/epk'
 import { getPublishedSite } from '@/lib/site'
-import { guardedFetch } from '@/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '@/lib/guarded-fetch'
 import { createClient } from '@/lib/supabase/server'
 
 /**

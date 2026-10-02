@@ -11,7 +11,7 @@ import { toast } from '../../../../toast'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { useSeeded } from '../../../_ui/use-seeded'
 import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
-import { useMounted, useNow } from './clock'
+import { useMounted, useNow } from '../_ui/clock'
 import { CrawlSection } from './crawl-section'
 import type { TestTabData } from './load'
 import {
@@ -30,7 +30,7 @@ import {
   whenText,
   type RunRefusal,
   type TestRow,
-} from './model'
+} from '@/lib/manager-tools/seo/test-model'
 import { PageScan, StartArt, VisitingAs, useReducedMotion } from './scan-art'
 import { rowButtonId, TestRowItem, type RowContext } from './test-row'
 
@@ -44,7 +44,7 @@ import { rowButtonId, TestRowItem, type RowContext } from './test-row'
  *   RUNNING  our run, or one the server says is going (a publish's, another tab's): the page
  *            being scanned beside who we visit as, and a small clock. No heading, no list, and
  *            no ticks: the drawing is decoration, never progress.
- *   DONE     a stored run: the headline (model.ts `runHeadline`),
+ *   DONE     a stored run: the headline (lib/manager-tools/seo/test-model.ts `runHeadline`),
  *            when it ran, "Test again", the quiet notices, the outside bios line (how many the
  *            Profiles tab asks to look at; never in the score), then the four groups and their rows
  *            (test-row.tsx). When a run lands in this session the rows rise in one after another

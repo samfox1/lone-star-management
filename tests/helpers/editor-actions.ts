@@ -7,7 +7,7 @@
  * list, and a new action that the inspector starts importing is added here rather than
  * in whichever suite fails first. Use it as:
  *
- *   vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('./helpers/editor-actions'))
+ *   vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
  *
  * A factory that returns this module's promise is what vitest's hoisting allows; the
  * mocked functions are then the SAME objects `vi.mocked(...)` hands back in the test.

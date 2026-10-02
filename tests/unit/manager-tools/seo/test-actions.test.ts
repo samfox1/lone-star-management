@@ -13,7 +13,7 @@
  *           • the Apple fix changes only this artist's Apple link, through the Connections door,
  *             as a draft, only when the latest run OFFERS it, with the address worked out from
  *             the link as it is NOW
- * Not here: the run itself (runs/running.test.ts); how the Test tab reads its data
+ * Not here: the run itself (tests/unit/seo-tests/runs/running.test.ts); how the Test tab reads its data
  *           (tests/unit/manager-tools/seo/test-tab-model.test.ts); the Apple store rule itself
  *           (src/lib/seo-tests/apple-storefront.ts, with the SEO tests under tests/unit/seo-tests/).
  * Fixtures: the signed-in user, ownership and the stored runs come from a PostgREST fake; the
@@ -21,7 +21,7 @@
  *           client is a marker object so a test can see which client a write was handed.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const h = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,

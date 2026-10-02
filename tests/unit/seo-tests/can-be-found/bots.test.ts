@@ -18,7 +18,7 @@
  *             Bing's Copilot tags: noarchive fails, nocache / nosnippet are said in the pass)
  * Not here: what all ten tests share (contract.test.ts); how robots.txt is read line by line
  *           (robots-txt.test.ts); how the visits are fetched (evidence.test.ts).
- * Fixtures: ../found-fixtures.ts: a healthy two-page site; each case swaps ONE visit (a bot's, a
+ * Fixtures: ../_found-fixtures.ts: a healthy two-page site; each case swaps ONE visit (a bot's, a
  *           person's, or every bot's) for a real firewall or error answer. No network.
  */
 import { describe, expect, it } from 'vitest'
@@ -28,7 +28,7 @@ import type { SeoBot, SeoPageFetch } from '@/lib/seo-tests/types'
 import {
   ABOUT, CF_1020, CF_BLOCK, CF_CHALLENGE, EMPTY_SHELL, HOME, LOGIN, ROBOTS_OK, SOFT_404,
   details, doc, evidence, run, type Fixture,
-} from '@tests/unit/seo-tests/found-fixtures'
+} from '@tests/unit/seo-tests/_found-fixtures'
 
 type BotTest = SeoBot['test']
 /** The six bot tests, read from the bot list (bots.ts), not typed out by hand. */

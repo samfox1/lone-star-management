@@ -2,7 +2,7 @@
  * The Apple Music & Amazon bio email: what we ask AllMusic / Xperi to write from, and the
  * `mailto:` link that opens it in the manager's mail app.
  *
- * Code:     src/lib/manager-tools/seo/bio-pack.ts (buildBioPack, mailtoHref, ccAddress, emailText)
+ * Code:     src/lib/manager-tools/seo/profiles/bio-pack.ts (buildBioPack, mailtoHref, ccAddress, emailText)
  * Feature:  SEO / GEO page · Profiles tab · "Apple Music & Amazon bio" (Sam, 2026-09-30,
  *           prototypes/profiles_bio_pack_20260930.html)
  * Tier:     STRICT (AGENTS.md "Test depth"): it builds a URL from user-supplied text and an
@@ -22,7 +22,7 @@
  *           fields the pack reads; hostile values are planted on top of them.
  */
 import { describe, expect, it } from 'vitest'
-import { BIO_PACK_TO, buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/bio-pack'
+import { BIO_PACK_TO, buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/profiles/bio-pack'
 
 /* ── fixtures: the door's own shapes (get_public_site 2026-09-30, Skeen) ── */
 

@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INDEXNOW_CONTENT_KEY, INDEXNOW_KEY_PATH, INDEXNOW_VERSION_HEADER, isIndexNowKey } from '@samfox1/site-bridge/indexnow'
 import { INDEXNOW_ENDPOINT } from '@/lib/indexnow'
 import { saveEditorField } from '@/lib/site-editor/save'
-import { fakeClient, filterValue, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const h = vi.hoisted(() => ({
   after: vi.fn(),

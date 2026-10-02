@@ -10,7 +10,7 @@ import {
   usedColors,
 } from '@/lib/site-editor/style-apply'
 import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
-import { fakeClient } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient } from '@tests/helpers/fake-client'
 import { buildVideoItemStyleControls } from '@/lib/site-editor/style-controls'
 
 describe('resolveStyle — arbitrary colours leave the class string', () => {

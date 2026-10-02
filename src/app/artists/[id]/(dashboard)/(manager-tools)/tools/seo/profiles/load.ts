@@ -1,7 +1,7 @@
 import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 import { listContent } from '@/lib/content'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
-import { photoTypeOf, type BioPackInput, type BioPackRelease } from '@/lib/manager-tools/seo/bio-pack'
+import { photoTypeOf, type BioPackInput, type BioPackRelease } from '@/lib/manager-tools/seo/profiles/bio-pack'
 import type { loadSeoBase } from '../load'
 
 type Base = Awaited<ReturnType<typeof loadSeoBase>>
@@ -13,7 +13,7 @@ export type PackPhoto = { url: string; thumb: string; type: string | null; name:
 const MAX_PHOTOS = 12
 
 /**
- * What the Apple Music & Amazon bio email is built from (lib/manager-tools/seo/bio-pack.ts).
+ * What the Apple Music & Amazon bio email is built from (lib/manager-tools/seo/profiles/bio-pack.ts).
  * Everything but the releases is the DRAFT the manager sees on the other SEO tabs (loadSeoBase):
  * the bio, genre, city, the Facts tab's region and country, the links. The releases are the
  * PUBLISHED ones (`get_public_releases`), so nothing still being drafted goes out to Xperi.

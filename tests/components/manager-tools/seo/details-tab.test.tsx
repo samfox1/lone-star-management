@@ -18,7 +18,7 @@
  *             between photos except while typing
  *           • a count shows only while its field is being written
  * Not here: the save rules (tests/unit/manager-tools/seo/save-rules.test.ts); the preview
- *           picture's geometry (tests/unit/manager-tools/seo/preview-picture.test.ts).
+ *           picture's geometry (tests/unit/manager-tools/seo/og-card.test.ts).
  * Fixtures: the save actions, the preview-picture action and the router are mocks; one made-up
  *           photo list and one Brand colour.
  */
@@ -26,7 +26,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MAX_DESCRIPTION, MAX_TITLE } from '@samfox1/site-bridge/seo'
 import { DetailsTab, DESCRIPTION_CAP, type AltPhoto } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/details/details-tab'
-import { SEO_EDIT_TARGETS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
+import { SEO_EDIT_TARGETS } from '@/lib/manager-tools/seo/sections'
 import { saveSeoFieldAction, setMediaAltAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({

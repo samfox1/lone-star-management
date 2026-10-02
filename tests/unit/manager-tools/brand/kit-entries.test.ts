@@ -1,13 +1,13 @@
 // What the brand kit lists, and what each file is called, from the published door alone.
 /**
- * kit/kit-entries.ts (pure). The route suite (brand-kit-route.test.ts) runs it end to end;
- * this file pins the naming and the door's odd shapes that a 2026-09-23 mutation run showed
- * the route suite never reached: a null entry in the door's arrays, a slot whose font is
- * missing, a font whose title does not slug, a long title cut at a hyphen, skipped.txt's
- * exact text.
+ * src/lib/manager-tools/brand/kit-entries.ts (pure). The route suite (brand-kit-route.test.ts)
+ * runs it end to end; this file pins the naming and the door's odd shapes that a 2026-09-23
+ * mutation run showed the route suite never reached: a null entry in the door's arrays, a
+ * slot whose font is missing, a font whose title does not slug, a long title cut at a hyphen,
+ * skipped.txt's exact text.
  */
 import { describe, expect, it } from 'vitest'
-import { liveColors, nameSlug, planBrandKit, skippedTxt, type LiveBrand } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/kit/kit-entries'
+import { liveColors, nameSlug, planBrandKit, skippedTxt, type LiveBrand } from '@/lib/manager-tools/brand/kit-entries'
 
 const A = 'a1'
 const names = (live: LiveBrand) => planBrandKit(A, live).entries.map((e) => e.name)

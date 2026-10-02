@@ -16,8 +16,8 @@
  *           • page: one fetched page (a status, an error, a page cut at the read cap)
  *           • rowOf / expectPlainWords: read one "Show the details" row; check a result keeps
  *             the plain-words contract (types.ts)
- * Not here: bot visits, robots.txt and sitemaps have their own fakes (found-fixtures.ts,
- *           fake-site.ts); hostile and malformed html lives in parser-corpus.ts.
+ * Not here: bot visits, robots.txt and sitemaps have their own fakes (tests/unit/seo-tests/_found-fixtures.ts,
+ *           fake-site.ts); hostile and malformed html lives in tests/unit/safe-fetching/_parser-corpus.ts.
  * Fixtures: all made up: the artist "Skeen" at www.example-artist.com, today 2026-09-28.
  *           Nothing is fetched.
  */

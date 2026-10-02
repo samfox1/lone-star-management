@@ -1,5 +1,7 @@
-// Registering a site runs its steps in order, stops safely, and never leaves a wrong artist holding a site.
 /**
+ * Registering a site runs its steps in order, stops safely, and never leaves a wrong artist holding
+ * a site.
+ *
  * Code:     src/lib/search-engines/register.ts (registerSite, metaTags, tagsLive)
  * Feature:  Add website · registering a site with Google and Bing (ADD_WEBSITE_PLAN.md step 4)
  * Tier:     STRICT (AGENTS.md "Test depth"): this decides which artist a site is attached to and
@@ -401,6 +403,7 @@ describe('registerSite', () => {
       vi.useRealTimers()
     })
 
+    // Six or seven looks in a minute: the wait for the tags never turns into a tight loop against the site.
     it('looks at most every 10 seconds', async () => {
       vi.useFakeTimers()
       const mem = memStore()

@@ -17,13 +17,13 @@
  *           • the sentence and details say how much was opened and read
  * Not here: how the list is found, downloaded and parsed (evidence.test.ts); the rules shared by
  *           all ten tests (contract.test.ts).
- * Fixtures: ../found-fixtures.ts: a healthy two-page site whose list (SITEMAP_OK) names both pages,
+ * Fixtures: ../_found-fixtures.ts: a healthy two-page site whose list (SITEMAP_OK) names both pages,
  *           dated, and is named in robots.txt; each case changes the list or one visit.
  */
 import { describe, expect, it } from 'vitest'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoEvidence } from '@/lib/seo-tests/types'
-import { ABOUT, HOME, O, SITEMAP_OK, SOFT_404, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/found-fixtures'
+import { ABOUT, HOME, O, SITEMAP_OK, SOFT_404, details, evidence, run, type Fixture } from '@tests/unit/seo-tests/_found-fixtures'
 
 type Sitemap = NonNullable<SeoEvidence['sitemap']>
 const list = (over: Partial<Sitemap>): Fixture => ({ sitemap: { ...SITEMAP_OK, ...over } })

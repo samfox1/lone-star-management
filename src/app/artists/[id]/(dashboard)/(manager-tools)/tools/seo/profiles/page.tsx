@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
-import { bioRows } from '@/lib/manager-tools/profiles/bio-state'
-import { readProfileMarks } from '@/lib/manager-tools/profiles/marks'
+import { bioRows } from '@/lib/manager-tools/seo/profiles/bio-state'
+import { readProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
 import { loadSeoBase } from '../load'
 import { BioRows } from './bio-rows'
 import { loadOutsideBios } from './bios-load'

@@ -21,7 +21,7 @@
  * Not here: each test's own `na` case and its "couldn't check" twin, in the test's file:
  *           genre and musicbrainz (says-who-you-are/), photo-descriptions
  *           (looks-right-when-shared/), apple-music and releases (facts-are-true/).
- * Fixtures: _page-fixture.ts (a healthy site); each sweep changes one thing for every test.
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site); each sweep changes one thing for every test.
  *           The "in Tapir" sweep builds one site where Tapir and the site each hold values the
  *           other doesn't, spelled as markers that appear nowhere else. Nothing is fetched.
  */
@@ -32,7 +32,7 @@ import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
 import { WHO_TESTS } from '@/lib/seo-tests/who'
 import { SEO_TEST_IDS, type SeoEvidence, type SeoTest, type SeoTestGroup, type SeoTestId } from '@/lib/seo-tests/types'
-import { ORIGIN, PROFILES, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known, page } from '@tests/unit/seo-tests/_page-fixture'
+import { ORIGIN, PROFILES, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known, page } from '@tests/helpers/seo/page-fixture'
 
 /** The 14 tests of the three groups this file sweeps, read from their registries. */
 const THESE: Record<string, SeoTest> = { ...WHO_TESTS, ...SHARED_TESTS, ...FACTS_TESTS }

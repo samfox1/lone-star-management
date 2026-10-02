@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
 import { diffUnpublished, publicSnapshot, siteUnpublished, type ContentRow } from '@/lib/content'
 import { brandPending } from '@/lib/brand'
 import { dirtyBySeg } from '@/app/artists/[id]/(dashboard)/sections'
-import { fakeClient, type Call } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call } from '@tests/helpers/fake-client'
 
 const A = 'a1'
 

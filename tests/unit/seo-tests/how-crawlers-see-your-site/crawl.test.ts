@@ -23,7 +23,7 @@
  *           conclude (the other folders); asking Google / Bing and the other spelling (runs/
  *           running.test.ts); storing and rendering the section (store / page tests).
  * Fixtures: a Skeen-like site gathered by the REAL gatherer (evidence.ts) from a fake web
- *           (../fake-site.ts), and the "Can be found" fixture site (../found-fixtures.ts) with one
+ *           (tests/helpers/seo/fake-site.ts), and the "Can be found" fixture site (../_found-fixtures.ts) with one
  *           thing changed per test. The crawler list and its order come from bots.ts, never
  *           typed out here.
  */
@@ -33,8 +33,8 @@ import { buildCrawl } from '@/lib/seo-tests/crawl'
 import { gatherSiteEvidence } from '@/lib/seo-tests/evidence'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoCrawl, SeoEvidence } from '@/lib/seo-tests/types'
-import { fakeSite, type FakeAnswer } from '@tests/unit/seo-tests/fake-site'
-import { ABOUT, HOME, O, doc, evidence, fetched, type Fixture } from '@tests/unit/seo-tests/found-fixtures'
+import { fakeSite, type FakeAnswer } from '@tests/helpers/seo/fake-site'
+import { ABOUT, HOME, O, doc, evidence, fetched, type Fixture } from '@tests/unit/seo-tests/_found-fixtures'
 
 const NONE = { otherHost: null, listing: { google: null, bing: null } } as const
 const crawlOf = (f: Fixture = {}) => buildCrawl(evidence(f), NONE)

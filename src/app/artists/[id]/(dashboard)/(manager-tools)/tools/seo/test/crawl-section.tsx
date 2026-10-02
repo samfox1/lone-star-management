@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/icons'
 import type { SeoCrawl, SeoTestStatus } from '@/lib/seo-tests/types'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { useMounted } from './clock'
+import { useMounted } from '../_ui/clock'
 import {
   ASK_GOOGLE,
   BING_WEBMASTER,
@@ -41,7 +41,7 @@ import {
   type CrawlMark,
   type CrawlRowId,
   type Words,
-} from './crawl-model'
+} from '@/lib/manager-tools/seo/crawl-model'
 import { StatusMark } from './test-row'
 
 /**
@@ -56,11 +56,11 @@ import { StatusMark } from './test-row'
  *   Crawler visits          EVERY VISIT (crawlers × pages) · NOTE
  *   Listed on Google/Bing   GOOGLE · BING · WHY IT MATTERS
  *
- * FACTS, not verdicts (types.ts SeoCrawl): the words and marks are crawl-model.ts's. Nothing is
+ * FACTS, not verdicts (types.ts SeoCrawl): the words and marks are lib/manager-tools/seo/crawl-model.ts's. Nothing is
  * drawn for a run without a crawl, or with a shape version this page doesn't know.
  *
  * EVERYTHING HERE CAME FROM THE SITE OR FROM GOOGLE / BING: rendered as React text only. Dates
- * are the manager's own time zone, so they appear only after mount (clock.ts), never on the server.
+ * are the manager's own time zone, so they appear only after mount (_ui/clock.ts), never on the server.
  *
  * The row and card are test-row.tsx's grammar, drawn here (its Card is private to one test
  * result): the same row face, the same StatusMark, the same card box and label.

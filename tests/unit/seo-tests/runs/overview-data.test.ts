@@ -17,14 +17,14 @@
  *           • any read that fails is null, never 0, and a half timeline is never returned
  * Not here: a page that draws this: the Overview tab that did was removed 2026-09-29; the module is
  *           kept for the stashed "AI visibility" page (TODO.md).
- * Fixtures: hand-made run summaries; a PostgREST fake (brand/_fake-client) for the reads, each
+ * Fixtures: hand-made run summaries; a PostgREST fake (tests/helpers/fake-client.ts) for the reads, each
  *           of which a test can make fail.
  */
 import { describe, expect, it } from 'vitest'
 import { SEO_TEST_PRIORITY, buildTimeline, failingInPriority, readSeoOverview, runChanges, searchAndAiVisits } from '@/lib/seo-tests/overview'
 import type { SeoRunSummary } from '@/lib/seo-tests/store'
 import { SEO_TEST_IDS, type SeoTestResult } from '@/lib/seo-tests/types'
-import { fakeClient, type Call, type Reply } from '@tests/unit/manager-tools/brand/_fake-client'
+import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 
 const A = 'artist-1'
 const r = (id: SeoTestResult['id'], status: SeoTestResult['status']): SeoTestResult => ({ id, status, value: '', sentence: '', evidence: [] })

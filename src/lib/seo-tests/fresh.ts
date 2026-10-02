@@ -34,7 +34,7 @@
  * sitemap, then pauses a moment before the run, but a page it did not poke can still be old.
  */
 import { trimTrailingSlashes } from '@/lib/url'
-import { guardedFetch, type GuardedOptions } from './guarded-fetch'
+import { guardedFetch, type GuardedOptions } from '@/lib/guarded-fetch'
 
 /** Postgres microseconds vs JS milliseconds, plus a little slack. */
 const SAME_MOMENT_MS = 1_000

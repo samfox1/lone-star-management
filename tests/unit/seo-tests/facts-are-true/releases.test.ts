@@ -20,14 +20,14 @@
  *             name listed twice once, "none" for none, 8 at most then "and N more", long
  *             titles shortened so the whole row survives being stored
  * Not here: nothing published, a home page cut at the read cap, or unreachable (../honesty.test.ts).
- * Fixtures: _page-fixture.ts (a healthy site whose card and music section list the same 3
+ * Fixtures: tests/helpers/seo/page-fixture.ts (a healthy site whose card and music section list the same 3
  *           releases Music has, newest first); `one` builds a page with one release. Nothing
  *           is fetched.
  */
 import { describe, expect, it } from 'vitest'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
 import { capResult } from '@/lib/seo-tests/store'
-import { ORIGIN, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, page, rowOf, type Graph } from '@tests/unit/seo-tests/_page-fixture'
+import { ORIGIN, artistNode, evidence, expectPlainWords, graphBlock, healthyGraph, homeHtml, known, page, rowOf, type Graph } from '@tests/helpers/seo/page-fixture'
 
 const r = FACTS_TESTS.releases
 const withGraph = (graph: Graph, more: Parameters<typeof evidence>[0] = {}) => evidence({ home: homeHtml({ ld: [graphBlock(graph)] }), ...more })

@@ -19,7 +19,7 @@
 import { SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
 import { SEO_MANUAL_COOLDOWN_S, type StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
-import { SEO_EDIT_TARGETS } from '../sections'
+import { SEO_EDIT_TARGETS } from './sections'
 
 export type TestFilter = 'all' | 'need' | 'pass' | 'unknown'
 

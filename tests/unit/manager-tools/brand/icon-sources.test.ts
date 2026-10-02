@@ -1,13 +1,13 @@
 // What each icon is framed from, and what the "Select a logo…" menu lists.
 /**
- * `iconLogoOptions` / `resolveIconSource` (brand/icons/icon-sources.ts): pure over the
+ * `iconLogoOptions` / `resolveIconSource` (src/lib/manager-tools/brand/icon-sources.ts): pure over the
  * Brand page's reads. `artists.<target>_source_media_id` is null for "the primary logo"
  * (BRAND_PAGE_PLAN.md, data model), may name any logo, or an image uploaded just for that
  * icon (`icon_source`, which the menu never lists — it is not a logo).
  */
 import { describe, expect, it } from 'vitest'
 import type { BrandLogo, BrandLogos } from '@/lib/brand'
-import { iconLogoOptions, resolveIconSource } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/icons/icon-sources'
+import { iconLogoOptions, resolveIconSource } from '@/lib/manager-tools/brand/icon-sources'
 
 const logo = (id: string, purpose: BrandLogo['purpose'], label: string | null = null): BrandLogo => ({
   id,
