@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 import type { DiffSeg } from './sections'
+import { NAV_HOVER } from './nav-hover'
 
 type Tab = {
   label: string
@@ -84,7 +85,7 @@ export function ArtistNav({
               aria-current={active ? 'page' : undefined}
               className={cx(
                 'group relative inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
-                active ? 'text-accent' : 'text-ink-muted hover:text-ink',
+                active ? 'text-accent' : `text-ink-muted ${NAV_HOVER}`,
               )}
             >
               <Icon name={t.icon} size={22} />

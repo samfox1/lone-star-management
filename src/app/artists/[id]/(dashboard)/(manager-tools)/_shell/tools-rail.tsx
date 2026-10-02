@@ -12,6 +12,7 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { TOOLS, tabFor, toolFor, toolsFor, type Tool } from './tools-registry'
+import { NAV_HOVER } from '../../nav-hover'
 
 export { TOOLS, tabFor, toolFor, toolsFor }
 
@@ -144,7 +145,7 @@ function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { art
                   style={{ height: RAIL_ITEM_H }}
                   className={cx(
                     'flex flex-col items-center justify-center gap-1 rounded-lg py-2 transition-colors',
-                    on ? 'text-accent' : 'text-ink-muted hover:text-ink',
+                    on ? 'text-accent' : `text-ink-muted ${NAV_HOVER}`,
                   )}
                 >
                   <Icon name={t.icon} size={20} />
@@ -217,7 +218,7 @@ function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; t
                     // The rail beside it already lights the tool in accent, and a second blue
                     // read as two selections. Space Mono is monospaced, so the bold weight is
                     // the same width — the row cannot reflow just because it is selected.
-                    on ? 'font-bold text-ink' : 'text-ink-muted hover:text-ink',
+                    on ? 'font-bold text-ink' : `text-ink-muted ${NAV_HOVER}`,
                   )}
                 >
                   {/* nowrap, never `truncate`: a label is read whole or the panel widens. */}
@@ -251,7 +252,7 @@ function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: To
             aria-current={on ? 'page' : undefined}
             className={cx(
               'whitespace-nowrap rounded-lg px-2.5 py-2 font-space text-[13px] tracking-[0.02em] transition-colors',
-              on ? 'bg-surface font-bold text-ink' : 'text-ink-muted hover:text-ink',
+              on ? 'bg-surface font-bold text-ink' : `text-ink-muted ${NAV_HOVER}`,
             )}
           >
             {t.label}

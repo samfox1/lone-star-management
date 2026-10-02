@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { RAIL_LANE } from './(manager-tools)/_shell/tools-rail'
+import { NAV_HOVER } from './nav-hover'
 
 type AssetKind = 'music' | 'photos' | 'videos'
 
@@ -50,7 +51,7 @@ function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind 
                 aria-current={it.key === active ? 'page' : undefined}
                 className={cx(
                   'flex flex-col items-center gap-1 rounded-lg py-2.5 transition-colors',
-                  it.key === active ? 'text-accent' : 'text-ink-muted hover:text-ink',
+                  it.key === active ? 'text-accent' : `text-ink-muted ${NAV_HOVER}`,
                 )}
               >
                 <Icon name={it.icon} size={22} />
