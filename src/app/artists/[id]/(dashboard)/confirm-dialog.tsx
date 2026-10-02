@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { buttonClass, type ButtonVariant } from '@/components/ui/ui'
+import { type ButtonVariant } from '@/components/ui/ui'
+import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
+import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
 
 /**
  * ASKING, IN THE APP'S OWN VOICE (Sam, 2026-09-12: "add a confirmation modal or dialogue
@@ -23,8 +26,10 @@ import { buttonClass, type ButtonVariant } from '@/components/ui/ui'
  * is not the named action is a no. It never rejects: a caller writing
  * `if (!(await ask(…))) return` must not need a try/catch to be safe.
  */
-/** Both answers are the same size: neither is the default by being the bigger target. */
-const PAIR = 'min-w-[88px] justify-center'
+/** Both answers are bare glyphs of the same size (Sam, 2026-10-02: "I want icons, not with
+ *  borders"): neither is the default by being the bigger target. Each keeps its words as its
+ *  accessible name and hover title. */
+const ANSWER = `inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors ${FOCUS_RING}`
 
 /** The answer button's voice. Tied to the button vocabulary rather than spelled out
  *  again, so renaming a variant is a compile error here instead of a silent fallback. */
@@ -105,12 +110,18 @@ export function useConfirm(): {
         <div className="mt-5 flex items-center justify-end gap-2">
           {/* Focus lands on CANCEL, never on the destructive answer: a stray Enter or
               Space arriving right after the question opens must not delete anything. */}
-          <button autoFocus type="button" onClick={() => settle(false)} className={buttonClass('confirm', PAIR)}>
-            Cancel
+          <button autoFocus type="button" aria-label="Cancel" title="Cancel" onClick={() => settle(false)} className={`${ANSWER} text-ink-muted ${ICON_HOVER}`}>
+            <Icon name="close" size={18} />
           </button>
           {/* Named for what it DOES — never an "OK" that could mean either half. */}
-          <button type="button" onClick={() => settle(true)} className={buttonClass(pending.tone, PAIR)}>
-            {pending.action}
+          <button
+            type="button"
+            aria-label={pending.action}
+            title={pending.action}
+            onClick={() => settle(true)}
+            className={`${ANSWER} ${pending.tone === 'danger' ? 'text-accent-red' : 'text-ink'} ${ICON_BOLD}`}
+          >
+            <Icon name={pending.tone === 'danger' ? 'trash' : 'check'} size={18} />
           </button>
         </div>
       </div>
