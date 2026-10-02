@@ -13,7 +13,8 @@ import { RowIcon } from '../../_ui/row-icon'
 import { renameLogoAction, setLogoNoteAction } from '../actions'
 import { LogoEditor, type LogoTarget } from './logo-editor'
 import { LogoTile } from './logo-tile'
-import { iconsFramedFrom, removeLogo, removeQuestion, type BuiltInPurpose, type IconUse } from './remove'
+import { iconsFramedFrom, removeQuestion, type BuiltInPurpose, type IconUse } from '@/lib/manager-tools/brand/logo-remove'
+import { removeLogo } from './remove'
 
 /** The two built-in rows: a fixed title and fixed grey guide text (the approved Brand-only
  *  exception to the no-instruction-copy rule). Not renamable, not deletable. */

@@ -8,10 +8,11 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import type { StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoTestId } from '@/lib/seo-tests/types'
 import { toast } from '../../../../toast'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { EYEBROW, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useSeeded } from '../../../_ui/use-seeded'
 import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
 import { useMounted, useNow } from '../_ui/clock'
+import { DisclosureGroup } from '../_ui/disclosure'
 import { CrawlSection } from './crawl-section'
 import type { TestTabData } from './load'
 import {
@@ -104,7 +105,6 @@ const STAGGER_MS = 45
 const COLUMN = 'mx-auto w-full max-w-[660px] pt-7'
 /** Before and during a run, the block sits in the middle of the screen. */
 const MIDDLE = 'flex min-h-[max(420px,calc(100vh-260px))] flex-col items-center justify-center text-center'
-const EYEBROW = 'font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
 const HEADLINE = 'mt-2.5 text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-ink max-[560px]:text-[26px]'
 
 type View = 'off' | 'error' | 'start' | 'running' | 'done'
@@ -403,7 +403,7 @@ export function TestTab({
           <Link
             href={`/artists/${artistId}/tools/seo/profiles`}
             data-bios-line=""
-            className={cx('group/bios mt-3 inline-flex items-center gap-1.5 rounded-md font-space text-[12px] text-ink-muted transition-colors hover:text-accent', FOCUS_RING, 'focus-visible:outline-offset-2')}
+            className={cx('group/bios mt-3 inline-flex items-center gap-1.5 rounded-md font-space text-[12px] text-ink-muted transition-colors hover:text-accent', FOCUS_RING_OFFSET)}
           >
             {COPY.bios(biosToCheck)}
             <Icon name="chevronRight" size={13} aria-hidden="true" className="transition-transform duration-200 group-hover/bios:translate-x-[3px]" />
@@ -417,11 +417,7 @@ export function TestTab({
           <CrawlSection crawl={latest?.crawl} site={latest?.siteUrl ?? ''} />
           {groups.map((g) => (
             <section key={g.id} aria-label={g.label}>
-              <div className="mb-0.5 mt-[26px] flex items-baseline justify-between gap-4">
-                <h3 className={cx(EYEBROW, 'font-normal')}>{g.label}</h3>
-                <span className="font-space text-[11px] text-ink-faint">{`${g.pass} of ${g.applicable}`}</span>
-              </div>
-              <div className="-mx-3">
+              <DisclosureGroup title={g.label} count={`${g.pass} of ${g.applicable}`}>
                 {g.rows.map((row, i) => (
                   <TestRowItem
                     key={row.def.id}
@@ -433,7 +429,7 @@ export function TestTab({
                     ctx={ctxFor(row)}
                   />
                 ))}
-              </div>
+              </DisclosureGroup>
             </section>
           ))}
         </div>
@@ -485,8 +481,7 @@ function QuietLink({
         'group/go inline-flex items-center gap-2 rounded-md px-0.5 py-1.5 font-space text-[13px] transition-colors hover:text-accent',
         muted ? 'text-ink-muted disabled:hover:text-ink-muted' : 'text-ink disabled:hover:text-ink',
         'disabled:cursor-default disabled:opacity-50',
-        FOCUS_RING,
-        'focus-visible:outline-offset-2',
+        FOCUS_RING_OFFSET,
       )}
     >
       <Icon name={icon} size={15} aria-hidden="true" />

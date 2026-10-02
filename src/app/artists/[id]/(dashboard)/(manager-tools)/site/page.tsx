@@ -5,6 +5,7 @@ import { fieldsFor } from '@/lib/site-content-schema'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { requireArtist } from '../../_data'
 import { publishSiteAction, saveSiteContentAction, saveTemplateAction } from '../../actions'
+import { BLOCK_LABEL } from '../_ui/styles'
 
 const selectClass =
   'rounded-lg border border-hairline bg-paper px-2.5 py-2 text-sm text-ink outline-none focus:border-ink-faint'
@@ -63,7 +64,7 @@ export default async function SitePage({ params }: { params: Promise<{ id: strin
             <form action={saveSiteContentAction.bind(null, id)} className="mt-3 space-y-3">
               {fields.map((f) => (
                 <label key={f.key} className="block">
-                  <span className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+                  <span className={BLOCK_LABEL}>
                     {f.label}
                   </span>
                   <input

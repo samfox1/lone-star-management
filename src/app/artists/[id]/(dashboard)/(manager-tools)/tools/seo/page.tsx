@@ -1,6 +1,7 @@
 import { listBrandColors } from '@/lib/manager-tools/brand/brand-colors'
 import { brandSwatches } from '@/lib/site-editor/style-apply'
-import { defaultTitleOf, loadAltPhotos, loadSeoBase, loadShareSources } from './load'
+import { defaultTitleOf } from '@/lib/manager-tools/seo/default-title'
+import { loadAltPhotos, loadSeoBase, loadShareSources } from './load'
 import { DetailsTab } from './details/details-tab'
 
 /**

@@ -22,38 +22,33 @@ import { publishedFromPayload, readKnown, seoSiteOrigin } from '@/lib/seo-tests/
 import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import { FACT_CONTENT_KEYS, artistPlace, sameAsFrom } from '@samfox1/site-bridge/seo'
 import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
+import { sitePayload } from '@tests/helpers/site-data'
 
 const A = 'artist-1'
 
 afterEach(() => vi.unstubAllEnvs())
 
 const payload = (over: Partial<PublicSitePayload> = {}): PublicSitePayload =>
-  ({
-    artist: { id: A, slug: 'ex', name: 'Example', bio: '  A bio.  ', hero_image_url: null, template: 'custom', spotify_artist_id: null, genre: 'house', location: 'Chicago, IL' },
+  sitePayload({
+    artist: { id: A, slug: 'ex', name: 'Example', bio: '  A bio.  ', genre: 'house', location: 'Chicago, IL' },
     published_at: '2026-09-28T21:14:03.123456+00:00',
-    tracks: [],
     tour_dates: [
       { id: 't1', date: '2026-10-01', venue: 'Smartbar', city: 'Chicago', country: 'US', ticket_url: null, is_past: false },
       { id: 't2', date: '2026-01-01', venue: 'Old', city: 'Madison', country: 'US', ticket_url: null, is_past: true },
     ],
-    merch: [],
     links: [{ id: 'l1', label: 'Spotify', url: 'https://open.spotify.com/artist/1', sort_order: 0 }],
     identity_links: [
       { url: 'https://open.spotify.com/artist/1', label: 'Spotify' },
       { url: 'https://musicbrainz.org/artist/abc', label: 'MusicBrainz' },
     ],
-    videos: [],
     media: [
       { purpose: 'gallery_image', path: 'a1/g1.jpg', alt: 'On stage' },
       { purpose: 'profile_photo', path: 'a1/p.jpg', alt: null },
       { purpose: 'logo_primary', path: 'a1/logo.png', alt: 'Logo' },
     ],
     site_content: { seo_title: 'Example | Chicago house DJ' },
-    styles: {},
-    fonts: [],
-    font_slots: {},
     ...over,
-  }) as PublicSitePayload
+  })
 
 type World = { artist?: Record<string, unknown> | null; site?: PublicSitePayload | null; siteError?: boolean }
 

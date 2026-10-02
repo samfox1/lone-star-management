@@ -21,9 +21,10 @@ describe('service icons', () => {
   })
 
   it('the committed file is exactly what the generator writes (no hand edits, no stale marks)', () => {
-    // Stryker's sandbox prepends `// @ts-nocheck` to every src file (disableTypeChecks), so
-    // the comparison drops that one line; the committed file never carries it.
-    const committed = readFileSync(resolve(__dirname, '../../../../src/lib/service-icons.ts'), 'utf8').replace(/^\/\/ @ts-nocheck\r?\n/, '')
+    // Stryker's sandbox adds `// @ts-nocheck` to every src file (disableTypeChecks): at the top,
+    // or (now) after the leading doc comment with a blank line. The comparison drops that line
+    // wherever it sits; the committed file never carries it.
+    const committed = readFileSync(resolve(__dirname, '../../../../src/lib/service-icons.ts'), 'utf8').replace(/^\/\/ @ts-nocheck\r?\n(\r?\n)?/m, '')
     expect(committed).toBe(buildServiceIcons())
   })
 })

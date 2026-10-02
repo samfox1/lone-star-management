@@ -23,22 +23,16 @@
 import { describe, expect, it } from 'vitest'
 import { BRIDGE_VERSION, EDITOR_SOURCE, FRAME_SOURCE, editorMessage, isFrameMessage } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
+import { sitePayload } from '@tests/helpers/site-data'
 
 /** A frame `ready` announcement, as skeen's mountFrameBridge posts it. */
 const readyMsg = { v: BRIDGE_VERSION, source: FRAME_SOURCE, type: 'ready', manifest: { styles: [] } }
 
-const draft: PublicSitePayload = {
-  artist: {
-    id: 'a1', slug: 'skeen', name: 'Skeen', bio: null,
-    hero_image_url: null, template: 'classic', spotify_artist_id: null,
-  },
-  tracks: [], tour_dates: [], merch: [], links: [], videos: [],
+const draft = sitePayload({
+  artist: { template: 'classic' },
   media: [{ purpose: 'gallery_image', path: 'a1/gallery/one.jpg' }],
-  site_content: {},
   styles: { hero_wordmark: 'text-9xl' },
-  fonts: [],
-  font_slots: {},
-}
+})
 
 describe('init-data payload — the wire shape a custom site consumes', () => {
   it('carries media as a raw PATH, never a resolved url', () => {

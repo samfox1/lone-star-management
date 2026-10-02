@@ -1,5 +1,6 @@
 'use client'
 
+import { cx } from '@/lib/cx'
 import { useState, useTransition } from 'react'
 import { fileSize, type PlayableAttachment } from '@/lib/enquiries/attachments'
 import {
@@ -14,14 +15,16 @@ import {
   type KindOption,
 } from '@/lib/enquiries/inbox'
 import { safeHref } from '@/lib/url'
+import { clockTime, shortDay } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
 import { deleteEnquiryAction, setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
+import { MONO_META } from '../_ui/styles'
 
 function received(iso: string): string {
   const d = new Date(iso)
-  return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+  return `${shortDay(d, { locale: 'en-US' })} · ${clockTime(d, 'en-US')}`
 }
 
 /**
@@ -135,6 +138,8 @@ export function EnquiryTable({
           once it does. */}
       <div className="flex flex-wrap items-center gap-2 pb-2">
         <span className="font-space text-[11px] uppercase tracking-[0.08em] text-ink-muted">
+          {/* Three text nodes, not plural(): one string shifts the letter-spaced line a
+              sub-pixel (screenshot diff, 2026-10-01). */}
           {rows.length} {rows.length === 1 ? 'enquiry' : 'enquiries'}
           {unreadCount > 0 && ` · ${unreadCount} unread`}
         </span>
@@ -289,10 +294,10 @@ function FragmentRow({
         <td className="max-w-0 px-4 py-2.5">
           <span className="block truncate font-space text-xs text-ink-muted">{snippet(row.message)}</span>
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-right font-space text-[11px] text-ink-faint">
+        <td className={cx('whitespace-nowrap px-4 py-2.5 text-right', MONO_META)}>
           {received(row.created_at)}
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-right font-space text-[11px] text-ink-faint">
+        <td className={cx('whitespace-nowrap px-4 py-2.5 text-right', MONO_META)}>
           {row.attachmentCount > 0 ? row.attachmentCount : ''}
           {row.demo_url && <Icon name="external" size={11} />}
           {/* Not emailed. Says so plainly, because a table of messages reads as a record of
@@ -348,15 +353,15 @@ function FragmentRow({
                       <div className="flex items-baseline gap-2">
                         <span className="font-space text-xs font-medium">{a.filename}</span>
                         {fileSize(a.bytes) && (
-                          <span className="font-space text-[11px] text-ink-faint">{fileSize(a.bytes)}</span>
+                          <span className={MONO_META}>{fileSize(a.bytes)}</span>
                         )}
                       </div>
                       {a.expired ? (
-                        <p className="mt-1 font-space text-[11px] text-ink-faint">
+                        <p className={cx('mt-1', MONO_META)}>
                           Attachment expired — audio is deleted after 90 days.
                         </p>
                       ) : a.neverUploaded ? (
-                        <p className="mt-1 font-space text-[11px] text-ink-faint">
+                        <p className={cx('mt-1', MONO_META)}>
                           Upload didn&rsquo;t complete — the sender never finished sending this.
                         </p>
                       ) : (

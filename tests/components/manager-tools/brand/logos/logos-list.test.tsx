@@ -34,7 +34,7 @@ import {
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import type { BrandLogo, BrandLogos } from '@/lib/brand'
-import { iconsFramedFrom, NO_ICONS, type IconUse } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/remove'
+import { iconsFramedFrom, NO_ICONS, type IconUse } from '@/lib/manager-tools/brand/logo-remove'
 import { decodeLogo, encodePng } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/logos/pixels'
 import { flatLogo, pngFile } from '@tests/components/manager-tools/brand/logos/_images'
 

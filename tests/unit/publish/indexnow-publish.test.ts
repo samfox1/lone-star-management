@@ -13,18 +13,17 @@
  *   • only the system writes the key: the editor's field path refuses it.
  *
  * DB-free over the PostgREST fake; `after` is captured so each test decides whether the
- * scheduled ping runs; `fetch` is a stub, so nothing reaches the network.
+ * scheduled ping runs; `fetch` is a stub, so nothing reaches the network. The password gate,
+ * the fake and the list of publish actions come from tests/unit/publish/_publish-world.ts.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INDEXNOW_CONTENT_KEY, INDEXNOW_KEY_PATH, INDEXNOW_VERSION_HEADER, isIndexNowKey } from '@samfox1/site-bridge/indexnow'
 import { INDEXNOW_ENDPOINT } from '@/lib/indexnow'
 import { saveEditorField } from '@/lib/site-editor/save'
-import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
+import { fakeClient, filterValue } from '@tests/helpers/fake-client'
+import { A, WRONG_PASSWORD, gate, isKeyWrite, publishCases, setWorld, world as baseWorld, type World } from '@tests/unit/publish/_publish-world'
 
-const h = vi.hoisted(() => ({
-  after: vi.fn(),
-  password: { error: null as null | { message: string; code?: string; status?: number } },
-}))
+const h = vi.hoisted(() => ({ after: vi.fn() }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: h.after }))
@@ -41,40 +40,14 @@ vi.mock('@/lib/net-guard', async (orig) => ({
   ...(await orig<typeof import('@/lib/net-guard')>()),
   pickTransport: (fetcher?: typeof fetch) => fetcher ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
 }))
-vi.mock('@supabase/supabase-js', async (orig) => ({
-  ...(await orig<typeof import('@supabase/supabase-js')>()),
-  createClient: () => ({ auth: { signInWithPassword: async () => ({ error: h.password.error }) } }),
-}))
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
 
-const A = 'a1'
 const KEY = '0123456789abcdef0123456789abcdef'
 const ORIGIN = 'https://www.skeenmusic.com'
-let fake = fakeClient()
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => ({
-    ...fake.client,
-    auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'm@example.test' } } }) },
-  })),
-}))
-
-/** A write of the IndexNow key row (any write op, so a delete or insert would count too). */
-function isKeyWrite(c: Call): boolean {
-  return c.table === 'site_content' && c.op !== 'select' && (c.payload as { key?: string } | undefined)?.key === INDEXNOW_CONTENT_KEY
-}
-
-type World = { site?: { site_kind: string; custom_site_url: string | null }; key?: string | null; upsertError?: boolean; insertError?: boolean }
-
-function world({ site = { site_kind: 'custom', custom_site_url: `${ORIGIN}/` }, key = null, upsertError = false, insertError = false }: World = {}) {
-  return fakeClient((c: Call): Reply => {
-    if (c.op === 'rpc') return { data: [] }
-    if (c.table === 'artists' && c.cols === 'site_kind, custom_site_url') return { data: site }
-    if (c.table === 'artists') return { data: { name: 'Fake' } }
-    if (isKeyWrite(c)) return upsertError ? { error: { message: 'denied' } } : { data: null }
-    if (c.table === 'site_content' && c.op === 'select' && filterValue(c, 'key') === INDEXNOW_CONTENT_KEY) return { data: key ? { value: key } : null }
-    if (c.table === 'revisions' && c.op === 'insert') return insertError ? { error: { message: 'insert refused' } } : { data: null }
-    return { data: [{ id: `${c.table}-1`, artist_id: A }], count: 1 }
-  })
-}
+/** The shared world, on a custom site that can be pinged unless a test says otherwise. */
+const world = (w: World = {}) => setWorld(baseWorld({ site: { site_kind: 'custom', custom_site_url: `${ORIGIN}/` }, ...w }))
+let fake = world()
 
 /** A live site that serves `served` as its key, and an IndexNow that says 200. */
 function stubNetwork(served = KEY) {
@@ -97,22 +70,10 @@ async function runScheduled() {
 const keyWrites = () => fake.calls.filter(isKeyWrite)
 const revisionInsertAt = () => fake.calls.findIndex((c) => c.table === 'revisions' && c.op === 'insert')
 
-type Actions = typeof import('@/app/artists/[id]/(dashboard)/actions')
-const SHIPS_SITE_TEXT: { name: string; run: (a: Actions) => Promise<unknown> }[] = [
-  { name: 'publishAction (Overview "Publish all")', run: (a) => a.publishAction(A, 'pw') },
-  { name: "publishAllGatedAction (the editor's Publish)", run: (a) => a.publishAllGatedAction(A, 'pw') },
-  { name: 'publishSiteWithPasswordAction (SEO / GEO)', run: (a) => a.publishSiteWithPasswordAction(A, 'pw') },
-]
-const PINGS: { name: string; run: (a: Actions) => Promise<unknown> }[] = [
-  ...SHIPS_SITE_TEXT,
-  { name: 'publishMusicAction', run: (a) => a.publishMusicAction(A, 'pw') },
-  { name: "publishEntityAction('tour_date')", run: (a) => a.publishEntityAction('tour_date', A, 'pw') },
-]
-
 beforeEach(() => {
   fake = world()
   h.after.mockReset()
-  h.password.error = null
+  gate.error = null
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => {
@@ -121,7 +82,7 @@ afterEach(() => {
 })
 
 describe('the key goes live WITH the site text', () => {
-  it.each(SHIPS_SITE_TEXT)('CRITICAL: $name writes a new key to the draft BEFORE the snapshot', async ({ run }) => {
+  it.each(publishCases((e) => e.shipsSiteText))('CRITICAL: $name writes a new key to the draft BEFORE the snapshot', async ({ run }) => {
     const actions = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await run(actions)).toEqual({ ok: true })
     const writes = keyWrites()
@@ -163,7 +124,7 @@ describe('the key goes live WITH the site text', () => {
   })
 
   it('a wrong password writes no key', async () => {
-    h.password.error = { message: 'Invalid login credentials', status: 400, code: 'invalid_credentials' }
+    gate.error = WRONG_PASSWORD
     const { publishAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await publishAction(A, 'nope')).toEqual({ ok: false, error: 'Incorrect password.' })
     expect(keyWrites()).toEqual([])
@@ -171,7 +132,7 @@ describe('the key goes live WITH the site text', () => {
 })
 
 describe('one ping per publish', () => {
-  it.each(PINGS)('CRITICAL: $name schedules exactly one ping, and it posts once', async ({ run }) => {
+  it.each(publishCases((e) => e.pings))('CRITICAL: $name schedules exactly one ping, and it posts once', async ({ run }) => {
     fake = world({ key: KEY })
     const net = stubNetwork()
     const actions = await import('@/app/artists/[id]/(dashboard)/actions')
@@ -190,7 +151,7 @@ describe('one ping per publish', () => {
   })
 
   it('a wrong password schedules nothing', async () => {
-    h.password.error = { message: 'Invalid login credentials', status: 400, code: 'invalid_credentials' }
+    gate.error = WRONG_PASSWORD
     const { publishAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishAction(A, 'nope')
     expect(h.after).not.toHaveBeenCalled()
@@ -254,12 +215,12 @@ describe('a ping never fails a publish', () => {
   })
 
   it('the state read failing does not stop the publish either', async () => {
-    fake = fakeClient((c) => {
+    fake = setWorld(fakeClient((c) => {
       if (c.table === 'site_content' && filterValue(c, 'key') === INDEXNOW_CONTENT_KEY) throw new Error('socket hang up')
       if (c.op === 'rpc') return { data: [] }
       if (c.table === 'artists') return { data: { name: 'Fake' } }
       return { data: [{ id: `${c.table}-1`, artist_id: A }], count: 1 }
-    })
+    }))
     const { publishAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await publishAction(A, 'pw')).toEqual({ ok: true })
     // …and the ping, which reads the same row after the response, swallows it too.

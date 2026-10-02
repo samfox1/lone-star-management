@@ -16,12 +16,13 @@
  * Not here: the save rules themselves (save-rules.test.ts); drawing the tab
  *           (tests/components/manager-tools/seo/facts-tab.test.tsx).
  * Fixtures: made-up stored facts and artist rows; the combination test builds a public-site
- *           payload for each and asks the real bridge (`jsonLdGraph`) what it states.
+ *           payload for each (tests/helpers/site-data.ts) and asks the real bridge
+ *           (`jsonLdGraph`) what it states.
  */
 import { describe, expect, it } from 'vitest'
 import { FACT_CONTENT_KEYS, MAX_PLACE_PART_LENGTH, jsonLdGraph } from '@samfox1/site-bridge/seo'
-import type { PublicSitePayload } from '@samfox1/site-bridge/payload'
 import { CITY_MAX_LENGTH, COUNTRY_NOT_LISTED, factErrors, readFacts } from '@/lib/seo-facts'
+import { sitePayload } from '@tests/helpers/site-data'
 
 const K = FACT_CONTENT_KEYS
 
@@ -74,7 +75,7 @@ describe('the facts as the page shows them (readFacts)', () => {
       for (const location of ['Chicago', null]) {
         for (const content of contents) {
           const view = readFacts(content, { name: 'Skeen', location, schema_type })
-          const p = { artist: { id: 'a', slug: 's', name: 'Skeen', bio: null, hero_image_url: null, template: 'custom', spotify_artist_id: null, location, schema_type }, tracks: [], tour_dates: [], merch: [], links: [], videos: [], media: [], site_content: content, styles: {}, fonts: [], font_slots: {} } satisfies PublicSitePayload
+          const p = sitePayload({ artist: { location, schema_type }, site_content: content })
           const node = jsonLdGraph(p, { origin: 'https://x.example' })['@graph'][0] as Record<string, unknown>
           const place = (node.foundingLocation ?? node.homeLocation) as { name: string } | undefined
           const where = JSON.stringify({ schema_type, location, content })

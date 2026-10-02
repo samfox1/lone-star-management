@@ -5,11 +5,12 @@ import Link from 'next/link'
 import { FAQ_AUTO_ONLY, probePrompts } from '@samfox1/site-bridge/seo'
 import { FAQ_EXTRA, FAQ_KEYS } from '@/lib/site-content-schema'
 import { cx } from '@/lib/cx'
+import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction } from '../../../../actions'
 import { useConfirm } from '../../../../confirm-dialog'
-import { LedgerSection } from '../../../_ui/ledger'
+import { LEDGER_ROW_GRID, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { AreaField, EndSlot, FieldError, LineField } from '../_ui/parts'
@@ -45,7 +46,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
   const save = useDebouncedFieldSave<string>({
     persist: async (k, val) => {
       const r = await saveSeoFieldAction(artistId, k, val)
-      setError(r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+      setError(r.ok ? null : (r.error ?? SAVE_FAILED))
       return { ok: r.ok, error: r.error }
     },
   })
@@ -59,7 +60,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
     for (const [k, val] of pairs)
       save.runNow(k, async () => {
         const r = await saveSeoFieldAction(artistId, k, val)
-        setError(r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+        setError(r.ok ? null : (r.error ?? SAVE_FAILED))
         return { ok: r.ok, error: r.error }
       })
   }
@@ -137,9 +138,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
   )
 }
 
-/** The row grammar of the ledger (ledger.tsx LedgerRow), with a question that wraps. */
-const ROW = 'group/ledger grid grid-cols-1 gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]'
-
+/** One question and its answer, on the ledger's row grid (ledger.tsx), topped so a question wraps. */
 function AnswerRow({
   artistId,
   row,
@@ -179,7 +178,7 @@ function AnswerRow({
             onDone()
           }
         }}
-        className={cx(ROW, 'items-start')}
+        className={cx(LEDGER_ROW_GRID, 'items-start')}
       >
         {onQuestion ? (
           <LineField label="Question" value={row.question} onChange={onQuestion} className="w-full font-medium" />
@@ -197,7 +196,7 @@ function AnswerRow({
   }
 
   return (
-    <div data-answer-row={row.key} className={cx(ROW, 'items-start')}>
+    <div data-answer-row={row.key} className={cx(LEDGER_ROW_GRID, 'items-start')}>
       <div className="text-[15px] font-medium text-ink">{row.question}</div>
       <div className="flex min-w-0 items-start gap-2.5">
         {/* An automatic-only answer has no editor to open, so it is never cut short. */}

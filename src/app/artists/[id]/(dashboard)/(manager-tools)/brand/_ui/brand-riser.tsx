@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { cx } from '@/lib/cx'
 import { publishBrandWithPasswordAction } from '../../../actions'
 import { revertBrandAction } from '../actions'
-import { PublishRiser } from '../../_ui/publish-riser'
+import { PublishRiser, RISER_BAR } from '../../_ui/publish-riser'
 import { announceBrandRevert } from './brand-events'
 
 /**
@@ -70,7 +71,7 @@ export function BrandCheckFailed() {
   return (
     <div
       role="alert"
-      className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper px-4 pt-[18px] pb-[calc(18px+env(safe-area-inset-bottom,0px))] shadow-[0_-8px_24px_rgba(0,0,0,0.05)] sm:px-8"
+      className={cx(RISER_BAR, 'shadow-[0_-8px_24px_rgba(0,0,0,0.05)]')}
     >
       <p className="min-w-0 text-[15px] leading-snug text-accent-red">Couldn’t check for unpublished changes.</p>
       <button

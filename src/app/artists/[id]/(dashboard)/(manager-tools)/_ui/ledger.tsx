@@ -1,6 +1,7 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { NoteField, RowTitle } from './inline-text'
+import { MONO_META } from './styles'
 
 /**
  * LAYOUT A, "LEDGER" (Sam, 2026-09-23; prototypes/brand_variants_20260923.html). No cards:
@@ -61,14 +62,19 @@ export type LedgerRowProps = LedgerRowBase & ({ guide?: string; note?: never } |
  * `group/ledger-list`) when any row in it has a trash or it has an Add row (AddRow's
  * `data-ledger-add`) that could make one. A list of built-ins only reserves nothing.
  */
-const END_SLOT = 'w-8 flex-none items-center justify-center'
+export const END_SLOT = 'w-8 flex-none items-center justify-center'
+
+/** The ledger row's grid, without its vertical alignment: LedgerRow centres its two columns;
+ *  the SEO Answers tab tops them (a question and its answer wrap). */
+export const LEDGER_ROW_GRID =
+  'group/ledger grid grid-cols-1 gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]'
 
 export function LedgerRow({ title, onRename, guide, note, meta, children, remove }: LedgerRowProps) {
   return (
     <div
       data-ledger-row=""
       // `group/ledger`: a faint RowIcon (row-icon.tsx) lights up while its row is hovered.
-      className="group/ledger grid grid-cols-1 items-center gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]"
+      className={cx(LEDGER_ROW_GRID, 'items-center')}
     >
       <div className="min-w-0">
         {onRename ? (
@@ -78,7 +84,7 @@ export function LedgerRow({ title, onRename, guide, note, meta, children, remove
         )}
         {guide ? <div className="mt-0.5 max-w-[40ch] text-[13px] text-ink-muted">{guide}</div> : null}
         {note ? <NoteField {...note} /> : null}
-        {meta ? <div className="mt-1 font-space text-[11px] text-ink-faint">{meta}</div> : null}
+        {meta ? <div className={cx('mt-1', MONO_META)}>{meta}</div> : null}
       </div>
       <div className="flex min-w-0 items-center justify-start gap-2.5 min-[900px]:justify-end">
         {children}

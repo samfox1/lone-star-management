@@ -29,6 +29,7 @@ import type { EditorTextField } from '@/app/artists/[id]/(dashboard)/editor/insp
 import type { TemplateManifest } from '@/lib/site-editor/manifest'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
+import { sitePayload } from '@tests/helpers/site-data'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
@@ -86,21 +87,9 @@ const CUSTOM_MANIFEST = {
   links: [],
 } as unknown as TemplateManifest
 
-/** A minimal draft — this file only needs one to hand the frame; the payload's WIRE
- *  SHAPE is pinned in tests/editor-custom-frame.test.tsx, so it is cast rather than
- *  re-listed field-for-field as that contract grows. */
-const draft = {
-  artist: {
-    id: 'a1', slug: 'skeen', name: 'Skeen', bio: null,
-    hero_image_url: null, template: 'custom', spotify_artist_id: null,
-  },
-  tracks: [], tour_dates: [], merch: [], links: [], videos: [],
-  media: [],
-  site_content: { hero_caption: '/ backstage /' },
-  styles: {},
-  fonts: [],
-  font_slots: {},
-} as unknown as PublicSitePayload
+/** A minimal draft: this file only needs one to hand the frame; the payload's WIRE
+ *  SHAPE is pinned in tests/components/site-editor/editor-custom-frame.test.tsx. */
+const draft = sitePayload({ site_content: { hero_caption: '/ backstage /' } })
 
 function renderShell(opts: {
   /** The artist's external site origin. Set = a CUSTOM site, whose frame is the only

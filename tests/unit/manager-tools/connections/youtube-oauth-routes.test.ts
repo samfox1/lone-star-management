@@ -19,38 +19,26 @@
  *             saves nothing and still revokes; a refused or thrown save is a clear failure code
  * Not here: the rules these routes call (youtube-oauth.test.ts); what the save does with the
  *           channel (connections-actions.test.ts).
- * Fixtures: Supabase is faked (sign-in and ownership); the paste door is a mock; Google is a
- *           stubbed global fetch; console output is captured to prove the token is never logged.
+ * Fixtures: Supabase is faked (sign-in and ownership: tests/helpers/oauth-routes.ts); the paste
+ *           door is a mock; Google is a stubbed global fetch; console output is captured to prove
+ *           the token is never logged.
  */
 import { createHash } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { STATE_COOKIE, STATE_TTL_MS, createState, readState } from '@/lib/youtube-oauth'
+import { OWNER_ID, json, location, owner, routeTestSetup, setCookie } from '@tests/helpers/oauth-routes'
 
 const CLIENT_ID = 'client-id.apps.googleusercontent.com'
 const SECRET = 'GOCSPX-route-secret'
 const ORIGIN = 'https://app.test'
 const ARTIST = '11111111-1111-4111-8111-111111111111'
-const USER = 'user-1'
+const USER = OWNER_ID
 const CHANNEL = 'UC' + 'b'.repeat(22)
 const TOKEN = 'ya29.route-access-token'
 const CODE = '4/0-one-time-code'
 
-const w = vi.hoisted(() => ({
-  user: { id: 'user-1' } as { id: string } | null,
-  owns: true,
-  tables: [] as string[],
-}))
-
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: w.user } }) },
-    from: (table: string) => {
-      w.tables.push(table)
-      return { select: () => ({ eq: (_col: string, id: string) => ({ maybeSingle: async () => ({ data: table === 'artists' && w.owns ? { id } : null }) }) }) }
-    },
-  }),
-}))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/oauth-routes')).ownerServer())
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
@@ -73,7 +61,6 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   if (url === 'https://oauth2.googleapis.com/revoke') return google.revoke()
   return new Response('not found', { status: 404 })
 })
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const HAPPY: Google = {
   token: () => json({ access_token: TOKEN, expires_in: 3599, scope: 'https://www.googleapis.com/auth/youtube.readonly', token_type: 'Bearer' }),
   channels: () => json({ items: [{ id: CHANNEL, snippet: { title: 'Skeen', customUrl: '@skeenmusic' } }] }),
@@ -82,28 +69,12 @@ const HAPPY: Google = {
 const calledTo = (url: string) => fetchMock.mock.calls.filter(([u]) => String(u).startsWith(url))
 
 /** Every console line the routes wrote, as one string: a token must never be in it. */
-let logs: ReturnType<typeof vi.spyOn>[] = []
-const logged = () => JSON.stringify(logs.flatMap((s) => s.mock.calls))
-
-const ENV = { id: process.env.GOOGLE_OAUTH_CLIENT_ID, secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET }
+const { logged } = routeTestSetup({ GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET: SECRET })
 beforeEach(() => {
-  process.env.GOOGLE_OAUTH_CLIENT_ID = CLIENT_ID
-  process.env.GOOGLE_OAUTH_CLIENT_SECRET = SECRET
-  w.user = { id: USER }
-  w.owns = true
-  w.tables = []
   google = { ...HAPPY }
   vi.stubGlobal('fetch', fetchMock)
-  logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}))
-})
-afterEach(() => {
-  vi.unstubAllGlobals()
-  process.env.GOOGLE_OAUTH_CLIENT_ID = ENV.id
-  process.env.GOOGLE_OAUTH_CLIENT_SECRET = ENV.secret
 })
 
-const location = (res: Response) => res.headers.get('location') ?? ''
-const setCookie = (res: Response) => res.headers.get('set-cookie') ?? ''
 const back = (reason: string, origin = ORIGIN) => `${origin}/artists/${ARTIST}/connections?youtube=failed&reason=${reason}`
 
 // ── start ───────────────────────────────────────────────────────────────────────────────
@@ -172,7 +143,7 @@ describe('start', () => {
   // Nobody signed in goes to the login page, not to Google.
   it('CRITICAL: nobody signed in goes to /login, not to Google', async () => {
     await startGoesToGoogle()
-    w.user = null
+    owner.user = null
     const res = await start(startReq({ artist: ARTIST }))
     expect(new URL(location(res)).pathname).toBe('/login')
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
@@ -181,7 +152,7 @@ describe('start', () => {
   // A manager of another artist gets "not found" and no cookie.
   it('CRITICAL: a manager of another artist gets a 404 and no cookie', async () => {
     await startGoesToGoogle()
-    w.owns = false
+    owner.owns = false
     const res = await start(startReq({ artist: ARTIST }))
     expect(res.status).toBe(404)
     expect(location(res)).toBe('')
@@ -240,7 +211,7 @@ function expectTokenNowhere(res: Response) {
   const kept = [location(res), setCookie(res), JSON.stringify(vi.mocked(connectOneAction).mock.calls), logged()].join('\n')
   for (const secret of [TOKEN, CODE, SECRET]) expect(kept).not.toContain(secret)
   // No database write of any kind: the one read is the ownership check.
-  expect(w.tables.every((t) => t === 'artists')).toBe(true)
+  expect(owner.tables.every((t) => t === 'artists')).toBe(true)
 }
 
 describe('callback — the happy path', () => {
@@ -335,9 +306,9 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
   it('CRITICAL: finished in another manager’s session, or signed out in between', async () => {
     await witnessSaves()
     const t = trip()
-    w.user = { id: 'user-2' }
+    owner.user = { id: 'user-2' }
     expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
-    w.user = null
+    owner.user = null
     expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
     expectNothingHappened()
   })
@@ -346,7 +317,7 @@ describe('callback — refusals save nothing and ask Google for nothing', () => 
   it('CRITICAL: a manager who no longer manages the artist', async () => {
     await witnessSaves()
     const t = trip()
-    w.owns = false
+    owner.owns = false
     const res = await callback(callbackReq(returnFor(t), t.cookie))
     expectNothingHappened()
     expect(location(res)).toBe(back('auth'))

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireArtist } from '../../_data'
 import { LedgerSection } from '../_ui/ledger'
 import { LogosList } from './logos/logos-list'
-import type { IconUse } from './logos/remove'
+import type { IconUse } from '@/lib/manager-tools/brand/logo-remove'
 
 export const metadata = { title: 'Logos — Brand — Lone Star Management' }
 

@@ -19,28 +19,26 @@
  *             token on a FIRST connect and restores the previous sign-in on a RE-connect
  * Not here: the rules these routes call (eventbrite-oauth.test.ts); the Vault functions themselves
  *           (tests/integration/sync/eventbrite-vault.test.ts); the pull (tests/unit/tour).
- * Fixtures: Supabase is faked (ownership, sign-in, RPC log); the paste door and the pull are
- *           mocks; Eventbrite is a stubbed global fetch; console output is captured to prove the
- *           token is never logged.
+ * Fixtures: Supabase is faked (ownership and sign-in from tests/helpers/oauth-routes.ts, plus an
+ *           RPC log); the paste door and the pull are mocks; Eventbrite is a stubbed global fetch;
+ *           console output is captured to prove the token is never logged.
  */
 import { createHash } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { STATE_COOKIE, STATE_TTL_MS, createState, readState } from '@/lib/eventbrite-oauth'
+import { OWNER_ID, json, location, owner, routeTestSetup, setCookie } from '@tests/helpers/oauth-routes'
 
 const CLIENT_ID = 'EB-APP-KEY'
 const SECRET = 'EB-client-secret-route'
 const ORIGIN = 'https://app.test'
 const ARTIST = '11111111-1111-4111-8111-111111111111'
-const USER = 'user-1'
+const USER = OWNER_ID
 const TOKEN = 'EB-ARTIST-TOKEN-only-in-vault'
 const CODE = 'eb-one-time-code'
 const ORGANIZER_URL = 'https://www.eventbrite.com/o/skeen-222'
 
 const w = vi.hoisted(() => ({
-  user: { id: 'user-1' } as { id: string } | null,
-  owns: true,
-  tables: [] as string[],
   rpc: [] as { fn: string; args: Record<string, unknown> }[],
   rpcError: {} as Record<string, { code: string; message: string } | undefined>,
   /** What an RPC answers (the sign-in already stored, for eventbrite_credentials). */
@@ -51,24 +49,15 @@ const w = vi.hoisted(() => ({
   rpcBeforePull: null as string[] | null,
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: w.user } }) },
-    from: (table: string) => {
-      w.tables.push(table)
-      return {
-        select: () => ({
-          eq: (_col: string, id: string) => ({ maybeSingle: async () => ({ data: table === 'artists' && w.owns ? { id, name: 'Skeen' } : null }) }),
-        }),
-      }
-    },
+vi.mock('@/lib/supabase/server', async () =>
+  (await import('@tests/helpers/oauth-routes')).ownerServer({
     rpc: async (fn: string, args: Record<string, unknown>) => {
       w.rpc.push({ fn, args })
       if (w.rpcFailWhen?.(fn, args)) return { data: null, error: { code: 'XX000', message: 'refused' } }
       return { data: w.rpcData[fn] ?? null, error: w.rpcError[fn] ?? null }
     },
   }),
-}))
+)
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
@@ -98,7 +87,6 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   if (url.startsWith('https://www.eventbriteapi.com/v3/organizations/111/organizers/')) return eventbrite.organizers()
   return new Response('not found', { status: 404 })
 })
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const HAPPY: Eventbrite = {
   token: () => json({ access_token: TOKEN, token_type: 'bearer' }),
   organizations: () => json({ organizations: [{ id: '111', name: 'Skeen Music' }], pagination: { has_more_items: false } }),
@@ -106,16 +94,8 @@ const HAPPY: Eventbrite = {
 }
 const calledTo = (url: string) => fetchMock.mock.calls.filter(([u]) => String(u).startsWith(url))
 
-let logs: ReturnType<typeof vi.spyOn>[] = []
-const logged = () => JSON.stringify(logs.flatMap((s) => s.mock.calls))
-
-const ENV = { id: process.env.EVENTBRITE_CLIENT_ID, secret: process.env.EVENTBRITE_CLIENT_SECRET }
+const { logged } = routeTestSetup({ EVENTBRITE_CLIENT_ID: CLIENT_ID, EVENTBRITE_CLIENT_SECRET: SECRET })
 beforeEach(() => {
-  process.env.EVENTBRITE_CLIENT_ID = CLIENT_ID
-  process.env.EVENTBRITE_CLIENT_SECRET = SECRET
-  w.user = { id: USER }
-  w.owns = true
-  w.tables = []
   w.rpc = []
   w.rpcError = {}
   w.rpcData = {}
@@ -123,16 +103,8 @@ beforeEach(() => {
   w.rpcBeforePull = null
   eventbrite = { ...HAPPY }
   vi.stubGlobal('fetch', fetchMock)
-  logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}))
-})
-afterEach(() => {
-  vi.unstubAllGlobals()
-  process.env.EVENTBRITE_CLIENT_ID = ENV.id
-  process.env.EVENTBRITE_CLIENT_SECRET = ENV.secret
 })
 
-const location = (res: Response) => res.headers.get('location') ?? ''
-const setCookie = (res: Response) => res.headers.get('set-cookie') ?? ''
 const back = (reason: string, origin = ORIGIN) => `${origin}/artists/${ARTIST}/connections?eventbrite=failed&reason=${reason}`
 const rpcs = (fn: string) => w.rpc.filter((r) => r.fn === fn)
 
@@ -201,7 +173,7 @@ describe('start', () => {
   // Nobody signed in goes to the login page, not to Eventbrite.
   it('CRITICAL: nobody signed in goes to /login, not to Eventbrite', async () => {
     await startGoesToEventbrite()
-    w.user = null
+    owner.user = null
     const res = await start(startReq({ artist: ARTIST }))
     expect(new URL(location(res)).pathname).toBe('/login')
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
@@ -210,7 +182,7 @@ describe('start', () => {
   // A manager of another artist gets "not found" and no cookie.
   it('CRITICAL: a manager of another artist gets a 404 and no cookie', async () => {
     await startGoesToEventbrite()
-    w.owns = false
+    owner.owns = false
     const res = await start(startReq({ artist: ARTIST }))
     expect(res.status).toBe(404)
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
@@ -274,7 +246,7 @@ function expectTokenOnlyInVault(res: Response) {
   ].join('\n')
   for (const secret of [TOKEN, CODE, SECRET]) expect(kept).not.toContain(secret)
   // No table write of any kind from the route: the reads are the ownership check and the name.
-  expect(w.tables.every((t) => t === 'artists')).toBe(true)
+  expect(owner.tables.every((t) => t === 'artists')).toBe(true)
 }
 
 describe('callback — the happy path', () => {
@@ -365,9 +337,9 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
   it('CRITICAL: finished in another manager’s session, or signed out', async () => {
     await witnessSaves()
     const t = trip()
-    w.user = { id: 'user-2' }
+    owner.user = { id: 'user-2' }
     expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
-    w.user = null
+    owner.user = null
     expect(location(await callback(callbackReq(returnFor(t), t.cookie)))).toBe(back('auth'))
     expectNothingHappened()
   })
@@ -376,7 +348,7 @@ describe('callback — refusals save nothing and ask Eventbrite for nothing', ()
   it('CRITICAL: a manager who no longer manages the artist', async () => {
     await witnessSaves()
     const t = trip()
-    w.owns = false
+    owner.owns = false
     const res = await callback(callbackReq(returnFor(t), t.cookie))
     expectNothingHappened()
     expect(location(res)).toBe(back('auth'))

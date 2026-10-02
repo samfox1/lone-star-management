@@ -3,6 +3,7 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
+import { plural } from '@/lib/manager-tools/format'
 import {
   SUBSCRIBER_SORTS,
   emailList,
@@ -132,7 +133,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
     if (!count) return
     if (await copyText(emailList(shown))) {
       flashCopiedAll(count)
-      setSaid(`Copied ${count} ${count === 1 ? 'email' : 'emails'}`)
+      setSaid(`Copied ${plural(count, 'email', 'emails')}`)
     }
   }
   const copied = useCallback((email: string) => setSaid(`Copied ${email}`), [])

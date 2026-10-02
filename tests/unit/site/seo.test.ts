@@ -7,31 +7,10 @@
 import { describe, expect, it } from 'vitest'
 import { siteMetadata } from '@/lib/seo'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
-function site(artist: Partial<SiteData['artist']> = {}): SiteData {
-  return {
-    artist: {
-      id: 'a',
-      slug: 'lone-pine',
-      name: 'Lone Pine',
-      bio: 'Dusty alt-country out of West Texas.',
-      hero_image_url: 'https://img.example/hero.jpg',
-      template: 'classic',
-      spotify_artist_id: null,
-      ...artist,
-    },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
-    media: [],
-    site_content: {},
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  }
-}
+const site = (artist: Partial<SiteData['artist']> = {}): SiteData =>
+  siteData({ artist: { slug: 'lone-pine', name: 'Lone Pine', bio: 'Dusty alt-country out of West Texas.', hero_image_url: 'https://img.example/hero.jpg', ...artist } })
 
 describe('siteMetadata', () => {
   it('uses the artist name, bio, and hero image', () => {

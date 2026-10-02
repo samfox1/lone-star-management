@@ -37,7 +37,8 @@ function stubFetch(table: Record<string, Answer>) {
   return { fetcher, seen, pings }
 }
 
-const keyFile = (body = KEY, version: string | null = '0.42.0', status = 200) =>
+// The key file as a text file usually is: ending in a newline, which still matches the key.
+const keyFile = (body = `${KEY}\n`, version: string | null = '0.42.0', status = 200) =>
   new Response(body, {
     status,
     headers: { 'content-type': 'text/plain; charset=utf-8', ...(version ? { [INDEXNOW_VERSION_HEADER]: version } : {}) },

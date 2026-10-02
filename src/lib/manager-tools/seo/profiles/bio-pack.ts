@@ -2,6 +2,7 @@ import { isIdentityProfileUrl, siteFacts } from '@samfox1/site-bridge/seo'
 import { linkHost, platformFromUrl } from '@samfox1/site-bridge/social'
 import { releaseIsReleased } from '@/lib/music'
 import { RELEASE_TYPE_LABEL, RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
+import { plural } from '../../format'
 
 /**
  * THE APPLE MUSIC & AMAZON BIO EMAIL (Sam, 2026-09-30, prototypes/profiles_bio_pack_20260930.html).
@@ -236,7 +237,7 @@ export function buildBioPack(input: BioPackInput, opts: { cc?: string | null } =
 
   const words = wordCount(bio)
   const checks: BioPackCheck[] = []
-  if (words < BIO_PACK_MIN_WORDS) checks.push({ id: 'bio', text: words ? `Bio is ${words} ${words === 1 ? 'word' : 'words'}. They write their own from it, so more facts help.` : 'No bio yet.' })
+  if (words < BIO_PACK_MIN_WORDS) checks.push({ id: 'bio', text: words ? `Bio is ${plural(words, 'word', 'words')}. They write their own from it, so more facts help.` : 'No bio yet.' })
   if (!links['amazon music']) checks.push({ id: 'amazon', text: 'No Amazon Music link yet.' })
   if (!links['apple music']) checks.push({ id: 'apple', text: 'No Apple Music link yet.' })
   if (!photo) checks.push({ id: 'photo', text: 'No photo yet.' })

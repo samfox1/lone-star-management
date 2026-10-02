@@ -1,5 +1,6 @@
 'use client'
 
+import { cx } from '@/lib/cx'
 import { useEffect, useRef, useState } from 'react'
 import { FONT_FOLDER, FONTS_BUCKET, isReservedFamily, slugify, type FontSlot, type FontSlotMeta } from '@/lib/fonts'
 import { sniffFontWeight } from '@/lib/font-weight'
@@ -10,6 +11,7 @@ import { UploadField } from '../../../upload-field'
 import { BrandModal } from '../_ui/brand-modal'
 import { addArtistFontAction } from '../actions'
 import { WEIGHT_CHOICES } from '@/lib/manager-tools/brand/font-face'
+import { EYEBROW } from '../../_ui/styles'
 
 /** What the weight question starts on: the weight most single-file fonts are. */
 const DEFAULT_WEIGHT = '400'
@@ -169,7 +171,7 @@ export function FontUploadDialog({
   return (
     <BrandModal label="Upload a font" meta={title} onClose={close} onSave={save} saveBusy={uploading && !asking ? 'Uploading…' : undefined}>
       <label className="flex flex-col gap-1">
-        <span className="font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Name</span>
+        <span className={EYEBROW}>Name</span>
         <input
           autoFocus
           value={label}
@@ -203,7 +205,7 @@ export function FontUploadDialog({
       />
       {asking ? (
         <div className="flex items-center gap-4">
-          <span className="w-[72px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Weight</span>
+          <span className={cx('w-[72px] flex-none', EYEBROW)}>Weight</span>
           <SelectMenu label="Weight" value={weight} options={WEIGHT_CHOICES} required onChange={setWeight} />
         </div>
       ) : null}

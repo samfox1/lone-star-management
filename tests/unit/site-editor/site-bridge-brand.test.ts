@@ -32,6 +32,7 @@ import {
 import { RESERVED_FAMILIES as APP_RESERVED } from '@/lib/fonts'
 // The PREVIEW's copy of the door's colour rules: the bridge must pass exactly what it passes.
 import { brandColorsPayload } from '@/lib/site'
+import { sitePayload } from '@tests/helpers/site-data'
 
 const SB = 'https://sb.co'
 const OPTS = { supabaseUrl: SB }
@@ -58,21 +59,7 @@ const INTER: SiteFont = { family: 'inter', label: 'Inter', path: null, format: n
 const SORG: SiteFont = { family: 'sorg', label: 'Sorg', path: SORG_PATH, format: 'woff2', source: 'upload' }
 
 function skeen(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
-  return {
-    artist: {
-      id: 'a1',
-      slug: 'skeen',
-      name: 'Skeen',
-      bio: null,
-      hero_image_url: null,
-      template: 'custom',
-      spotify_artist_id: null,
-    },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
+  return sitePayload({
     media: [
       { id: 'm1', purpose: 'logo_primary', path: 'a1/brand/logo.png' },
       { id: 'm2', purpose: 'favicon', path: 'a1/brand/favicon.png' },
@@ -80,13 +67,11 @@ function skeen(over: Partial<PublicSitePayload> = {}): PublicSitePayload {
       { id: 'm4', purpose: 'icon_source', path: 'a1/brand/source.png' },
       { id: 'm5', purpose: 'logo', path: 'a1/brand/alt-logo.png', label: 'Stamp' },
     ],
-    site_content: {},
-    styles: {},
     fonts: [ARCHIVO, INTER, SORG],
     font_slots: { primary: 'archivo', secondary: 'inter', custom_1: 'sorg' },
     brand: SKEEN_BRAND,
     ...over,
-  } satisfies PublicSitePayload
+  })
 }
 
 /** A payload exactly as a 0.40 door serves it: no `brand`, fonts without `source` or

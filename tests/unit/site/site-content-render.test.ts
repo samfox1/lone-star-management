@@ -9,24 +9,16 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ArtistSite } from '@/components/artist-site'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
-function makeData(site_content: Record<string, string>): SiteData {
-  return {
-    artist: { id: 'a', slug: 'a', name: 'A', bio: null, hero_image_url: null, template: 'classic', spotify_artist_id: null },
+const makeData = (site_content: Record<string, string>): SiteData =>
+  siteData({
+    artist: { name: 'A', template: 'classic' },
     tracks: [
       { id: 't', title: 'Song', cover_url: null, stream_url: null, provider_url: null, apple_url: null, has_audio: false, featured_artists: [], album_name: null, release_id: null, sort_order: 0, source: null, spotify_id: null, apple_id: null, deezer_id: null, soundcloud_url: null, released: false },
     ],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
-    media: [],
     site_content,
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  }
-}
+  })
 
 const render = (sc: Record<string, string>) =>
   renderToStaticMarkup(createElement(ArtistSite, { data: makeData(sc) }))

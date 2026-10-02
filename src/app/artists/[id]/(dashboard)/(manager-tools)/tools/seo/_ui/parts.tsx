@@ -4,8 +4,10 @@ import { forwardRef, useRef, useState, type ReactNode, type TextareaHTMLAttribut
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { HoverLabel, RowIcon, type HoverLabelAlign } from '../../../_ui/row-icon'
+import { HoverLabel, RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { END_SLOT } from '../../../_ui/ledger'
+import { ERROR_TEXT, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 
 /**
  * THE SEO / GEO TABS' SMALL PIECES, in round 2's row grammar (prototypes/seo_variants_20260928_r2.html,
@@ -14,53 +16,33 @@ import { FOCUS_RING } from '../../../_ui/focus-ring'
  * buttons to take action... I like icons"), chips for lists.
  */
 
-/** RowIcon's faint look (row-icon.tsx VARIANT.faint), as a link: in-app with next/link, or
- *  another site in a new tab. The label is its accessible name and its hover label. */
-export function IconLink({
-  icon,
-  label,
-  href,
-  external = false,
-  primary = false,
-  align = 'center',
-}: {
-  icon: IconName
-  label: string
-  href: string
-  external?: boolean
-  /** Full ink, always (a row's one action that matters), rather than faint until hovered. */
-  primary?: boolean
-  align?: HoverLabelAlign
-}) {
-  const cls = cx(
-    'relative inline-flex flex-none items-center justify-center rounded-lg p-1.5 transition-[opacity,color,background-color] duration-150 hover:bg-surface-hover',
-    FOCUS_RING,
-    'focus-visible:outline-offset-2',
-    primary ? 'text-ink hover:text-accent' : 'text-ink-muted opacity-40 hover:opacity-100 hover:text-ink focus-visible:opacity-100 group-hover/ledger:opacity-100',
-  )
-  const inner = (
-    <>
-      <Icon name={icon} size={20} />
-      <HoverLabel label={label} align={align} />
-    </>
-  )
-  if (external) {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className={cls}>
-        {inner}
-      </a>
-    )
-  }
+/**
+ * A full-ink in-app link glyph that turns blue on hover, its label on hover and as its
+ * accessible name: the Facts tab's two "+ Add in Connections". Everything else is a RowIcon
+ * (`href` + `link`). These two stay apart for now because a RowIcon + also turns blue on
+ * KEYBOARD FOCUS (Sam's every-+ rule), which these never did: moving them is a visible change,
+ * left for a pass that may change pixels.
+ */
+export function IconLink({ icon, label, href }: { icon: IconName; label: string; href: string }) {
   return (
-    <Link href={href} aria-label={label} className={cls}>
-      {inner}
+    <Link
+      href={href}
+      aria-label={label}
+      className={cx(
+        'relative inline-flex flex-none items-center justify-center rounded-lg p-1.5 transition-[opacity,color,background-color] duration-150 hover:bg-surface-hover',
+        FOCUS_RING_OFFSET,
+        'text-ink hover:text-accent',
+      )}
+    >
+      <Icon name={icon} size={20} />
+      <HoverLabel label={label} align="end" />
     </Link>
   )
 }
 
-/** The ledger row's end column (32px), for a row whose action sits there. */
+/** The ledger row's end column (32px, ledger.tsx END_SLOT), for a row whose action sits there. */
 export function EndSlot({ children }: { children?: ReactNode }) {
-  return <span className="flex w-8 flex-none justify-center">{children}</span>
+  return <span className={cx(END_SLOT, 'flex')}>{children}</span>
 }
 
 /** "37 of 70" — faint, red once over. */
@@ -71,7 +53,7 @@ export function Count({ n, max, className }: { n: number; max: number; className
 /** A refusal, in the validator's own words, under the value. */
 export function FieldError({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="font-space text-[11px] leading-snug text-accent-red">
+    <p role="alert" className={cx(ERROR_TEXT, 'leading-snug')}>
       {children}
     </p>
   )

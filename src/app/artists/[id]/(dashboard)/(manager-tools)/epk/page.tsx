@@ -7,6 +7,7 @@ import { buttonClass } from '@/components/ui/ui'
 import { requireArtist } from '../../_data'
 import { DocumentUpload } from './document-upload'
 import { PressKitForm } from './press-kit-form'
+import { BLOCK_LABEL } from '../_ui/styles'
 
 /**
  * Press kit (EPK).
@@ -53,7 +54,7 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
       {/* The gate. It states what is missing and why, because this is the only place the
           manager finds out why the button is off. */}
       <section className="rounded-xl border border-hairline p-4">
-        <h2 className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+        <h2 className={BLOCK_LABEL}>
           {ready ? 'Ready to send' : 'Before you can download'}
         </h2>
         <ul className="mt-3 space-y-2">
@@ -99,7 +100,7 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
 
       <section className="space-y-4 border-t border-hairline pt-8">
         <div>
-          <h2 className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+          <h2 className={BLOCK_LABEL}>
             Stage plot & tech rider
           </h2>
           <p className="mt-2 font-space text-xs leading-relaxed text-ink-faint">

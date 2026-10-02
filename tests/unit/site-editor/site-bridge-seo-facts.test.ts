@@ -27,25 +27,13 @@ import {
   siteFacts,
 } from '@samfox1/site-bridge/seo'
 import { CASE_ORIGIN, JSON_LD_CASES } from '@tests/helpers/seo-jsonld-cases'
+import { sitePayload } from '@tests/helpers/site-data'
 
 const K = FACT_CONTENT_KEYS
 const ORIGIN = CASE_ORIGIN
 
-function payload(content: Record<string, string> = {}, artist: Partial<PublicSitePayload['artist']> = {}): PublicSitePayload {
-  return {
-    artist: { id: 'a1', slug: 'skeen', name: 'Skeen', bio: 'Chicago DJ.', hero_image_url: null, template: 'custom', spotify_artist_id: null, genre: 'House', location: 'Chicago', ...artist },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
-    media: [],
-    site_content: content,
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  }
-}
+const payload = (content: Record<string, string> = {}, artist: Partial<PublicSitePayload['artist']> = {}): PublicSitePayload =>
+  sitePayload({ artist: { bio: 'Chicago DJ.', genre: 'House', location: 'Chicago', ...artist }, site_content: content })
 
 const artistNode = (p: PublicSitePayload) => jsonLdGraph(p, { origin: ORIGIN })['@graph'][0] as Record<string, unknown>
 

@@ -31,6 +31,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { expectExecuteDenied } from '@tests/helpers/rls'
+import { deleteThrowawayArtist } from '@tests/helpers/artist'
+import { at, unrolledDays } from '@tests/integration/analytics/_days'
 import { ENTITY_KINDS, EVENT_TYPES, type EntityKind, type OnSiteEvent } from '@/lib/events'
 
 const svc = serviceClient()
@@ -53,7 +55,6 @@ const HOST = `${slugF}.example`
 const entityE = crypto.randomUUID()
 let ROLLED_DAY: string
 let KEPT_DAY: string
-const at = (day: string, hour: number) => `${day}T${String(hour).padStart(2, '0')}:00:00Z`
 const utcDay = (d: Date) => d.toISOString().slice(0, 10)
 const daysAgo = (n: number) => utcDay(new Date(Date.now() - n * 86_400_000))
 
@@ -107,25 +108,6 @@ const recentCount = async (bot: boolean) => {
   return count ?? 0
 }
 
-/** A day in 2017–2024 that is NOT in the ledger: plant a probe, read the raw path, clean up. */
-async function unrolledDay(): Promise<string> {
-  for (let tries = 0; tries < 20; tries++) {
-    const y = 2017 + Math.floor(Math.random() * 8)
-    const m = 1 + Math.floor(Math.random() * 12)
-    const d = 1 + Math.floor(Math.random() * 26) // 1..26, so d + 1 <= 27 stays in every month
-    const day = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const next = `${y}-${String(m).padStart(2, '0')}-${String(d + 1).padStart(2, '0')}`
-    const probes = [await plant({ created_at: at(day, 1), visitor_hash: 'probe' }), await plant({ created_at: at(next, 1), visitor_hash: 'probe' })]
-    const { data } = await svc.rpc('analytics_timeline', { p_artist_id: artistF, p_since: day, p_until: next })
-    await svc.from('analytics_events').delete().in('id', probes.map((p) => p.id))
-    if ((data as unknown[]).length === 2) {
-      KEPT_DAY = next
-      return day
-    }
-  }
-  throw new Error('could not find an unrolled day in 20 tries')
-}
-
 beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
   asB = await signInAs(SEED.managerB)
@@ -135,10 +117,11 @@ beforeAll(async () => {
   const userA = (await asA.auth.getUser()).data.user!.id
   const { error: e2 } = await svc.from('artist_managers').insert({ artist_id: artistF, user_id: userA })
   if (e2) throw new Error(e2.message)
-  ROLLED_DAY = await unrolledDay()
+  // Two unrolled days in a row: ROLLED_DAY gets rolled up below, KEPT_DAY (the next) stays raw.
+  ;[ROLLED_DAY, KEPT_DAY] = await unrolledDays(svc, artistF, (first, last) => svc.rpc('analytics_timeline', { p_artist_id: artistF, p_since: first, p_until: last }), 2)
 })
 afterAll(async () => {
-  await svc.from('artists').delete().eq('id', artistF)
+  await deleteThrowawayArtist(svc, artistF)
 })
 
 let ctxCreatedAt: string

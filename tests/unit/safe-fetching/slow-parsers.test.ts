@@ -4,9 +4,8 @@
  *
  * Code:     src/lib/seo-tests/fresh.ts (sitemapLastmods), src/lib/seo-tests/html.ts (parsePage,
  *           linkKey), src/lib/url.ts (trimTrailingSlashes), src/lib/seo-tests/shared.ts (the
- *           preview check), src/lib/seo-tests/musicbrainz.ts (musicBrainzForms), src/lib/seo-audit.ts
- *           (visibleText, firstJsonLd)
- * Feature:  safe fetching: every SEO/GEO check that reads a page or sitemap, and the old live check
+ *           preview check), src/lib/seo-tests/musicbrainz.ts (musicBrainzForms)
+ * Feature:  safe fetching: every SEO/GEO check that reads a page or sitemap
  * Tier:     STRICT (AGENTS.md "Test depth"): security, and parsers of outside text. A regex that
  *           backtracks runs on the one JavaScript thread, where no timeout can stop it: a 32 KiB
  *           sitemap took 27 s and a 1 MiB page ~153 s, and every other request waited meanwhile
@@ -14,8 +13,7 @@
  * Covers:   • each reader gets its worst known input at (or past) the size it is allowed to read,
  *             and must finish within LIMIT_MS (5 s; the fixed readers take under half a second,
  *             the broken ones 27 s to hours, so it cannot pass by luck)
- *           • sitemap dates, every page parse, slash-heavy link paths, many-label profile links,
- *             and the old live check's text and fact-card readers
+ *           • sitemap dates, every page parse, slash-heavy link paths and many-label profile links
  *           • the recorded corpus: normal and merely-broken pages and sitemaps read exactly as
  *             they did before the fix
  * Not here: byte caps and time limits on the fetch itself (size-and-time-limits.test.ts); what each
@@ -29,7 +27,6 @@ import { sitemapLastmods } from '@/lib/seo-tests/fresh'
 import { linkKey, parsePage } from '@/lib/seo-tests/html'
 import { musicBrainzForms } from '@/lib/seo-tests/musicbrainz'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
-import { firstJsonLd, visibleText } from '@/lib/seo-audit'
 import { trimTrailingSlashes } from '@/lib/url'
 import { PAGES, RECORDED, SITEMAPS } from '@tests/unit/safe-fetching/_parser-corpus'
 import { ORIGIN, evidence, page } from '@tests/helpers/seo/page-fixture'
@@ -137,33 +134,5 @@ describe('profile links with many labels (musicBrainzForms)', () => {
   // The fix still cleans a real Tidal link to the form MusicBrainz lists.
   it('still cleans a real Tidal link', () => {
     expect(musicBrainzForms('https://listen.tidal.com/artist/123')[0]).toBe('https://tidal.com/artist/123')
-  })
-})
-
-describe('the old live check (seo-audit.ts)', () => {
-  const CAP = 2 * MIB // fetchGuarded's cap
-  // Reading a page's visible text: scripts, styles and tags that never close, to the 2 MiB cap.
-  it('CRITICAL: visibleText on scripts, styles and tags that never close', () => {
-    for (const unit of ['<script', '<style', '<', '<script>', '<p a="']) {
-      within(() => visibleText(fill(unit, CAP)), JSON.stringify(unit))
-    }
-  })
-
-  // Finding the fact card: script tags that never close or never end, to the cap.
-  it('CRITICAL: firstJsonLd on script tags that never close or never end', () => {
-    for (const unit of ['<script type="application/ld+json"', '<script type="application/ld+json">', '<script ']) {
-      within(() => firstJsonLd(fill(unit, CAP)), JSON.stringify(unit))
-    }
-  })
-
-  // The fix still drops scripts and styles, strips tags and decodes entities.
-  it('visibleText still drops scripts and styles, strips tags and decodes entities', () => {
-    expect(visibleText('<p>I&#x27;m <b>here</b></p><script>var x = "<p>no</p>"</script><style>p{}</style><p>too &amp; that</p>')).toBe("I'm here too & that")
-  })
-
-  // The fix still finds the FIRST fact card, and nothing when there is none.
-  it('firstJsonLd finds the first fact card, as before', () => {
-    expect(firstJsonLd('<script type="text/javascript">x</script><script type="application/ld+json">{"a":1}</script><script type="application/ld+json">{"b":2}</script>')).toBe('{"a":1}')
-    expect(firstJsonLd('<p>none</p>')).toBeNull()
   })
 })

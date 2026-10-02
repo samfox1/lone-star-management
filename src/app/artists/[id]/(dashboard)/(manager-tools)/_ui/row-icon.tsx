@@ -2,10 +2,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, type Ref } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
-import { FOCUS_RING } from './focus-ring'
 import { placeLabel, type LabelAlign } from './label-placement'
+import { FOCUS_RING_OFFSET } from './styles'
 
 /**
  * ICONS, NOT WORDS (Sam, 2026-09-23, BRAND_PAGE_PLAN.md). Every Brand row action is a
@@ -28,6 +29,11 @@ export type RowIconVariant =
   | 'primary'
   /** A bordered square — modal actions, the add form's ✓ and ×, the kit download. */
   | 'boxed'
+  /** A BARE GLYPH (Sam dislikes icons in a box): ink, no padding, no background, blue on
+   *  hover (a + on keyboard focus too). The AI test's "what to do" ↗ / pencil / wrench at the
+   *  end of a sentence, and the Profiles cards' actions. Callers place it (`className`) and
+   *  size it (`glyphSize`); it takes no other tone. */
+  | 'bare'
 
 export type RowIconProps = {
   icon: IconName
@@ -42,10 +48,17 @@ export type RowIconProps = {
   size?: 'md' | 'sm'
   /** Hover colour: `accent` for ✓ and every +, `danger` for × and trash. A `plus` icon is
    *  `accent` unless told otherwise (Sam, 2026-09-23: every + turns blue, as the trash
-   *  turns red). */
-  tone?: 'default' | 'accent' | 'danger'
+   *  turns red). `link`: blue on hover only, not on keyboard focus (the SEO tabs' links). */
+  tone?: 'default' | 'accent' | 'danger' | 'link'
+  /** The glyph's size in px. Default: 20, or the boxed size's own. */
+  glyphSize?: number
   /** A real link instead of a button (the brand-kit download). */
   href?: string
+  /** How `href` opens: `app`, a page of this app (next/link); `external`, another site in a
+   *  new tab. Unset: a plain link (a download, a mailto:). */
+  link?: 'app' | 'external'
+  /** A plain link's file name: the browser saves it rather than opening it. */
+  download?: string
   onClick?: MouseEventHandler<HTMLButtonElement>
   disabled?: boolean
   /** The button, so a NoteField's Enter can move focus here. */
@@ -58,6 +71,7 @@ const TONE: Record<NonNullable<RowIconProps['tone']>, string> = {
   // Keyboard focus too: the + is where focus lands after a note's Enter.
   accent: 'hover:text-accent focus-visible:text-accent',
   danger: 'hover:text-accent-red',
+  link: 'hover:text-accent',
 }
 
 const VARIANT: Record<RowIconVariant, string> = {
@@ -66,7 +80,12 @@ const VARIANT: Record<RowIconVariant, string> = {
   faint: 'rounded-lg p-1.5 text-ink-muted opacity-40 hover:bg-surface-hover hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
   primary: 'rounded-lg p-1.5 text-ink hover:bg-surface-hover',
   boxed: 'rounded-xl border border-hairline text-ink-muted hover:bg-surface-hover',
+  bare: '',
 }
+
+/** The bare glyph, whole: its own transition and disabled look, none of the boxed base's
+ *  centring or padding (test-row.tsx's and the Profiles cards' glyphs, as they were drawn). */
+const BARE = cx('relative inline-flex rounded text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
 
 const BOX: Record<NonNullable<RowIconProps['size']>, { cls: string; glyph: number }> = {
   md: { cls: 'h-11 w-11', glyph: 22 },
@@ -231,33 +250,53 @@ export function RowIcon({
   labelAlign = 'center',
   size = 'md',
   tone,
+  glyphSize,
   href,
+  link,
+  download,
   onClick,
   disabled = false,
   ref,
   className,
 }: RowIconProps) {
   const box = variant === 'boxed' ? BOX[size] : null
-  const cls = cx(
-    'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
-    // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.
-    FOCUS_RING,
-    'focus-visible:outline-offset-2',
-    VARIANT[variant],
-    box?.cls,
-    TONE[tone ?? (icon === 'plus' ? 'accent' : 'default')],
-    'disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-muted',
-    className,
-  )
+  const toned = tone ?? (icon === 'plus' ? 'accent' : 'default')
+  const cls =
+    variant === 'bare'
+      ? cx(BARE, toned === 'accent' && TONE.accent, className)
+      : cx(
+          'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
+          // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.
+          FOCUS_RING_OFFSET,
+          VARIANT[variant],
+          box?.cls,
+          TONE[toned],
+          'disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-muted',
+          className,
+        )
   const inner = (
     <>
-      <Icon name={icon} size={box?.glyph ?? 20} />
+      <Icon name={icon} size={glyphSize ?? box?.glyph ?? 20} />
       <HoverLabel label={label} side={labelSide} align={labelAlign} />
     </>
   )
+  if (href && link === 'app') {
+    return (
+      <Link href={href} aria-label={label} className={cls}>
+        {inner}
+      </Link>
+    )
+  }
+  if (href && link === 'external') {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className={cls}>
+        {inner}
+      </a>
+    )
+  }
   if (href) {
     return (
-      <a href={href} aria-label={label} className={cls}>
+      <a href={href} download={download} aria-label={label} className={cls}>
         {inner}
       </a>
     )

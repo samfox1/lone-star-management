@@ -15,6 +15,7 @@ import { ConnectionMark } from './connection-mark'
 import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
 import { EventbriteTrip, ShopifyLink } from './connect-modal'
 import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
+import { ERROR_TEXT } from '../_ui/styles'
 
 const FIELD_CLASS =
   'block h-6 min-w-0 w-full border-b border-hairline bg-transparent p-0 font-space text-[13px] leading-6 text-ink outline-none placeholder:text-hairline focus:border-ink'
@@ -230,7 +231,7 @@ export function ConnectionModal({
                 <ShopifyLink artistId={artistId} domain={domain} onBad={setShopError} className={buttonClass('ghost', 'whitespace-nowrap')} />
               </div>
               {shopError && (
-                <span role="alert" className="font-space text-[11px] text-accent-red">
+                <span role="alert" className={ERROR_TEXT}>
                   {shopError}
                 </span>
               )}

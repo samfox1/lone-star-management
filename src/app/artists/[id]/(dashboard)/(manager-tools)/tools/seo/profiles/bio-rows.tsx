@@ -5,12 +5,13 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { bioItem } from '@/lib/manager-tools/seo/profiles/bios'
 import { changedWords, dayLabel, type BioRow, type BioState } from '@/lib/manager-tools/seo/profiles/bio-state'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { SAVE_FAILED, shortLink } from '@/lib/manager-tools/format'
 import { useSeeded } from '../../../_ui/use-seeded'
+import { ERROR_TEXT } from '../../../_ui/styles'
 import { useNow } from '../_ui/clock'
 import { ConnectionMark } from '../../../connections/connection-mark'
 import { markProfileItemAction } from './actions'
-import { Field, GLYPH, Glyph, LABEL, ROW } from './profiles-tab'
+import { CardAction, CardActions, DashedMark, Field, LABEL, OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
 
 /**
  * OUTSIDE BIOS (OUTSIDE_PROFILES_PLAN.md, build step 1, "the change nudge"): one row per bio the
@@ -30,9 +31,6 @@ import { Field, GLYPH, Glyph, LABEL, ROW } from './profiles-tab'
  * null on the server), so a server in UTC never prints another day.
  */
 
-const VALUE = 'text-[13.5px] leading-[1.6]'
-const LINK = cx('break-all border-b border-hairline font-space text-[13px] leading-[1.7] text-ink hover:text-accent', FOCUS_RING)
-
 /** The row's words. `now` null (on the server, before mount): no dates yet. */
 function statusText(row: BioRow, now: number | null): string {
   const day = (iso: string | null) => (iso && now != null ? dayLabel(iso, now) : '')
@@ -51,7 +49,7 @@ function statusText(row: BioRow, now: number | null): string {
 }
 
 function Mark({ state }: { state: BioState | null }) {
-  if (state === null) return <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border-[1.5px] border-dashed border-ink-faint" />
+  if (state === null) return <DashedMark />
   return (
     <span
       aria-hidden="true"
@@ -64,10 +62,6 @@ function Mark({ state }: { state: BioState | null }) {
       {state === 'current' ? <Icon name="check" size={10} /> : null}
     </span>
   )
-}
-
-function short(url: string): string {
-  return url.replace(/^https:\/\/(www\.)?/, '')
 }
 
 function capital(s: string): string {
@@ -92,9 +86,9 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
     try {
       const r = await markProfileItemAction(artistId, bioItem(row.key), true)
       if (r.ok) setRow((x) => ({ ...x, state: 'current', confirmedAt: new Date().toISOString(), since: null, changed: [] }))
-      else setError(r.error ?? 'Couldn’t save that.')
+      else setError(r.error ?? SAVE_FAILED)
     } catch {
-      setError('Couldn’t save that.')
+      setError(SAVE_FAILED)
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -103,20 +97,25 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
 
   return (
     <div data-bio={row.key}>
-      <button type="button" aria-expanded={open} aria-controls={cardId} onClick={() => setOpen((o) => !o)} className={cx(ROW, 'transition-colors hover:bg-surface-hover', FOCUS_RING, 'focus-visible:-outline-offset-2')}>
-        <Mark state={row.state} />
-        <ConnectionMark def={row.def} size={15} className="flex-none text-ink" />
-        <span className="flex-1 text-[15px]">{row.label}</span>
-        <span className={cx('text-right font-space text-[12px]', row.state === 'stale' ? 'text-accent-red' : 'text-ink-muted')}>{statusText(row, now)}</span>
-        <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
-      </button>
+      <ProfileRow
+        open={open}
+        controls={cardId}
+        onToggle={() => setOpen((o) => !o)}
+        mark={
+          <>
+            <Mark state={row.state} />
+            <ConnectionMark def={row.def} size={15} className="flex-none text-ink" />
+          </>
+        }
+        name={row.label}
+        status={statusText(row, now)}
+        statusClassName={cx('text-right', row.state === 'stale' ? 'text-accent-red' : 'text-ink-muted')}
+      />
       {open ? (
-        <div id={cardId} className="mb-[18px] mt-1.5 rounded-[14px] border border-hairline bg-paper px-6 py-[22px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <ProfileCard id={cardId}>
           {row.url ? (
             <Field label="Profile">
-              <a href={row.url} target="_blank" rel="noopener noreferrer" className={LINK}>
-                {short(row.url)}
-              </a>
+              <OutLink href={row.url}>{shortLink(row.url)}</OutLink>
             </Field>
           ) : null}
           {row.state === 'stale' && row.changed.length ? (
@@ -129,20 +128,16 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
               <span className={VALUE}>{dayLabel(row.confirmedAt, now)}</span>
             </Field>
           ) : null}
-          <div className="mt-1.5 flex flex-wrap items-center gap-4 border-t border-hairline-soft pt-4">
-            <a href={row.edit} target="_blank" rel="noopener noreferrer" aria-label={`Edit on ${row.label}`} className={GLYPH}>
-              <Glyph icon="edit" label={`Edit on ${row.label}`} />
-            </a>
-            <button type="button" aria-label="Mark as updated" onClick={() => void tick()} disabled={busy} className={cx(GLYPH, 'ml-auto')}>
-              <Glyph icon="check" label="Mark as updated" />
-            </button>
+          <CardActions>
+            <CardAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
+            <CardAction icon="check" label="Mark as updated" onClick={() => void tick()} disabled={busy} className="ml-auto" />
             {error ? (
-              <span role="alert" className="font-space text-[11px] text-accent-red">
+              <span role="alert" className={ERROR_TEXT}>
                 {error}
               </span>
             ) : null}
-          </div>
-        </div>
+          </CardActions>
+        </ProfileCard>
       ) : null}
     </div>
   )
@@ -158,11 +153,7 @@ export function BioRows({ artistId, rows }: { artistId: string; rows: BioRow[] |
         {rows ? (
           rows.map((row) => <BioRowItem key={row.key} artistId={artistId} row={row} />)
         ) : (
-          <div className={cx(ROW, 'text-ink-muted')}>
-            <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border-[1.5px] border-dashed border-ink-faint" />
-            <span className="flex-1 text-[15px] text-ink">Bios</span>
-            <span className="font-space text-[12px]">couldn’t check</span>
-          </div>
+          <QuietRow name="Bios" status="couldn’t check" />
         )}
       </div>
     </section>

@@ -53,6 +53,11 @@ export type PublishRiserProps = {
 /** The spec's tail on every message (BRAND_PAGE_PLAN.md: "<what changed> · not on the site yet"). */
 const NOT_LIVE = ' · not on the site yet'
 
+/** The bar's box: pinned to the bottom edge, full width, a hairline on top, clear of the
+ *  phone's home bar. BrandCheckFailed (brand-riser.tsx) stands in the same place. */
+export const RISER_BAR =
+  'fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper px-4 pt-[18px] pb-[calc(18px+env(safe-area-inset-bottom,0px))] sm:px-8'
+
 export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'brand' }: PublishRiserProps) {
   const [open, setOpen] = useState(false)
   // `dirty` going false closes the prompt (state adjusted while rendering, React's pattern
@@ -117,7 +122,7 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
         aria-hidden={dirty ? undefined : true}
         inert={!dirty}
         className={cx(
-          'fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-4 border-t border-hairline bg-paper px-4 pt-[18px] pb-[calc(18px+env(safe-area-inset-bottom,0px))] sm:px-8',
+          RISER_BAR,
           // `visibility` rides the same transition: it turns visible at the START of the slide
           // up and hidden at the END of the slide down, so the motion is kept.
           'motion-safe:transition-[transform,visibility] motion-safe:duration-200 motion-safe:ease-out',

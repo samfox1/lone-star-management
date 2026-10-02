@@ -3,12 +3,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { slugify } from '@/lib/slug'
-import { Icon, type IconName } from '@/components/ui/icons'
 import { MAILTO_SAFE_LENGTH, buildBioPack, ccAddress, emailText, mailtoHref, type BioPackInput } from '@/lib/manager-tools/seo/profiles/bio-pack'
 import { dayLabel } from '@/lib/manager-tools/seo/profiles/bio-state'
-import { HoverLabel } from '../../../_ui/row-icon'
+import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { ERROR_TEXT, MONO_META } from '../../../_ui/styles'
 import { useNow } from '../_ui/clock'
+import { CardAction, CardActions, Field, LABEL, ProfileCard, ProfileRow, QuietRow, RoundMark } from './_ui/profile-row'
 import { markProfileItemAction } from './actions'
 import type { PackPhoto } from './load'
 
@@ -30,10 +31,6 @@ import type { PackPhoto } from './load'
  */
 
 const LATER = ['Bandsintown shows', 'Resident Advisor'] as const
-
-export const LABEL = 'font-space text-[10.5px] font-bold uppercase leading-none tracking-[0.14em] text-ink-faint'
-export const ROW = 'flex w-full items-center gap-3.5 border-b border-hairline px-2.5 py-[13px] text-left'
-export const GLYPH = cx('relative inline-flex rounded p-1 text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING, 'focus-visible:outline-offset-2')
 
 export type ProfilesTabProps = {
   artistId: string
@@ -72,14 +69,14 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
     <div className="mx-auto max-w-[800px] pt-10">
       <div className={LABEL}>Outside profiles</div>
       <div className="mt-3.5 border-t border-hairline">
-        <button type="button" aria-expanded={open} aria-controls={cardId} onClick={() => setOpen((o) => !o)} className={cx(ROW, 'transition-colors hover:bg-surface-hover', FOCUS_RING, 'focus-visible:-outline-offset-2')}>
-          <span aria-hidden="true" className={cx('flex h-4 w-4 flex-none items-center justify-center rounded-full border-[1.5px] border-ink', sentAt && 'bg-ink text-paper')}>
-            {sentAt ? <Icon name="check" size={10} /> : null}
-          </span>
-          <span className="flex-1 text-[15px]">Apple Music &amp; Amazon bio</span>
-          <span className="font-space text-[12px] text-ink-muted">{marksOk ? (sentAt ? sentLabel(sentAt, now) : 'not sent') : ''}</span>
-          <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
-        </button>
+        <ProfileRow
+          open={open}
+          controls={cardId}
+          onToggle={() => setOpen((o) => !o)}
+          mark={<RoundMark done={!!sentAt} />}
+          name="Apple Music & Amazon bio"
+          status={marksOk ? (sentAt ? sentLabel(sentAt, now) : 'not sent') : ''}
+        />
         {open ? (
           <BioCard
             id={cardId}
@@ -93,34 +90,12 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
         ) : null}
         {outside}
         {LATER.map((label) => (
-          <div key={label} className={cx(ROW, 'text-ink-faint')}>
-            <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border-[1.5px] border-dashed border-ink-faint" />
-            <span className="flex-1 text-[15px]">{label}</span>
-            <span className="font-space text-[12px]">later</span>
-          </div>
+          <QuietRow key={label} name={label} status="later" later />
         ))}
       </div>
       <div className="mt-2.5 text-center font-space text-[12px] text-ink-faint">Xperi writes the bio · usually takes months</div>
       {bios}
     </div>
-  )
-}
-
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-1.5 border-t border-hairline-soft py-3 first:border-t-0 first:pt-0.5 min-[600px]:grid-cols-[120px_minmax(0,1fr)] min-[600px]:gap-[18px]">
-      <span className={cx(LABEL, 'pt-[3px]')}>{label}</span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
-
-export function Glyph({ icon, label }: { icon: IconName; label: string }) {
-  return (
-    <>
-      <Icon name={icon} size={18} aria-hidden="true" />
-      <HoverLabel label={label} />
-    </>
   )
 }
 
@@ -194,9 +169,9 @@ function BioCard({
     try {
       const r = await markProfileItemAction(artistId, 'allmusic_bio', done)
       if (r.ok) onMarked(done)
-      else setError(r.error ?? 'Couldn’t save that.')
+      else setError(r.error ?? SAVE_FAILED)
     } catch {
-      setError('Couldn’t save that.')
+      setError(SAVE_FAILED)
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -207,7 +182,7 @@ function BioCard({
   const fileName = `${slugify(name) || 'artist'}-press-photo.${ext}`
 
   return (
-    <div id={id} className="mb-[18px] mt-1.5 rounded-[14px] border border-hairline bg-paper px-6 py-[22px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <ProfileCard id={id}>
       <Field label="To">
         <div className="font-space text-[13px] leading-[1.7]">
           {pack.to.map((a) => (
@@ -289,31 +264,21 @@ function BioCard({
           </ul>
         </Field>
       ) : null}
-      <div className="mt-1.5 flex flex-wrap items-center gap-4 border-t border-hairline-soft pt-4">
-        <a href={mailHref} aria-label="Open in Mail" className={GLYPH}>
-          <Glyph icon="mailbox" label="Open in Mail" />
-        </a>
+      <CardActions>
+        <CardAction icon="mailbox" label="Open in Mail" href={mailHref} />
         {/* A long mailto can be cut short by the mail app without a word: Copy keeps all of it. */}
-        {mailHref.length > MAILTO_SAFE_LENGTH ? <span className="-ml-2 font-space text-[11px] text-ink-faint">may be cut off · use Copy</span> : null}
-        <button type="button" aria-label={copied ? 'Copied' : 'Copy email'} onClick={() => void copy()} className={GLYPH}>
-          <Glyph icon={copied ? 'check' : 'copy'} label={copied ? 'Copied' : 'Copy email'} />
-        </button>
-        {photo ? (
-          <a href={downloadHref(photo.url, fileName)} download={fileName} aria-label="Download photo" className={GLYPH}>
-            <Glyph icon="download" label="Download photo" />
-          </a>
-        ) : null}
+        {mailHref.length > MAILTO_SAFE_LENGTH ? <span className={cx('-ml-2', MONO_META)}>may be cut off · use Copy</span> : null}
+        <CardAction icon={copied ? 'check' : 'copy'} label={copied ? 'Copied' : 'Copy email'} onClick={() => void copy()} />
+        {photo ? <CardAction icon="download" label="Download photo" href={downloadHref(photo.url, fileName)} download={fileName} /> : null}
         {canMark ? (
-          <button type="button" aria-label={sent ? 'Mark as not sent' : 'Mark as sent'} onClick={() => void mark()} disabled={busy} className={cx(GLYPH, 'ml-auto')}>
-            <Glyph icon={sent ? 'replay' : 'check'} label={sent ? 'Mark as not sent' : 'Mark as sent'} />
-          </button>
+          <CardAction icon={sent ? 'replay' : 'check'} label={sent ? 'Mark as not sent' : 'Mark as sent'} onClick={() => void mark()} disabled={busy} className="ml-auto" />
         ) : null}
         {error ? (
-          <span role="alert" className="font-space text-[11px] text-accent-red">
+          <span role="alert" className={ERROR_TEXT}>
             {error}
           </span>
         ) : null}
-      </div>
-    </div>
+      </CardActions>
+    </ProfileCard>
   )
 }

@@ -1,4 +1,5 @@
 import type { UnpublishedDiff } from '@/lib/content'
+import { plural } from '../format'
 
 const count = (d: { added: number; edited: number; deleted: number }) => d.added + d.edited + d.deleted
 
@@ -10,7 +11,7 @@ export function pendingMessage(diff: UnpublishedDiff): string {
   if (diff.profile.dirty) parts.push('profile')
   if (diff.site_content.dirty) parts.push('site text')
   if (diff.media.site?.dirty ?? diff.media.dirty) parts.push('photos')
-  if (diff.link?.dirty) parts.push(count(diff.link) === 1 ? '1 link' : `${count(diff.link)} links`)
+  if (diff.link?.dirty) parts.push(plural(count(diff.link), 'link', 'links'))
   if (!parts.length) return ''
   const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
   return `${list.charAt(0).toUpperCase()}${list.slice(1)} changed`

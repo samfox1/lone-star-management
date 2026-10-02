@@ -1,11 +1,13 @@
 'use client'
 
+import { cx } from '@/lib/cx'
 import { useState } from 'react'
 import { PITCH_MAX, QUOTES_MAX, QUOTE_MAX, SOURCE_MAX, type PressQuote } from '@/lib/epk'
 import { Icon } from '@/components/ui/icons'
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SaveForm } from '../../save-form'
 import { savePressKitAction } from './actions'
+import { BLOCK_LABEL, MONO_META } from '../_ui/styles'
 
 /** A row needs a key that survives reordering/removal, and a quote's text is not one
  *  (two blank rows would collide). A counter is, and it never leaves the client. */
@@ -50,7 +52,7 @@ export function PressKitForm({
       className="space-y-8"
     >
       <label className="block">
-        <span className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+        <span className={BLOCK_LABEL}>
           One-line pitch
         </span>
         <input
@@ -60,13 +62,13 @@ export function PressKitForm({
           placeholder="Austin four-piece with a debut out this autumn"
           className={`mt-1.5 ${inputClass} w-full`}
         />
-        <span className="mt-1 block font-space text-[11px] text-ink-faint">
+        <span className={cx('mt-1 block', MONO_META)}>
           One sentence a journalist can quote straight into a piece.
         </span>
       </label>
 
       <div className="space-y-3">
-        <span className="font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint">
+        <span className={BLOCK_LABEL}>
           Press quotes
         </span>
 

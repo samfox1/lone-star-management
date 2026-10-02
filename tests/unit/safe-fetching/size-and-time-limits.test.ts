@@ -3,10 +3,9 @@
  * byte cap, and every fetch ends at its time limit.
  *
  * Code:     src/lib/guarded-fetch.ts (guardedFetch: maxBytes, timeoutMs, deadlineMs),
- *           src/lib/seo-audit.ts (fetchGuarded), src/lib/og.ts (fetchOpenGraph), src/lib/net-guard.ts
- *           (createSafeFetch: idle timeout, abort signal)
- * Feature:  safe fetching: the SEO/GEO checks, the old live check, IndexNow, and the Add modal's
- *           link preview
+ *           src/lib/indexnow.ts (pingIndexNow's reads), src/lib/og.ts (fetchOpenGraph),
+ *           src/lib/net-guard.ts (createSafeFetch: idle timeout, abort signal)
+ * Feature:  safe fetching: the SEO/GEO checks, IndexNow, and the Add modal's link preview
  * Tier:     STRICT (AGENTS.md "Test depth"): security. The transport unzips, so a few hundred KB
  *           on the wire can be gigabytes in memory, and a body that drips a byte at a time can
  *           hold a request open forever (security review 2026-09-29, F3).
@@ -27,7 +26,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSafeFetch } from '@/lib/net-guard'
 import { guardedFetch } from '@/lib/guarded-fetch'
-import { fetchGuarded } from '@/lib/seo-audit'
+import { pingIndexNow } from '@/lib/indexnow'
 import { fetchOpenGraph } from '@/lib/og'
 import { fakeDns } from '@tests/helpers/fake-dns'
 import { fakeSite } from '@tests/helpers/seo/fake-site'
@@ -95,15 +94,14 @@ describe('byte caps', () => {
     expect(r.text).toHaveLength(1000)
   })
 
-  // fetchGuarded (the old live check, IndexNow) stops at its own 2 MiB cap and says it cut.
-  it('CRITICAL: fetchGuarded stops pulling at its cap (2 MiB), whatever the answer’s size', async () => {
+  // The IndexNow ping reads a manager's site on every Publish, with no cap of its own: the shared
+  // default (2 MiB) must still stop it. A 64 MiB key file is cut, so it is not the key.
+  it('CRITICAL: the IndexNow ping stops pulling a huge key file at the 2 MiB default cap', async () => {
     const { fetcher, counter } = big(SIXTY_FOUR_MIB)
-    const r = await fetchGuarded(`${SITE}`, fetcher)
+    const r = await pingIndexNow({ site_kind: 'custom', custom_site_url: 'https://www.example.com' }, '0123456789abcdef0123456789abcdef', fetcher)
     // The cap, plus the chunk that crossed it and the one a stream pulls ahead: not 64 MiB.
     expect(counter.pulled).toBeLessThanOrEqual(2 * MIB + 2 * MIB)
-    expect(r.status).toBe(200)
-    expect(r.body?.length ?? 0).toBeLessThanOrEqual(2 * MIB)
-    expect(r.truncated).toBe(true)
+    expect(r).toEqual({ sent: false, reason: 'key-not-served' })
   })
 
   // The link preview stops at its 512 KB cap and still reads the share tags at the top of the page.
@@ -158,14 +156,6 @@ describe('time limits', () => {
     expect(Date.now() - t).toBeLessThan(1500)
     expect(r).toMatchObject({ status: 200, error: 'timeout', text: null })
   }, 4000)
-
-  // fetchGuarded ends a dripping body at its timeout, with no body.
-  it('CRITICAL: fetchGuarded ends a dripping body at its timeout', async () => {
-    const t = Date.now()
-    const r = await fetchGuarded(SITE, drip(), { timeoutMs: 300 })
-    expect(Date.now() - t).toBeLessThan(2000)
-    expect(r.body).toBeNull()
-  }, 5000)
 
   // The link preview ends a dripping body at its timeout, with no preview.
   it('CRITICAL: fetchOpenGraph ends a dripping body at its timeout', async () => {

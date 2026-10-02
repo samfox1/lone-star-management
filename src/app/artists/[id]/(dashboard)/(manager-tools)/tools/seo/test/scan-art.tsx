@@ -3,6 +3,7 @@
 import { useEffect, useRef, useSyncExternalStore, type CSSProperties } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
+import { EYEBROW } from '../../../_ui/styles'
 
 /**
  * THE AI TEST'S DRAWINGS (Sam, 2026-09-29, prototypes/seo_variants_20260929_r10.html):
@@ -322,7 +323,7 @@ export function VisitingAs() {
 
   return (
     <div aria-hidden="true" className="text-left">
-      <div className="mb-2 font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">Visiting as</div>
+      <div className={cx('mb-2', EYEBROW)}>Visiting as</div>
       <div ref={wrapRef} className="relative before:absolute before:bottom-[18px] before:left-1 before:top-[18px] before:w-px before:bg-ink-faint/45 before:content-['']">
         <ul>
           {VISITORS.map((v) => (

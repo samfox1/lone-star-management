@@ -19,22 +19,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
 import { fakeClient, type Call } from '@tests/helpers/fake-client'
+import { A, setWorld } from '@tests/unit/publish/_publish-world'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 // The password gate signs in on a throwaway client; here it always says yes.
-vi.mock('@supabase/supabase-js', async (orig) => ({
-  ...(await orig<typeof import('@supabase/supabase-js')>()),
-  createClient: () => ({ auth: { signInWithPassword: async () => ({ error: null }) } }),
-}))
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
 
-const A = 'a1'
 let fake = fakeClient()
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => ({
-    ...fake.client,
-    auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'm@example.test' } } }) },
-  })),
-}))
 
 const media = (id: string, purpose: string, extra: Record<string, unknown> = {}): ContentRow => ({
   id,
@@ -89,7 +81,7 @@ function written(): [string, string, boolean][] {
 }
 
 beforeEach(() => {
-  fake = world()
+  fake = setWorld(world())
 })
 
 describe('the Brand publish is brand-scoped', () => {

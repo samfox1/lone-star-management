@@ -22,6 +22,7 @@ import { renderHook, act } from '@testing-library/react'
 import { frameOrigin, frameSrc, useFrameBridge, HELLO_RETRY_MS, HELLO_TIMEOUT_MS } from '@/app/artists/[id]/(dashboard)/editor/use-frame-bridge'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
 import type { PublicSitePayload } from '@/lib/site'
+import { sitePayload } from '@tests/helpers/site-data'
 import type { DroppedRegion, ManifestPage, TemplateManifest } from '@samfox1/site-bridge/manifest'
 
 const CUSTOM = 'https://skeen-website.vercel.app'
@@ -30,18 +31,7 @@ const CUSTOM = 'https://skeen-website.vercel.app'
 const posted = (frame: { postMessage: ReturnType<typeof vi.fn> }, type: string) =>
   frame.postMessage.mock.calls.filter((c) => (c[0] as { type?: string })?.type === type)
 
-const draft: PublicSitePayload = {
-  artist: {
-    id: 'a1', slug: 'skeen', name: 'Skeen', bio: null,
-    hero_image_url: null, template: 'classic', spotify_artist_id: null,
-  },
-  tracks: [], tour_dates: [], merch: [], links: [], videos: [],
-  media: [{ purpose: 'gallery_image', path: 'a1/gallery/one.jpg' }],
-  site_content: {},
-  styles: {},
-  fonts: [],
-  font_slots: {},
-}
+const draft = sitePayload({ artist: { template: 'classic' }, media: [{ purpose: 'gallery_image', path: 'a1/gallery/one.jpg' }] })
 
 /** A stand-in for the iframe's contentWindow — the thing we postMessage into. */
 function fakeFrame() {

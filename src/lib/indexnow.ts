@@ -33,8 +33,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { after } from 'next/server'
 import { INDEXNOW_CONTENT_KEY, INDEXNOW_KEY_PATH, INDEXNOW_VERSION_HEADER, isIndexNowKey } from '@samfox1/site-bridge/indexnow'
 import { isPublicSiteUrl } from './custom-site'
+import { guardedFetch } from './guarded-fetch'
 import { pickTransport } from './net-guard'
-import { fetchGuarded } from './seo-audit'
 import { bridgeSupportsIndexNow } from './site-editor/manifest'
 
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow'
@@ -46,6 +46,10 @@ export const MAX_PING_URLS = 100
 /** Per request. The ping runs after the response, but a hung socket still holds the
  *  function open until the platform kills it. */
 const TIMEOUT_MS = 8_000
+
+/** Each read of the site (key file, sitemap): the whole call, redirects included. Per hop it
+ *  is guardedFetch's own 10 s, and its 2 MiB byte cap. */
+const READ_DEADLINE_MS = 20_000
 
 /** Vercel's own hosts are previews (or a site not yet on its domain): never ping for them. */
 const PREVIEW_HOST = /(^|\.)vercel\.app$/i
@@ -138,15 +142,16 @@ export async function pingIndexNow(
     // (every redirect hop re-checked), and judged where it really answered: apex → www is
     // normal, but the answering host must itself be pingable and the file must still be at
     // the root, or it vouches for less than the whole site.
-    const file = await fetchGuarded(`${origin}${INDEXNOW_KEY_PATH}`, timed)
-    const served = file.url ? pingableOrigin(file.url) : null
-    if (file.status !== 200 || file.body == null || !served || new URL(file.url!).pathname !== INDEXNOW_KEY_PATH || file.body.trim() !== key) {
+    const read = (url: string) => guardedFetch(url, { fetcher: timed, deadlineMs: READ_DEADLINE_MS })
+    const file = await read(`${origin}${INDEXNOW_KEY_PATH}`)
+    const served = file.finalUrl ? pingableOrigin(file.finalUrl) : null
+    if (file.status !== 200 || file.text == null || !served || new URL(file.finalUrl!).pathname !== INDEXNOW_KEY_PATH || file.text.trim() !== key) {
       return { sent: false, reason: 'key-not-served' }
     }
-    if (!bridgeSupportsIndexNow(file.headers?.get?.(INDEXNOW_VERSION_HEADER))) return { sent: false, reason: 'old-bridge' }
+    if (!bridgeSupportsIndexNow(file.headers[INDEXNOW_VERSION_HEADER])) return { sent: false, reason: 'old-bridge' }
 
-    const map = await fetchGuarded(`${served}/sitemap.xml`, timed)
-    const urlList = pageUrls(map.status === 200 ? map.body : null, served)
+    const map = await read(`${served}/sitemap.xml`)
+    const urlList = pageUrls(map.status === 200 ? map.text : null, served)
 
     let res: Response
     try {

@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { cx } from '@/lib/cx'
-import { FOCUS_RING } from '../../_ui/focus-ring'
+import { FOCUS_RING_OFFSET } from '../../_ui/styles'
 import { HoverLabel } from '../../_ui/row-icon'
 
 /** A brand colour offered as a board background. `key` must be unique among swatches and
@@ -99,7 +99,7 @@ export function ModalBoard({
                   // Never `outline-hidden`/`outline-none` beside a ring: in Tailwind v4 they set
                   // --tw-outline-style:none, which `outline-2` reads — so each ring says
                   // `outline-solid` itself (tests/components/manager-tools/shared/focus-rings.test.tsx).
-                  on ? 'outline-solid outline-2 outline-offset-2 outline-ink' : cx(FOCUS_RING, 'focus-visible:outline-offset-2'),
+                  on ? 'outline-solid outline-2 outline-offset-2 outline-ink' : cx(FOCUS_RING_OFFSET),
                 )}
               >
                 <HoverLabel label={o.name} side="top" />

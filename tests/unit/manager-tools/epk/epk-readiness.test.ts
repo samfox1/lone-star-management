@@ -19,32 +19,15 @@
 import { describe, expect, it } from 'vitest'
 import { epkReadiness, resolveEpkContact } from '@/lib/epk'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
-function site(over: Partial<SiteData> = {}, artist: Partial<SiteData['artist']> = {}): SiteData {
-  return {
-    artist: {
-      id: 'a1',
-      slug: 'lone-pine',
-      name: 'Lone Pine',
-      bio: 'Dusty alt-country out of West Texas.',
-      hero_image_url: null,
-      template: 'classic',
-      spotify_artist_id: null,
-      ...artist,
-    },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
+const site = (over: Partial<SiteData> = {}, artist: Partial<SiteData['artist']> = {}): SiteData =>
+  siteData({
     links: [{ id: 'l1', label: 'Booking', url: 'mailto:book@example.com', sort_order: 0 }] as never,
-    videos: [],
     media: [{ purpose: 'profile_photo', url: 'https://img.example/p.jpg' }] as never,
-    site_content: {},
-    styles: {},
-    fonts: [],
-    font_slots: {},
     ...over,
-  }
-}
+    artist: { slug: 'lone-pine', name: 'Lone Pine', bio: 'Dusty alt-country out of West Texas.', ...artist },
+  })
 
 const ready = (over?: Partial<SiteData>, artist?: Partial<SiteData['artist']>, releaseCount = 1) =>
   epkReadiness({ site: site(over, artist), releaseCount })

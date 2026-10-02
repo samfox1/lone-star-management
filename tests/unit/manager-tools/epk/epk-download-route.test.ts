@@ -13,6 +13,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
 const maybeSingleMock = vi.fn()
 const rpcMock = vi.fn()
@@ -55,32 +56,12 @@ vi.mock('node:dns/promises', async (importOriginal) => {
 
 import { GET } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/download/route'
 
-function site(artist: Partial<SiteData['artist']> = {}): SiteData {
-  return {
-    artist: {
-      id: 'a1',
-      slug: 'lone-pine',
-      name: 'Lone Pine',
-      bio: 'Dusty alt-country out of West Texas.',
-      hero_image_url: null,
-      template: 'classic',
-      spotify_artist_id: null,
-      stage_plot_path: null,
-      tech_rider_path: null,
-      ...artist,
-    },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
+const site = (artist: Partial<SiteData['artist']> = {}): SiteData =>
+  siteData({
+    artist: { slug: 'lone-pine', name: 'Lone Pine', bio: 'Dusty alt-country out of West Texas.', stage_plot_path: null, tech_rider_path: null, ...artist },
     links: [{ id: 'l1', label: 'Booking', url: 'mailto:book@example.com', sort_order: 0 }] as never,
-    videos: [],
     media: [{ purpose: 'profile_photo', url: 'https://img.example/p.jpg' }] as never,
-    site_content: {},
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  } as SiteData
-}
+  })
 
 const call = () => GET(new Request('http://x/'), { params: Promise.resolve({ id: 'a1' }) })
 

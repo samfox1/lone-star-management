@@ -19,6 +19,7 @@
 import { SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
 import { SEO_MANUAL_COOLDOWN_S, type StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
+import { clockTime, plural, shortDay } from '../format'
 import { SEO_EDIT_TARGETS } from './sections'
 
 export type TestFilter = 'all' | 'need' | 'pass' | 'unknown'
@@ -113,7 +114,7 @@ export function runHeadline(run: Pick<StoredSeoRun, 'results' | 'siteUrl'> & { r
   if (c.applicable === 0) return { kind: 'none-apply', title: 'None of the tests apply to you', detail: [] }
   if (c.pass === 0 && c.fail === 0) return { kind: 'unchecked', title: 'We couldn’t check your site this time', detail: [] }
   const detail: string[] = []
-  if (c.fail) detail.push(`${c.fail} need${c.fail === 1 ? 's' : ''} you`)
+  if (c.fail) detail.push(`${plural(c.fail, 'needs', 'need')} you`)
   if (c.unknown) detail.push(`${c.unknown} couldn’t be checked`)
   return { kind: 'score', title: c.applicable === 1 ? `${c.pass} of 1 test passes` : `${c.pass} of ${c.applicable} tests pass`, detail }
 }
@@ -316,17 +317,14 @@ function dayWord(at: Date, now: Date, locale?: string): { word: string; relative
   const y = new Date(now)
   y.setDate(now.getDate() - 1)
   if (sameDay(at, y)) return { word: 'yesterday', relative: true }
-  const opts: Intl.DateTimeFormatOptions = at.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }
-  return { word: at.toLocaleDateString(locale, opts), relative: false }
+  return { word: shortDay(at, { locale, now }), relative: false }
 }
-
-const clock = (at: Date, locale?: string) => at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
 
 /** "today at 9:14 PM", "yesterday at 6:00 AM", "Sep 21 at 9:14 PM". '' for a bad date. */
 export function whenText(iso: string, now: Date, locale?: string): string {
   const at = new Date(iso)
   if (!Number.isFinite(at.getTime())) return ''
-  return `${dayWord(at, now, locale).word} at ${clock(at, locale)}`
+  return `${dayWord(at, now, locale).word} at ${clockTime(at, locale)}`
 }
 
 /** A history dot's label: "Today, 9:14 PM · passed". */
@@ -335,7 +333,7 @@ export function dotText(iso: string, status: SeoTestStatus, now: Date, locale?: 
   if (!Number.isFinite(at.getTime())) return STATUS_WORD[status]
   const { word, relative } = dayWord(at, now, locale)
   const day = relative ? word.charAt(0).toUpperCase() + word.slice(1) : word
-  return `${day}, ${clock(at, locale)} · ${STATUS_WORD[status]}`
+  return `${day}, ${clockTime(at, locale)} · ${STATUS_WORD[status]}`
 }
 
 const STATUS_WORD: Record<SeoTestStatus, string> = {

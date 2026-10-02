@@ -18,6 +18,20 @@
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+/**
+ * Stryker's OWN matcher (its package exports hide it, hence the file path). `mutate` entries
+ * are GLOBS: `[id]` in a Next route path is a character class unless written `[[]id[]]`. This
+ * script once compared paths as plain strings, which agreed with the config while Stryker
+ * matched nothing, so seven src/app entries were never mutated (found 2026-10-02).
+ */
+type Matcher = { matches(fileName: string): boolean }
+async function strykerMatcher(): Promise<new (pattern: string, allowHiddenFiles: boolean) => Matcher> {
+  const file = resolve('node_modules/@stryker-mutator/core/dist/src/config/file-matcher.js')
+  return ((await import(pathToFileURL(file).href)) as { FileMatcher: new (p: string, h: boolean) => Matcher }).FileMatcher
+}
 
 const argv = process.argv.slice(2)
 const baseFlag = argv.indexOf('--base')
@@ -40,13 +54,17 @@ function mergeBase(): string {
   return 'HEAD~1'
 }
 
-function main() {
+async function main() {
+  const FileMatcher = await strykerMatcher()
   const config = JSON.parse(readFileSync('stryker.config.json', 'utf8')) as { mutate: string[] }
-  const slice = new Set(config.mutate)
+  const matchers = config.mutate.filter((p) => !p.startsWith('!')).map((p) => new FileMatcher(p, false))
+  const inSlice = (f: string) => matchers.some((m) => m.matches(f))
+  /** A changed path as a --mutate glob that matches only itself. */
+  const literal = (f: string) => f.replace(/[[\]*?{}]/g, (c) => `[${c}]`)
 
   let targets: string[]
   if (runAll) {
-    targets = [...slice]
+    targets = config.mutate
   } else {
     const from = mergeBase()
     // Committed changes plus anything still in the working tree — the point is to check
@@ -57,9 +75,9 @@ function main() {
       ...git(['ls-files', '--others', '--exclude-standard']).split('\n'),
     ].filter(Boolean))
 
-    targets = [...changed].filter((f) => slice.has(f)).sort()
+    targets = [...changed].filter(inSlice).sort().map(literal)
 
-    const skipped = [...changed].filter((f) => /^(src|packages|supabase)\/.*\.tsx?$/.test(f) && !slice.has(f))
+    const skipped = [...changed].filter((f) => /^(src|packages|supabase)\/.*\.tsx?$/.test(f) && !inSlice(f))
     console.log(`changed since ${from.slice(0, 12)}: ${changed.size} file(s)`)
     if (skipped.length) {
       console.log(`\nNOT mutated — outside the slice in stryker.config.json:`)
@@ -81,4 +99,4 @@ function main() {
   execFileSync('npx', ['stryker', 'run', '--mutate', targets.join(',')], { stdio: 'inherit' })
 }
 
-main()
+void main()

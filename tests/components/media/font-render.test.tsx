@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { ArtistTemplate } from '@/components/artist-template'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
 vi.mock('@/components/templates/cinematic', () => ({
   CinematicTemplate: () => <div data-testid="cinematic" />,
@@ -25,29 +26,8 @@ vi.mock('@/components/templates/cinematic', () => ({
 beforeEach(() => vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://stub.supabase.co'))
 afterEach(() => vi.unstubAllEnvs())
 
-function site(fonts: SiteData['fonts'], font_slots: SiteData['font_slots'] = {}, template = 'classic'): SiteData {
-  return {
-    artist: {
-      id: 'a1',
-      slug: 'lone-pine',
-      name: 'Lone Pine',
-      bio: null,
-      hero_image_url: null,
-      template,
-      spotify_artist_id: null,
-    },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
-    media: [],
-    site_content: {},
-    styles: {},
-    fonts,
-    font_slots,
-  } as unknown as SiteData
-}
+const site = (fonts: SiteData['fonts'], font_slots: SiteData['font_slots'] = {}, template = 'classic'): SiteData =>
+  siteData({ artist: { slug: 'lone-pine', name: 'Lone Pine', template }, fonts, font_slots })
 
 const FONT = {
   family: 'archivo-narrow',

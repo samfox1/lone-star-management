@@ -14,6 +14,7 @@
  * name different days for the same signup.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { shortDay } from '../format'
 
 export type Subscriber = { id: string; email: string; created_at: string }
 
@@ -90,7 +91,7 @@ export function highlightSegments(text: string, query: string): Segment[] {
 
 /** "Sep 22, 2026", in UTC. */
 export function formatSubscribedDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })
+  return shortDay(new Date(iso), { locale: 'en-US', timeZone: 'UTC' })
 }
 
 /** "2026-09-22", in UTC: the CSV's `subscribed_at`. */

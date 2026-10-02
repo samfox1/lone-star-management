@@ -3,7 +3,7 @@ import { FAQ_EXTRA, FAQ_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import { mediaUrl } from '@/lib/storage-url'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { listContent } from '@/lib/content'
-import { autoFaqAnswer, defaultSeoTitle } from '@samfox1/site-bridge/seo'
+import { autoFaqAnswer } from '@samfox1/site-bridge/seo'
 import type { SiteRelease, SiteTourDate } from '@samfox1/site-bridge/payload'
 import { requireArtist } from '../../../_data'
 import type { OgSource } from './og-image-picker'
@@ -40,11 +40,6 @@ export async function loadSeoBase(id: string) {
 }
 
 type Base = Awaited<ReturnType<typeof loadSeoBase>>
-
-/** The title the site composes when the manager's is blank (audit #1), from the same facts. */
-export function defaultTitleOf(b: Base): string {
-  return defaultSeoTitle({ name: b.artist.name, genre: b.genre, location: b.location, schema_type: b.schemaType })
-}
 
 const SHARE_LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }
 const SHARE_ORDER = ['logo_primary', 'logo_secondary', 'profile_photo']

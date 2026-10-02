@@ -23,16 +23,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
+import { createThrowawayArtist, deleteThrowawayArtist } from '@tests/helpers/artist'
+import { at, unrolledDays } from '@tests/integration/analytics/_days'
 
 const svc = serviceClient()
 let asA: SupabaseClient
 
 let artistF: string
-const slugF = `t-parity-${crypto.randomUUID().slice(0, 8)}`
 let DAY: string
 const entityE = crypto.randomUUID()
 const entityF = crypto.randomUUID()
-const at = (day: string, hour: number) => `${day}T${String(hour).padStart(2, '0')}:00:00Z`
 
 type Planted = Partial<{ type: string; created_at: string; visitor_hash: string | null; entity_id: string; entity_type: string; is_bot: boolean }>
 async function plant(row: Planted): Promise<void> {
@@ -60,30 +60,10 @@ async function readAll(c: SupabaseClient = svc, since = at(DAY, 0)) {
   }
 }
 
-/** A day in 2017–2024 that is NOT already in the ledger: plant, read the raw path, clean up. */
-async function unrolledDay(): Promise<string> {
-  for (let tries = 0; tries < 20; tries++) {
-    const y = 2017 + Math.floor(Math.random() * 8)
-    const m = 1 + Math.floor(Math.random() * 12)
-    const d = 1 + Math.floor(Math.random() * 27)
-    const day = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const { data: probe } = await svc.from('analytics_events').insert({ artist_id: artistF, type: 'view', created_at: at(day, 1) }).select('id').single()
-    const { data } = await svc.rpc('analytics_daily', { p_since: at(day, 0), p_artist_id: artistF })
-    await svc.from('analytics_events').delete().eq('id', (probe as { id: string }).id)
-    if ((data as unknown[]).length === 1) return day
-  }
-  throw new Error('could not find an unrolled day in 20 tries')
-}
-
 beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
-  const { data, error } = await svc.from('artists').insert({ slug: slugF, name: 'Reader parity throwaway' }).select('id').single()
-  if (error) throw new Error(error.message)
-  artistF = data.id as string
-  const userA = (await asA.auth.getUser()).data.user!.id
-  const { error: e2 } = await svc.from('artist_managers').insert({ artist_id: artistF, user_id: userA })
-  if (e2) throw new Error(e2.message)
-  DAY = await unrolledDay()
+  artistF = (await createThrowawayArtist(svc, 'Reader parity', asA)).id
+  DAY = (await unrolledDays(svc, artistF, (first) => svc.rpc('analytics_daily', { p_since: at(first, 0), p_artist_id: artistF })))[0]
 
   // Three real views from two visitors; a play WITH a track id and a play WITHOUT one (the
   // shape no pre-existing tally could hold); a ticket click on a second entity; one bot.
@@ -96,7 +76,7 @@ beforeAll(async () => {
   await plant({ created_at: at(DAY, 15), type: 'view', visitor_hash: 'bot', is_bot: true })
 })
 afterAll(async () => {
-  await svc.from('artists').delete().eq('id', artistF)
+  await deleteThrowawayArtist(svc, artistF)
 })
 
 const EXPECTED = {

@@ -115,7 +115,7 @@ describe('every + turns blue on hover and keyboard focus (Sam, 2026-09-23, said 
   // row's +, the editors' +) turns ACCENT. Once, in RowIcon: `icon="plus"` defaults to the
   // accent tone, and the accent tone colours the glyph on hover AND focus-visible.
   /** Every variant, as a Record so a new variant is a compile error here until listed. */
-  const VARIANTS: Record<RowIconVariant, true> = { faint: true, primary: true, boxed: true }
+  const VARIANTS: Record<RowIconVariant, true> = { faint: true, primary: true, boxed: true, bare: true }
 
   it('CRITICAL: a plus in EVERY variant is accent on hover and on keyboard focus, with no tone given', () => {
     for (const variant of Object.keys(VARIANTS) as RowIconVariant[]) {

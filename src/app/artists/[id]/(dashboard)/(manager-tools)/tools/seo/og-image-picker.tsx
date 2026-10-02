@@ -7,6 +7,7 @@ import { HeaderIcon, KvLabel, MetaDot, ModalHeader, SelectMenu } from '../../../
 import { BrandSwatchProvider, ColorPalette, type NamedSwatch } from '../../../editor/color-picker'
 import { saveOgCardAction } from './actions'
 import { RowIcon } from '../../_ui/row-icon'
+import { ERROR_TEXT, MONO_META } from '../../_ui/styles'
 
 export type OgSource = { url: string; label: string }
 
@@ -108,7 +109,7 @@ export function ShareImageModal({
     <div className="flex items-center justify-between gap-5">
       <div className="min-w-0">
         {error ? (
-          <p role="alert" className="font-space text-[11px] text-accent-red">
+          <p role="alert" className={ERROR_TEXT}>
             {error}
           </p>
         ) : null}
@@ -118,7 +119,7 @@ export function ShareImageModal({
         // autosave: the card is written to ONE fixed PUBLIC file that shared links read at
         // once, so trying colours must not overwrite what's already out there. Only this does.
         <span className="flex items-center gap-2.5">
-          {busy ? <span className="font-space text-[11px] text-ink-faint">Saving…</span> : null}
+          {busy ? <span className={MONO_META}>Saving…</span> : null}
           <RowIcon icon="check" label="Use this picture" variant="boxed" size="sm" tone="accent" labelSide="top" labelAlign="end" onClick={() => void save()} disabled={busy} />
         </span>
       ) : null}

@@ -14,6 +14,7 @@
  */
 import { SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoBot, SeoCrawl } from '@/lib/seo-tests/types'
+import { plural, shortDay } from '../format'
 
 export type CrawlBot = SeoCrawl['robots']['bots'][number]
 export type CrawlPage = SeoCrawl['pages'][number]
@@ -89,8 +90,6 @@ export const opens = (s: number | null | undefined): s is number => typeof s ===
 /** "answered 200", or "no answer". */
 export const answered = (s: number | null | undefined): string => (typeof s === 'number' ? `answered ${s}` : 'no answer')
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-
 /** An address as a person reads it: "www.skeenmusic.com/robots.txt", the home page as the host
  *  alone. Not a web address: returned as it came. */
 export function shortUrl(url: string | null | undefined): string {
@@ -127,7 +126,7 @@ export function dayText(iso: string | null | undefined, locale?: string): string
   const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
   const at = d ? new Date(+d[1], +d[2] - 1, +d[3]) : new Date(s)
   if (!Number.isFinite(at.getTime())) return ''
-  return at.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })
+  return shortDay(at, { locale })
 }
 
 /* ── who runs which crawler ─────────────────────────────────────────────────────────── */
@@ -257,7 +256,7 @@ export function sitemapFace(crawl: SeoCrawl): CrawlFace {
   const tried = sitemapPages(crawl).filter((p) => p.opened)
   const shut = tried.filter((p) => !opens(p.status)).length
   const pages = plural(total, 'page', 'pages')
-  if (shut) return { mark: 'bad', value: `${pages} · ${shut} ${shut === 1 ? 'doesn’t' : 'don’t'} open` }
+  if (shut) return { mark: 'bad', value: `${pages} · ${plural(shut, 'doesn’t', 'don’t')} open` }
   if (!tried.length) return { mark: 'ok', value: pages }
   if (tried.length === total) return { mark: 'ok', value: `${pages} · all open` }
   return { mark: 'ok', value: `${pages} · ${tried.length} tried, all open` }
@@ -346,7 +345,7 @@ export function visitsFace(crawl: SeoCrawl): CrawlFace {
   if (!visitors.length || !pages.length) return { mark: 'unknown', value: 'couldn’t check' }
   const cells = pages.flatMap((p) => visitors.map((b) => visitOf(p, b.key)))
   const all = pages.filter((p) => visitors.every((b) => opens(visitOf(p, b.key)))).length
-  const value = `${plural(visitors.length, 'crawler', 'crawlers')} · ${all} of ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}`
+  const value = `${plural(visitors.length, 'crawler', 'crawlers')} · ${all} of ${plural(pages.length, 'page', 'pages')}`
   if (cells.some((s) => s != null && !opens(s))) return { mark: 'bad', value }
   if (cells.some((s) => s == null)) return { mark: 'unknown', value }
   return { mark: 'ok', value }

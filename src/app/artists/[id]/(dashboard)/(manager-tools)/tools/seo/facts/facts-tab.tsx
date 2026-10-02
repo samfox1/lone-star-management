@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ABOUT_PLACEMENTS, COUNTRIES, FACT_CONTENT_KEYS, MAX_ALIASES, countryOf, type AboutPlacement } from '@samfox1/site-bridge/seo'
 import { cx } from '@/lib/cx'
+import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { CITY_MAX_LENGTH, cleanFactValue, factErrors, factTextError, joinAliases, readFacts, thisYearAt, type FactField } from '@/lib/seo-facts'
 import { regionIn, regionsFor } from '@/lib/seo-regions'
@@ -14,7 +15,7 @@ import { CardModal } from '../../../../card-modal'
 import { HeaderIcon, KvRow, MetaDot, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
 import { AreaField, Chips, EndSlot, FieldError, IconLink, LineField } from '../_ui/parts'
 import { PlatformMark } from '../_ui/mark'
 import { clearHash, useOpenOnHash } from '../_ui/hash'
@@ -89,7 +90,7 @@ export function FactsTab(p: FactsTabProps) {
       const field = (Object.keys(FACT_CONTENT_KEYS) as FactField[]).find((f) => FACT_CONTENT_KEYS[f] === key)
       const r = await saveSeoFieldAction(artistId, key, val)
       if (field) {
-        refuse(field, r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+        refuse(field, r.ok ? null : (r.error ?? SAVE_FAILED))
         // Show back what the gate stored, when it tidied the text (a known country's name).
         if (r.ok) {
           const cleaned = cleanFactValue(key as (typeof FACT_CONTENT_KEYS)[FactField], val, { artistName, thisYear: thisYearAt(new Date()) })
@@ -110,7 +111,7 @@ export function FactsTab(p: FactsTabProps) {
   const artistSave = useDebouncedFieldSave<string>({
     persist: async (col, val) => {
       const r = await saveArtistFactAction(artistId, col as 'genre' | 'location' | 'schema_type', val)
-      refuse(col === 'location' ? 'city' : (col as 'genre'), r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+      refuse(col === 'location' ? 'city' : (col as 'genre'), r.ok ? null : (r.error ?? SAVE_FAILED))
       return { ok: r.ok, error: r.error }
     },
     // The city's rule (the same as its region and country): a refused city is never sent.
@@ -148,7 +149,7 @@ export function FactsTab(p: FactsTabProps) {
     setGenre(joined)
     artistSave.runNow('genre', async () => {
       const r = await saveArtistFactAction(artistId, 'genre', joined)
-      refuse('genre', r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+      refuse('genre', r.ok ? null : (r.error ?? SAVE_FAILED))
       return r
     })
     return null
@@ -171,7 +172,7 @@ export function FactsTab(p: FactsTabProps) {
     setType(next)
     artistSave.runNow('schema_type', async () => {
       const r = await saveArtistFactAction(artistId, 'schema_type', next)
-      refuse('type', r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+      refuse('type', r.ok ? null : (r.error ?? SAVE_FAILED))
       return r
     })
   }
@@ -188,8 +189,8 @@ export function FactsTab(p: FactsTabProps) {
     setFacts((f) => ({ ...f, [key]: value }))
     refuse(field, null)
     placeQueue.current = placeQueue.current.then(async () => {
-      const r = await saveSeoFieldAction(artistId, key, value).catch(() => ({ ok: false, error: 'Couldn’t save that.' }))
-      if (!r.ok) refuse(field, r.error ?? 'Couldn’t save that.')
+      const r = await saveSeoFieldAction(artistId, key, value).catch(() => ({ ok: false, error: SAVE_FAILED }))
+      if (!r.ok) refuse(field, r.error ?? SAVE_FAILED)
     })
   }
   const pickCountry = (next: string) => {
@@ -268,7 +269,7 @@ export function FactsTab(p: FactsTabProps) {
                 <ChoiceMenu label="Country" value={countryOf(country)?.name ?? country} options={COUNTRY_OPTIONS} align="end" size="cell" onChange={pickCountry} />
               </Cell>
             </div>
-            {tidied.country ? <span className="font-space text-[11px] text-ink-faint">{`Saved as ${tidied.country}`}</span> : null}
+            {tidied.country ? <span className={MONO_META}>{`Saved as ${tidied.country}`}</span> : null}
             {errors.city ? <FieldError>{errors.city}</FieldError> : null}
             {errors.region ? <FieldError>{errors.region}</FieldError> : null}
             {errors.country ? <FieldError>{errors.country}</FieldError> : null}
@@ -282,7 +283,7 @@ export function FactsTab(p: FactsTabProps) {
         <LedgerRow title="Booking">
           <span className="min-w-0 truncate font-space text-[12px] text-ink-muted">{`${p.bookingEmail || '—'} · from Settings`}</span>
           <EndSlot>
-            <IconLink icon="settings" label="Change it in Settings" href={`/artists/${artistId}/settings`} align="end" />
+            <RowIcon icon="settings" label="Change it in Settings" href={`/artists/${artistId}/settings`} link="app" labelAlign="end" />
           </EndSlot>
         </LedgerRow>
       </LedgerSection>
@@ -302,7 +303,7 @@ export function FactsTab(p: FactsTabProps) {
             <span className="font-space text-[12px] text-ink-faint">none yet</span>
           )}
           <EndSlot>
-            <IconLink icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} align="end" />
+            <RowIcon icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" labelAlign="end" />
           </EndSlot>
         </LedgerRow>
         <DatabaseRow
@@ -311,7 +312,7 @@ export function FactsTab(p: FactsTabProps) {
           title="MusicBrainz"
           shown={p.databases.musicbrainz}
           missing={<span className="font-space text-[12px] text-accent-red">none</span>}
-          add={<IconLink icon="external" label="Create the page" href={p.musicBrainzCreate} external primary align="end" />}
+          add={<RowIcon icon="external" label="Create the page" href={p.musicBrainzCreate} link="external" variant="primary" tone="link" labelAlign="end" />}
         />
         <DatabaseRow
           artistId={artistId}
@@ -319,8 +320,8 @@ export function FactsTab(p: FactsTabProps) {
           title="Discogs"
           guide="Comes with a release."
           shown={p.databases.discogs}
-          missing={<span className="font-space text-[11px] text-ink-faint">not yet</span>}
-          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} primary align="end" />}
+          missing={<span className={MONO_META}>not yet</span>}
+          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} />}
         />
         <DatabaseRow
           artistId={artistId}
@@ -328,8 +329,8 @@ export function FactsTab(p: FactsTabProps) {
           title="Wikidata"
           guide="Needs press coverage first."
           shown={p.databases.wikidata}
-          missing={<span className="font-space text-[11px] text-ink-faint">not yet</span>}
-          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} primary align="end" />}
+          missing={<span className={MONO_META}>not yet</span>}
+          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} />}
         />
       </LedgerSection>
     </div>
@@ -434,8 +435,7 @@ function ChoiceMenu({
           'flex max-w-full items-center rounded-md text-[15px]',
           size === 'cell' ? 'gap-1.5 leading-6' : 'gap-2.5',
           faint ? 'text-ink-faint' : 'text-ink',
-          FOCUS_RING,
-          'focus-visible:outline-offset-2',
+          FOCUS_RING_OFFSET,
         )}
       >
         <span className="min-w-0 truncate">{shown}</span>
@@ -497,7 +497,7 @@ function DatabaseRow({
         <PlatformMark slug={slug} />
       </span>
       {shown ? <span className="min-w-0 truncate font-space text-[12px] text-ink-muted">{shown}</span> : missing}
-      <EndSlot>{shown ? <IconLink icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} align="end" /> : add}</EndSlot>
+      <EndSlot>{shown ? <RowIcon icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" labelAlign="end" /> : add}</EndSlot>
     </LedgerRow>
   )
 }
@@ -618,7 +618,7 @@ function BioModal({
             className="w-full"
           />
         </KvRow>
-        {seoSave.status === 'error' ? <FieldError>Couldn’t save that.</FieldError> : null}
+        {seoSave.status === 'error' ? <FieldError>{SAVE_FAILED}</FieldError> : null}
       </div>
     </CardModal>
   )

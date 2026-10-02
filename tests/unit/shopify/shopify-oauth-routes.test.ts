@@ -16,34 +16,27 @@
  *   - the uninstall webhook deletes only the matching store's connection, and only for a
  *     body Shopify signed.
  *
- * Supabase and the connect action are faked; Shopify is a stubbed global fetch.
+ * Supabase (sign-in and ownership: tests/helpers/oauth-routes.ts) and the connect action are
+ * faked; Shopify is a stubbed global fetch.
  */
 import { createHmac } from 'node:crypto'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { STATE_COOKIE, STATE_TTL_MS, createState, readState } from '@/lib/merch/shopify-oauth'
+import { OWNER_ID, json, location, owner, routeTestSetup, setCookie } from '@tests/helpers/oauth-routes'
 
 const SECRET = 'shpss_route_secret'
 const ORIGIN = 'https://app.test'
 const SHOP = 'skeen-store.myshopify.com'
 const ARTIST = '11111111-1111-4111-8111-111111111111'
-const USER = 'user-1'
+const USER = OWNER_ID
 
 const w = vi.hoisted(() => ({
-  user: { id: 'user-1' } as { id: string } | null,
-  owns: true,
   deletes: [] as { table: string; filters: [string, unknown][] }[],
   deleteResult: { data: [{ artist_id: '11111111-1111-4111-8111-111111111111' }], error: null } as { data: unknown; error: unknown },
 }))
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: w.user } }) },
-    from: (table: string) => ({
-      select: () => ({ eq: (_col: string, id: string) => ({ maybeSingle: async () => ({ data: table === 'artists' && w.owns ? { id } : null }) }) }),
-    }),
-  }),
-}))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/oauth-routes')).ownerServer())
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -88,32 +81,19 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   }
   return new Response('not found', { status: 404 })
 })
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const HAPPY: Shopify = {
   exchange: () => json({ access_token: 'shpat_admin_secret', scope: 'unauthenticated_read_product_listings' }),
   storefront: () => json({ data: { storefrontAccessTokenCreate: { storefrontAccessToken: { accessToken: 'sf_token' }, userErrors: [] } } }),
   webhook: () => json({ data: { webhookSubscriptionCreate: { webhookSubscription: { id: 'gid://shopify/WebhookSubscription/1' }, userErrors: [] } } }),
 }
 
-const ENV = { key: process.env.SHOPIFY_API_KEY, secret: process.env.SHOPIFY_API_SECRET }
+routeTestSetup({ SHOPIFY_API_KEY: 'client-id', SHOPIFY_API_SECRET: SECRET })
 beforeEach(() => {
-  process.env.SHOPIFY_API_KEY = 'client-id'
-  process.env.SHOPIFY_API_SECRET = SECRET
-  w.user = { id: USER }
-  w.owns = true
   w.deletes = []
   w.deleteResult = { data: [{ artist_id: ARTIST }], error: null }
   shopify = { ...HAPPY }
   vi.stubGlobal('fetch', fetchMock)
 })
-afterEach(() => {
-  vi.unstubAllGlobals()
-  process.env.SHOPIFY_API_KEY = ENV.key
-  process.env.SHOPIFY_API_SECRET = ENV.secret
-})
-
-const location = (res: Response) => res.headers.get('location') ?? ''
-const setCookie = (res: Response) => res.headers.get('set-cookie') ?? ''
 
 // ── install ─────────────────────────────────────────────────────────────────────────────
 
@@ -159,7 +139,7 @@ describe('install', () => {
 
   it('CRITICAL: nobody signed in goes to /login, not to Shopify', async () => {
     await installGoesToShopify()
-    w.user = null
+    owner.user = null
     const res = await install(installReq({ artist: ARTIST, shop: SHOP }))
     expect(new URL(location(res)).pathname).toBe('/login')
     expect(setCookie(res)).not.toContain(STATE_COOKIE)
@@ -167,7 +147,7 @@ describe('install', () => {
 
   it('CRITICAL: a manager of another artist gets a 404 and no cookie', async () => {
     await installGoesToShopify()
-    w.owns = false
+    owner.owns = false
     const res = await install(installReq({ artist: ARTIST, shop: SHOP }))
     expect(res.status).toBe(404)
     expect(location(res)).toBe('')
@@ -330,7 +310,7 @@ describe('callback — refusals save nothing and ask Shopify for nothing', () =>
   it('CRITICAL: finished in another manager’s session', async () => {
     await witnessSaves()
     const t = trip()
-    w.user = { id: 'user-2' }
+    owner.user = { id: 'user-2' }
     const res = await callback(callbackReq(returnFor(t), t.cookie))
     expectNothingHappened()
     expect(location(res)).toContain('reason=auth')
@@ -339,7 +319,7 @@ describe('callback — refusals save nothing and ask Shopify for nothing', () =>
   it('CRITICAL: a manager who no longer manages the artist', async () => {
     await witnessSaves()
     const t = trip()
-    w.owns = false
+    owner.owns = false
     const res = await callback(callbackReq(returnFor(t), t.cookie))
     expectNothingHappened()
     expect(location(res)).toContain('reason=auth')

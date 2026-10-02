@@ -15,6 +15,7 @@ import {
   type LinkRowLike,
 } from '@/lib/connections'
 import { probeAdvice } from '@/lib/merch/probe'
+import { plural } from '@/lib/manager-tools/format'
 import type { ReturnReason } from '@/lib/merch/shopify-oauth'
 import { addContentAction, deleteContentAction, saveSourceIdAction } from '../../actions'
 import { INTEGRATIONS } from '../../integrations'
@@ -140,7 +141,7 @@ async function connectShopify(artistId: string, input: ConnectInput): Promise<Co
   }
   const pulled = await syncShopifyAction(artistId)
   if (!pulled.ok) return { ok: false, error: pulled.error, reason: 'sync' }
-  return { ok: true, message: pulled.message ?? `${probe.products.length} product${probe.products.length === 1 ? '' : 's'} found` }
+  return { ok: true, message: pulled.message ?? `${plural(probe.products.length, 'product', 'products')} found` }
 }
 
 /**

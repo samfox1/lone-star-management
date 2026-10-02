@@ -4,9 +4,9 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import type { SeoCrawl, SeoTestStatus } from '@/lib/seo-tests/types'
-import { HoverLabel } from '../../../_ui/row-icon'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useMounted } from '../_ui/clock'
+import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowChevron, RowValue, SentenceAction } from '../_ui/disclosure'
 import {
   ASK_GOOGLE,
   BING_WEBMASTER,
@@ -62,14 +62,11 @@ import { StatusMark } from './test-row'
  * EVERYTHING HERE CAME FROM THE SITE OR FROM GOOGLE / BING: rendered as React text only. Dates
  * are the manager's own time zone, so they appear only after mount (_ui/clock.ts), never on the server.
  *
- * The row and card are test-row.tsx's grammar, drawn here (its Card is private to one test
- * result): the same row face, the same StatusMark, the same card box and label.
+ * The row and card are test-row.tsx's grammar (_ui/disclosure.tsx): the same group head, row
+ * box, StatusMark, value, chevron, card box and label.
  */
 
 const TITLE = 'How crawlers see your site'
-const EYEBROW = 'font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
-/** The thin line between two closed rows (test-row.tsx's). */
-const DIVIDER = 'shadow-[0_-1px_0_var(--color-hairline-soft)]'
 
 const MARK_STATUS: Record<CrawlMark, SeoTestStatus> = { ok: 'pass', bad: 'fail', unknown: 'unknown' }
 const MARK_WORD: Record<CrawlMark, string> = { ok: 'fine', bad: 'needs you', unknown: 'couldn’t see' }
@@ -109,11 +106,7 @@ export function CrawlSection({ crawl, site }: { crawl: SeoCrawl | null | undefin
 
   return (
     <section aria-label={TITLE} data-crawl-section="" onKeyDown={onKey}>
-      <div className="mb-0.5 mt-[26px] flex items-baseline justify-between gap-4">
-        <h3 className={cx(EYEBROW, 'font-normal')}>{TITLE}</h3>
-        <span data-crawl-fine="" className="font-space text-[11px] text-ink-faint">{`${fine} of ${total} fine`}</span>
-      </div>
-      <div className="-mx-3">
+      <DisclosureGroup title={TITLE} count={`${fine} of ${total} fine`} countData={{ 'data-crawl-fine': '' }}>
         {CRAWL_ROWS.map((r, i) => {
           const open = openId === r.id
           return (
@@ -130,63 +123,43 @@ export function CrawlSection({ crawl, site }: { crawl: SeoCrawl | null | undefin
             </CrawlRow>
           )
         })}
-      </div>
+      </DisclosureGroup>
     </section>
   )
 }
 
 function CrawlRow({ id, name, face, open, divider, onToggle, children }: { id: CrawlRowId; name: string; face: CrawlFace; open: boolean; divider: boolean; onToggle: () => void; children: ReactNode }) {
   return (
-    <div data-crawl-item={id} className={cx('rounded-xl', open ? 'my-1 bg-surface' : divider && DIVIDER)}>
-      <button
-        id={rowId(id)}
-        type="button"
-        data-crawl-row=""
-        data-mark={face.mark}
-        aria-expanded={open}
-        aria-controls={cardId(id)}
-        onClick={onToggle}
-        className={cx('group/trow flex w-full items-center gap-3.5 rounded-xl p-3 text-left transition-colors hover:bg-surface', FOCUS_RING, 'focus-visible:-outline-offset-2')}
-      >
-        <StatusMark status={MARK_STATUS[face.mark]} />
-        <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
-          <span className="min-w-0 flex-1 text-[15px] font-medium leading-[1.35] text-ink [overflow-wrap:anywhere]">{name}</span>
-          <span className="sr-only">, {MARK_WORD[face.mark]}</span>
-          <span data-crawl-value="" className={cx('min-w-0 max-w-full truncate whitespace-nowrap font-space text-[12px] sm:max-w-[200px]', face.mark === 'bad' ? 'text-accent-red' : 'text-ink-faint')}>
-            {face.value}
+    <DisclosureItem
+      buttonId={rowId(id)}
+      cardId={cardId(id)}
+      open={open}
+      divider={divider}
+      onToggle={onToggle}
+      itemData={{ 'data-crawl-item': id }}
+      rowData={{ 'data-crawl-row': '', 'data-mark': face.mark }}
+      face={
+        <>
+          <StatusMark status={MARK_STATUS[face.mark]} />
+          <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
+            <span className="min-w-0 flex-1 text-[15px] font-medium leading-[1.35] text-ink [overflow-wrap:anywhere]">{name}</span>
+            <span className="sr-only">, {MARK_WORD[face.mark]}</span>
+            <RowValue bad={face.mark === 'bad'} data={{ 'data-crawl-value': '' }}>
+              {face.value}
+            </RowValue>
           </span>
-        </span>
-        <Icon
-          name="chevronRight"
-          size={14}
-          aria-hidden="true"
-          className={cx('flex-none transition-transform duration-150', open ? 'rotate-90 text-ink' : 'text-ink-faint group-hover/trow:text-ink')}
-        />
-      </button>
-      {open ? (
-        <div id={cardId(id)} role="region" aria-labelledby={rowId(id)} className="px-3 pb-3 pt-0.5 sm:pb-[22px] sm:pl-[46px] sm:pr-3.5">
-          <div className="grid grid-cols-1 gap-y-1.5 rounded-xl border border-hairline bg-paper px-5 py-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.03)] min-[700px]:grid-cols-[100px_minmax(0,1fr)] min-[700px]:gap-x-5 min-[700px]:gap-y-5">
-            {children}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-/* ── the card's pieces ── */
-
-/** One LABEL | value row of the card. Beside its value from 700px, above it on a phone. */
-function Field({ label, name, children }: { label: string; name: string; children: ReactNode }) {
-  return (
-    <>
-      <span className="pt-3 font-space text-[10px] uppercase leading-[1.4] tracking-[0.1em] text-ink-faint first:pt-0 min-[700px]:pt-1 min-[700px]:first:pt-1">{label}</span>
-      <div data-card={name} className="min-w-0">
+          <RowChevron open={open} />
+        </>
+      }
+    >
+      <DisclosureCard id={cardId(id)} labelledBy={rowId(id)}>
         {children}
-      </div>
-    </>
+      </DisclosureCard>
+    </DisclosureItem>
   )
 }
+
+/* ── the card's pieces (each LABEL | value row is a CardField) ── */
 
 /** Words, with robots.txt lines set in mono. */
 function Say({ words }: { words: Words }) {
@@ -259,18 +232,7 @@ function CompanyRow({ name, span, first }: { name: string; span: number; first: 
 
 /** A bare ↗ glyph with its name on hover and focus, like a test row's action. */
 function OutsideLink({ link }: { link: { label: string; href: string } }) {
-  return (
-    <a
-      href={link.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={link.label}
-      className={cx('relative ml-2.5 inline-flex rounded align-[-3px] text-ink transition-colors hover:text-accent', FOCUS_RING, 'focus-visible:outline-offset-2')}
-    >
-      <Icon name="external" size={17} aria-hidden="true" />
-      <HoverLabel label={link.label} align="start" />
-    </a>
-  )
+  return <SentenceAction icon="external" label={link.label} href={link.href} link="external" />
 }
 
 /** "ASK GOOGLE ↗" beside a page Google doesn't list: Search Console's inspect page for it, where
@@ -285,8 +247,7 @@ function AskGoogleLink({ href, path }: { href: string; path: string }) {
       data-ask-google
       className={cx(
         'ml-2.5 inline-flex items-center gap-1 whitespace-nowrap rounded align-middle font-space text-[10px] uppercase tracking-[0.1em] text-ink transition-colors hover:text-accent',
-        FOCUS_RING,
-        'focus-visible:outline-offset-2',
+        FOCUS_RING_OFFSET,
       )}
     >
       {ASK_GOOGLE}
@@ -328,13 +289,13 @@ function RobotsCard({ crawl }: { crawl: SeoCrawl }) {
   const groups = byCompany(r.bots)
   return (
     <>
-      <Field label="The file" name="file">
+      <CardField label="The file" name="file">
         {r.text != null ? (
           <pre className="m-0 max-h-80 overflow-auto whitespace-pre-wrap rounded-[10px] bg-surface px-3.5 py-3 font-space text-[12px] leading-[1.65] text-ink [overflow-wrap:anywhere]">{r.text}</pre>
         ) : null}
         <Caption>{where}</Caption>
-      </Field>
-      <Field label="Who it lets in" name="who">
+      </CardField>
+      <CardField label="Who it lets in" name="who">
         {lead ? (
           <Lead>
             <Say words={lead.words} />
@@ -368,15 +329,15 @@ function RobotsCard({ crawl }: { crawl: SeoCrawl }) {
             }),
           ])}
         </Table>
-      </Field>
+      </CardField>
       {notes.length ? (
-        <Field label="Note" name="note">
+        <CardField label="Note" name="note">
           {notes.map((n, i) => (
             <Note key={i}>
               <Say words={n} />
             </Note>
           ))}
-        </Field>
+        </CardField>
       ) : null}
     </>
   )
@@ -390,7 +351,7 @@ function SitemapCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null
   const total = Math.max(s.total, pages.length)
   return (
     <>
-      <Field label="Address" name="address">
+      <CardField label="Address" name="address">
         {s.url ? (
           <>
             <p className="text-[14px] leading-normal text-ink [overflow-wrap:anywhere]">{shortUrl(s.url)}</p>
@@ -401,9 +362,9 @@ function SitemapCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null
         ) : (
           <Lead last>We didn’t find a sitemap.</Lead>
         )}
-      </Field>
+      </CardField>
       {pages.length ? (
-        <Field label="Pages in it" name="pages">
+        <CardField label="Pages in it" name="pages">
           <Table
             head={
               <tr>
@@ -422,12 +383,12 @@ function SitemapCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null
             ))}
           </Table>
           {total > pages.length ? <Caption>{`The first ${pages.length} of ${total} pages.`}</Caption> : null}
-        </Field>
+        </CardField>
       ) : null}
       {s.sameDates && pages.length > 1 ? (
-        <Field label="Note" name="note">
+        <CardField label="Note" name="note">
           <Note>Every page has the same date, so the list doesn’t say which page changed last. Search engines may ignore dates like that.</Note>
-        </Field>
+        </CardField>
       ) : null}
     </>
   )
@@ -451,7 +412,7 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
   return (
     <>
       {oh ? (
-        <Field label="Address" name="address">
+        <CardField label="Address" name="address">
           {/* One line that wraps on a phone: the other spelling → where it sends you · how. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-space text-[12px] text-ink-faint [overflow-wrap:anywhere]">
             <span className="text-ink">{shortUrl(oh.url)}</span>
@@ -460,9 +421,9 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
           </div>
           {toOwn && permanent ? <Caption>One address for the whole site, so search engines don’t split you in two.</Caption> : null}
           {!oh.to && opens(oh.status) ? <Caption>Both addresses show your site.</Caption> : null}
-        </Field>
+        </CardField>
       ) : null}
-      <Field label="Canonical tag" name="canonical">
+      <CardField label="Canonical tag" name="canonical">
         {read.length ? (
           <>
             <Table
@@ -498,8 +459,8 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
         ) : (
           <Lead last>No page opened, so there were no tags to read.</Lead>
         )}
-      </Field>
-      <Field label="Noindex" name="noindex">
+      </CardField>
+      <CardField label="Noindex" name="noindex">
         {!read.length ? (
           <Lead last>No page opened, so we couldn’t check.</Lead>
         ) : skip.length ? (
@@ -521,7 +482,7 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
             <Mark mark="ok" /> None. No page tag or header tells search engines to skip a page.
           </Lead>
         )}
-      </Field>
+      </CardField>
     </>
   )
 }
@@ -534,7 +495,7 @@ function VisitsCard({ crawl }: { crawl: SeoCrawl }) {
   const span = pages.length + 1
   return (
     <>
-      <Field label="Every visit" name="visits">
+      <CardField label="Every visit" name="visits">
         {/* The crawler's name wraps; the page columns don't, so many pages on a phone scroll
             the table sideways, never the page. */}
         <div className="overflow-x-auto">
@@ -576,10 +537,10 @@ function VisitsCard({ crawl }: { crawl: SeoCrawl }) {
             ])}
           </Table>
         </div>
-      </Field>
-      <Field label="Note" name="note">
+      </CardField>
+      <CardField label="Note" name="note">
         <Note>We visit using each crawler’s name, from our own server. A firewall that checks who is really visiting can treat the real crawler differently.</Note>
-      </Field>
+      </CardField>
     </>
   )
 }
@@ -591,7 +552,7 @@ function ListedCard({ crawl, origin, day }: { crawl: SeoCrawl; origin: string | 
   const b = Array.isArray(crawl.listing.bing) ? crawl.listing.bing : null
   return (
     <>
-      <Field label="Google" name="google">
+      <CardField label="Google" name="google">
         {g ? (
           <Table
             head={
@@ -623,9 +584,9 @@ function ListedCard({ crawl, origin, day }: { crawl: SeoCrawl; origin: string | 
             <OutsideLink link={SEARCH_CONSOLE} />
           </Lead>
         )}
-      </Field>
+      </CardField>
       {/* Bing says when it last visited a page, never whether it lists it: no "listed" here. */}
-      <Field label="Bing" name="bing">
+      <CardField label="Bing" name="bing">
         {b ? (
           <Table
             head={
@@ -650,10 +611,10 @@ function ListedCard({ crawl, origin, day }: { crawl: SeoCrawl; origin: string | 
             <OutsideLink link={BING_WEBMASTER} />
           </Lead>
         )}
-      </Field>
-      <Field label="Why it matters" name="why">
+      </CardField>
+      <CardField label="Why it matters" name="why">
         <Note>ChatGPT search reads Bing’s list, and Gemini reads Google’s. A page that isn’t listed can’t come up in their answers.</Note>
-      </Field>
+      </CardField>
     </>
   )
 }

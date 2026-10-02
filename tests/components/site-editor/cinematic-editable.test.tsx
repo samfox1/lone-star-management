@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 import { CinematicTemplate } from '@/components/templates/cinematic'
 
 vi.mock('@/components/templates/cinematic-hero', () => ({ CinematicHero: () => <div data-testid="hero" /> }))
@@ -22,39 +23,18 @@ vi.mock('@/components/subscribe-form', () => ({ SubscribeForm: () => <div data-t
 const TOUR_ID = 'aaaaaaaa-0000-4000-8000-000000000001'
 const VIDEO_ID = 'bbbbbbbb-0000-4000-8000-000000000002'
 
-function siteData(): SiteData {
-  return {
-    artist: {
-      id: 'artist-1',
-      slug: 'demo',
-      name: 'Demo Artist',
-      bio: 'Line one',
-      hero_image_url: 'https://img/hero.jpg',
-      template: 'cinematic',
-      spotify_artist_id: null,
-    },
-    tracks: [],
-    tour_dates: [
-      { id: TOUR_ID, date: '2099-06-01', venue: 'The Venue', city: 'Austin', country: 'US', ticket_url: null },
-    ],
-    merch: [],
-    links: [],
-    videos: [
-      { id: VIDEO_ID, title: 'A video', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/x', storage_path: null, sort_order: 0 },
-    ],
-    media: [],
-    site_content: {},
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  }
-}
+const site = (): SiteData =>
+  siteData({
+    artist: { id: 'artist-1', slug: 'demo', name: 'Demo Artist', bio: 'Line one', hero_image_url: 'https://img/hero.jpg', template: 'cinematic' },
+    tour_dates: [{ id: TOUR_ID, date: '2099-06-01', venue: 'The Venue', city: 'Austin', country: 'US', ticket_url: null }],
+    videos: [{ id: VIDEO_ID, title: 'A video', provider: 'youtube', embed_url: 'https://www.youtube.com/embed/x', storage_path: null, sort_order: 0 }],
+  })
 
 afterEach(cleanup)
 
 describe('cinematic template — edit-mode markers', () => {
   it('marks slots, fields, and items when editable', () => {
-    const { container } = render(<CinematicTemplate data={siteData()} editable />)
+    const { container } = render(<CinematicTemplate data={site()} editable />)
 
     // Shows section: slot + heading field + item row.
     expect(container.querySelector('[data-lse-slot="shows"]')).not.toBeNull()
@@ -77,7 +57,7 @@ describe('cinematic template — edit-mode markers', () => {
   })
 
   it('emits NO markers when not editable (the public site)', () => {
-    const { container } = render(<CinematicTemplate data={siteData()} />)
+    const { container } = render(<CinematicTemplate data={site()} />)
     expect(container.querySelector('[data-lse-slot]')).toBeNull()
     expect(container.querySelector('[data-lse-field]')).toBeNull()
     expect(container.querySelector('[data-lse-item]')).toBeNull()

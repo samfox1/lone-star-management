@@ -25,7 +25,7 @@ import { useFrameBridge } from '@/app/artists/[id]/(dashboard)/editor/use-frame-
 import { resolvePanelInputs } from '@/lib/site-editor/panel-inputs'
 import { runtimeImageFields, runtimeTextFields } from '@/app/artists/[id]/(dashboard)/editor/editor-shell'
 import { BRIDGE_VERSION, FRAME_SOURCE } from '@samfox1/site-bridge/protocol'
-import type { PublicSitePayload } from '@/lib/site'
+import { sitePayload } from '@tests/helpers/site-data'
 
 const CUSTOM = 'https://skeen-website.vercel.app'
 
@@ -54,11 +54,7 @@ const announce = (page: string) => ({
   ],
 })
 
-const draft: PublicSitePayload = {
-  artist: { id: 'a1', slug: 'skeen', name: 'Skeen', bio: 'skeen is a band from texas.', hero_image_url: null, template: 'classic', spotify_artist_id: null },
-  tracks: [], tour_dates: [], merch: [], links: [], videos: [], media: [],
-  site_content: {}, styles: {}, fonts: [], font_slots: {},
-}
+const draft = sitePayload({ artist: { bio: 'skeen is a band from texas.', template: 'classic' } })
 
 function mount() {
   const el = {

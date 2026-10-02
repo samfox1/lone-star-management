@@ -18,14 +18,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { firstAnalyticsDay } from '@/lib/analytics'
+import { createThrowawayArtist, deleteThrowawayArtist } from '@tests/helpers/artist'
+import { at, unrolledDays } from '@tests/integration/analytics/_days'
 
 const svc = serviceClient()
 let asA: SupabaseClient
 let artistF: string
 let EARLY: string
 const LATE = new Date().toISOString().slice(0, 10)
-const slugF = `t-firstday-${crypto.randomUUID().slice(0, 8)}`
-const at = (day: string, hour: number) => `${day}T${String(hour).padStart(2, '0')}:00:00Z`
 
 async function plant(day: string, hour: number): Promise<void> {
   const { error } = await svc.from('analytics_events').insert({
@@ -34,37 +34,14 @@ async function plant(day: string, hour: number): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-/** A day in 2017–2024 the ledger has NOT rolled, probed through a public reader. */
-async function unrolledDay(): Promise<string> {
-  for (let tries = 0; tries < 20; tries++) {
-    const y = 2017 + Math.floor(Math.random() * 8)
-    const m = 1 + Math.floor(Math.random() * 12)
-    const d = 1 + Math.floor(Math.random() * 27)
-    const day = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const { data: probe } = await svc.from('analytics_events')
-      .insert({ artist_id: artistF, type: 'view', created_at: at(day, 1) }).select('id').single()
-    const { data, error } = await svc.rpc('analytics_timeline', { p_artist_id: artistF, p_since: day, p_until: day })
-    await svc.from('analytics_events').delete().eq('id', (probe as { id: string }).id)
-    if (error) throw new Error(error.message)
-    if (((data ?? []) as unknown[]).length === 1) return day
-  }
-  throw new Error('could not find an unrolled day in 20 tries')
-}
-
 beforeAll(async () => {
   asA = await signInAs(SEED.managerA)
-  const { data, error } = await svc.from('artists')
-    .insert({ slug: slugF, name: 'First day throwaway' }).select('id').single()
-  if (error) throw new Error(error.message)
-  artistF = data.id as string
-  const userA = (await asA.auth.getUser()).data.user!.id
-  const { error: e2 } = await svc.from('artist_managers').insert({ artist_id: artistF, user_id: userA })
-  if (e2) throw new Error(e2.message)
-  EARLY = await unrolledDay()
+  artistF = (await createThrowawayArtist(svc, 'First day', asA)).id
+  EARLY = (await unrolledDays(svc, artistF, (first, last) => svc.rpc('analytics_timeline', { p_artist_id: artistF, p_since: first, p_until: last })))[0]
 })
 
 afterAll(async () => {
-  if (artistF) await svc.from('artists').delete().eq('id', artistF)
+  await deleteThrowawayArtist(svc, artistF)
 })
 
 describe('firstAnalyticsDay', () => {

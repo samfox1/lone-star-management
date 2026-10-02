@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MAX_DESCRIPTION, MAX_TITLE } from '@samfox1/site-bridge/seo'
 import { recommendAlt } from '@samfox1/site-bridge/alt'
 import { cx } from '@/lib/cx'
+import { SAVE_FAILED, plural } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction, setMediaAltAction } from '../../../../actions'
@@ -12,7 +13,7 @@ import { CardModal } from '../../../../card-modal'
 import { HeaderIcon, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
-import { FOCUS_RING } from '../../../_ui/focus-ring'
+import { FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
 import { ShareImageModal, type OgSource } from '../og-image-picker'
 import type { NamedSwatch } from '../../../../editor/color-picker'
 import { AreaField, Count, EndSlot, FieldError, LineField } from '../_ui/parts'
@@ -71,7 +72,7 @@ export function DetailsTab({
   const save = useDebouncedFieldSave<string>({
     persist: async (k, val) => {
       const r = await saveSeoFieldAction(artistId, k, val)
-      refuse(k, r.ok ? null : (r.error ?? 'Couldn’t save that.'))
+      refuse(k, r.ok ? null : (r.error ?? SAVE_FAILED))
       return { ok: r.ok, error: r.error }
     },
     // Refused HERE, before it is queued or sent, in the gate's own words (never cut).
@@ -139,7 +140,7 @@ export function DetailsTab({
         </LedgerRow>
         <LedgerRow title="Preview">
           <div className="w-full max-w-[520px] rounded-lg bg-surface px-4 py-3 text-left" data-testid="google-preview">
-            <div className="truncate font-space text-[11px] text-ink-faint">{siteUrl ?? 'your site'}</div>
+            <div className={cx('truncate', MONO_META)}>{siteUrl ?? 'your site'}</div>
             <div className="mt-0.5 truncate text-[16px] text-accent">{title}</div>
             <div className="mt-0.5 line-clamp-2 text-[12px] leading-[1.35] text-ink-muted">{desc || '—'}</div>
           </div>
@@ -178,8 +179,7 @@ function ShareRow({ artistId, currentUrl, sources, brandColors }: { artistId: st
           className={cx(
             'h-[92px] w-[176px] flex-none overflow-hidden rounded-lg border border-hairline bg-paper',
             url ? 'block' : 'flex items-center justify-center border-dashed text-ink-faint hover:text-accent',
-            FOCUS_RING,
-            'focus-visible:outline-offset-2',
+            FOCUS_RING_OFFSET,
           )}
         >
           {url ? <img src={url} alt="" className="block h-full w-full object-cover" /> : <Icon name="plus" size={18} />}
@@ -202,12 +202,12 @@ function AltRow({ artistId, artistName, photos: initial }: { artistId: string; a
     setOpen(false)
     clearHash('alt')
   }
-  const meta = photos.length ? `${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}` : undefined
+  const meta = photos.length ? plural(photos.length, 'photo', 'photos') : undefined
   return (
     <div id="alt" className="scroll-mt-28">
       <LedgerRow title="Photo descriptions" meta={meta}>
         {photos.length ? (
-          <button type="button" aria-label="Open the photos" onClick={() => setOpen(true)} className={cx('flex gap-1.5 rounded-md', FOCUS_RING, 'focus-visible:outline-offset-2')}>
+          <button type="button" aria-label="Open the photos" onClick={() => setOpen(true)} className={cx('flex gap-1.5 rounded-md', FOCUS_RING_OFFSET)}>
             {photos.slice(0, 6).map((p) => (
               <img key={p.id} src={p.url} alt="" className="block h-9 w-9 rounded-md border border-hairline object-cover" />
             ))}

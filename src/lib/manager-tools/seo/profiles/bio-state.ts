@@ -16,6 +16,7 @@
 import type { ARTIST_SNAPSHOT } from '@/lib/content'
 import { CONNECTIONS, buildConnectionRows, type ConnectionDef, type LinkRowLike } from '@/lib/connections'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
+import { shortDay } from '../../format'
 import { OUTSIDE_BIOS, bioItem, type OutsideBio } from './bios'
 
 /**
@@ -182,8 +183,7 @@ export function bioRows(input: BiosInput, now: Date | number): BioRow[] | null {
 export function dayLabel(iso: string, now: Date | number): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  const year = d.getFullYear() !== new Date(now).getFullYear()
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) })
+  return shortDay(d, { locale: 'en-US', now })
 }
 
 /** How many bios to look at: every row that is not current. A row that couldn't be checked is

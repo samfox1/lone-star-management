@@ -3,11 +3,10 @@
  * sends it, including a name that looked public a moment earlier (DNS rebinding).
  *
  * Code:     src/lib/net-guard.ts (createSafeFetch, pickTransport), src/lib/guarded-fetch.ts
- *           (guardedFetch), src/lib/seo-audit.ts (fetchGuarded, auditLiveSite), src/lib/indexnow.ts
- *           (pingIndexNow), src/lib/seo-tests/evidence.ts (gatherSiteEvidence), src/lib/og.ts
- *           (fetchOpenGraph)
- * Feature:  safe fetching: the SEO/GEO checks' site visit, the old live check, the IndexNow ping,
- *           and the Add modal's link preview
+ *           (guardedFetch), src/lib/indexnow.ts (pingIndexNow), src/lib/seo-tests/evidence.ts
+ *           (gatherSiteEvidence), src/lib/og.ts (fetchOpenGraph)
+ * Feature:  safe fetching: the SEO/GEO checks' site visit, the IndexNow ping, and the Add modal's
+ *           link preview
  * Tier:     STRICT (AGENTS.md "Test depth"): security. The text check alone let
  *           `169.254.169.254.nip.io` reach the cloud metadata service (security review
  *           2026-09-29), because callers handed the name to the global fetch, which resolves it
@@ -19,8 +18,8 @@
  *             user:password@ address
  *           • the SEO checks' fetcher refuses a private address as `not-public`, and never
  *             trusts the global fetch handed to it
- *           • every production caller (old live check, IndexNow, the SEO site visit, link
- *             previews) uses the safe transport by default
+ *           • every production caller (IndexNow, the SEO site visit, link previews) uses the safe
+ *             transport by default
  * Not here: which addresses count as private (private-addresses.test.ts); redirects to a private
  *           address (redirects.test.ts); what a fetch that IS allowed sends and brings back
  *           (requests-and-answers.test.ts).
@@ -54,7 +53,6 @@ vi.mock('node:dns/promises', async (importOriginal) => {
 
 import { createSafeFetch, isBlockedAddressError, resolvePublic } from '@/lib/net-guard'
 import { guardedFetch } from '@/lib/guarded-fetch'
-import { auditLiveSite, fetchGuarded } from '@/lib/seo-audit'
 import { pingIndexNow } from '@/lib/indexnow'
 import { fetchOpenGraph } from '@/lib/og'
 import { gatherSiteEvidence } from '@/lib/seo-tests/evidence'
@@ -196,7 +194,7 @@ describe('the SEO checks’ fetcher (guardedFetch)', () => {
     expect(dns.calls).toEqual(['gone.example.com'])
   })
 
-  // A caller that passes the global `fetch` (the old live check did) would resolve the name
+  // A caller that passes the global `fetch` would resolve the name
   // again, unchecked: it is treated as "no fetcher" and the safe transport is used instead.
   it('CRITICAL: the global fetch handed in is not trusted: the safe transport is used instead', async () => {
     const spy = vi.fn(async () => new Response('should never be asked'))
@@ -236,31 +234,6 @@ describe('every server caller uses the safe transport by default', () => {
   })
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  // fetchGuarded with no fetcher asks the system DNS (all addresses) and, told "private",
-  // fetches nothing.
-  it('CRITICAL: fetchGuarded with no fetcher does not fetch a name that resolves privately', async () => {
-    expect(await fetchGuarded(`${ORIGIN}/`)).toEqual({ status: null, body: null })
-    expect(spy).not.toHaveBeenCalled()
-    expect(dnsState.calls).toEqual([HOST])
-  })
-
-  // A resolver handed to fetchGuarded reaches the safe transport (and the system DNS is not asked).
-  it('fetchGuarded passes its resolver option to the safe transport', async () => {
-    const dns = fakeDns({ [HOST]: ['93.184.216.34', '::1'] })
-    expect(await fetchGuarded(`${ORIGIN}/`, undefined, { resolver: dns })).toEqual({ status: null, body: null })
-    expect(dns.calls).toEqual([HOST])
-    expect(dnsState.calls).toEqual([])
-  })
-
-  // The old live check, called exactly as its action calls it (with `fetch` itself), still
-  // goes through the safe transport.
-  it('CRITICAL: the old live check (auditLiveSite), called the way the action calls it', async () => {
-    const r = await auditLiveSite(ORIGIN, fetch)
-    expect(spy).not.toHaveBeenCalled()
-    expect(dnsState.calls).toContain(HOST)
-    expect(r.ok).toBe(false)
   })
 
   // The IndexNow ping reads the site's key file and sitemap: both go through the safe transport.

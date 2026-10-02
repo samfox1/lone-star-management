@@ -1,12 +1,15 @@
+import { cx } from '@/lib/cx'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { Card, buttonClass } from '@/components/ui/ui'
 import { createClient } from '@/lib/supabase/server'
+import { plural } from '@/lib/manager-tools/format'
 import { dashboardDiff, getShopifyDomain, requireArtist } from '../../_data'
 import { connectedCount } from '../../integrations'
 import { dirtyBySeg, isSegDirty } from '../../sections'
 import { TOOLS } from '../_shell/tools-registry'
 import { OverviewPublish } from './overview-publish'
+import { MONO_META } from '../_ui/styles'
 
 /**
  * The Overview of the manager-tools dashboard (Sam, 2026-08-28): what state the site is
@@ -28,7 +31,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
   const unpublished = Object.values(dirty).filter(Boolean).length
 
   const stats: { value: string | number; label: string; href: string; tone?: 'accent' }[] = [
-    { value: unpublished ? `${unpublished} section${unpublished === 1 ? '' : 's'}` : 'Live', label: unpublished ? 'unpublished' : 'everything published', href: `/artists/${id}/site`, tone: unpublished ? 'accent' : undefined },
+    { value: unpublished ? plural(unpublished, 'section', 'sections') : 'Live', label: unpublished ? 'unpublished' : 'everything published', href: `/artists/${id}/site`, tone: unpublished ? 'accent' : undefined },
     { value: subscribers ?? 0, label: 'subscribers', href: `/artists/${id}/subscribers` },
     { value: enquiries ?? 0, label: 'unread enquiries', href: `/artists/${id}/enquiries`, tone: enquiries ? 'accent' : undefined },
     { value: connected, label: `connection${connected === 1 ? '' : 's'}`, href: `/artists/${id}/connections` },
@@ -72,7 +75,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
                   {t.label}
                   {isSegDirty(dirty, t.seg) && <span className="h-[6px] w-[6px] rounded-full bg-accent" aria-label="Unpublished changes" />}
                 </div>
-                <div className="mt-0.5 truncate font-space text-[11px] text-ink-faint">{t.desc}</div>
+                <div className={cx('mt-0.5 truncate', MONO_META)}>{t.desc}</div>
               </div>
             </Card>
           </Link>

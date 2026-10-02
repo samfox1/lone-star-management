@@ -22,6 +22,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import EpkPage from '@/app/[slug]/epk/page'
 import { parsePressQuotes } from '@/lib/epk'
 import { getPublishedSite } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ rpc: async () => ({ data: [] }) }),
@@ -42,20 +43,8 @@ vi.mock('@/lib/epk', async (importOriginal) => {
 const mockedSite = vi.mocked(getPublishedSite)
 const mockedParse = vi.mocked(parsePressQuotes)
 
-/** A published site carrying only what the EPK reads. */
-function site(artist: Record<string, unknown>) {
-  return {
-    artist: { id: 'a1', slug: 'lone-pine', name: 'Lone Pine', bio: null, hero_image_url: null, template: 'classic', spotify_artist_id: null, ...artist },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
-    links: [],
-    videos: [],
-    media: [],
-    site_content: {},
-    styles: {},
-  }
-}
+/** A published site with nothing on it but the artist fields a test names. */
+const site = (artist: Record<string, unknown>) => siteData({ artist: { slug: 'lone-pine', name: 'Lone Pine', ...artist } })
 
 const renderPage = async () => render(await EpkPage({ params: Promise.resolve({ slug: 'lone-pine' }) }))
 

@@ -14,38 +14,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PUBLISHABLE } from '@/lib/content'
 import { BRAND_KINDS } from '@/lib/brand'
-import { fakeClient, type Call } from '@tests/helpers/fake-client'
+import { LOGO, PHOTO, PUBLISH_ACTIONS, setWorld, world, type PublishName } from '@tests/unit/publish/_publish-world'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 // The password gate signs in on a throwaway client; here it always says yes.
-vi.mock('@supabase/supabase-js', async (orig) => ({
-  ...(await orig<typeof import('@supabase/supabase-js')>()),
-  createClient: () => ({ auth: { signInWithPassword: async () => ({ error: null }) } }),
-}))
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
 
-const A = 'a1'
-let fake = fakeClient()
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => ({
-    ...fake.client,
-    auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'm@example.test' } } }) },
-  })),
-}))
-
-function world() {
-  return fakeClient((c: Call) => {
-    if (c.op === 'rpc') return { data: [] } // nothing published yet: every row is new
-    if (c.table === 'artists' && c.cols === 'id, theme_color') return { data: { id: A, theme_color: '#0a0a0a' } }
-    if (c.table === 'artists') return { data: { name: 'Fake' } } // the profile snapshot
-    // Media holds one of each side: a logo (the Brand page's) and a gallery photo (the
-    // site's), so every action shows which media it sends.
-    if (c.table === 'media') return { data: [LOGO, PHOTO], count: 2 }
-    // One working row per other table.
-    return { data: [{ id: `${c.table}-1`, artist_id: A, purpose: 'logo' }], count: 1 }
-  })
-}
-const LOGO = { id: 'media-logo', artist_id: A, purpose: 'logo' }
-const PHOTO = { id: 'media-photo', artist_id: A, purpose: 'gallery_image' }
+let fake = setWorld(world())
 
 type Row = { entity_type: string; entity_id: string }
 /** Every `revisions` insert the action made, as the rows each one carried. */
@@ -62,26 +38,22 @@ const EVERYTHING = [...Object.keys(PUBLISHABLE), 'artist']
 const BOTH = [LOGO.id, PHOTO.id]
 
 beforeEach(() => {
-  fake = world()
+  fake = setWorld(world())
 })
 
-type Actions = typeof import('@/app/artists/[id]/(dashboard)/actions')
 /** `media`: which media rows the action sends. The Brand page owns the logo and the Site /
  *  SEO publish the photo (2026-09-28: the Site publish used to ship Brand's draft logos
  *  and icons too); the whole-site publishes send both. */
-const CASES: { name: string; run: (a: Actions) => Promise<unknown>; kinds: readonly string[]; media: readonly string[] }[] = [
-  { name: 'publishAction (the dashboard Publish)', run: (a) => a.publishAction(A, 'pw'), kinds: EVERYTHING, media: BOTH },
-  { name: "publishAllGatedAction (the editor's Publish)", run: (a) => a.publishAllGatedAction(A, 'pw'), kinds: EVERYTHING, media: BOTH },
-  { name: 'publishBrandWithPasswordAction', run: (a) => a.publishBrandWithPasswordAction(A, 'pw'), kinds: BRAND_KINDS, media: [LOGO.id] },
-  { name: 'publishSiteAction', run: (a) => a.publishSiteAction(A), kinds: ['media', 'site_content', 'artist'], media: [PHOTO.id] },
-  {
-    name: 'publishSiteWithPasswordAction (SEO / GEO)',
-    run: (a) => a.publishSiteWithPasswordAction(A, 'pw'),
-    kinds: ['media', 'site_content', 'artist'],
-    media: [PHOTO.id],
-  },
-  { name: 'publishMusicAction', run: (a) => a.publishMusicAction(A, 'pw'), kinds: ['release', 'track'], media: [] },
-]
+type Sends = { kinds: readonly string[]; media: readonly string[] }
+const SENDS: Partial<Record<PublishName, Sends>> = {
+  publishAction: { kinds: EVERYTHING, media: BOTH },
+  publishAllGatedAction: { kinds: EVERYTHING, media: BOTH },
+  publishBrandWithPasswordAction: { kinds: BRAND_KINDS, media: [LOGO.id] },
+  publishSiteAction: { kinds: ['media', 'site_content', 'artist'], media: [PHOTO.id] },
+  publishSiteWithPasswordAction: { kinds: ['media', 'site_content', 'artist'], media: [PHOTO.id] },
+  publishMusicAction: { kinds: ['release', 'track'], media: [] },
+}
+const CASES = (Object.entries(SENDS) as [PublishName, Sends][]).map(([name, sends]) => ({ name, run: PUBLISH_ACTIONS[name].run, ...sends }))
 
 describe('one click, one insert', () => {
   it.each(CASES)('CRITICAL: $name writes every kind it sends in ONE insert', async ({ run, kinds, media }) => {

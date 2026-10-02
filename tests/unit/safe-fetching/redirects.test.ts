@@ -3,9 +3,8 @@
  * address; a redirect loop ends, and each redirect's body is let go.
  *
  * Code:     src/lib/net-guard.ts (createSafeFetch never follows), src/lib/guarded-fetch.ts
- *           (guardedFetch walks the hops), src/lib/seo-audit.ts (fetchGuarded, which uses that walk)
- * Feature:  safe fetching: every server fetch of an outside address (SEO/GEO checks, the old live
- *           check, IndexNow)
+ *           (guardedFetch walks the hops)
+ * Feature:  safe fetching: every server fetch of an outside address (SEO/GEO checks, IndexNow)
  * Tier:     STRICT (AGENTS.md "Test depth"): security. A public site can answer 302 to
  *           `http://169.254.169.254/`, so a fetcher that follows redirects on its own undoes
  *           every check on the first address.
@@ -27,7 +26,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSafeFetch } from '@/lib/net-guard'
 import { guardedFetch } from '@/lib/guarded-fetch'
-import { fetchGuarded } from '@/lib/seo-audit'
 import { fakeDns } from '@tests/helpers/fake-dns'
 import { fakeSite } from '@tests/helpers/seo/fake-site'
 import { startLoopbackServer, type LoopbackServer } from '@tests/unit/safe-fetching/_loopback-server'
@@ -160,13 +158,5 @@ describe('redirect bodies are let go', () => {
     const { fetcher, cancelled } = recording({ 'https://a.example.com/': { status: 302, location: 'http://169.254.169.254/' } })
     expect((await guardedFetch('https://a.example.com/', { fetcher })).error).toBe('not-public')
     expect(cancelled).toEqual(['https://a.example.com/'])
-  })
-
-  // fetchGuarded (the old live check, IndexNow) lets go of a redirect's body, and of an endless
-  // non-2xx body once its cap is read.
-  it('fetchGuarded lets go of the body of a redirect and of a non-2xx answer', async () => {
-    const { fetcher, cancelled } = recording({ 'https://a.example.com/': { status: 301, location: 'https://a.example.com/home' }, 'https://a.example.com/home': { status: 404 } })
-    expect(await fetchGuarded('https://a.example.com/', fetcher)).toMatchObject({ status: 404, body: null })
-    expect(cancelled).toEqual(['https://a.example.com/', 'https://a.example.com/home'])
   })
 })

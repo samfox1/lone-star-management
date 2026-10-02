@@ -16,62 +16,32 @@
  * Not here: what the scheduled run then does (runs/after-publish.test.ts); what the resend does
  *           (tests/unit/search-engines/resubmit.test.ts); the publish itself (tests/unit/publish/).
  * Fixtures: the two schedulers are mocks (the real ones are tested in their own files); the
- *           password check, next/cache and next/server are mocked; a PostgREST fake answers the
- *           publish's reads and writes and can refuse the revision insert.
+ *           password check, the publish actions and the PostgREST fake (which can refuse the
+ *           revision insert) come from tests/unit/publish/_publish-world.ts; next/cache and
+ *           next/server are mocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
+import { A, WRONG_PASSWORD, gate, publishCases, setWorld, world } from '@tests/unit/publish/_publish-world'
 
-const h = vi.hoisted(() => ({
-  schedule: vi.fn(),
-  resubmit: vi.fn(),
-  password: { error: null as null | { message: string; code?: string; status?: number } },
-}))
+const h = vi.hoisted(() => ({ schedule: vi.fn(), resubmit: vi.fn() }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: vi.fn() }))
-vi.mock('@supabase/supabase-js', async (orig) => ({
-  ...(await orig<typeof import('@supabase/supabase-js')>()),
-  createClient: () => ({ auth: { signInWithPassword: async () => ({ error: h.password.error }) } }),
-}))
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
 vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: h.schedule }))
 vi.mock('@/lib/search-engines/resubmit', () => ({ scheduleSitemapResubmit: h.resubmit }))
 
-const A = 'a1'
-let fake = fakeClient()
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(async () => ({ ...fake.client, auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'm@example.test' } } }) } })),
-}))
-
-function world({ insertError = false } = {}) {
-  return fakeClient((c: Call): Reply => {
-    if (c.op === 'rpc') return { data: [] }
-    if (c.table === 'artists' && c.cols === 'site_kind, custom_site_url') return { data: { site_kind: 'template', custom_site_url: null } }
-    if (c.table === 'artists') return { data: { name: 'Fake' } }
-    if (c.table === 'revisions' && c.op === 'insert') return insertError ? { error: { message: 'insert refused' } } : { data: null }
-    return { data: [{ id: `${c.table}-1`, artist_id: A }], count: 1 }
-  })
-}
-
-type Actions = typeof import('@/app/artists/[id]/(dashboard)/actions')
-const TESTS_AFTER: { name: string; run: (a: Actions) => Promise<unknown> }[] = [
-  { name: 'publishAction (Overview "Publish all")', run: (a) => a.publishAction(A, 'pw') },
-  { name: "publishAllGatedAction (the editor's Publish)", run: (a) => a.publishAllGatedAction(A, 'pw') },
-  { name: 'publishSiteWithPasswordAction (SEO / GEO)', run: (a) => a.publishSiteWithPasswordAction(A, 'pw') },
-  { name: 'publishMusicAction', run: (a) => a.publishMusicAction(A, 'pw') },
-  { name: "publishEntityAction('tour_date')", run: (a) => a.publishEntityAction('tour_date', A, 'pw') },
-]
-
 beforeEach(() => {
-  fake = world()
+  setWorld(world())
   h.schedule.mockReset()
   h.resubmit.mockReset()
-  h.password.error = null
+  gate.error = null
 })
 
 describe('the SEO / GEO run after a publish', () => {
   // Each publish path: exactly one run, for this artist, in the checked manager's name (the per-person limits count it).
-  it.each(TESTS_AFTER)('CRITICAL: $name schedules exactly one run, for this artist, after it succeeds', async ({ run }) => {
+  it.each(publishCases((e) => e.pings))('CRITICAL: $name schedules exactly one run, for this artist, after it succeeds', async ({ run }) => {
     const actions = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await run(actions)).toEqual({ ok: true })
     expect(h.schedule).toHaveBeenCalledTimes(1)
@@ -96,10 +66,10 @@ describe('the SEO / GEO run after a publish', () => {
   // Nothing went live: a wrong password or a failed publish starts no run.
   it('CRITICAL: a wrong password or a FAILED publish schedules none: nothing new is live to test', async () => {
     const { publishAction } = await import('@/app/artists/[id]/(dashboard)/actions')
-    h.password.error = { message: 'Invalid login credentials', status: 400, code: 'invalid_credentials' }
+    gate.error = WRONG_PASSWORD
     await publishAction(A, 'nope')
-    h.password.error = null
-    fake = world({ insertError: true })
+    gate.error = null
+    setWorld(world({ insertError: true }))
     expect(await publishAction(A, 'pw')).toEqual({ ok: false, error: 'insert refused' })
     expect(h.schedule).not.toHaveBeenCalled()
     expect(h.resubmit).not.toHaveBeenCalled()

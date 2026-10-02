@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { PHOTO_SIZE, buildEpkPdf, headerBottom, pdfImageFormat, pdfSafeText, wrapText } from '@/lib/manager-tools/epk/epk-pdf'
 import type { SiteData } from '@/lib/site'
+import { siteData } from '@tests/helpers/site-data'
 
 /** A measure fn where every character is exactly 10 units wide — makes the arithmetic
  *  checkable by eye instead of depending on real font metrics. */
@@ -66,32 +67,18 @@ describe('wrapText', () => {
 
 /* ── buildEpkPdf ─────────────────────────────────────────────────────────────────── */
 
-function site(over: Partial<SiteData['artist']> = {}): SiteData {
-  return {
+const site = (over: Partial<SiteData['artist']> = {}): SiteData =>
+  siteData({
     artist: {
-      id: 'a1',
       slug: 'lone-pine',
       name: 'Lone Pine',
       bio: 'Dusty alt-country out of West Texas.\n\nA second paragraph about the band.',
-      hero_image_url: null,
-      template: 'classic',
-      spotify_artist_id: null,
       press_pitch: 'Austin four-piece with a debut out this autumn.',
       press_quotes: [{ quote: 'A blistering live act.', source: 'NME', url: null }],
       ...over,
     },
-    tracks: [],
-    tour_dates: [],
-    merch: [],
     links: [{ id: 'l1', label: 'Booking', url: 'mailto:book@example.com', sort_order: 0 }] as never,
-    videos: [],
-    media: [],
-    site_content: {},
-    styles: {},
-    fonts: [],
-    font_slots: {},
-  }
-}
+  })
 
 const RELEASES = [{ title: 'First Light', release_date: '2025-03-01' }]
 

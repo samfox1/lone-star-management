@@ -7,13 +7,13 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**82 test files · 1393 tests**
+**81 test files · 1375 tests**
 
 - [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 597 tests
-- [SEO / GEO page](#seo--geo-page) · 21 files · 303 tests
+- [SEO / GEO page](#seo--geo-page) · 20 files · 294 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
-- [Safe fetching](#safe-fetching) · 6 files · 102 tests
+- [Safe fetching](#safe-fetching) · 6 files · 93 tests
 - [Search engines (Google and Bing)](#search-engines-google-and-bing) · 5 files · 99 tests
 - [Stored logins](#stored-logins) · 2 files · 27 tests
 - [Eventbrite and YouTube sign-in](#eventbrite-and-youtube-sign-in) · 8 files · 144 tests
@@ -1296,26 +1296,6 @@ The preview picture made on the Listing tab is 1200 × 630 with the logo centred
 - A picked colour fills as itself, opaque; anything with alpha is not a colour here, so white.
 - Both light and dark are offered: a white logo needs a dark card, a black logo a light one.
 
-### tests/unit/manager-tools/seo/old-live-check.test.ts · 9 tests
-
-The OLD live check ("Run check") reports every rule pass or fail against a served site, and never fetches a private address or follows a redirect into one.
-
-- **Code:** src/lib/seo-audit.ts (auditLiveSite, AUDIT_RULES). NOTE: nothing in src/ calls auditLiveSite since ba6002e removed its only caller (runSeoAuditAction); the SEO / GEO tests replaced it. The file's fetchGuarded is still live (the IndexNow ping). These tests stay while the code does: delete them WITH auditLiveSite.
-- **Tier:** STRICT (AGENTS.md "Test depth"): a server fetch of a manager-typed address (SSRF), and fragments of the answer went back to the browser.
-- **Not here:** the guarded fetch itself (tests/unit/safe-fetching/); the SEO / GEO tests that replaced this check (tests/unit/seo-tests/).
-
-**Tests**
-
-- Every rule is listed, pass or fail (derived from the registry), and a missing required fact-card field surfaces.
-- The bio must be visible on the home page or a sitemap page, and the artist node must state genre and location.
-- An unreachable site is an error, not a pass.
-- The bio matches through HTML entities (React writes an apostrophe as &#x27;), and can still fail.
-- A /edit nobody could look at is reported, not passed; no /edit at all is fine.
-- Private targets are refused before any request is made (each would have served a full site).
-- Sitemap addresses are fetched only on the same site (their contents would reach the browser).
-- A redirect from a public host into a private one is not followed.
-- An ordinary redirect between public hosts (apex to www) is still followed.
-
 ### tests/unit/manager-tools/seo/outside-profiles.test.ts · 11 tests
 
 The Profiles tab's Discogs and Wikidata checks ask the right thing, politely, and tell the manager only what the answer says.
@@ -1618,11 +1598,11 @@ In the real database, an artist's profile marks ("Mark as sent" and the outside 
 
 Every time the server fetches an address someone else chose: where it may go, how much it reads, how long it waits.
 
-### tests/unit/safe-fetching/blocked-before-connecting.test.ts · 20 tests
+### tests/unit/safe-fetching/blocked-before-connecting.test.ts · 17 tests
 
 A fetch to a private address is refused before any connection opens, whichever server code sends it, including a name that looked public a moment earlier (DNS rebinding).
 
-- **Code:** src/lib/net-guard.ts (createSafeFetch, pickTransport), src/lib/guarded-fetch.ts (guardedFetch), src/lib/seo-audit.ts (fetchGuarded, auditLiveSite), src/lib/indexnow.ts (pingIndexNow), src/lib/seo-tests/evidence.ts (gatherSiteEvidence), src/lib/og.ts (fetchOpenGraph)
+- **Code:** src/lib/net-guard.ts (createSafeFetch, pickTransport), src/lib/guarded-fetch.ts (guardedFetch), src/lib/indexnow.ts (pingIndexNow), src/lib/seo-tests/evidence.ts (gatherSiteEvidence), src/lib/og.ts (fetchOpenGraph)
 - **Tier:** STRICT (AGENTS.md "Test depth"): security. The text check alone let `169.254.169.254.nip.io` reach the cloud metadata service (security review 2026-09-29), because callers handed the name to the global fetch, which resolves it again, unchecked.
 - **Not here:** which addresses count as private (private-addresses.test.ts); redirects to a private address (redirects.test.ts); what a fetch that IS allowed sends and brings back (requests-and-answers.test.ts).
 
@@ -1640,11 +1620,8 @@ A fetch to a private address is refused before any connection opens, whichever s
 - The nip.io trick through the whole SEO fetcher: `not-public`, after exactly one lookup.
 - Every private family a DNS record can name (IPv4, IPv6, IPv4 inside IPv6, carrier NAT, link-local), alone or next to a public address, comes back `not-public` through the real transport.
 - A name that does not resolve is a plain `network` failure (the check then says "unknown"), and nothing is sent.
-- A caller that passes the global `fetch` (the old live check did) would resolve the name again, unchecked: it is treated as "no fetcher" and the safe transport is used instead.
+- A caller that passes the global `fetch` would resolve the name again, unchecked: it is treated as "no fetcher" and the safe transport is used instead.
 - Hosts that are really 127.0.0.1 in disguise (decimal, hex, octal, full-width digits, mapped IPv6) are refused by their text, before any lookup.
-- fetchGuarded with no fetcher asks the system DNS (all addresses) and, told "private", fetches nothing.
-- A resolver handed to fetchGuarded reaches the safe transport (and the system DNS is not asked).
-- The old live check, called exactly as its action calls it (with `fetch` itself), still goes through the safe transport.
 - The IndexNow ping reads the site's key file and sitemap: both go through the safe transport.
 - The SEO checks' site visit records the page as not fetched, with the `not-public` reason.
 - The Add modal's link preview checks the name first (answer 1: public), then fetches; the fetch's own lookup (answer 2: private) is the one a socket would use, and it is refused.
@@ -1690,11 +1667,11 @@ The server knows which addresses belong to its own network (loopback, private ra
 - The tests-only hatch lets exactly the loopback answers through; every other private answer is still refused.
 - Asking for IPv6 from a name that has only IPv4 is "not found", not an empty list the socket would choke on.
 
-### tests/unit/safe-fetching/redirects.test.ts · 11 tests
+### tests/unit/safe-fetching/redirects.test.ts · 10 tests
 
 Redirects are followed by hand, one hop at a time, so every hop is checked like the first address; a redirect loop ends, and each redirect's body is let go.
 
-- **Code:** src/lib/net-guard.ts (createSafeFetch never follows), src/lib/guarded-fetch.ts (guardedFetch walks the hops), src/lib/seo-audit.ts (fetchGuarded, which uses that walk)
+- **Code:** src/lib/net-guard.ts (createSafeFetch never follows), src/lib/guarded-fetch.ts (guardedFetch walks the hops)
 - **Tier:** STRICT (AGENTS.md "Test depth"): security. A public site can answer 302 to `http://169.254.169.254/`, so a fetcher that follows redirects on its own undoes every check on the first address.
 - **Not here:** the refusal of a private FIRST address (blocked-before-connecting.test.ts); the time limit on a slow chain of hops (size-and-time-limits.test.ts).
 
@@ -1710,7 +1687,6 @@ Redirects are followed by hand, one hop at a time, so every hop is checked like 
 - Each redirect's body is cancelled as the walk moves on, so no connection is left half-read, including a redirect with no Location.
 - Cancelling one copy of a cloned response only settles once the other copy is cancelled too, so a walker that WAITS for the cancel hangs forever on a clone (a caching fetch clones).
 - A redirect whose target is then refused still has its own body let go.
-- fetchGuarded (the old live check, IndexNow) lets go of a redirect's body, and of an endless non-2xx body once its cap is read.
 
 ### tests/unit/safe-fetching/requests-and-answers.test.ts · 11 tests
 
@@ -1734,11 +1710,11 @@ A fetch the guard allows behaves like a normal fetch: it sends the right name, h
 - Asked for bytes (a share picture), it returns the bytes and no text.
 - A dropped connection, or a fetcher that throws something that is not even an Error, is reported as `network`: guardedFetch never throws, so a check says "unknown", never crashes.
 
-### tests/unit/safe-fetching/size-and-time-limits.test.ts · 14 tests
+### tests/unit/safe-fetching/size-and-time-limits.test.ts · 13 tests
 
 Nothing the server fetches can fill its memory or hold a request open: every read stops at a byte cap, and every fetch ends at its time limit.
 
-- **Code:** src/lib/guarded-fetch.ts (guardedFetch: maxBytes, timeoutMs, deadlineMs), src/lib/seo-audit.ts (fetchGuarded), src/lib/og.ts (fetchOpenGraph), src/lib/net-guard.ts (createSafeFetch: idle timeout, abort signal)
+- **Code:** src/lib/guarded-fetch.ts (guardedFetch: maxBytes, timeoutMs, deadlineMs), src/lib/indexnow.ts (pingIndexNow's reads), src/lib/og.ts (fetchOpenGraph), src/lib/net-guard.ts (createSafeFetch: idle timeout, abort signal)
 - **Tier:** STRICT (AGENTS.md "Test depth"): security. The transport unzips, so a few hundred KB on the wire can be gigabytes in memory, and a body that drips a byte at a time can hold a request open forever (security review 2026-09-29, F3).
 - **Not here:** parsers that are slow on hostile text (slow-parsers.test.ts); the SEO checks' own run budget across many pages (tests/unit/seo-tests).
 
@@ -1746,11 +1722,10 @@ Nothing the server fetches can fill its memory or hold a request open: every rea
 
 - A 64 MiB answer is cut at the cap and only a chunk or two past it is ever pulled: a reader that took everything and cut afterwards would pass a length check, but not this one.
 - An answer with no stream (only a whole buffer) is capped too.
-- fetchGuarded (the old live check, IndexNow) stops at its own 2 MiB cap and says it cut.
+- The IndexNow ping reads a manager's site on every Publish, with no cap of its own: the shared default (2 MiB) must still stop it. A 64 MiB key file is cut, so it is not the key.
 - The link preview stops at its 512 KB cap and still reads the share tags at the top of the page.
 - A server that never answers is given up on at the timeout, reported as `timeout`.
 - A transport that does not tie its body to the request's signal (a fake, a wrapper that drops it) must not let a dripping body hold the read open: the reader races the signal itself.
-- fetchGuarded ends a dripping body at its timeout, with no body.
 - The link preview ends a dripping body at its timeout, with no preview.
 - Three slow hops each fit their own timeout (the chain arrives), but a deadline ends the whole walk: without it, a four-hop chain could take four timeouts.
 - The deadline also cuts one slow hop short, not only the gaps between hops.
@@ -1759,11 +1734,11 @@ Nothing the server fetches can fill its memory or hold a request open: every rea
 - The caller's abort signal stops a body that never ends, promptly.
 - A signal that is already aborted sends nothing, and the error is an AbortError that keeps the caller's own reason.
 
-### tests/unit/safe-fetching/slow-parsers.test.ts · 16 tests
+### tests/unit/safe-fetching/slow-parsers.test.ts · 12 tests
 
 The readers that run on a site's fetched text finish quickly even on the worst text a hostile site can serve, and still read normal pages exactly as before.
 
-- **Code:** src/lib/seo-tests/fresh.ts (sitemapLastmods), src/lib/seo-tests/html.ts (parsePage, linkKey), src/lib/url.ts (trimTrailingSlashes), src/lib/seo-tests/shared.ts (the preview check), src/lib/seo-tests/musicbrainz.ts (musicBrainzForms), src/lib/seo-audit.ts (visibleText, firstJsonLd)
+- **Code:** src/lib/seo-tests/fresh.ts (sitemapLastmods), src/lib/seo-tests/html.ts (parsePage, linkKey), src/lib/url.ts (trimTrailingSlashes), src/lib/seo-tests/shared.ts (the preview check), src/lib/seo-tests/musicbrainz.ts (musicBrainzForms)
 - **Tier:** STRICT (AGENTS.md "Test depth"): security, and parsers of outside text. A regex that backtracks runs on the one JavaScript thread, where no timeout can stop it: a 32 KiB sitemap took 27 s and a 1 MiB page ~153 s, and every other request waited meanwhile (security review 2026-09-29, F4).
 - **Not here:** byte caps and time limits on the fetch itself (size-and-time-limits.test.ts); what each reader finds on a normal page (the SEO checks' own tests under tests/unit/seo-tests).
 
@@ -1781,10 +1756,6 @@ The readers that run on a site's fetched text finish quickly even on the worst t
 - The preview check on a share link (og:url) whose path is a megabyte of slashes, on the site's OWN host (on another host the path is never looked at: "another site" wins first).
 - A Tidal address with 100 labels (the old pattern nested two quantifiers), with and without a path.
 - The fix still cleans a real Tidal link to the form MusicBrainz lists.
-- Reading a page's visible text: scripts, styles and tags that never close, to the 2 MiB cap.
-- Finding the fact card: script tags that never close or never end, to the cap.
-- The fix still drops scripts and styles, strips tags and decodes entities.
-- The fix still finds the FIRST fact card, and nothing when there is none.
 
 ### tests/unit/safe-fetching/_loopback-server.ts · support file
 
