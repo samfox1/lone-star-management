@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { CONNECTIONS, buttonChoices, connectionHandle, connectionOfLink } from '@/lib/connections'
@@ -99,7 +100,7 @@ function ButtonPicker({
             type="button"
             onClick={onCancel}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
           >
             <Icon name="close" size={16} />
           </button>

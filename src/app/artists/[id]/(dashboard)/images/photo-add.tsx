@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { MediaUploader } from '../media-uploader'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
@@ -29,7 +30,7 @@ export function PhotoAddButton({ artistId }: { artistId: string }) {
         onClick={() => setOpen(true)}
         title="Add photo"
         aria-label="Add photo"
-        className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
       >
         <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
           Add

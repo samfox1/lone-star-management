@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_HOVER } from '@/components/ui/icon-hover'
 import { type EditorVideo, type ItemEdit, type SiteVideoRole } from '../inspector-types'
 import { type ManifestVideoSlot } from '@/lib/site-editor/manifest'
 import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker, useScrollIntoFocus } from '../inspector-grid'
@@ -113,9 +114,9 @@ export function VideoTools({
                   aria-label={`Edit the ${label} slot`}
                   title="Customize this video"
                   onClick={() => onEditItem({ type: 'videoSlot', role, label })}
-                  className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
+                  className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity', ICON_HOVER, REVEAL_ON_HOVER)}
                 >
-                  <Icon name="edit" size={13} />
+                  <Icon name="edit" size={EDIT_GLYPH} />
                 </button>
               </div>
             </div>
@@ -156,9 +157,9 @@ export function VideoTools({
               aria-label={`Edit video slot ${i + 1}`}
               title="Customize this video"
               onClick={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
-              className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
+              className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity', ICON_HOVER, REVEAL_ON_HOVER)}
             >
-              <Icon name="edit" size={14} />
+              <Icon name="edit" size={EDIT_GLYPH} />
             </button>
           </div>
         </div>

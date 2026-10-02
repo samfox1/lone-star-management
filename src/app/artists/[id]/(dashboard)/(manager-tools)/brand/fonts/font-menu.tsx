@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { MAX_FONT_LABEL, type BrandFont } from '@/lib/fonts'
 import { FOCUS_RING } from '../../_ui/focus-ring'
@@ -210,18 +211,19 @@ export function FontMenu({
                 aria-label={`Rename ${font.label}`}
                 onClick={() => setEditing(font.id)}
                 className={cx(
-                  'flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/fo:opacity-100 group-has-[:focus-visible]/fo:opacity-100 [@media(hover:none)]:opacity-100',
+                  'flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity focus-visible:opacity-100 group-hover/fo:opacity-100 group-has-[:focus-visible]/fo:opacity-100 [@media(hover:none)]:opacity-100',
+                  ICON_HOVER,
                   FOCUS_RING,
                 )}
               >
-                <Icon name="edit" size={14} />
+                <Icon name="edit" size={EDIT_GLYPH} />
               </button>
               <button
                 type="button"
                 role="menuitem"
                 aria-label={`Remove ${font.label}`}
                 onClick={() => onRemove(font)}
-                className={cx('flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-accent-red focus-visible:opacity-100 group-hover/fo:opacity-100', FOCUS_RING)}
+                className={cx('flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-accent-red focus-visible:opacity-100 group-hover/fo:opacity-100', ICON_BOLD, FOCUS_RING)}
               >
                 <Icon name="trash" size={14} />
               </button>

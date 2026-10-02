@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { EYEBROW } from './inspector-shared'
@@ -200,9 +201,9 @@ export function TileEditButton({ label, title, onClick }: { label: string; title
       aria-label={label}
       title={title}
       onClick={onClick}
-      className={cx('absolute right-1.5 top-1.5 rounded-lg bg-black/60 p-2 text-white/90 transition-opacity hover:bg-black/75 hover:text-white', REVEAL_ON_HOVER)}
+      className={cx('absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white/90 transition-opacity hover:text-white', ICON_BOLD, REVEAL_ON_HOVER)}
     >
-      <Icon name="edit" size={16} />
+      <Icon name="edit" size={EDIT_GLYPH} />
     </button>
   )
 }

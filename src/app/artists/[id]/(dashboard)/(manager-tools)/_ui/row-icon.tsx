@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, t
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { placeLabel, type LabelAlign } from './label-placement'
 import { FOCUS_RING_OFFSET, REVEAL_ON_HOVER } from './styles'
@@ -23,18 +24,17 @@ import { FOCUS_RING_OFFSET, REVEAL_ON_HOVER } from './styles'
  */
 export type RowIconVariant =
   /** A row action: 40% until its LedgerRow is hovered (or it is focused). A pencil: hidden
-   *  until then (`reveal`). */
+   *  until then (`reveal`). A 32px box, whatever the glyph. */
   | 'faint'
   /** The empty state's one action (+): full ink, and a blue focus ring, because focus
    *  lands here after the note (Enter) and the manager must see where it went. */
   | 'primary'
-  /** A bordered square — modal actions, the add form's ✓ and ×, the kit download. */
+  /** A bordered square — modal actions, the add form's ✓ and ×, the kit download. The border
+   *  is its rest look; hover adds no fill. */
   | 'boxed'
-  /** A BARE GLYPH (Sam dislikes icons in a box): ink, no padding, no background, blue on
-   *  hover (a + on keyboard focus too). The AI test's "what to do" ↗ / pencil / wrench at the
-   *  end of a sentence, and the Profiles cards' actions. Callers place it (`className`) and
-   *  size it (`glyphSize`). One other tone: `danger`, red on hover instead of blue (a card's
-   *  trash, Batch 3: Settings › Email's Delete kind). */
+  /** A BARE GLYPH (Sam dislikes icons in a box): ink, no padding, no background. The AI test's
+   *  "what to do" ↗ / pencil / wrench at the end of a sentence, and the Profiles cards' actions.
+   *  Callers place it (`className`) and size it (`glyphSize`). Its tones are every variant's. */
   | 'bare'
 
 export type RowIconProps = {
@@ -48,11 +48,13 @@ export type RowIconProps = {
   labelAlign?: HoverLabelAlign
   /** `boxed` only: 44px (modal actions) or 36px (add form, kit). */
   size?: 'md' | 'sm'
-  /** Hover colour: `accent` for ✓ and every +, `danger` for × and trash. A `plus` icon is
-   *  `accent` unless told otherwise (Sam, 2026-09-23: every + turns blue, as the trash
-   *  turns red). `link`: blue on hover only, not on keyboard focus (the SEO tabs' links). */
+  /** Hover colour. `default`: ink (Sam, 2026-10-02: "black and bold"). `accent` for ✓ and
+   *  every +, `danger` for × and trash. A `plus` icon is `accent` unless told otherwise (Sam,
+   *  2026-09-23: every + turns blue, as the trash turns red). `link`: blue on hover only, not on
+   *  keyboard focus. Every tone also thickens the stroke (ICON_BOLD), and none draws a box. */
   tone?: 'default' | 'accent' | 'danger' | 'link'
-  /** The glyph's size in px. Default: 20, or the boxed size's own. */
+  /** The glyph's size in px. Default: 20, or the boxed size's own. Ignored for `edit`: every
+   *  pencil is EDIT_GLYPH (14px, Sam 2026-10-02: "these edit icons should be smaller across"). */
   glyphSize?: number
   /** Hidden until the pointer is on the thing it edits (its `EDIT_TARGET`, styles.ts), or on
    *  it; shown on keyboard focus and on a touch screen. Default: on for every `edit` pencil
@@ -72,6 +74,8 @@ export type RowIconProps = {
   className?: string
 }
 
+/** The hover colour of each tone. The stroke half (ICON_BOLD) is added once, for every tone:
+ *  black-and-bold for the default, blue-and-bold for a +, red-and-bold for a trash. */
 const TONE: Record<NonNullable<RowIconProps['tone']>, string> = {
   default: 'hover:text-ink',
   // Keyboard focus too: the + is where focus lands after a note's Enter.
@@ -85,15 +89,20 @@ const VARIANT: Record<RowIconVariant, string> = {
   // so it is never a control that only a mouse over the row can find.
   // Its rest opacity is RowIcon's: 40%, or 0 for a pencil (`reveal`). cx joins, it doesn't
   // resolve a clash, so the two never sit in one class list.
-  faint: 'rounded-lg p-1.5 text-ink-muted hover:bg-surface-hover hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
-  primary: 'rounded-lg p-1.5 text-ink hover:bg-surface-hover',
-  boxed: 'rounded-xl border border-hairline text-ink-muted hover:bg-surface-hover',
+  // h-8 w-8: the 32px a 20px glyph and p-1.5 made, now fixed, so a 14px pencil keeps it.
+  faint: 'h-8 w-8 rounded-lg text-ink-muted hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
+  primary: 'h-8 w-8 rounded-lg text-ink',
+  boxed: 'rounded-xl border border-hairline text-ink-muted',
   bare: '',
 }
 
 /** The bare glyph, whole: its own transition and disabled look, none of the boxed base's
  *  centring or padding (test-row.tsx's and the Profiles cards' glyphs, as they were drawn). */
 const BARE = cx('relative inline-flex rounded text-ink transition-[opacity,color] disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
+
+/** A bare pencil is only 14px: on a touch screen an invisible ring makes it a 28px target
+ *  without taking any room (a later sibling still paints over it, so it never steals a tap). */
+const TOUCH_SLOP = "pointer-coarse:before:absolute pointer-coarse:before:-inset-[7px] pointer-coarse:before:content-['']"
 
 const BOX: Record<NonNullable<RowIconProps['size']>, { cls: string; glyph: number }> = {
   md: { cls: 'h-11 w-11', glyph: 22 },
@@ -272,9 +281,9 @@ export function RowIcon({
   const toned = tone ?? (icon === 'plus' ? 'accent' : 'default')
   const cls =
     variant === 'bare'
-      ? cx(BARE, toned === 'danger' ? TONE.danger : toned === 'accent' ? TONE.accent : 'hover:text-accent', reveal && REVEAL_ON_HOVER, className)
+      ? cx(BARE, TONE[toned], ICON_BOLD, icon === 'edit' && TOUCH_SLOP, reveal && REVEAL_ON_HOVER, className)
       : cx(
-          'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
+          'relative inline-flex flex-none items-center justify-center transition-[opacity,color] duration-150',
           // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.
           FOCUS_RING_OFFSET,
           VARIANT[variant],
@@ -282,12 +291,13 @@ export function RowIcon({
           reveal && REVEAL_ON_HOVER,
           box?.cls,
           TONE[toned],
-          'disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-muted',
+          ICON_BOLD,
+          'disabled:cursor-default disabled:opacity-35 disabled:hover:text-ink-muted',
           className,
         )
   const inner = (
     <>
-      <Icon name={icon} size={glyphSize ?? box?.glyph ?? 20} />
+      <Icon name={icon} size={icon === 'edit' ? EDIT_GLYPH : (glyphSize ?? box?.glyph ?? 20)} />
       <HoverLabel label={label} side={labelSide} align={labelAlign} />
     </>
   )

@@ -171,7 +171,7 @@ describe('the trash column lines every row up (visual check, 2026-09-23)', () =>
   })
 
   it('CRITICAL: the empty slot is exactly as wide as the trash it stands in for', () => {
-    // A faint RowIcon is p-1.5 (6px a side) around a 20px glyph: 32px, which is w-8.
+    // A faint RowIcon is a fixed 32px box (h-8 w-8) around its glyph, so the slot is w-8.
     render(
       <>
         <LedgerRow title="Built in" guide="g" />
@@ -179,9 +179,8 @@ describe('the trash column lines every row up (visual check, 2026-09-23)', () =>
       </>,
     )
     const trash = screen.getByRole('button', { name: 'Remove' })
-    expect(cls(trash)).toContain('p-1.5')
-    expect(trash.querySelector('svg')!.getAttribute('width')).toBe('20')
-    const px = 2 * 6 + 20
+    expect(cls(trash)).toContain('w-8')
+    const px = 32
     for (const title of ['Built in', 'Added']) {
       const w = cls(slotOf(rowOf(title))).filter((c) => /^w-/.test(c))
       expect(w, title).toEqual([`w-${px / 4}`])

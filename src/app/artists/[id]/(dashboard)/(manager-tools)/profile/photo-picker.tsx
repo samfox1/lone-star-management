@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl } from '@/lib/storage-url'
 import { MediaUploader } from '../../media-uploader'
@@ -93,7 +94,7 @@ export function ProfilePhotoControl({ artistId, current, photos }: { artistId: s
             {/* eslint-disable-next-line @next/next/no-img-element -- a storage render URL, already sized */}
             <img src={shown.thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
             <span className="absolute inset-0 grid place-items-center bg-black/35 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-              <Icon name="edit" size={18} />
+              <Icon name="edit" size={EDIT_GLYPH} />
             </span>
           </>
         ) : (

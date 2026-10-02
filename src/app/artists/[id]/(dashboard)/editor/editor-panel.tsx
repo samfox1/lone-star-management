@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { SCROLL_BODY } from './inspector-shared'
 
 /**
@@ -38,7 +39,7 @@ export function EditorPanel({
           type="button"
           onClick={onBack}
           aria-label="Back"
-          className="flex-none rounded-md p-1 text-ink-muted hover:bg-surface hover:text-ink"
+          className={`flex-none rounded-md p-1 text-ink-muted ${ICON_HOVER}`}
         >
           <Icon name="chevronLeft" size={18} />
         </button>

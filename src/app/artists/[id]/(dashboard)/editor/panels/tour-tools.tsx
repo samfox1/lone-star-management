@@ -1,6 +1,7 @@
 import { cx } from '@/lib/cx'
 import { useDragReorder } from '../use-drag-reorder'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { type EditorTour } from '../inspector-types'
 import { OnSiteToggle, onSiteOnly } from '../inspector-shared'
 import { AddLink, useScrollIntoFocus } from '../inspector-grid'
@@ -148,15 +149,15 @@ export function TourTools({
             title="Supporting acts and their links"
             onClick={() => onEditTour(t, showLabel(t))}
             // Shown while the row is hovered (the row is its EDIT_TARGET, _ui/styles.ts).
-            className={cx('mt-0.5 flex-none rounded-md p-1.5 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
+            className={cx('mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-md text-ink-faint transition-opacity', ICON_HOVER, REVEAL_ON_HOVER)}
           >
-            <Icon name="edit" size={15} />
+            <Icon name="edit" size={EDIT_GLYPH} />
           </button>
           <button
             type="button"
             aria-label={`Remove ${t.venue || 'date'}`}
             onClick={() => void remove(t)}
-            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+            className={`mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-md text-ink-faint hover:text-accent-red ${ICON_BOLD}`}
           >
             <Icon name="trash" size={15} />
           </button>

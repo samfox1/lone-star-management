@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { SECTION_SERVICE_NOUN, type SyncRunResult, type SyncSection, type SyncSource } from './sync-sections'
@@ -89,7 +90,7 @@ export function SyncDialog({
         onClick={() => setOpen(true)}
         disabled={disabled}
         aria-label="Sync"
-        className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60"
+        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-60 ${ICON_BOLD}`}
       >
         <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[90px] group-hover:pl-1 group-hover:pr-1.5">
           Sync

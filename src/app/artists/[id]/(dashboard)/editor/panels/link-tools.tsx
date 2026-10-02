@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
 import { safeHref } from '@/lib/url'
 import { displayAddress } from '@/lib/settings'
@@ -469,7 +470,7 @@ export function ContactLinkTools({
                     type="button"
                     aria-label={`Remove contact link ${i + 1}`}
                     onClick={() => void remove(l, v.label.trim())}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:text-accent-red ${ICON_BOLD}`}
                   >
                     <Icon name="trash" size={15} />
                     <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Remove</span>

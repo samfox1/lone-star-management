@@ -3,6 +3,7 @@
 import { forwardRef, useRef, useState, type KeyboardEventHandler, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { HoverLabel, RowIcon } from './row-icon'
 import { FOCUS_RING } from './focus-ring'
 import { END_SLOT } from './ledger'
@@ -159,7 +160,7 @@ export function Chips({
             aria-label={`Remove ${it}`}
             onClick={() => onChange(items.filter((_, j) => j !== i))}
             // Always visible: a touch screen has no hover to reveal it (review L7).
-            className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', FOCUS_RING)}
+            className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', ICON_BOLD, FOCUS_RING)}
           >
             <Icon name="close" size={11} />
           </button>

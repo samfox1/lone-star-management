@@ -2,6 +2,7 @@
 
 import type { Ref } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { FOCUS_RING } from './focus-ring'
 import { HoverLabel } from './row-icon'
@@ -25,7 +26,7 @@ export function Chip({ text, title, removeLabel, onRemove }: { text: string; tit
         type="button"
         aria-label={removeLabel}
         onClick={onRemove}
-        className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', FOCUS_RING)}
+        className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', ICON_BOLD, FOCUS_RING)}
       >
         <Icon name="close" size={11} />
       </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { EDIT_GLYPH } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { CAPS_LABEL, EDIT_TARGET, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
 
@@ -256,7 +257,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
 /** The row's pencil: a mark, not a control (the value is the click). Hidden until the row is
  *  hovered or its value is focused, always there on a touch screen (REVEAL_ON_HOVER). */
 function RowPencil() {
-  return <Icon name="edit" size={14} className={cx('flex-none text-ink-faint transition-opacity', REVEAL_ON_HOVER)} />
+  return <Icon name="edit" size={EDIT_GLYPH} className={cx('flex-none text-ink-faint transition-opacity', REVEAL_ON_HOVER)} />
 }
 
 /** One `LABEL  value` row that saves its own field. `trailing` sits after the value —

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
 import { useConfirm } from './confirm-dialog'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
@@ -124,7 +125,7 @@ export function CardModal({
               href={analyticsHref}
               aria-label="Analytics"
               title="Analytics"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
             >
               <Icon name="analytics" size={16} />
             </Link>
@@ -134,7 +135,7 @@ export function CardModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
           >
             <Icon name="close" size={16} />
           </button>

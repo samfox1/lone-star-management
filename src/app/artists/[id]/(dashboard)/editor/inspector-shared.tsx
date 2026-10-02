@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { formatCount, isTooLong, nearLimit, tooLongError } from '@/lib/site-editor/text-limits'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
 
@@ -255,11 +256,13 @@ export function EditRow({
         aria-label={`${expanded ? 'Close' : 'Edit'} ${editLabel ?? label}`}
         aria-expanded={expanded}
         className={cx(
-          'flex-none text-ink-faint transition-opacity hover:text-ink focus-visible:opacity-100',
+          // A 16px box whatever the glyph (a 14px pencil, a 16px ×), so opening a row moves nothing.
+          'flex h-4 w-4 flex-none items-center justify-center text-ink-faint transition-opacity focus-visible:opacity-100',
+          ICON_HOVER,
           expanded ? 'opacity-100' : REVEAL_ON_HOVER,
         )}
       >
-        <Icon name={expanded ? 'close' : 'edit'} size={16} />
+        <Icon name={expanded ? 'close' : 'edit'} size={expanded ? 16 : EDIT_GLYPH} />
       </button>
     </div>
   )
@@ -414,7 +417,7 @@ export function OnSiteDot({
       className={cx(
         'absolute flex h-5 w-5 items-center justify-center rounded-full transition-colors',
         corner,
-        on ? 'bg-accent text-white' : 'bg-paper text-ink shadow-sm hover:bg-accent hover:text-white',
+        on ? 'bg-accent text-white' : cx('bg-paper text-ink shadow-sm hover:text-accent', ICON_BOLD),
       )}
     >
       <Icon name={on ? 'check' : 'plus'} size={12} />

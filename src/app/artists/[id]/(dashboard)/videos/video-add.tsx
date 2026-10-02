@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon, type IconName } from '@/components/ui/icons'
+import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
@@ -154,7 +155,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
         onClick={() => setOpen(true)}
         title="Add video"
         aria-label="Add video"
-        className="group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
       >
         <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
           Add
@@ -179,7 +180,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
                     setError(null)
                   }}
                   aria-label="Back"
-                  className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+                  className={`inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`}
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>

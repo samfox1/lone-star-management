@@ -27,6 +27,7 @@ import { isContactLink, looksLikeEmail } from '@/lib/url'
  *  (2026-08-10 review). */
 const isContactish = (url: string) => isContactLink(url) || looksLikeEmail(url)
 import { Icon, type IconName } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { ItemEditor } from './item-editor'
 import { buildItemEditorConfig } from './item-editor-config'
 import { budgetFor, type AssetBudgets } from '@/lib/site-editor/asset-budget'
@@ -1340,7 +1341,7 @@ function PanelChrome({
           type="button"
           onClick={onBack}
           aria-label="Close"
-          className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-ink hover:bg-surface"
+          className={`flex h-6 w-6 flex-none items-center justify-center rounded-md text-ink ${ICON_HOVER}`}
         >
           <Icon name="close" size={16} />
         </button>
@@ -1366,7 +1367,7 @@ function PanelChrome({
               'flex h-8 w-9 items-center justify-center rounded-lg transition-colors',
               c.kind === component.kind
                 ? 'bg-accent-soft text-accent'
-                : 'text-ink-faint hover:bg-paper hover:text-ink',
+                : `text-ink-faint ${ICON_HOVER}`,
             )}
           >
             <Icon name={c.icon} size={17} />

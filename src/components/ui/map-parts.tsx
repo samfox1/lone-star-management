@@ -2,6 +2,7 @@
 
 import { memo, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { DOT_R } from '@/lib/map-constants'
 import type { Point, View } from '@/lib/map-view'
@@ -33,7 +34,7 @@ export function MapButton({ label, onClick, disabled, children }: { label: strin
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={cx('flex h-7 w-7 items-center justify-center rounded-full bg-paper text-ink shadow-[0_2px_8px_rgba(17,17,17,0.12)] transition-colors hover:bg-surface-hover disabled:text-ink-faint disabled:hover:bg-paper', FOCUS_RING)}
+      className={cx('flex h-7 w-7 items-center justify-center rounded-full bg-paper text-ink shadow-[0_2px_8px_rgba(17,17,17,0.12)] transition-colors disabled:text-ink-faint', ICON_HOVER, 'disabled:hover:text-ink-faint', FOCUS_RING)}
     >
       {children}
     </button>

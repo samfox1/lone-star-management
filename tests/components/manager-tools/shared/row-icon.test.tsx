@@ -19,6 +19,7 @@ import { LedgerRow } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/le
 import { CardActions, CardField, SentenceAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/disclosure'
 import { KvField } from '@/app/artists/[id]/(dashboard)/modal-kit'
 import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 
 afterEach(cleanup)
 
@@ -253,5 +254,26 @@ describe('the Brand glyphs draw something', () => {
       expect(container.querySelector('svg')!.children.length, name).toBeGreaterThan(0)
       unmount()
     }
+  })
+})
+
+describe('icons answer the pointer black and bold, never with a box (Sam, 2026-10-02)', () => {
+  // "I dont want the edit icons to have the grey box around them on hover. I want them to get
+  // black and bold. Goes with all icons. Also, these edit icons should be smaller across."
+  const VARIANTS: Record<RowIconVariant, true> = { faint: true, primary: true, boxed: true, bare: true }
+
+  it('CRITICAL: in every variant a pencil is 14px whatever glyphSize says, bolder on hover, with no hover fill', () => {
+    for (const variant of Object.keys(VARIANTS) as RowIconVariant[]) {
+      render(<RowIcon icon="edit" label="Edit" variant={variant} glyphSize={20} />)
+      const btn = screen.getByRole('button', { name: 'Edit' })
+      expect(btn.querySelector('svg')!.getAttribute('width'), variant).toBe(String(EDIT_GLYPH))
+      const cls = btn.className.split(/\s+/)
+      expect(cls, variant).toContain(ICON_BOLD)
+      expect(cls.filter((c) => /hover:bg-/.test(c)), variant).toEqual([])
+      cleanup()
+    }
+    // Other glyphs keep their size: the rule is the pencil's.
+    render(<RowIcon icon="trash" label="Remove" tone="danger" />)
+    expect(screen.getByRole('button', { name: 'Remove' }).querySelector('svg')!.getAttribute('width')).toBe('20')
   })
 })

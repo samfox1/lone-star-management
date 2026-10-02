@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { CardModal } from '../card-modal'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
@@ -151,7 +152,7 @@ export function TourRow({
             title="Tickets"
             aria-label="Tickets"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex flex-none items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
+            className={`inline-flex flex-none items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
           >
             <Icon name="ticket" size={16} />
           </a>

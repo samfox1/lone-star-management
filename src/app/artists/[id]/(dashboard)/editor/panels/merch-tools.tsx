@@ -1,6 +1,7 @@
 import { cx } from '@/lib/cx'
 import { useDragReorder } from '../use-drag-reorder'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { type EditorMerch } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { AddLink } from '../inspector-grid'
@@ -88,7 +89,8 @@ export function MerchTools({
                 aria-label={`Edit ${m.title || 'product'}`}
                 onClick={() => onEdit(m)}
                 className={cx(
-                  'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-ink shadow-sm transition-opacity hover:bg-accent hover:text-white',
+                  'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-ink shadow-sm transition-opacity',
+                  ICON_HOVER,
                   REVEAL_ON_HOVER,
                 )}
               >

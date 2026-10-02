@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 import { type EditorTour } from './inspector-types'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { FIELD, FieldRow, SaveLine } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { EditorPanel } from './editor-panel'
@@ -186,7 +187,7 @@ export function TourDateEditor({
                     type="button"
                     aria-label={`Remove ${name}`}
                     onClick={() => saveActs(acts.filter((a) => a !== name))}
-                    className="rounded-md p-1 text-ink-faint hover:bg-danger-soft hover:text-accent-red"
+                    className={`rounded-md p-1 text-ink-faint hover:text-accent-red ${ICON_BOLD}`}
                   >
                     <Icon name="trash" size={12} />
                   </button>

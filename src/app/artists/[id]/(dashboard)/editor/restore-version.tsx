@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { EYEBROW, plural } from './inspector-shared'
 import { listPublishMomentsAction, restorePublishedAction } from '../actions'
 import type { PublishMoment } from '@/lib/content'
@@ -63,7 +64,7 @@ export function RestoreVersionMenu({ artistId }: { artistId: string }) {
         aria-label="More actions"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-surface hover:text-ink"
+        className={`flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`}
       >
         <Icon name="more" size={16} />
       </button>
