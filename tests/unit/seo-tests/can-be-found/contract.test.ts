@@ -17,7 +17,7 @@
  *             error ("Not Found", "Area 404"), are read as normal pages
  * Not here: each test's own rules: bots.test.ts, allowed.test.ts, list.test.ts, words.test.ts and
  *           bingwm.test.ts in this folder. How the site is fetched: evidence.test.ts. The
- *           "in Tapir:" label rule across all 24 tests: ../honesty.test.ts.
+ *           "in Tapir:" label rule across every test: ../honesty.test.ts.
  * Fixtures: ../_found-fixtures.ts builds the evidence: a healthy two-page site (home + /about) with
  *           single visits swapped for real error, firewall and parked pages. No network.
  *

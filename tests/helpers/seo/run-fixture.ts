@@ -7,9 +7,10 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): the page's counts and states are asserted from these
  *           results, so a hand-written result the engine never gives would test nothing real
  *           (the UI review, 2026-09-29: the first fixture had a Bing FAIL the engine can't give,
- *           so "All 24 pass" went untested).
+ *           so "All pass" went untested).
  * What it provides:
- *           • engineResults(scenario): the 24 real results for a made-up site, capped as stored
+ *           • engineResults(scenario): one real result per test (SEO_TEST_IDS) for a made-up site,
+ *             capped as stored
  *           • fixtureResults(over, scenario): the same with some tests forced (only to a status
  *             the engine can really give that test)
  *           • fixtureRun: a stored run around those results (a publish run, or a
@@ -44,11 +45,21 @@ type Over = {
   known?: SeoEvidence['known']
   shareImage?: SeoEvidence['shareImage']
   musicbrainz?: SeoEvidence['musicbrainz']
+  youtube?: SeoEvidence['youtube']
 }
+
+/** The artist's YouTube channel (youtube.ts's answer): healthy, it names the site and the city. */
+const YOUTUBE_OK: NonNullable<SeoEvidence['youtube']> = {
+  link: 'https://www.youtube.com/@skeenmusic',
+  looked: true,
+  channel: { id: 'UCpa4vYE3su6wUjHg_ck33zw', title: 'Skeen', handle: '@skeenmusic', description: 'Chicago house DJ and producer. Shows and music: example-artist.com' },
+}
+/** Skeen's real channel description (tests/fixtures/youtube-channels.json): neither. */
+const YOUTUBE_SKEEN: NonNullable<SeoEvidence['youtube']> = { ...YOUTUBE_OK, channel: { ...YOUTUBE_OK.channel!, description: 'skeeeeeeen\n' } }
 
 /** A whole site's evidence: every fetching bot sees what a person sees unless told otherwise. */
 function site(o: Over = {}): SeoEvidence {
-  const base = evidence({ home: o.home, about: o.about, pages: o.plain, known: o.known, shareImage: o.shareImage, musicbrainz: o.musicbrainz })
+  const base = evidence({ home: o.home, about: o.about, pages: o.plain, known: o.known, shareImage: o.shareImage, musicbrainz: o.musicbrainz, youtube: o.youtube ?? YOUTUBE_OK })
   return {
     ...base,
     byBot: Object.fromEntries(FETCHING_BOTS.map((b) => [b.key, base.plain.map((p) => (o.bots ? o.bots(b.key, { ...p }) : { ...p }))])),
@@ -70,9 +81,10 @@ const SCENARIOS = {
   /** Everything right, MusicBrainz knows the artist. */
   healthy: () => site({ musicbrainz: { looked: true, artistUrl: 'https://musicbrainz.org/artist/abc', matchedOn: ORIGIN, artistName: 'Skeen', asked: [ORIGIN] } }),
   /** Skeen-like: a short bio, a city with no region or country, no MusicBrainz page, an Apple
-   *  Music link tied to Norway. */
+   *  Music link tied to Norway, his real YouTube description. */
   needsWork: () =>
     site({
+      youtube: YOUTUBE_SKEEN,
       known: known({}, { bio: SHORT_BIO, links: [{ label: 'Apple Music', url: WRONG_STORE, onSite: true }] }),
       about: aboutHtml(SHORT_BIO),
       home: homeHtml({

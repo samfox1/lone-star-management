@@ -11,6 +11,8 @@
  *             the edit page in a new tab, and the tick calls the action with bio_<key>
  *           • the server writes no date (its time zone is not the viewer's, and React 19 keeps a
  *             server text node it disagrees with): dates arrive after mount
+ *           • YouTube, which the AI test reads: a passing description is a check and its value,
+ *             the card says what was read, and the manual "updated" tick stays
  * Not here: the states themselves (bio-state.test.ts); the action (profile-marks.test.ts).
  * Fixtures: the row is built by the REAL bio-state functions from Skeen's real Instagram link;
  *           the action is a mock.
@@ -19,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import { OUTSIDE_BIOS } from '@/lib/manager-tools/seo/profiles/bios'
-import { bioRows, connectedBios, dayLabel, factChanges } from '@/lib/manager-tools/seo/profiles/bio-state'
+import { bioReads, bioRows, connectedBios, dayLabel, factChanges } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { BioRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bio-rows'
 import { markProfileItemAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/actions'
 
@@ -72,5 +74,18 @@ describe('the outside bios', () => {
     expect(html).not.toContain('Sep')
     render(<BioRows artistId="a1" rows={staleInstagram()} />)
     expect(screen.getByRole('button', { name: /Instagram/ }).textContent).toContain(`since ${since()}`)
+  })
+
+  // YouTube's description passed the AI test: the row shows a check and the test's value even though the bio was never ticked, the card says what was read, and the manual tick is still there.
+  it('YouTube shows what the AI test read: a check when the description passes, and the tick stays', () => {
+    const bios = connectedBios([{ id: 'yt', label: 'YouTube', url: 'https://www.youtube.com/@skeenmusic', role: null }], {})
+    const reads = bioReads([{ id: 'youtube', status: 'pass', value: 'says who you are', sentence: 'Your YouTube description links your site and says Chicago.', evidence: [] }])
+    const { container } = render(<BioRows artistId="a1" rows={bioRows({ bios, marks: {}, factsKnown: true, changes: [], reads }, Date.now())} />)
+    const row = screen.getByRole('button', { name: /YouTube/ })
+    expect(row.textContent).toContain('says who you are')
+    expect(container.querySelector('[data-bio="youtube"] [data-row-mark]')?.getAttribute('data-row-mark')).toBe('check')
+    fireEvent.click(row)
+    expect(screen.getByText('Your YouTube description links your site and says Chicago.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mark as updated' })).toBeTruthy()
   })
 })

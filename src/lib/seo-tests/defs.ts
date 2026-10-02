@@ -1,5 +1,5 @@
 /**
- * The 24 tests, in page order, with the plain words Sam approved in the round 2 mock
+ * The tests (SEO_TEST_IDS), in page order, with the plain words Sam approved in the round 2 mock
  * (prototypes/seo_variants_20260928_r2.html). Words only: what each test DOES lives beside its
  * group (found.ts, who.ts, shared.ts, facts.ts).
  *
@@ -9,8 +9,9 @@
 import type { SeoTestDef, SeoTestGroup, SeoTestId } from './types'
 
 /** The tests whose answer does not come from reading the artist's site: `mb` asks MusicBrainz
- *  about the artist. Every other test reads the site's pages, robots.txt, sitemap or files. */
-export const SITE_FREE_TESTS: ReadonlySet<SeoTestId> = new Set<SeoTestId>(['mb'])
+ *  about the artist, `youtube` reads their YouTube channel. Every other test reads the site's
+ *  pages, robots.txt, sitemap or files. */
+export const SITE_FREE_TESTS: ReadonlySet<SeoTestId> = new Set<SeoTestId>(['mb', 'youtube'])
 
 export const SEO_TEST_GROUPS: readonly { id: SeoTestGroup; label: string }[] = [
   { id: 'found', label: 'Can be found' },
@@ -36,6 +37,7 @@ export const SEO_TEST_DEFS: readonly SeoTestDef[] = [
   { id: 'genre', group: 'who', name: 'Your genre is named', tested: 'We read the genre your site gives search engines and compared it with the one in Tapir.', why: 'When someone asks AI for artists with your sound, this is how it knows you fit.' },
   { id: 'place', group: 'who', name: 'Where you\'re based is clear', tested: 'We read the city, state and country your site gives search engines and compared them with Tapir\'s.', why: 'A city, state and country helps AI pick the right place, not a town with the same name.' },
   { id: 'mb', group: 'who', name: 'MusicBrainz knows you', tested: 'We asked MusicBrainz, a free music database, which artist links to your site and your main profiles, and checked it has your name.', why: 'Many AI tools and music apps learn who an artist is from MusicBrainz. A page there tells you apart from other artists with your name.', outside: 'MusicBrainz' },
+  { id: 'youtube', group: 'who', name: 'Your YouTube channel says who you are', tested: 'We read your YouTube channel\'s description and looked for your site\'s address and your city or genre.', why: 'AI tools read YouTube to learn who an artist is. A description that links your site and names your city or sound ties the channel to you.', outside: 'YouTube' },
   { id: 'share', group: 'shared', name: 'Your preview picture looks right', tested: 'We opened the picture that shows when someone shares your link.', why: 'It\'s the first thing people see when a fan texts or posts your link.' },
   { id: 'preview', group: 'shared', name: 'Your link preview says who you are', tested: 'We read the title and summary that show up in a shared link.', why: 'A clear preview gets more taps than a bare link.' },
   { id: 'alt', group: 'shared', name: 'Every photo has a description', tested: 'We checked each photo on the pages we read for a short description.', why: 'Google Images and screen readers use it, and it adds words about you.' },

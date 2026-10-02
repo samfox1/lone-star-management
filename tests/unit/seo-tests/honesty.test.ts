@@ -10,14 +10,15 @@
  *           "Facts are true" (all four groups for rule 3)
  * Tier:     STRICT (AGENTS.md "Test depth"): these rules are what makes a result trustworthy
  *           (Sam, 2026-09-28: "These tests should be verified to accurately detect what they say").
- * Covers:   • a home page not visited, silent, timed out, or answering 404 / 503: all 14 tests are
- *             unknown, each says why (MusicBrainz: when it couldn't be asked either)
+ * Covers:   • a home page not visited, silent, timed out, or answering 404 / 503: every test in the
+ *             three groups is unknown, each says why (the site-free tests, MusicBrainz and
+ *             YouTube: when they couldn't be asked either)
  *           • a home page cut at the read cap: every test whose answer could sit past the cut
  *             is unknown and says so; a card read whole before the cut is still judged
  *           • nothing published from Tapir: the tests that compare with Tapir say so, never
  *             "we failed to read it"
  *           • every detail row quoting a value only Tapir holds is labelled "in Tapir: …", and
- *             no such row quotes a value only the site holds (all 24 tests)
+ *             no such row quotes a value only the site holds (every test in SEO_TEST_IDS)
  * Not here: each test's own `na` case and its "couldn't check" twin, in the test's file:
  *           genre and musicbrainz (says-who-you-are/), photo-descriptions
  *           (looks-right-when-shared/), apple-music and releases (facts-are-true/).
@@ -26,7 +27,7 @@
  *           other doesn't, spelled as markers that appear nowhere else. Nothing is fetched.
  */
 import { describe, expect, it } from 'vitest'
-import { SEO_TEST_DEFS } from '@/lib/seo-tests/defs'
+import { SEO_TEST_DEFS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
 import { FACTS_TESTS } from '@/lib/seo-tests/facts'
 import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import { SHARED_TESTS } from '@/lib/seo-tests/shared'
@@ -34,7 +35,7 @@ import { WHO_TESTS } from '@/lib/seo-tests/who'
 import { SEO_TEST_IDS, type SeoEvidence, type SeoTest, type SeoTestGroup, type SeoTestId } from '@/lib/seo-tests/types'
 import { ORIGIN, PROFILES, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known, page } from '@tests/helpers/seo/page-fixture'
 
-/** The 14 tests of the three groups this file sweeps, read from their registries. */
+/** The tests of the three groups this file sweeps, read from their registries. */
 const THESE: Record<string, SeoTest> = { ...WHO_TESTS, ...SHARED_TESTS, ...FACTS_TESTS }
 const ALL: Record<SeoTestId, SeoTest> = { ...FOUND_TESTS, ...WHO_TESTS, ...SHARED_TESTS, ...FACTS_TESTS }
 
@@ -55,7 +56,7 @@ describe('a test that could not look says "couldn’t check"', () => {
   const unreached = (pages: ReturnType<typeof page>[]): SeoEvidence =>
     evidence({ pages, shareImage: null, musicbrainz: { looked: false, artistUrl: null, matchedOn: null, error: 'network' } })
 
-  // Rule 1: with no home page (never visited, no answer, timed out, a 404 or a 503) every test is unknown, carries its own id, and all but MusicBrainz say why in their sentence.
+  // Rule 1: with no home page (never visited, no answer, timed out, a 404 or a 503) every test is unknown, carries its own id, and all but the site-free ones (MusicBrainz, YouTube) say why in their sentence.
   it.each([
     ['was not visited', [], 'we didn’t visit your home page'],
     ['gave no answer', [page('/', null, null)], 'your home page didn’t answer'],
@@ -67,7 +68,7 @@ describe('a test that could not look says "couldn’t check"', () => {
       const r = test(unreached(pages))
       expect(r.id).toBe(id)
       expect(r.status, id).toBe('unknown')
-      if (id !== 'mb') expect(r.sentence, id).toContain(why)
+      if (!SITE_FREE_TESTS.has(id as SeoTestId)) expect(r.sentence, id).toContain(why)
     }
   })
 })
@@ -108,7 +109,7 @@ describe('nothing published from Tapir yet', () => {
 
 describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
   /** Only Tapir holds these. */
-  const TAPIR = ['Zqtapirrelease', 'zqtapirprofile', 'Zqtapirvenue', 'Zqtapirtitle', 'Zqtapirgenre', 'Zqtapirregion', 'Iceland', 'Zqtapirbio']
+  const TAPIR = ['Zqtapirrelease', 'zqtapirprofile', 'Zqtapirvenue', 'Zqtapirtitle', 'Zqtapirgenre', 'Zqtapirregion', 'Iceland', 'Zqtapirbio', 'zqtapirchannel']
   /** Only the site holds these. */
   const SITE = ['Zqsiterelease', 'zqsiteprofile', 'Zqsitevenue', 'Zqsitetitle']
   const has = (text: string, markers: string[]) => markers.filter((m) => text.toLowerCase().includes(m.toLowerCase()))
@@ -138,6 +139,8 @@ describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
         tourDates: [...base.tourDates, { date: '2026-11-01', venue: 'Zqtapirvenue', city: 'Zqtapircity', isPast: false }],
         releases: [...base.releases, { title: 'Zqtapirrelease', releasedOn: '2026-06-01' }],
       }),
+      // A channel whose description says none of Tapir's facts, so `youtube` quotes what it looked for.
+      youtube: { link: 'https://www.youtube.com/@zqtapirchannel', looked: true, channel: { id: 'UCpa4vYE3su6wUjHg_ck33zw', title: 'Skeen', handle: '@skeen', description: 'Videos every week.' } },
     })
   }
   const results = SEO_TEST_IDS.map((id) => ALL[id](mismatched()))
@@ -147,10 +150,10 @@ describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
     const quoted = results.flatMap((r) => r.evidence).filter((row) => has(row.value, TAPIR).length)
     const ids = new Set(results.filter((r) => r.evidence.some((row) => has(row.value, TAPIR).length)).map((r) => r.id))
     expect(quoted.length).toBeGreaterThanOrEqual(8)
-    for (const id of ['title', 'genre', 'place', 'profiles', 'apple', 'shows', 'releases', 'words'] as SeoTestId[]) expect(ids, id).toContain(id)
+    for (const id of ['title', 'genre', 'place', 'profiles', 'apple', 'shows', 'releases', 'words', 'youtube'] as SeoTestId[]) expect(ids, id).toContain(id)
   })
 
-  // CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in all 24 tests, so Tapir's data is never passed off as the site's.
+  // CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in every test, so Tapir's data is never passed off as the site's.
   it('labels every row quoting a Tapir-only value "in Tapir"', () => {
     const bad = results.flatMap((r) => r.evidence.filter((row) => has(row.value, TAPIR).length && !/^in Tapir: /.test(row.label)).map((row) => `${r.id} · ${row.label}: ${row.value}`))
     expect(bad).toEqual([])

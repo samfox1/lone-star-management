@@ -4,7 +4,7 @@
  *
  * Code:     src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), capCrawl,
  *           crawlOf, latestRun, historyFor, recentRuns, currentRun, seoScore)
- * Feature:  Test runs · storage (the seo_test_runs table), all 24 SEO tests
+ * Feature:  Test runs · storage (the seo_test_runs table), every SEO test (SEO_TEST_IDS)
  * Tier:     STRICT (AGENTS.md "Test depth"): stored data the live page reads back, and a stored
  *           `outside` link the page renders (a javascript: link would be stored XSS).
  * Covers:   • the only writes are the two service-role functions (seo_test_claim, seo_test_finish)
@@ -37,7 +37,7 @@ const A = 'artist-1'
 
 /** A stored run row as PostgREST returns it. */
 const row = (id: string, ranAt: string, summary: Record<string, string>) => ({
-  id, artist_id: A, ran_at: ranAt, finished_at: ranAt, trigger: 'manual', site_url: 'https://x.example', passed: 1, total: 24, summary, site_fresh: true, published_at: null, note: null,
+  id, artist_id: A, ran_at: ranAt, finished_at: ranAt, trigger: 'manual', site_url: 'https://x.example', passed: 1, total: SEO_TEST_IDS.length, summary, site_fresh: true, published_at: null, note: null,
 })
 
 describe('claimRun / finishRun: the ONLY write path, the service-role functions', () => {
@@ -141,7 +141,7 @@ describe('capResult: what may be stored', () => {
     expect(r.sentence.length).toBeLessThanOrEqual(800)
     expect(r.todo!.length).toBeLessThanOrEqual(400)
     expect(r.evidence).toHaveLength(12)
-    // 24 worst-case ASCII results stay far under the table's 256 KB check.
+    // One worst-case ASCII result per test stays far under the table's 256 KB check.
     expect(JSON.stringify(SEO_TEST_IDS.map((id) => ({ ...r, id }))).length).toBeLessThan(200_000)
   })
 })
@@ -174,8 +174,8 @@ describe('capResult counts BYTES, as the table does', () => {
     action: { kind: 'outside', href: `https://www.bing.com/${'a'.repeat(5_000)}`, label: heavy(500) },
   })
 
-  // The table's size check: 24 worst-case results must fit, or the database refuses the whole run.
-  it('CRITICAL: 24 results at every cap, in multi-byte text, stay under the table\'s 256 KB as Postgres counts it', () => {
+  // The table's size check: one worst-case result per test (SEO_TEST_IDS) must fit, or the database refuses the whole run.
+  it('CRITICAL: every test\'s result at every cap, in multi-byte text, stays under the table\'s 256 KB as Postgres counts it', () => {
     const results = capResults(SEO_TEST_IDS.map(worst))
     expect(pgJsonbTextBytes(results)).toBeLessThanOrEqual(220 * 1024)
   })
@@ -387,7 +387,7 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
   })
 
   // The crawl is extra, never the run: when the finish WITH one fails, the run is finished again
-  // without it, so its 24 results are kept. Without a crawl there is nothing to drop: no retry.
+  // without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
   it('CRITICAL: when the finish WITH a crawl fails (not pushed yet, or refused), the run is finished again without it: its results are never lost', async () => {
     const refused = (args: Record<string, unknown>): Reply => ('p_crawl' in args ? { error: { code: 'PGRST202', message: 'Could not find the function public.seo_test_finish' } } : { data: true })
     const { out, args } = await finishWith(realCrawl(), refused)

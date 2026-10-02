@@ -16,6 +16,7 @@
 import type { ARTIST_SNAPSHOT } from '@/lib/content'
 import { CONNECTIONS, buildConnectionRows, type ConnectionDef, type LinkRowLike } from '@/lib/connections'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
+import type { SeoTestId } from '@/lib/seo-tests/types'
 import { shortDay } from '../../format'
 import { OUTSIDE_BIOS, bioItem, type OutsideBio } from './bios'
 
@@ -203,6 +204,30 @@ export function connectedBios(links: readonly LinkRowLike[], artist: Integration
   })
 }
 
+/* ── what the AI test read ───────────────────────────────────────────────────────────── */
+
+/**
+ * What the AI test READ on a platform, for a bio Tapir can check itself (OUTSIDE_PROFILES_PLAN.md,
+ * build step 2: YouTube's channel description). Only a pass or a fail is a read; "couldn't check"
+ * and "doesn't apply" say nothing about the bio, so the row keeps its manual state.
+ */
+export type BioRead = { status: 'pass' | 'fail'; value: string; sentence: string; lead?: 'Almost' }
+
+/** The AI test that reads each bio Tapir can read. */
+export const BIO_TESTS = { youtube: 'youtube' } as const satisfies Partial<Record<OutsideBio, SeoTestId>>
+
+/** The reads, from the newest stored run's `results` (read defensively: a stored row is data). */
+export function bioReads(results: unknown): Partial<Record<OutsideBio, BioRead>> {
+  const out: Partial<Record<OutsideBio, BioRead>> = {}
+  if (!Array.isArray(results)) return out
+  for (const [bio, test] of Object.entries(BIO_TESTS) as [OutsideBio, SeoTestId][]) {
+    const r = results.find((x): x is Record<string, unknown> => isObj(x) && x.id === test)
+    if (!r || (r.status !== 'pass' && r.status !== 'fail') || typeof r.value !== 'string' || typeof r.sentence !== 'string') continue
+    out[bio] = { status: r.status, value: r.value, sentence: r.sentence, ...(r.lead === 'Almost' ? { lead: 'Almost' as const } : {}) }
+  }
+  return out
+}
+
 /** What the rows are built from. Null where a read failed: those rows say "couldn't check". */
 export type BiosInput = {
   /** Null: the links couldn't be read, so which bios is unknown. */
@@ -213,6 +238,8 @@ export type BiosInput = {
   factsKnown: boolean
   /** Every fact change, newest first (factChanges). */
   changes: FactsChange[]
+  /** What the newest AI test run read, per bio it can read (bioReads). Absent: none. */
+  reads?: Partial<Record<OutsideBio, BioRead>>
 }
 
 export type BioRow = ConnectedBio & {
@@ -222,6 +249,8 @@ export type BioRow = ConnectedBio & {
   since: string | null
   /** Stale only: every fact changed after this bio's tick, in ALL_BIO_FACTS order. */
   changed: BioFact[]
+  /** What the AI test read there, for a bio Tapir can check (bioReads); null: none. */
+  read: BioRead | null
 }
 
 /**
@@ -238,7 +267,8 @@ export function bioRows(input: BiosInput, now: Date | number): BioRow[] | null {
   return input.bios.map((b) => {
     const confirmedAt = marks?.[bioItem(b.key)] ?? null
     const state = marks && factsKnown ? bioState({ confirmedAt, factsChangedAt: changes[0]?.at ?? null, now }) : null
-    if (state !== 'stale') return { ...b, confirmedAt, state, since: null, changed: [] }
+    const read = input.reads?.[b.key] ?? null
+    if (state !== 'stale') return { ...b, confirmedAt, state, since: null, changed: [], read }
     const after = changes.filter((c) => Date.parse(c.at) > Date.parse(confirmedAt!))
     return {
       ...b,
@@ -246,6 +276,7 @@ export function bioRows(input: BiosInput, now: Date | number): BioRow[] | null {
       state,
       since: after[after.length - 1].at,
       changed: ALL_BIO_FACTS.filter((f) => after.some((c) => c.fields.includes(f))),
+      read,
     }
   })
 }

@@ -1,19 +1,20 @@
 /**
- * Running the SEO / GEO tests: all 24 run in order, one broken test never sinks the run, the run
+ * Running the SEO / GEO tests: every one runs in order, one broken test never sinks the run, the run
  * keeps to its time budget, and the database decides whether a run may start at all.
  *
  * Code:     src/lib/seo-tests/run.ts (runSeoTests, runAllTests)
- * Feature:  Test runs · all 24 SEO tests (SEO_TEST_IDS), every Test-tab group
+ * Feature:  Test runs · every SEO test (SEO_TEST_IDS), every Test-tab group
  * Tier:     STRICT (AGENTS.md "Test depth"): this decides what is STORED as the verdict on the
  *           artist's site, so what the manager is later told is true.
  * Covers:   • results come out in SEO_TEST_IDS order, one per test, whatever order the engine uses
  *           • a test that throws, answers junk or answers for another test is `unknown`; the rest stand
- *           • a missing test is `unknown`, never left out (a run always stores 24)
+ *           • a missing test is `unknown`, never left out (a run always stores one per test)
  *           • the time budget: a site that never answers ends the run in time, every test `unknown`
- *           • a slow share picture or a MusicBrainz outage makes ONLY its own test unknown
+ *           • a slow share picture, a MusicBrainz outage or a YouTube one makes ONLY its own test
+ *             unknown (a lost YouTube answer is left out, never read as "no link")
  *           • the database's refusal (cool-down, busy) stops the run before anything is fetched
  *           • every write goes through the service-role writer; the manager's session only reads
- *           • no site connected: 24 × unknown "no site", stored, nothing fetched
+ *           • no site connected: every test unknown "no site", stored, nothing fetched
  *           • the stale-site verdict and the run-level `reach` are worked out and stored
  *           • a failure after the claim marks the run failed and returns a plain error
  *           • `na` (does not apply) is a verdict the run keeps
@@ -29,7 +30,7 @@
  *           the crawl is built from evidence (how-crawlers-see-your-site/crawl.test.ts); the Google
  *           and Bing calls themselves (tests/unit/search-engines/).
  * Fixtures: a PostgREST fake (tests/helpers/fake-client.ts) answers the claim, finish, publish_moments and
- *           site_verifications calls; a fake engine whose 24 tests all pass unless a test swaps one
+ *           site_verifications calls; a fake engine whose tests all pass unless a test swaps one
  *           out; what Tapir knows is handed in (`readKnown`), never read; Google and Bing are fake
  *           clients handed in (`listingClients`), so no test reaches the server's keys; the other
  *           spelling is fetched from a fake web (tests/helpers/seo/fake-site.ts).
@@ -100,6 +101,7 @@ function engine(over: Partial<SeoEngine> = {}): SeoEngine & { calls: string[] } 
     gatherSiteEvidence: async (origin) => (calls.push(`pages:${origin}`), pages()),
     fetchShareImage: async () => (calls.push('share'), { url: `${ORIGIN}/og.png`, status: 200, contentType: 'image/png', width: 1200, height: 630, bytes: 1000 }),
     lookupMusicBrainz: async () => (calls.push('mb'), { looked: true, artistUrl: 'https://musicbrainz.org/artist/x', matchedOn: ORIGIN }),
+    lookupYouTube: async () => (calls.push('yt'), { link: 'https://www.youtube.com/@Sskeen', looked: true, channel: null }),
     tests: allPass(),
     appleStorefrontFix: () => null,
     ...over,
@@ -142,7 +144,7 @@ describe('order and completeness', () => {
     expect(stored(f).results.map((r) => r.id)).toEqual([...SEO_TEST_IDS])
   })
 
-  // A missing test: a run must always hold 24 results, or the page would count a gap as nothing.
+  // A missing test: a run must always hold one result per test, or the page would count a gap as nothing.
   it('a test the engine does not have yet is `unknown`, never left out', () => {
     const tests = allPass()
     delete tests.card
@@ -220,6 +222,25 @@ describe('the time budget', () => {
     expect(seen).toMatchObject({ looked: false })
     expect(stored(f).results.find((r) => r.id === 'mb')?.status).toBe('unknown')
   })
+
+  // A YouTube lookup that throws or never answers: its evidence is left OUT, never "no link" (which
+  // the real test reads as `na`, and a missed part never overwrites `na`), so ONLY `youtube` is
+  // "couldn't check" and the other tests stand.
+  it.each([
+    ['throws', async () => { throw new Error('quota') }],
+    ['never answers', () => new Promise<never>(() => {})],
+  ] as const)('YouTube that %s: ONLY `youtube` unknown, never "doesn’t apply"', async (_, lookupYouTube) => {
+    let seen: SeoEvidence['youtube'] | 'unset' = 'unset'
+    const tests = allPass()
+    // Like the real test: no link → `na`; no evidence at all → anything (the run replaces it).
+    tests.youtube = (e) => ((seen = e.youtube), e.youtube && e.youtube.link === null ? { id: 'youtube', status: 'na', value: 'no YouTube link', sentence: 'no link.', evidence: [] } : pass('youtube'))
+    const f = world()
+    await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine({ tests, lookupYouTube }), readKnown: async () => known(), budgetMs: 40 })
+    expect(seen).toBeUndefined()
+    const results = stored(f).results
+    expect(results.find((r) => r.id === 'youtube')?.status).toBe('unknown')
+    expect(results.filter((r) => r.id !== 'youtube').every((r) => r.status === 'pass')).toBe(true)
+  })
 })
 
 describe('the database decides whether a run may start', () => {
@@ -251,8 +272,8 @@ describe('the database decides whether a run may start', () => {
 })
 
 describe('no site connected', () => {
-  // No site: say "no site" 24 times in storage (the page says it once) and fetch nothing.
-  it('CRITICAL: 24 × unknown "no site", stored, and nothing fetched', async () => {
+  // No site: say "no site" once per test in storage (the page says it once) and fetch nothing.
+  it('CRITICAL: every test unknown "no site", stored, and nothing fetched', async () => {
     const f = world()
     const e = engine()
     const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: e, readKnown: async () => known({ siteUrl: null }) })
@@ -417,7 +438,7 @@ const NULL_G = (path: string) => ({ path, answered: false, verdict: null, covera
 const NULL_B = (path: string) => ({ path, answered: false, lastCrawled: null, status: null })
 
 describe('"How crawlers see your site": what the run hands the store', () => {
-  // The section is built from the SAME evidence the 24 tests read, plus what only the run can
+  // The section is built from the SAME evidence the tests read, plus what only the run can
   // find out (the other spelling, the listing), and handed to finishRun with the results.
   it('CRITICAL: the crawl built from the gathered evidence reaches finishRun, with the other spelling and the listing', async () => {
     const other = { url: 'https://example-artist.com/', status: 200, to: `${ORIGIN}/` }
@@ -506,7 +527,7 @@ describe('the listing: asked only where the site is registered', () => {
 
   // A provider that fails leaves THOSE pages as nulls ("couldn't ask"), never a made-up answer,
   // and never sinks the run: a refusal, a throw, a missing key, clients that can't be built.
-  it('CRITICAL: a failing provider leaves nulls and the run still stores its 24 results', async () => {
+  it('CRITICAL: a failing provider leaves nulls and the run still stores every result', async () => {
     const paths = TWO_PAGES().paths
     const cases: { name: string; l: ReturnType<typeof fakeListing>; make?: () => Promise<ListingClients>; google: unknown; bing: unknown }[] = [
       {

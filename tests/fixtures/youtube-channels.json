@@ -1,0 +1,38 @@
+{
+  "_about": "Real YouTube Data API v3 channels.list answers (part=snippet,brandingSettings), fetched 2026-10-02 with Tapir’s key (the key is never in an answer, and is not here). forHandle_Sskeen: the handle Skeen’s Connections link names (https://www.youtube.com/@Sskeen), which YouTube no longer knows (the page 404s too). id_UCpa4vYE3su6wUjHg_ck33zw: the channel his synced videos come from, now @skeenmusic. Trimmed: thumbnails and localized left out (never read). See tests/unit/seo-tests/says-who-you-are/youtube.test.ts.",
+  "forHandle_Sskeen": {
+    "kind": "youtube#channelListResponse",
+    "etag": "RuuXzTIr0OoDqI4S0RU6n4FqKEM",
+    "pageInfo": {
+      "totalResults": 0,
+      "resultsPerPage": 5
+    }
+  },
+  "id_UCpa4vYE3su6wUjHg_ck33zw": {
+    "kind": "youtube#channelListResponse",
+    "etag": "GIeGQlJgXB1YVLSExG4fhJp11SM",
+    "pageInfo": {
+      "totalResults": 1,
+      "resultsPerPage": 5
+    },
+    "items": [
+      {
+        "kind": "youtube#channel",
+        "etag": "huNWmGCY-tBErIz-8SfxqY-R7oA",
+        "id": "UCpa4vYE3su6wUjHg_ck33zw",
+        "snippet": {
+          "title": "Skeen",
+          "description": "skeeeeeeen\n",
+          "customUrl": "@skeenmusic",
+          "publishedAt": "2020-05-31T18:13:38.68795Z"
+        },
+        "brandingSettings": {
+          "channel": {
+            "title": "Skeen",
+            "description": "skeeeeeeen\n"
+          }
+        }
+      }
+    ]
+  }
+}

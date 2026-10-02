@@ -1,7 +1,7 @@
 /**
  * "HOW CRAWLERS SEE YOUR SITE": the facts behind the AI test's first section (types.ts
  * `SeoCrawl`; prototypes/seo_variants_20260930_r11.html). Built ONCE per run from the evidence
- * the 24 tests read, with the ENGINE'S OWN readers, so this section can never tell the manager
+ * the tests read, with the ENGINE'S OWN readers, so this section can never tell the manager
  * something the tests read differently:
  *
  *   robots.txt  robots-txt.ts `robotsVerdict` for every SEO_BOTS entry at "/", the deciding

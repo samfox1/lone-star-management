@@ -45,7 +45,7 @@ export const SEO_TABS: readonly { seg: string; label: string }[] = SEO_SECTIONS.
  *   Search listing → Details          Share image → Details, #share
  *   Alt tags       → Details, #alt    Facts       → Profile
  *   About (bio + where it shows) → Profile, #bio
- *   AI visibility  → Answers          Test        → AI test (the 24 plain-language tests)
+ *   AI visibility  → Answers          Test        → AI test (the plain-language tests)
  * `listing` was a tab of its own from 2026-09-28 until 2026-09-29, when it became Details, the
  * tool's own route. `facts` was a tab until 2026-10-02. `test` keeps its name.
  */

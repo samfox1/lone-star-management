@@ -7,6 +7,10 @@
  *   Search Console API v3     sites.add · sitemaps.submit
  *   Search Console API v1     urlInspection.index.inspect (is a page listed? the AI test's
  *                             "How crawlers see your site", seo-tests/run.ts)
+ *   Search Console API v3     searchAnalytics.query (how often the site was seen and clicked in
+ *                             search: "How fans find you", manager-tools/seo/search-stats.ts).
+ *                             The `webmasters` scope covers it (Google lists it beside
+ *                             `webmasters.readonly`), so sign-in asks for nothing new.
  * The key comes from the env (`GOOGLE_SEARCH_SERVICE_ACCOUNT_B64`, base64 JSON). It owns every
  * client site in Search Console: it never appears in a return value, a log line or an error, and
  * this file is server-only (imported by the register script and, later, admin server actions).
@@ -20,7 +24,7 @@ import { isGoogleVerification } from '@samfox1/site-bridge/verification'
 
 export type GoogleCreds = { client_email: string; private_key: string }
 
-export type GoogleReason = 'google_auth' | 'google_token' | 'google_verify' | 'google_owner' | 'google_add' | 'google_sitemap' | 'google_inspect' | 'google_network'
+export type GoogleReason = 'google_auth' | 'google_token' | 'google_verify' | 'google_owner' | 'google_add' | 'google_sitemap' | 'google_inspect' | 'google_stats' | 'google_network'
 export type GoogleResult<T> = { ok: true; value: T } | { ok: false; reason: GoogleReason; status?: number; detail?: string }
 
 export type GoogleDeps = { fetcher?: typeof fetch; now?: () => number }
@@ -61,6 +65,39 @@ function metaContent(token: unknown): string | null {
  *  NEUTRAL, `coverage` Google's sentence ("Submitted and indexed"), `lastCrawl` when Googlebot
  *  last fetched it (ISO). null = Google's answer did not say. */
 export type GoogleInspection = { verdict: string | null; coverage: string | null; lastCrawl: string | null }
+
+/** The dimensions Tapir reads from Search Analytics. Google has more (searchAppearance, hour);
+ *  nothing reads them, so they are never asked for. */
+export const GOOGLE_SEARCH_DIMENSIONS = ['date', 'query', 'page', 'country', 'device'] as const
+export type GoogleSearchDimension = (typeof GOOGLE_SEARCH_DIMENSIONS)[number]
+
+/** One searchAnalytics.query. Dates are Google's days (Pacific time), YYYY-MM-DD, both ends
+ *  included. `dataState: 'all'` includes the last ~2 days Google has not finished counting
+ *  (Google's default, left out, is finished days only). */
+export type GoogleSearchRequest = { startDate: string; endDate: string; dimensions?: GoogleSearchDimension[]; rowLimit?: number; dataState?: 'all' | 'final' }
+
+/** One row of the answer: `keys` in the order of the dimensions asked (none for a total).
+ *  `position` is Google's average rank, null when there was nothing to rank (Google says 0).
+ *  Google's ctr is not kept: it is clicks ÷ impressions, worked out where it is shown. */
+export type GoogleSearchRow = { keys: string[]; clicks: number; impressions: number; position: number | null }
+
+/** The rows, and the first day Google is still counting (`metadata.firstIncompleteDate`, only
+ *  with dataState all): that day and later are preliminary. */
+export type GoogleSearchAnswer = { rows: GoogleSearchRow[]; firstIncompleteDate: string | null }
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+
+/** A row in Google's shape for `width` dimensions, or null. */
+function searchRow(r: unknown, width: number): GoogleSearchRow | null {
+  if (!r || typeof r !== 'object') return null
+  const x = r as Record<string, unknown>
+  const keys = width === 0 && x.keys === undefined ? [] : x.keys
+  if (!Array.isArray(keys) || keys.length !== width || !keys.every((k) => typeof k === 'string')) return null
+  if (!isCount(x.clicks) || !isCount(x.impressions)) return null
+  const position = typeof x.position === 'number' && Number.isFinite(x.position) && x.position > 0 ? x.position : null
+  return { keys: keys as string[], clicks: x.clicks, impressions: x.impressions, position }
+}
 
 /** A string field of Google's answer, cut; anything else null. */
 const textField = (v: unknown, max: number): string | null => (typeof v === 'string' && v !== '' ? v.slice(0, max) : null)
@@ -198,6 +235,27 @@ export function googleClient(creds: GoogleCreds, deps: GoogleDeps = {}) {
       if (!j.inspectionResult || typeof j.inspectionResult !== 'object') return { ok: false, reason: 'google_inspect', status: r.value.status, detail: 'no inspection result in the answer' }
       const x = j.inspectionResult.indexStatusResult ?? {}
       return { ok: true, value: { verdict: textField(x.verdict, 60), coverage: textField(x.coverageState, 200), lastCrawl: timeField(x.lastCrawlTime) } }
+    },
+
+    /**
+     * How often the property was seen (impressions) and clicked in Google Search, grouped by
+     * `dimensions` (none = the property's total). Read-only. Google returns its TOP rows only, and
+     * leaves out rare searches altogether (anonymised), so query rows never add up to the total:
+     * ask for the total on its own. The request is checked first; nothing odd is sent.
+     */
+    async searchAnalytics(siteUrl: string, req: GoogleSearchRequest): Promise<GoogleResult<GoogleSearchAnswer>> {
+      const dimensions = req.dimensions ?? []
+      if (!DAY.test(req.startDate) || !DAY.test(req.endDate)) return { ok: false, reason: 'google_stats', detail: 'dates must be YYYY-MM-DD' }
+      if (!dimensions.every((d) => (GOOGLE_SEARCH_DIMENSIONS as readonly string[]).includes(d))) return { ok: false, reason: 'google_stats', detail: 'a dimension Tapir does not read' }
+      const rowLimit = Math.min(25_000, Math.max(1, Math.floor(req.rowLimit ?? 1000)))
+      const body = { startDate: req.startDate, endDate: req.endDate, dimensions, type: 'web', rowLimit, ...(req.dataState ? { dataState: req.dataState } : {}) }
+      const r = await call('google_stats', `${CONSOLE_API}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, jsonInit('POST', body))
+      if (!r.ok) return r
+      const j = (await r.value.json().catch(() => null)) as { rows?: unknown; metadata?: { firstIncompleteDate?: unknown } } | null
+      if (!j || typeof j !== 'object' || Array.isArray(j)) return { ok: false, reason: 'google_stats', status: r.value.status, detail: 'no answer Google could mean' }
+      const rows = Array.isArray(j.rows) ? j.rows.map((x) => searchRow(x, dimensions.length)).filter((x): x is GoogleSearchRow => x !== null) : []
+      const first = j.metadata?.firstIncompleteDate
+      return { ok: true, value: { rows, firstIncompleteDate: typeof first === 'string' && DAY.test(first) ? first : null } }
     },
 
     /** Tells Google where the site's page list is. */

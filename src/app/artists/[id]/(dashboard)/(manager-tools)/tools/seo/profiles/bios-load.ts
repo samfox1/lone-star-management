@@ -3,6 +3,7 @@ import type { IntegrationArtist } from '@/lib/integrations-registry'
 import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
 import {
   BIO_FACTS,
+  bioReads,
   connectedBios,
   factChanges,
   mergeChanges,
@@ -72,12 +73,15 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
 /**
  * What the Outside bios rows are built from (lib/manager-tools/seo/profiles/bio-state.ts): the
  * artist's links (which platforms are connected), the "updated" ticks, the published profiles,
- * newest first, reading ONLY the fact fields out of each snapshot, and the profile photo's
- * published history (readPhotoHistory), so a new photo counts as a fact change.
+ * newest first, reading ONLY the fact fields out of each snapshot, the profile photo's
+ * published history (readPhotoHistory), so a new photo counts as a fact change, and the newest
+ * AI test run's results, for the bios the test reads itself (bioReads: YouTube's description).
+ * Only `results` is read from the run, never the crawl.
  *
  * Every read runs on the manager's own session after the page's ownership gate, so RLS decides
- * (`revisions_rw`, `links`, `profile_marks`: the artist's managers). NEVER THROWS: a read that
- * fails leaves its part null, and the rows say "couldn't check" (bioRows).
+ * (`revisions_rw`, `links`, `profile_marks`, `seo_test_runs`: the artist's managers). NEVER
+ * THROWS: a read that fails leaves its part null, and the rows say "couldn't check" (bioRows); a
+ * run that can't be read is no read, and the rows keep their manual state.
  *
  * `artist` is the gate's row (requireArtist), which carries the source id columns. `marks`: the
  * page's own read of profile_marks, when it makes one (the Profiles page), so it is read once.
@@ -88,7 +92,7 @@ export async function loadOutsideBios(
   marksRead?: Promise<ProfileMarks | null>,
 ): Promise<BiosInput> {
   const id = artist.id
-  const [links, marks, revisions, photos] = await Promise.all([
+  const [links, marks, revisions, photos, results] = await Promise.all([
     supabase
       .from('links')
       .select('id, label, url, role')
@@ -113,6 +117,18 @@ export async function loadOutsideBios(
         () => null,
       ),
     readPhotoHistory(supabase, id).catch(() => null),
+    supabase
+      .from('seo_test_runs')
+      .select('results')
+      .eq('artist_id', id)
+      .eq('status', 'done')
+      .order('ran_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(
+        (r) => (r.error ? null : ((r.data as { results?: unknown } | null)?.results ?? null)),
+        () => null,
+      ),
   ])
   const rows: ProfileRevision[] | null = revisions?.map((r) => ({ published_at: String(r.published_at), data: factsOf(r) })) ?? null
   // Both halves or neither: a photo history that failed to read could hide the change that
@@ -125,5 +141,6 @@ export async function loadOutsideBios(
     changes: known
       ? mergeChanges(factChanges(rows, { complete: rows.length < REVISION_CAP }), photoChanges(photos.rows, { complete: photos.complete }))
       : [],
+    reads: bioReads(results),
   }
 }

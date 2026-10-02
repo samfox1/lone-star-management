@@ -1,5 +1,5 @@
 /**
- * ONE RUN of the 24 SEO / GEO tests: claim → read what Tapir knows → gather the evidence ONCE →
+ * ONE RUN of the SEO / GEO tests (SEO_TEST_IDS): claim → read what Tapir knows → gather the evidence ONCE →
  * run every test in SEO_TEST_IDS order → store. The page only ever reads what this stored.
  *
  * What a run guarantees, each pinned by tests/unit/seo-tests/run.test.ts:
@@ -9,10 +9,10 @@
  *   • NO BROWSER WRITES: claims and results go through the service-role writer only; a manager's
  *     session can read runs and nothing else.
  *   • ONE TEST CANNOT SINK THE RUN. Every test is wrapped: a throw, or an answer that is not a
- *     result for that test, becomes `unknown` ("this test broke") and the other 23 stand.
+ *     result for that test, becomes `unknown` ("this test broke") and the others stand.
  *   • A TIME BUDGET for the whole gather. Whatever has not answered by then is `unknown` with
  *     "ran out of time", never `pass` and never `fail` (types.ts, honesty rule 1).
- *   • NO SITE is not a crash: 24 × `unknown`, "no site is connected", and nothing is fetched.
+ *   • NO SITE is not a crash: every test `unknown`, "no site is connected", and nothing is fetched.
  *   • STALE SITE is recorded, not hidden: `site_fresh` (fresh.ts) says whether the live site was
  *     showing the latest publish when the run looked.
  *   • WHAT THE RUN SAW is stored too (types.ts SeoCrawl, "How crawlers see your site"): built by
@@ -24,7 +24,7 @@
  *     read and the questions end at the run's deadline, which also aborts their requests. No
  *     site, or a gather that failed, stores no crawl.
  *
- * The engine (the evidence gatherers and the 24 tests, written beside this file by other hands)
+ * The engine (the evidence gatherers and the tests, written beside this file by other hands)
  * is INJECTED: `deps.engine`, else `./engine` loaded on first use. Unit tests run on fakes. The
  * Google / Bing clients are injected too (`deps.listingClients`); the default reads the server's
  * keys and is built only when a registration exists, so a unit test never reaches them.
@@ -43,8 +43,8 @@ import { claimRun, failRun, finishRun, type SeoClaimRefusal } from './store'
 import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoCrawl, type SeoEvidence, type SeoKnown, type SeoRunReach, type SeoRunTrigger, type SeoTest, type SeoTestId, type SeoTestResult } from './types'
 
 /** What `gatherSiteEvidence` answers: the site's side of the evidence (everything but the share
- *  picture, MusicBrainz and what Tapir knows, which the run adds). */
-export type SitePages = Omit<SeoEvidence, 'shareImage' | 'musicbrainz' | 'known'>
+ *  picture, MusicBrainz, YouTube and what Tapir knows, which the run adds). */
+export type SitePages = Omit<SeoEvidence, 'shareImage' | 'musicbrainz' | 'youtube' | 'known'>
 
 /** Passed to every gatherer. `signal` aborts when the run's budget runs out. */
 export type GatherOptions = { fetcher?: typeof fetch; signal?: AbortSignal }
@@ -53,6 +53,8 @@ export type SeoEngine = {
   gatherSiteEvidence: (origin: string, opts: GatherOptions) => Promise<SitePages>
   fetchShareImage: (homeHtml: string | null, origin: string, opts: GatherOptions) => Promise<SeoEvidence['shareImage']>
   lookupMusicBrainz: (known: SeoKnown, opts: GatherOptions) => Promise<SeoEvidence['musicbrainz']>
+  /** The artist's YouTube channel description (youtube.ts). The real engine adds Tapir's key. */
+  lookupYouTube: (known: SeoKnown, opts: GatherOptions) => Promise<NonNullable<SeoEvidence['youtube']>>
   tests: Partial<Record<SeoTestId, SeoTest>>
   /** The Apple Music storefront fix: the link moved to the US store, or null when there is
    *  nothing to move (apple-storefront.ts `appleStorefrontFix(url)?.fixed`). */
@@ -66,7 +68,7 @@ export async function loadEngine(): Promise<SeoEngine> {
   return { checkOtherHost, ...(await import('./engine')).SEO_ENGINE }
 }
 
-/** The whole gather (pages, share picture, MusicBrainz) must answer inside this. Each fetch has
+/** The whole gather (pages, share picture, MusicBrainz, YouTube) must answer inside this. Each fetch has
  *  its own 10 s timeout (guarded-fetch); this bounds the sum. */
 const SEO_RUN_BUDGET_MS = 90_000
 
@@ -145,11 +147,14 @@ const TIMEOUT = Symbol('timeout')
 const FAILED = Symbol('failed')
 type Late = typeof TIMEOUT | typeof FAILED
 
+/** The parts of the evidence gathered beside the site's pages. */
+type Part = 'shareImage' | 'musicbrainz' | 'youtube'
+
 /** Which tests a missing part of the evidence leaves unanswerable. */
-const DEPENDS: Record<'shareImage' | 'musicbrainz', SeoTestId[]> = { shareImage: ['share'], musicbrainz: ['mb'] }
+const DEPENDS: Record<Part, SeoTestId[]> = { shareImage: ['share'], musicbrainz: ['mb'], youtube: ['youtube'] }
 
 type Gathered =
-  | { ok: true; evidence: SeoEvidence; missed: ('shareImage' | 'musicbrainz')[]; timedOut: boolean; otherHost: SeoCrawl['otherHost'] }
+  | { ok: true; evidence: SeoEvidence; missed: Part[]; timedOut: boolean; otherHost: SeoCrawl['otherHost'] }
   | { ok: false; timedOut: boolean }
 
 async function gather(engine: SeoEngine, known: SeoKnown, origin: string, deps: { fetcher?: typeof fetch; deadline: number; now: () => number }): Promise<Gathered> {
@@ -173,6 +178,7 @@ async function gather(engine: SeoEngine, known: SeoKnown, origin: string, deps: 
   }
   try {
     const mb = within(start(() => engine.lookupMusicBrainz(known, opts)))
+    const yt = within(start(() => engine.lookupYouTube(known, opts)))
     const pages = await within(start(() => engine.gatherSiteEvidence(origin, opts)))
     if (pages === TIMEOUT || pages === FAILED) return { ok: false, timedOut: pages === TIMEOUT }
     const home = pages.plain?.find((p) => p.path === '/')?.html ?? null
@@ -180,10 +186,11 @@ async function gather(engine: SeoEngine, known: SeoKnown, origin: string, deps: 
     // input: a check that fails or runs out of time is "not checked" and changes nothing else.
     const landed = typeof pages.origin === 'string' && pages.origin ? pages.origin : origin
     const otherP = engine.checkOtherHost ? within(start(() => engine.checkOtherHost!(landed, opts))) : Promise.resolve(null)
-    const [share, brainz, other] = await Promise.all([within(start(() => engine.fetchShareImage(home, origin, opts))), mb, otherP])
-    const missed: ('shareImage' | 'musicbrainz')[] = []
+    const [share, brainz, tube, other] = await Promise.all([within(start(() => engine.fetchShareImage(home, origin, opts))), mb, yt, otherP])
+    const missed: Part[] = []
     if (share === TIMEOUT || share === FAILED) missed.push('shareImage')
     if (brainz === TIMEOUT || brainz === FAILED) missed.push('musicbrainz')
+    if (tube === TIMEOUT || tube === FAILED) missed.push('youtube')
     const evidence: SeoEvidence = {
       ...pages,
       // A share picture we never finished fetching is NOT "the page names none": the `share`
@@ -193,10 +200,13 @@ async function gather(engine: SeoEngine, known: SeoKnown, origin: string, deps: 
         brainz === TIMEOUT || brainz === FAILED
           ? { looked: false, artistUrl: null, matchedOn: null, error: brainz === TIMEOUT ? 'ran out of time' : 'the lookup failed' }
           : brainz,
+      // A YouTube answer that never came is left OUT (not "no link", which would read as `na`):
+      // the `youtube` result is replaced with `unknown` below.
+      ...(tube === TIMEOUT || tube === FAILED ? {} : { youtube: tube }),
       known,
     }
     const otherHost = other === TIMEOUT || other === FAILED ? null : (other ?? null)
-    return { ok: true, evidence, missed, timedOut: share === TIMEOUT || brainz === TIMEOUT, otherHost }
+    return { ok: true, evidence, missed, timedOut: share === TIMEOUT || brainz === TIMEOUT || tube === TIMEOUT, otherHost }
   } finally {
     for (const t of timers) clearTimeout(t)
     controller.abort() // stragglers stop; a gatherer that honours the signal frees its sockets

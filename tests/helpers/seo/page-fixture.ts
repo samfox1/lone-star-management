@@ -202,6 +202,8 @@ export type EvidenceOpts = {
   known?: SeoKnown
   shareImage?: SeoEvidence['shareImage']
   musicbrainz?: SeoEvidence['musicbrainz']
+  /** YouTube's answer about the channel. Absent = not asked (the `youtube` test is unknown). */
+  youtube?: SeoEvidence['youtube']
 }
 
 export function evidence(o: EvidenceOpts = {}): SeoEvidence {
@@ -218,6 +220,7 @@ export function evidence(o: EvidenceOpts = {}): SeoEvidence {
     sitemap: null,
     shareImage: o.shareImage === undefined ? { url: OG_IMAGE, status: 200, contentType: 'image/png', width: 1200, height: 630, bytes: 32_000, format: 'png' } : o.shareImage,
     musicbrainz: o.musicbrainz ?? { looked: true, artistUrl: null, matchedOn: null },
+    ...(o.youtube ? { youtube: o.youtube } : {}),
     known: o.known ?? known(),
   }
 }

@@ -2,7 +2,7 @@
  * HOW CRAWLERS SEE YOUR SITE: the words and numbers, pure (Sam, 2026-09-30, round 11,
  * prototypes/seo_variants_20260930_r11.html). The section shows what a run SAW (types.ts
  * SeoCrawl): robots.txt, the sitemap, the page tags, each crawler's visits, and whether Google and
- * Bing list the pages. FACTS, not verdicts: the 24 tests judge. The only judging here is the mark
+ * Bing list the pages. FACTS, not verdicts: the tests judge. The only judging here is the mark
  * on each of the five rows (check / red alert / dashed ring) and "N of 5 fine", each counted from
  * the stored facts, never assumed.
  *

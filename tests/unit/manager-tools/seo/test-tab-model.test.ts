@@ -4,9 +4,9 @@
  *
  * Code:     src/lib/manager-tools/seo/test-model.ts,
  *           test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
- * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), all 24 SEO
- *           tests in their four groups
- * Tier:     STRICT (AGENTS.md "Test depth"): the counts ("19 of 24", "5 need you"), the headline
+ * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), every SEO
+ *           test (SEO_TEST_IDS) in its four groups
+ * Tier:     STRICT (AGENTS.md "Test depth"): the counts ("19 of 25", "5 need you"), the headline
  *           and the hrefs a stored result can reach are what the manager is told is true.
  * Covers:   • counts: `na` left out of both sides of "N of M"; an unknown status counts nowhere
  *           • groups and the filter: four groups in page order, each row in exactly one filter,
@@ -78,7 +78,7 @@ describe('counts', () => {
     expect(c.unknown).toBeGreaterThan(0)
     expect(c.pass).toBe(by('pass'))
     expect(c.fail).toBe(by('fail'))
-    expect(c.applicable).toBe(SEO_TEST_IDS.length - 2) // 22, not 24
+    expect(c.applicable).toBe(SEO_TEST_IDS.length - 2) // two `na` left out
     expect(c.pass + c.fail + c.unknown).toBe(c.applicable)
   })
   // A malformed stored status counts nowhere, so it can never pass.
@@ -189,9 +189,10 @@ describe('the headline: one helper for every place a run is summed up', () => {
       expect(h.detail, s).toEqual([...(c.fail ? [`${c.fail} need${c.fail === 1 ? 's' : ''} you`] : []), ...(c.unknown ? [`${c.unknown} couldn’t be checked`] : [])])
       expect(headlineLine(h)).not.toMatch(/^All /)
     }
-    // 23 pass + 1 couldn't check reads exactly as the brief asked.
+    // All but one pass + 1 couldn't check reads exactly as the brief asked, out of every test there is (SEO_TEST_IDS, 25 since YouTube).
     const oneUnknown = fixtureResults(Object.fromEntries(SEO_TEST_IDS.map((id) => [id, { status: id === 'bingwm' ? 'unknown' : 'pass' }])))
-    expect(headlineLine(runHeadline({ results: oneUnknown, siteUrl: 'https://x.com' }))).toBe('23 of 24 tests pass · 1 couldn’t be checked')
+    const n = SEO_TEST_IDS.length
+    expect(headlineLine(runHeadline({ results: oneUnknown, siteUrl: 'https://x.com' }))).toBe(`${n - 1} of ${n} tests pass · 1 couldn’t be checked`)
   })
   // No site, none apply (0 of 0) and nothing checked each have their own words, never a score.
   it('no site, every test na (0 of 0), and nothing passed or failed each have their own words', () => {

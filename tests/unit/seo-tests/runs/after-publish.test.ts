@@ -53,6 +53,7 @@ const engine: SeoEngine = {
   gatherSiteEvidence: async () => ({ origin: ORIGIN, gatheredAt: '', paths: ['/'], plain: [], byBot: {}, robots: { status: 200, body: '' }, sitemap: null }),
   fetchShareImage: async () => null,
   lookupMusicBrainz: async () => ({ looked: false, artistUrl: null, matchedOn: null }),
+  lookupYouTube: async () => ({ link: null, looked: false, channel: null }),
   tests: Object.fromEntries(SEO_TEST_IDS.map((id) => [id, () => ({ id, status: 'pass', value: '', sentence: '', evidence: [] })])),
   appleStorefrontFix: () => null,
 }
@@ -315,7 +316,7 @@ describe('waiting for the site to update (waitForFreshSite)', () => {
 })
 
 describe('the test after a publish (testAfterPublish)', () => {
-  // No site: nothing to wait for or test, and no run of 24 unknowns is stored.
+  // No site: nothing to wait for or test, and no run of unknowns is stored.
   it('CRITICAL: no site connected: no wait, no claim, nothing stored', async () => {
     const { testAfterPublish } = await import('@/lib/seo-tests/after-publish')
     const w = world()

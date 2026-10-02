@@ -3,12 +3,13 @@
  * types.ts): everything here is a read of a stored run. No DOM, no clock of its own (times come
  * in as arguments), so every number and sentence the tab shows is testable without rendering.
  *
- * COUNTS (Sam's header, round 2: "19 of 24 tests pass" · "5 need you"):
+ * COUNTS (Sam's header, round 2: "19 of 24 tests pass" · "5 need you"; M is every test in
+ * SEO_TEST_IDS that applies, 25 since YouTube):
  *   pass       status 'pass'                        → the "Passing" filter
  *   need you   status 'fail'                        → the "Needs you" filter
  *   unknown    "couldn't check": NOT a pass and not a fail; said beside the score and given
  *              its own filter, "Couldn't check", so every row sits in exactly one filter
- *   na         "doesn't apply": left out of both sides of "19 of 24" (types.ts SeoTestStatus);
+ *   na         "doesn't apply": left out of both sides of "N of M" (types.ts SeoTestStatus);
  *              shown only under All
  * So pass + need + couldn't = the score's M, and All = M + doesn't-apply.
  * (Since 2026-09-29 the tab itself shows no filter, only All: `groupsFor(results, 'all')`. The
@@ -119,13 +120,13 @@ export function runHeadline(run: Pick<StoredSeoRun, 'results' | 'siteUrl'> & { r
   return { kind: 'score', title: c.applicable === 1 ? `${c.pass} of 1 test passes` : `${c.pass} of ${c.applicable} tests pass`, detail }
 }
 
-/** "23 of 24 tests pass · 1 couldn’t be checked". */
+/** "24 of 25 tests pass · 1 couldn’t be checked". */
 export function headlineLine(h: RunHeadline): string {
   return [h.title, ...h.detail].join(' · ')
 }
 
 /** Do the rows carry results worth opening? Not when the run had no site or the site didn't
- *  answer: 24 rows of "couldn't check" would bury the one thing that matters. */
+ *  answer: a whole page of "couldn't check" rows would bury the one thing that matters. */
 export function rowsAreResults(h: RunHeadline): boolean {
   return h.kind !== 'no-site' && h.kind !== 'unreachable'
 }
@@ -173,7 +174,7 @@ export function sentenceOf(r: Pick<SeoTestResult, 'status' | 'lead' | 'sentence'
   return leadOf(r) ? s : s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/** A run tested with no site connected: every result is "no site". Said once, not 24 times. */
+/** A run tested with no site connected: every result is "no site". Said once, not once per test. */
 export function hasNoSite(run: Pick<StoredSeoRun, 'siteUrl'>): boolean {
   return !run.siteUrl
 }

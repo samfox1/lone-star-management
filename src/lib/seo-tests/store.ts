@@ -14,7 +14,7 @@
  * shows.
  *
  * Every string written is capped here first, in BYTES of its JSON form: the table's 256 KB check
- * counts bytes, and 24 results at these caps stay under ~200 KB of it.
+ * counts bytes, and one result per test (25 since YouTube) at these caps stays under ~160 KB of it.
  *
  * READERS take the manager's own client (RLS: their artists only).
  */
@@ -31,7 +31,7 @@ const isTestId = (v: unknown): v is SeoTestId => typeof v === 'string' && (SEO_T
 /**
  * The score, as the migration's finish trigger derives it: `passed` = the passes, `total` =
  * every result that is not `na` ("does not apply" is left out on BOTH sides, so 19 passes and
- * one `na` out of 24 is "19 of 23"). For tests and for a page that has results in hand; the
+ * one `na` out of 25 is "19 of 24"). For tests and for a page that has results in hand; the
  * stored `passed` / `total` are the database's and always win.
  */
 export function seoScore(results: readonly { status: SeoTestStatus }[]): { passed: number; total: number } {
@@ -245,7 +245,8 @@ const capNote = (note: string | null | undefined): string | null => {
   return (flat.length > 300 ? `${flat.slice(0, 299).join('')}…` : flat.join('')) || null
 }
 
-/** Byte caps per field. 24 results at every cap are ~190 KB of the table's 256 KB. */
+/** Byte caps per field. One result per test at every cap is ~160 KB of the table's 256 KB
+ *  (25 tests, 2026-10-02; runs/storage.test.ts measures it from SEO_TEST_IDS). */
 const CAP = { value: 120, sentence: 800, good: 400, todo: 400, limits: 400, label: 120, evLabel: 120, evValue: 600, evTotal: 4_000, href: 1_024 } as const
 const MAX_EVIDENCE = 12
 

@@ -4,7 +4,7 @@
  *
  * Code:     src/lib/seo-tests/overview.ts (SEO_TEST_PRIORITY, failingInPriority, runChanges,
  *           buildTimeline, searchAndAiVisits, readSeoOverview)
- * Feature:  SEO / GEO page · Overview tab (its data), all 24 SEO tests
+ * Feature:  SEO / GEO page · Overview tab (its data), every SEO test (SEO_TEST_IDS)
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the manager is told needs them, and
  *           a 0 shown for a number we couldn't read would be untrue.
  * Covers:   • the priority ranks every test exactly once (derived from SEO_TEST_IDS)
@@ -29,7 +29,7 @@ import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
 const A = 'artist-1'
 const r = (id: SeoTestResult['id'], status: SeoTestResult['status']): SeoTestResult => ({ id, status, value: '', sentence: '', evidence: [] })
 const summary = (id: string, ranAt: string, statuses: SeoRunSummary['statuses']): SeoRunSummary => ({
-  id, artistId: A, ranAt, finishedAt: ranAt, trigger: 'manual', siteUrl: 'https://x.example', passed: 0, total: 24, siteFresh: true, publishedAt: null, note: null, statuses,
+  id, artistId: A, ranAt, finishedAt: ranAt, trigger: 'manual', siteUrl: 'https://x.example', passed: 0, total: SEO_TEST_IDS.length, siteFresh: true, publishedAt: null, note: null, statuses,
 })
 
 describe('priority and failing', () => {
@@ -188,7 +188,7 @@ describe('readSeoOverview: a number that cannot be read is null, never 0', () =>
   // The main path: the latest run's failing tests in priority order, with its trigger and the last publish.
   it('the latest run\'s failing tests, in priority order', async () => {
     const latest = {
-      id: 'r1', artist_id: A, ran_at: '2026-09-28T10:00:00Z', trigger: 'publish', site_url: 'https://x.example', passed: 22, total: 24, summary: {}, site_fresh: true, published_at: null, note: null,
+      id: 'r1', artist_id: A, ran_at: '2026-09-28T10:00:00Z', trigger: 'publish', site_url: 'https://x.example', passed: 22, total: SEO_TEST_IDS.length, summary: {}, site_fresh: true, published_at: null, note: null,
       results: [r('mb', 'unknown'), r('title', 'fail'), r('google', 'pass')],
     }
     const o = await readSeoOverview(world({ latest }).client, A, { now })

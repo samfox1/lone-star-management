@@ -9,7 +9,7 @@
  *           RLS and grants, seo_test_claim, seo_test_finish) and 20261001120000_seo_test_crawl.sql
  *           (the `crawl` column, its check, seo_test_finish + p_crawl), through
  *           src/lib/seo-tests/store.ts
- * Feature:  Test runs · storage (who may read and write a run), all 24 SEO tests
+ * Feature:  Test runs · storage (who may read and write a run), every SEO test (SEO_TEST_IDS)
  * Tier:     STRICT (AGENTS.md "Test depth"): RLS, grants and stored data. Every denial has a
  *           planted witness (rule 2), every refused write is checked by row STATE through the
  *           service client (rule 3), and every row lives on a throwaway artist (rule 6): never
@@ -239,7 +239,7 @@ describe.skipIf(!MIGRATION_PUSHED)('seo_test_runs', () => {
       expect(claim.ok).toBe(true)
       if (!claim.ok) return
       // Straight through the function: store.ts caps what it writes, so it could never trip this.
-      // 24 × 4,000 CJK characters is 96,000 characters but ~288 KB.
+      // One per test (25) × 4,000 CJK characters is 100,000 characters but ~300 KB.
       const huge = SEO_TEST_IDS.map((id) => ({ id, status: 'pass', value: 'v', sentence: '音'.repeat(4_000), evidence: [] }))
       const { error } = await svc.rpc('seo_test_finish', { p_run_id: claim.runId, p_status: 'done', p_results: huge, p_site_url: null, p_site_fresh: null, p_published_at: null, p_note: null })
       expect(error?.code).toBe('23514')

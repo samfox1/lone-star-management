@@ -8,7 +8,7 @@ import { loadTestTab } from './load'
 import { TestTab } from './test-tab'
 
 /**
- * AI TEST: the 24 plain-language tests (test-tab.tsx). `currentSite` is the same rule the run uses
+ * AI TEST: the plain-language tests (test-tab.tsx). `currentSite` is the same rule the run uses
  * to decide there is a site to fetch (known.ts `seoSiteOrigin`: a custom site at a public
  * address), so the page never offers a run that could only come back "no site", and can say
  * when the last run tested an address the site no longer has. The artist's name is for the

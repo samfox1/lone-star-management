@@ -18,6 +18,8 @@
  *           • bioRows: each row reads only the changes after ITS tick: since the oldest of them,
  *             naming every fact they changed
  *           • bioRows / biosToCheck: a read that failed says "couldn't check" and is not counted
+ *           • bioReads: the AI test's own read of a bio Tapir can check (YouTube's `youtube`): a
+ *             pass or a fail is the row's read, anything else leaves the row to its manual state
  *           • dayLabel: the year only when it is not this year
  * Not here: the rows on screen (tests/components/manager-tools/seo/bio-rows.test.tsx); the tick
  *           itself (profile-marks.test.ts).
@@ -34,6 +36,7 @@ import {
   RECHECK_AFTER_DAYS,
   RECHECK_AFTER_MS,
   bioConnection,
+  bioReads,
   bioRows,
   bioState,
   biosToCheck,
@@ -351,6 +354,31 @@ describe('bioRows and biosToCheck', () => {
       expect(rows.every((r) => r.state === null)).toBe(true)
       expect(biosToCheck(rows)).toBe(0)
     }
+  })
+})
+
+describe('what the AI test read (bioReads)', () => {
+  const r = (id: string, status: string, more: Record<string, unknown> = {}) => ({ id, status, value: 'no site link', sentence: 'your channel doesn’t link your site.', evidence: [], ...more })
+
+  // The YouTube row reads the newest run's `youtube` result: a pass or a fail (with its lead) is the read.
+  it('a pass or a fail of `youtube` is the YouTube row’s read', () => {
+    expect(bioReads([r('mb', 'pass'), r('youtube', 'pass', { value: 'says who you are' })])).toEqual({ youtube: { status: 'pass', value: 'says who you are', sentence: 'your channel doesn’t link your site.' } })
+    expect(bioReads([r('youtube', 'fail', { lead: 'Almost' })])).toEqual({ youtube: { status: 'fail', value: 'no site link', sentence: 'your channel doesn’t link your site.', lead: 'Almost' } })
+  })
+
+  // "Couldn't check", "doesn't apply", another test's result, a malformed row or no run at all is no read: the row keeps its manual state.
+  it('anything else is no read', () => {
+    for (const results of [[r('youtube', 'unknown')], [r('youtube', 'na')], [r('mb', 'pass')], [{ id: 'youtube', status: 'pass' }], [null], 'junk', null, undefined]) {
+      expect(bioReads(results), JSON.stringify(results)).toEqual({})
+    }
+  })
+
+  // bioRows hands the read to the YouTube row only; every other row has none.
+  it('bioRows puts the read on its own row', () => {
+    const bios = connectedBios([...SKEEN_LINKS, { id: 'yt', label: 'YouTube', url: 'https://www.youtube.com/@Sskeen', role: null }], SKEEN_ARTIST)
+    const rows = bioRows({ bios, marks: {}, factsKnown: true, changes: [], reads: bioReads([r('youtube', 'pass')]) }, Date.now())!
+    expect(rows.find((x) => x.key === 'youtube')?.read?.status).toBe('pass')
+    expect(rows.filter((x) => x.key !== 'youtube').every((x) => x.read === null)).toBe(true)
   })
 })
 

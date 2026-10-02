@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState } from 'react'
 import { bioItem } from '@/lib/manager-tools/seo/profiles/bios'
-import { changedWords, dayLabel, type BioRow, type BioState } from '@/lib/manager-tools/seo/profiles/bio-state'
+import { changedWords, dayLabel, type BioRead, type BioRow, type BioState } from '@/lib/manager-tools/seo/profiles/bio-state'
+import { leadOf, sentenceOf } from '@/lib/manager-tools/seo/test-model'
 import { SAVE_FAILED, shortLink } from '@/lib/manager-tools/format'
 import { useSeeded } from '../../../_ui/use-seeded'
 import { FieldError } from '../../../_ui/field-error'
@@ -20,6 +21,11 @@ import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile
  *   ring             not confirmed (never ticked), or ticked over 6 months ago
  *   red ring         the facts changed on a Publish after the tick
  *   check            ticked, nothing changed since
+ *
+ * A bio the AI test READS itself (YouTube's description, OUTSIDE_PROFILES_PLAN.md step 2) shows
+ * that read instead, from the newest run: a check and the test's value when it passes, a red ring
+ * and what is missing when it fails. The "updated" tick stays: it is the manual part (the facts
+ * the test doesn't look for). With no read (never tested, couldn't check), the row is as above.
  *
  * Opened, a small card: the artist's own profile, WHAT CHANGED (when out of date), when it was
  * last ticked, then a line of bare glyphs: edit it on the platform, and the "updated" tick,
@@ -49,8 +55,9 @@ function statusText(row: BioRow, now: number | null): string {
 
 const MARK: Record<BioState, RowMarkKind> = { current: 'check', stale: 'red-ring', unconfirmed: 'ring', recheck: 'ring' }
 
-function Mark({ state }: { state: BioState | null }) {
-  return <RowMark kind={state === null ? 'dashed' : MARK[state]} data={{ 'data-bio-mark': state ?? undefined }} />
+function Mark({ state, read }: { state: BioState | null; read: BioRead | null }) {
+  const kind = read ? (read.status === 'pass' ? 'check' : 'red-ring') : state === null ? 'dashed' : MARK[state]
+  return <RowMark kind={kind} data={{ 'data-bio-mark': state ?? undefined, 'data-bio-read': read?.status }} />
 }
 
 function capital(s: string): string {
@@ -92,13 +99,13 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
       itemData={{ 'data-bio': row.key }}
       mark={
         <>
-          <Mark state={row.state} />
+          <Mark state={row.state} read={row.read} />
           <ConnectionMark def={row.def} size={15} className="flex-none text-ink" />
         </>
       }
       name={row.label}
-      status={statusText(row, now)}
-      bad={row.state === 'stale'}
+      status={row.read ? row.read.value : statusText(row, now)}
+      bad={row.read ? row.read.status === 'fail' : row.state === 'stale'}
     >
       <ProfileCard id={id}>
         {row.url ? (
@@ -107,6 +114,11 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
                 line (Sam, 2026-10-02): the field is the pencil's EDIT_TARGET (_ui/styles.ts). */}
             <OutLink href={row.url}>{shortLink(row.url)}</OutLink>
             <SentenceAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
+          </CardField>
+        ) : null}
+        {row.read ? (
+          <CardField label="AI test">
+            <span className={VALUE}>{[leadOf(row.read), sentenceOf(row.read)].filter(Boolean).join(' ')}</span>
           </CardField>
         ) : null}
         {row.state === 'stale' && row.changed.length ? (

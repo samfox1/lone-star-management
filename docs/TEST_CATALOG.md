@@ -7,15 +7,15 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**84 test files · 1388 tests**
+**88 test files · 1460 tests**
 
-- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 597 tests
-- [SEO / GEO page](#seo--geo-page) · 21 files · 286 tests
+- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 32 files · 624 tests
+- [SEO / GEO page](#seo--geo-page) · 23 files · 315 tests
 - [Profile page](#profile-page) · 2 files · 21 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 93 tests
-- [Search engines (Google and Bing)](#search-engines-google-and-bing) · 5 files · 99 tests
+- [Search engines (Google and Bing)](#search-engines-google-and-bing) · 6 files · 115 tests
 - [Stored logins](#stored-logins) · 2 files · 27 tests
 - [Eventbrite and YouTube sign-in](#eventbrite-and-youtube-sign-in) · 8 files · 144 tests
 - [Identity databases (MusicBrainz, Discogs, Wikidata)](#identity-databases-musicbrainz-discogs-wikidata) · 2 files · 23 tests
@@ -116,7 +116,7 @@ Every one of the ten "Can be found" tests keeps the honesty rules, whatever site
 
 - **Code:** src/lib/seo-tests/found.ts (FOUND_TESTS, and the page readings all ten share)
 - **Tier:** STRICT (AGENTS.md "Test depth"): these results are what a manager is told about the live site.
-- **Not here:** each test's own rules: bots.test.ts, allowed.test.ts, list.test.ts, words.test.ts and bingwm.test.ts in this folder. How the site is fetched: evidence.test.ts. The "in Tapir:" label rule across all 24 tests: ../honesty.test.ts.
+- **Not here:** each test's own rules: bots.test.ts, allowed.test.ts, list.test.ts, words.test.ts and bingwm.test.ts in this folder. How the site is fetched: evidence.test.ts. The "in Tapir:" label rule across every test: ../honesty.test.ts.
 
 **Tests**
 
@@ -420,13 +420,13 @@ Proves the honesty rules hold across every test at once: a test that could not l
 **Tests**
 
 - Each group's registry holds exactly its tests from defs.ts, so a sweep over the registries misses none, and a new test joins every sweep. _(one per row of a table)_
-- Rule 1: with no home page (never visited, no answer, timed out, a 404 or a 503) every test is unknown, carries its own id, and all but MusicBrainz say why in their sentence. _(one per row of a table)_
+- Rule 1: with no home page (never visited, no answer, timed out, a 404 or a 503) every test is unknown, carries its own id, and all but the site-free ones (MusicBrainz, YouTube) say why in their sentence. _(one per row of a table)_
 - Rule 1: what wasn't found may be past the cut, so every test that reads the card or links is unknown and says the page was too big, never a pass or "doesn't apply". (verify-found H1) _(one per row of a table)_
 - Even with Tour empty (nothing expected), a cut page is no proof that no old show is listed. (verify-found H1)
 - The control: a card read whole before the cut is still judged, so the rule above isn't "unknown whenever truncated". (verify-found H1)
 - The tests that compare the site with what Tapir published say "you haven't published", not that we failed to read the site. (verify-found H2) _(one per row of a table)_
 - The scenario really puts Tapir-only values in front of the tests, in at least 8 tests: otherwise the two checks below would pass on nothing.
-- CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in all 24 tests, so Tapir's data is never passed off as the site's.
+- CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in every test, so Tapir's data is never passed off as the site's.
 - CRITICAL, rule 3: no row labelled "in Tapir" quotes a value only the site holds.
 
 ### tests/unit/seo-tests/how-crawlers-see-your-site/crawl.test.ts · 23 tests
@@ -434,8 +434,8 @@ Proves the honesty rules hold across every test at once: a test that could not l
 What the AI test's "How crawlers see your site" section is built from: robots.txt, the sitemap, each page's tags, and every crawler's visit, read by the engine's own rules.
 
 - **Code:** src/lib/seo-tests/crawl.ts (buildCrawl)
-- **Tier:** STRICT (AGENTS.md "Test depth"): this is stored with the run and shown to the manager as what their site told each crawler, so it must say what the engine saw, read by the engine's own rules (a second reading could disagree with the 24 tests).
-- **Not here:** how the evidence is gathered (can-be-found/evidence.test.ts); what the 24 tests conclude (the other folders); asking Google / Bing and the other spelling (runs/ running.test.ts); storing and rendering the section (store / page tests).
+- **Tier:** STRICT (AGENTS.md "Test depth"): this is stored with the run and shown to the manager as what their site told each crawler, so it must say what the engine saw, read by the engine's own rules (a second reading could disagree with the tests).
+- **Not here:** how the evidence is gathered (can-be-found/evidence.test.ts); what the tests conclude (the other folders); asking Google / Bing and the other spelling (runs/ running.test.ts); storing and rendering the section (store / page tests).
 
 **Tests**
 
@@ -620,7 +620,7 @@ After a publish, Tapir waits until the live site shows it, then tests the site o
 - No marker: wait a fixed time, then say we couldn't confirm (null), never "fresh".
 - Nothing published: nothing to wait for, and no request is made.
 - A broken site never throws out of the wait (it runs in the background after Publish).
-- No site: nothing to wait for or test, and no run of 24 unknowns is stored.
+- No site: nothing to wait for or test, and no run of unknowns is stored.
 - The order: pause, wait for the site, then claim a publish run in this manager's name, as the service role.
 - A burst: a newer publish after the pause means this hook stops; the newer one will test.
 - A newer publish during the wait also stops this hook before it claims.
@@ -672,9 +672,9 @@ Every publish that changes a page's words schedules ONE SEO / GEO test run in th
 - Nothing went live: a wrong password or a failed publish starts no run.
 - The publish is already live: a scheduler crash must not turn it into a reported failure.
 
-### tests/unit/seo-tests/runs/running.test.ts · 43 tests
+### tests/unit/seo-tests/runs/running.test.ts · 44 tests
 
-Running the SEO / GEO tests: all 24 run in order, one broken test never sinks the run, the run keeps to its time budget, and the database decides whether a run may start at all.
+Running the SEO / GEO tests: every one runs in order, one broken test never sinks the run, the run keeps to its time budget, and the database decides whether a run may start at all.
 
 - **Code:** src/lib/seo-tests/run.ts (runSeoTests, runAllTests)
 - **Tier:** STRICT (AGENTS.md "Test depth"): this decides what is STORED as the verdict on the artist's site, so what the manager is later told is true.
@@ -683,15 +683,16 @@ Running the SEO / GEO tests: all 24 run in order, one broken test never sinks th
 **Tests**
 
 - Order: the page and the history dots read results by position, so a shuffled engine must not shuffle them.
-- A missing test: a run must always hold 24 results, or the page would count a gap as nothing.
+- A missing test: a run must always hold one result per test, or the page would count a gap as nothing.
 - A crashing test: one bug in one test must not throw away the other 23 verdicts.
 - Junk answers: a malformed, async or mislabelled answer is "couldn't check", never stored as a verdict.
 - The budget: a hung site must not hold the run (and the manager's "Testing…") open forever.
 - A slow share picture: only the share test is unknown, and "no answer" is never read as "no picture named".
 - A MusicBrainz outage: only the MusicBrainz test is unknown; the evidence says it didn't look.
+- A YouTube lookup that throws or never answers: its evidence is left OUT, never "no link" (which the real test reads as `na`, and a missed part never overwrites `na`), so ONLY `youtube` is "couldn't check" and the other tests stand. _(one per row of a table)_
 - A refusal (cool-down, or a run already going): nothing is read or fetched, nothing is finished, and the seconds come back. _(one per row of a table)_
 - Who writes: only the service role may write runs, so the manager's own session must write nothing.
-- No site: say "no site" 24 times in storage (the page says it once) and fetch nothing.
+- No site: say "no site" once per test in storage (the page says it once) and fetch nothing.
 - Fresh: the sitemap names the latest publish, so the run is stored as a test of the new site.
 - Stale: the site still shows an older publish, so the run must say its verdict is about the old site.
 - A Brand-only publish moves no date on a 0.45 site: naming the last CONTENT change is fresh, not stale.
@@ -704,7 +705,7 @@ Running the SEO / GEO tests: all 24 run in order, one broken test never sinks th
 - A refused finish: the run is marked failed so the artist isn't stuck as "busy" for 5 minutes.
 - `na` kept: "doesn't apply" is a real answer, not a broken test.
 - `na` needs no look: a MusicBrainz outage must not turn "doesn't apply" into "couldn't check".
-- The section is built from the SAME evidence the 24 tests read, plus what only the run can find out (the other spelling, the listing), and handed to finishRun with the results.
+- The section is built from the SAME evidence the tests read, plus what only the run can find out (the other spelling, the listing), and handed to finishRun with the results.
 - No site: nothing was seen, so there is no crawl, and nobody is asked anything.
 - A gather that broke or timed out saw nothing: no crawl, and Google / Bing are not asked.
 - Only a REGISTERED provider can be asked (the robot owns only those properties), and at the address it was registered with, never the connected site's spelling.
@@ -745,7 +746,7 @@ Storing and reading SEO / GEO test runs: the database's refusals come back in pl
 - A NUL anywhere in a result would make Postgres refuse the whole finish (22P05): it becomes U+FFFD.
 - Outside links: only https survives storage, since the page renders it as a link.
 - Caps: every string and the evidence list are capped, and the verdict itself is never touched.
-- The table's size check: 24 worst-case results must fit, or the database refuses the whole run.
+- The table's size check: one worst-case result per test (SEO_TEST_IDS) must fit, or the database refuses the whole run.
 - Bytes, not characters: CJK, emoji and escaped characters take more room than they look.
 - Half an emoji: a lone surrogate makes the database refuse the run, so a cut must never leave one.
 - History: oldest first per test, every test present, and a status the page doesn't know is dropped.
@@ -759,7 +760,7 @@ Storing and reading SEO / GEO test runs: the database's refusals come back in pl
 - The witness every "null" below is measured against: the fixture IS a whole crawl, and a crawl that fits is stored exactly as the run made it.
 - The crawl reaches the database: one finish call carrying it as `p_crawl`, capped, with a field the page does not know dropped rather than stored.
 - No crawl, no argument: a database from before the crawl migration has no `p_crawl`, and a finish that named it would be refused there (PGRST202).
-- The crawl is extra, never the run: when the finish WITH one fails, the run is finished again without it, so its 24 results are kept. Without a crawl there is nothing to drop: no retry.
+- The crawl is extra, never the run: when the finish WITH one fails, the run is finished again without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
 - Sent again ONLY when the database REFUSED the call (nothing was written). A lost answer (a dropped connection, a timeout) may have finished the run with its crawl: a second call would find it no longer running, and the artist would be told the results weren't saved.
 - Not a crawl at all: never stored, never shown.
 - Step 1 of the size cap: the robots.txt text goes first (marked truncated: read, not kept), and when that is enough nothing else is cut.
@@ -964,6 +965,43 @@ Proves the "Your page title says who you are" test passes a title that names the
 - A 5 MB page is read in well under 3 seconds: a slow reader would stall the whole run.
 - Thousands of unclosed scripts and an unclosed quote: still answers, never hangs.
 
+### tests/unit/seo-tests/says-who-you-are/youtube.test.ts · 26 tests
+
+Proves the "Your YouTube channel says who you are" test passes only when the channel's own description names the artist's site AND their city or genre, that the channel is found from the YouTube link in Connections, and that "couldn't ask YouTube" is never turned into a fail.
+
+- **Code:** src/lib/seo-tests/youtube.ts (youtubeChannelRef, channelSelectors, siteMentionIn, lookupYouTube, youtubeKey), src/lib/seo-tests/who.ts (`youtube`)
+- **Tier:** STRICT (AGENTS.md "Test depth"): it reads outside text with Tapir's key, parses links the manager typed into a request, and tells the artist to go edit another site.
+- **Not here:** the run's budget around the lookup (tests/unit/seo-tests/runs/running.test.ts); the Profiles tab's YouTube row (tests/unit/manager-tools/seo/bio-state.test.ts, tests/components/manager-tools/seo/bio-rows.test.tsx).
+
+**Tests**
+
+- Every shape a channel link comes in names the same kind of thing YouTube's channels.list asks by. _(one per row of a table)_
+- A video, a playlist, YouTube Music, another host dressed up as YouTube, or a malformed id is not a channel: nothing is asked about it. _(one per row of a table)_
+- Each kind becomes the channels.list selector for it; a /c/ name is tried as a handle first (YouTube made most of them handles), then as a legacy username.
+- A description names the site however it is typed: bare, www, a scheme, a page on it, a label before it, punctuation after it, any case. _(one per row of a table)_
+- Look-alikes are not the site: the name alone, another ending, a longer name, the site's name inside another host, an email address, another subdomain, the site in a path elsewhere. _(one per row of a table)_
+- Skeen's Connections link today: one channels.list request, by his handle, for the description parts, with the key; YouTube's real answer has no channel there.
+- His real channel, by id: its id, name, handle and description come back as YouTube sent them.
+- A /c/ name YouTube doesn't know as a handle is asked again as a legacy username: two requests, the second finds it.
+- No YouTube channel link (none at all, or only a video link): nothing is asked, even with a key, and the answer says there is no link.
+- No key on the server: nothing is asked, and the answer says it couldn't ask (never "no channel").
+- Every way of not getting a readable answer is "couldn't ask": a thrown fetch, the daily quota, a refused key, a server error, junk, a non-channel answer. The key is never in what comes back. _(one per row of a table)_
+- The run ran out of time before asking: nothing is sent.
+- A key the server holds is read once, explicitly, and never under vitest: a test that forgot to inject one would otherwise call YouTube with the real key.
+- Skeen today, end to end from YouTube's real answer: his Connections link opens no channel, so the fix is the link, in Connections.
+- Skeen's real channel description ("skeeeeeeen") names neither the site nor his city or genre: a fail naming both, quoting what's there, sending him to YouTube Studio.
+- The site and the city: a pass. The details quote the lines that say them.
+- A genre is enough in place of the city.
+- Half right is "Almost", and names exactly what is missing.
+- The other half: the city is there, the site isn't, so only the site is named.
+- A long description: the line that says it is quoted, not just the start.
+- An empty description says so.
+- Tapir has no city or genre: only the site can be asked for, so the site alone passes (a fact Tapir doesn't have is never held against the artist).
+- No YouTube link: the test does not apply.
+- Couldn't ask YouTube (no key, quota, timeout), or the run never asked: "couldn't check", never a fail.
+- Nothing published from Tapir: no city, genre or link to compare, so it says so.
+- The site the test looks for is the one Tapir tests (ORIGIN), labelled as Tapir's.
+
 ### tests/helpers/seo/crawl-fixture.ts · support file
 
 A stored crawl (types.ts SeoCrawl) for the "How crawlers see your site" tests: a healthy site that lets every crawler in, three pages, registered with Google and Bing. Shaped like Skeen's real answers of 2026-09-29 (prototypes/seo_variants_20260930_r11.html), on the test origin.
@@ -990,7 +1028,7 @@ A healthy artist site (its html) and the evidence a run would gather from it. Ea
 Stored SEO / GEO runs for the page's tests, made by the REAL engine over made-up sites, so the page is tested against results the engine really gives.
 
 - **Code:** src/lib/seo-tests/engine.ts (SEO_ENGINE), run.ts (runAllTests), store.ts (capResults)
-- **What it provides:** • engineResults(scenario): the 24 real results for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun: a stored run around those results (a publish run, or a manual one); fixtureHistory: each test's last statuses, oldest first • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
+- **What it provides:** • engineResults(scenario): one real result per test (SEO_TEST_IDS) for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun: a stored run around those results (a publish run, or a manual one); fixtureHistory: each test's last statuses, oldest first • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
 
 ### tests/unit/seo-tests/_found-fixtures.ts · support file
 
@@ -1020,7 +1058,7 @@ The SEO / GEO Answers tab: five fixed questions, two of them read-only (from Tou
 - Own questions: Add fills the next free slot (question and answer); Remove asks, then clears both halves.
 - No more questions than slots: Add goes when they are full.
 
-### tests/components/manager-tools/seo/bio-rows.test.tsx · 2 tests
+### tests/components/manager-tools/seo/bio-rows.test.tsx · 3 tests
 
 The Profiles tab's Outside bios: a bio whose facts changed after its tick says so, with the date, and its card's tick re-confirms it.
 
@@ -1032,6 +1070,7 @@ The Profiles tab's Outside bios: a bio whose facts changed after its tick says s
 
 - Instagram ticked Aug 15, facts changed Sep 29: the row says so; the card's tick re-confirms bio_instagram.
 - The server's render carries the state but no date: the date is written in the viewer's zone after mount.
+- YouTube's description passed the AI test: the row shows a check and the test's value even though the bio was never ticked, the card says what was read, and the manual tick is still there.
 
 ### tests/components/manager-tools/seo/connected-rows.test.tsx · 2 tests
 
@@ -1201,7 +1240,7 @@ The profile photo joins the change nudge (PROFILE_TOOL_PLAN.md, Sam 2026-10-02):
 - The nudge itself: ticked after the bio change, then the photo changed. Out of date since the photo, naming only the photo.
 - "Photo · Sep 29" on the row: its own word, shared with no other fact.
 
-### tests/unit/manager-tools/seo/bio-state.test.ts · 27 tests
+### tests/unit/manager-tools/seo/bio-state.test.ts · 30 tests
 
 The change nudge decides what the artist is told about each outside bio: not confirmed, may be out of date since a date, check it's still current, or updated.
 
@@ -1237,6 +1276,9 @@ The change nudge decides what the artist is told about each outside bio: not con
 - Ticked Aug 15, bio changed Sep 1, city Sep 20: out of date since Sep 1 (the OLDEST change after the tick), naming both. A tick between the two sees only the city; no tick, neither.
 - The AI test's count: everything not current; 0 when all are ticked and nothing changed.
 - Fail soft: a read that failed is "couldn't check", never a state and never counted.
+- The YouTube row reads the newest run's `youtube` result: a pass or a fail (with its lead) is the read.
+- "Couldn't check", "doesn't apply", another test's result, a malformed row or no run at all is no read: the row keeps its manual state.
+- bioRows hands the read to the YouTube row only; every other row has none.
 - "Sep 29" this year; "Sep 29, 2025" when it is not this year; nothing for a bad date.
 
 ### tests/unit/manager-tools/seo/crawl-model.test.ts · 28 tests
@@ -1416,6 +1458,53 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 - The type is the registry only; genre and city are trimmed, capped at 120, blank clears.
 - The city follows the fact text rule: no markup, no control characters, no hidden marks.
 
+### tests/unit/manager-tools/seo/search-stats-ask.test.ts · 7 tests
+
+Asking both engines for an artist's search numbers: only where the site is registered, both at once, inside a deadline, and never with the real keys from a test.
+
+- **Code:** src/lib/manager-tools/seo/search-stats-ask.ts
+- **Tier:** LIGHT for the asking (the tab isn't designed yet; deps injected), STRICT for the secret rule: the env-backed deps refuse under vitest, so no test can reach the real keys (2026-09-30: a test printed part of the real Google key).
+- **Not here:** the numbers themselves (search-stats.test.ts); the calls (search-stats-calls.test.ts).
+
+**Tests**
+
+- No registration: nothing is asked and no key is read.
+- The main path: both engines asked on the registered address, Google with the period's requests exactly (derived, not hand-listed), its total first.
+- A refused total stops Google there: one request, not six.
+- One engine registered; the other's key missing on the server; one that never answers.
+- A broken registration read or client builder is "couldn't ask", never a throw.
+- Answers (and the settled "not registered" / "no key") are kept for hours; a refusal, an error or a timeout is asked again next time.
+- Tests load .env.local: the env-backed deps must refuse here, or a test could reach the real keys. A boolean, so a failure prints nothing of what came back.
+
+### tests/unit/manager-tools/seo/search-stats.test.ts · 18 tests
+
+Google's and Bing's search numbers become ONE shape for "How fans find you", and an engine Tapir couldn't ask says so instead of showing zeros.
+
+- **Code:** src/lib/manager-tools/seo/search-stats.ts
+- **Tier:** STRICT (AGENTS.md "Test depth"): it reads outside answers, decides what the artist is told about their own audience, and a page address from it ends up in a link.
+- **Not here:** the calls and their parsing (tests/unit/search-engines/search-stats-calls.test.ts); asking both engines, the deadline and the cache (search-stats-ask.test.ts).
+
+**Tests**
+
+- Search Console's days are Pacific time; both ends are included.
+- What the asker sends Google, per part, all from the period: one total, fresh days included.
+- The headline numbers are Google's TOTAL, never the sum of the query rows: Skeen's three named searches add up to 12 clicks / 42 impressions, the total is 15 / 56.
+- Google's last days are preliminary (metadata.firstIncompleteDate 2026-09-30) and its "today" row is 0 / 0 because it hasn't counted it yet, not because nobody searched: dropped.
+- Queries, pages, countries (ISO alpha-3, upper case) and devices, busiest first.
+- Google leaves out days with nothing: inside the data such a day is a real zero. Days outside the period, or not a day at all, are not shown. A final zero day at the end stays (it's real).
+- Only trailing preliminary EMPTY days go; a preliminary day with numbers stays, and so does an empty preliminary day followed by one with numbers.
+- No impressions: no ctr and no position, never 0% or rank 0 (Google's position 0 included).
+- A page address ends up in a link: http(s) only, no credentials, no junk. Two spellings Google treats as one page are one row.
+- Countries are three letters (Google's ISO alpha-3), devices one of three; a search keeps no control characters and is cut to 200.
+- The list is the top 50; "unlisted" is the total minus what the list shows, never below zero.
+- Nothing seen in search in the period is its own state, not a page of zeros.
+- A refusal anywhere means Tapir couldn't ask: no numbers at all (never zeros), the reason code and status kept for the operator. A quota refusal anywhere wins (it means "later").
+- Skeen today: Bing answered every call, with nothing. That is no_data, not zeros.
+- Microsoft's documented rows (2011) are outside any recent period: nothing counts.
+- Totals are the daily traffic's sums; Bing's weekly query rows are merged per search; position is weighted by impressions (how often each was SEEN); Bing names no countries or devices.
+- Bing refusing: ErrorCode 4/5 or a 429 is quota, anything else an error; no numbers either way.
+- The states that are not an answer carry the period and nothing else.
+
 ### tests/unit/manager-tools/seo/seo-facts.test.ts · 12 tests
 
 How Profile (the SEO / GEO Facts tab until 2026-10-02) reads the stored facts back: the page says exactly what the live site's fact card states, and flags any stored value the save gate would refuse today.
@@ -1486,7 +1575,7 @@ The SEO / GEO page's server actions check that the caller is signed in and manag
 The Test tab's rules: every count, headline, word and link the manager reads there, and how the tab tells "not switched on yet" from "couldn't read" from "never tested".
 
 - **Code:** src/lib/manager-tools/seo/test-model.ts, test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
-- **Tier:** STRICT (AGENTS.md "Test depth"): the counts ("19 of 24", "5 need you"), the headline and the hrefs a stored result can reach are what the manager is told is true.
+- **Tier:** STRICT (AGENTS.md "Test depth"): the counts ("19 of 25", "5 need you"), the headline and the hrefs a stored result can reach are what the manager is told is true.
 - **Not here:** drawing the tab (tests/components/manager-tools/seo/test-tab.test.tsx); the server action around the read (tests/unit/manager-tools/seo/test-actions.test.ts).
 
 **Tests**
@@ -1979,6 +2068,33 @@ After a publish that changed a page's words, the sitemap is resent to Google: on
 - It runs after a publish that is already live: a refusal or a throw anywhere is an outcome.
 - Scheduled for after the response; `after` refusing (outside a request) never reaches the publish; and what is logged is codes, never Google's words or an error's message.
 - Tests load .env.local: a test that forgot to inject its own clients must never read the hosted database or send the real key to Google. With no deps at all, the call ends as an outcome.
+
+### tests/unit/search-engines/search-stats-calls.test.ts · 16 tests
+
+Tapir asks Google and Bing how often a registered site was seen and clicked in search: the exact calls, every answer read defensively, and the Bing key never carried out.
+
+- **Code:** src/lib/search-engines/google.ts (searchAnalytics), src/lib/search-engines/bing.ts (trafficStats, queryStats, pageStats)
+- **Tier:** STRICT (AGENTS.md "Test depth"): parsers of outside answers (a page address from them ends up in a link), and calls made with a key that owns every client site.
+- **Not here:** turning these into the page's numbers (tests/unit/manager-tools/seo/search-stats.test.ts); sign-in, the 401 retry and timeouts (google.test.ts, shared by every call).
+
+**Tests**
+
+- The exact request: Search Console API v3 on the property, the body as asked, web results only.
+- No dimensions is the property's total (one row, no keys); rowLimit outside 1..25000 is clamped; no dataState sends none (Google's own default, final data only).
+- Bad dates or a dimension Tapir doesn't read never reach Google.
+- Skeen's real answer by date: keys kept, numbers kept, Google's "today" row (0 impressions, position 0) has no position, and the first preliminary day comes from metadata.
+- The total: one row, no keys; no metadata = no preliminary day.
+- Google leaves `rows` out when there is nothing: that is "no rows", not a failure.
+- A row that isn't in Google's shape is dropped, never guessed at.
+- A position that isn't a real rank (0, negative, junk) is null, not a rank.
+- Google saying no: the step's own reason and the status. A 200 that isn't JSON is no answer.
+- GETs with the site in the query and the key beside it, no body.
+- Skeen's real answers today: Bing answered, and has nothing yet. That is an empty list.
+- Microsoft's documented rows. Bing's date `/Date(1316156400000-0700)/` is midnight on 2011-09-16 in its own offset (the XML form says 2011-09-16T00:00:00-07:00): a calendar day.
+- The day is the wall-clock day in Bing's offset: UTC midnight at -0700 is still the 15th there. No offset is UTC. A year-1 or junk date is no day.
+- A traffic row needs a day and real counts; a query/page row needs a name. -1 or 0 is "no position" (Bing has no rank to give), never a rank.
+- No list at all is a failure, not "nothing yet".
+- Bing refusing: its ErrorCode rides along (4 ThrottleUser, 5 ThrottleHost are the quota), a refused key is bing_auth, and the key is in none of it.
 
 ## Stored logins
 

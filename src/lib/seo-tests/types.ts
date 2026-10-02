@@ -24,7 +24,7 @@ export type SeoTestGroup = 'found' | 'who' | 'shared' | 'facts'
 
 export const SEO_TEST_IDS = [
   'google', 'bing', 'chatgpt', 'claude', 'perplexity', 'others', 'allowed', 'list', 'words', 'bingwm',
-  'title', 'desc', 'bio', 'genre', 'place', 'mb',
+  'title', 'desc', 'bio', 'genre', 'place', 'mb', 'youtube',
   'share', 'preview', 'alt',
   'profiles', 'apple', 'shows', 'releases', 'card',
 ] as const
@@ -41,14 +41,14 @@ export type SeoTestDef = {
   /** One sentence about fans / AI: why it matters. */
   why: string
   /** The fix happens on another service ("OUTSIDE TAPIR" tag). */
-  outside?: 'Bing' | 'MusicBrainz'
+  outside?: 'Bing' | 'MusicBrainz' | 'YouTube'
   /** The answer comes from another tool's data ("Tour" / "Music" tag). */
   source?: 'Tour' | 'Music'
 }
 
 /**
  * `na` = the test DOES NOT APPLY to this artist (a visual artist has no genre; a solo person
- * has no founding year). It is not a pass and not a miss: it is left out of "19 of 24" on both
+ * has no founding year). It is not a pass and not a miss: it is left out of "19 of 25" on both
  * sides, shown greyed as "doesn't apply", and says why in its sentence. Never used to hide a
  * test that could not look: that is `unknown`.
  */
@@ -275,6 +275,20 @@ export type SeoEvidence = {
      *  `artistUrl` null, MusicBrainz has no artist at that link. */
     fromConnections?: boolean
   }
+  /** YouTube's answer about the channel the artist linked (youtube.ts). Optional: absent = not
+   *  asked (the run ran out of time, or the lookup failed), so the `youtube` test is `unknown`. */
+  youtube?: {
+    /** The YouTube channel link from what Tapir published that was read. null = there is none
+     *  (the test is `na`). */
+    link: string | null
+    /** false = we could not ask YouTube (no key, the daily limit, no answer, an answer we
+     *  couldn't read): the test is `unknown`, never `fail`. */
+    looked: boolean
+    /** The channel YouTube has at that link. null with `looked` = YouTube has no channel there. */
+    channel: { id: string; title: string; handle: string | null; description: string } | null
+    /** Why we couldn't ask, in plain words. Never holds the request address (it carries the key). */
+    error?: string
+  }
   known: SeoKnown
 }
 
@@ -287,7 +301,7 @@ export type SeoTest = (evidence: SeoEvidence) => SeoTestResult
  * WHAT THE RUN SAW, for the AI test's "How crawlers see your site" section (prototypes/
  * seo_variants_20260930_r11.html; Sam 2026-09-29: robots.txt, sitemap, canonical tags and where
  * each crawler may go "should all be explicitly detailed and broken down in the test"). FACTS,
- * not verdicts: the 24 tests judge, this shows. Built once per run from the evidence
+ * not verdicts: the tests judge, this shows. Built once per run from the evidence
  * (crawl.ts `buildCrawl`) and stored with the run (seo_test_runs.crawl, byte-capped). Every
  * string came from the artist's site or from Google / Bing: the page renders it as TEXT only.
  */

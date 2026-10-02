@@ -11,6 +11,7 @@
  *   genre   the artist's OWN fact card node names a style, the one Tapir has
  *   place   that node's place has a city, a region and a country, the ones Tapir has
  *   mb      MusicBrainz's answer (gathered by musicbrainz.ts), under this artist's name
+ *   youtube the channel description (read by youtube.ts) names the site AND the city or genre
  *
  * Evidence rows that state what TAPIR holds are labelled "in Tapir: …" (types.ts rule 3).
  * `na` (does not apply), decided from what Tapir PUBLISHED: `genre` and `mb` for a visual artist.
@@ -27,12 +28,13 @@ import {
 } from './html'
 import { distinctiveTitle, matchFold, matchSquash, namesPhrase, ownArtistNode, sentencesOf, wordCount } from './match'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
+import { siteMentionIn } from './youtube'
 
 /** Published in Tapir as a visual artist (Profile "Type"). Unknown when nothing is
  *  published: then no test can say it does not apply. */
 const visualArtist = (e: SeoEvidence) => e.known.published?.artistType === 'Person'
 
-type Id = Extract<SeoTestId, 'title' | 'desc' | 'bio' | 'genre' | 'place' | 'mb'>
+type Id = Extract<SeoTestId, 'title' | 'desc' | 'bio' | 'genre' | 'place' | 'mb' | 'youtube'>
 type Result = Omit<SeoTestResult, 'id'>
 type Readable = Extract<PageState, { ok: true }>
 
@@ -522,4 +524,88 @@ const mb = make('mb', (e) => {
   }
 })
 
-export const WHO_TESTS: Record<Id, SeoTest> = { title, desc, bio, genre, place, mb }
+/* ── youtube ────────────────────────────────────────────────────────────────────────── */
+
+/** Where the artist edits it (bios.ts OUTSIDE_BIOS 'youtube': Customization > Profile). */
+const YOUTUBE_STUDIO = 'https://studio.youtube.com/'
+/** At most this many lines of the description are quoted, each this long. */
+const QUOTE_LINES = 3
+const QUOTE_LINE = 160
+
+/** The part of a description worth quoting: the lines that say any of `hits`, else its start. */
+function quoteOf(description: string, hits: readonly string[]): string {
+  const lines = description.split(/\r?\n/).map(collapse).filter(Boolean)
+  if (!lines.length) return 'empty'
+  const saying = hits.length ? lines.filter((l) => hits.some((h) => l.includes(h) || namesPhrase(l, h))) : []
+  if (saying.length) return saying.slice(0, QUOTE_LINES).map((l) => clip(l, QUOTE_LINE)).join('\n')
+  return clip(lines.join(' '), 200)
+}
+
+const youtube = make('youtube', (e) => {
+  const limits = 'We read your channel’s description with YouTube’s own data service and look for your site’s address and the city or genre you gave Tapir, by their exact words. YouTube doesn’t share the links shown under your channel name, so a site link only there isn’t seen.'
+  const y = e.youtube
+  if (!y) return { status: 'unknown', value: 'couldn’t ask', sentence: 'we didn’t get to ask YouTube this time.', evidence: [], limits }
+  const pub = e.known.published
+  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Tapir yet, so we don’t know your YouTube channel, city or genre.', evidence: [], limits }
+  if (!y.link) {
+    return { status: 'na', value: 'no YouTube link', sentence: 'you haven’t linked a YouTube channel in Connections.', evidence: [{ label: 'in Tapir: YouTube', value: 'no channel linked' }], limits }
+  }
+  const linkRow = { label: 'in Tapir: your YouTube link', value: clip(shortLink(y.link), 80) }
+  if (!y.looked) {
+    return { status: 'unknown', value: 'couldn’t ask', sentence: `we couldn’t ask YouTube this time${y.error ? ` (${y.error})` : ''}.`, evidence: [linkRow, ...(y.error ? [{ label: 'why', value: y.error }] : [])], limits }
+  }
+  if (!y.channel) {
+    return {
+      status: 'fail', value: 'no channel there', sentence: 'there’s no YouTube channel at the link in your Connections.',
+      todo: 'Open your channel on YouTube, copy its address (youtube.com/@yourname) and paste it in Connections.',
+      action: { kind: 'edit', target: 'connections', label: 'Open Connections' },
+      evidence: [linkRow, { label: 'youtube.com', value: 'no channel at this link' }], limits,
+    }
+  }
+  const site = e.known.siteUrl
+  if (!site) return { status: 'unknown', value: 'no site', sentence: 'no site is connected, so there was no address to look for.', evidence: [linkRow], limits }
+  const { city, genres } = tapirWho(e)
+  const d = y.channel.description
+  const siteHit = siteMentionIn(d, site)
+  const cityHit = city && namesPhrase(d, city) ? city : null
+  // The most specific genre said ("Tech House" over the "House" inside it).
+  const genreHit = genres.filter((g) => namesPhrase(d, g)).sort((a, b) => b.length - a.length)[0] ?? null
+  // A fact Tapir doesn't have is never held against the channel: with no city and no genre in
+  // Tapir, the site alone is asked for.
+  const wantWho = !!city || genres.length > 0
+  const whoHit = cityHit ?? genreHit
+  const channelName = [y.channel.title, y.channel.handle].filter(Boolean).join(' · ')
+  const evidence = [
+    ...(channelName ? [{ label: 'channel', value: clip(channelName, 120) }] : []),
+    { label: 'description', value: quoteOf(d, [siteHit, cityHit, genreHit].filter((h): h is string => !!h)) },
+    { label: 'your site', value: siteHit ?? 'not found' },
+    ...(city ? [{ label: 'city', value: cityHit ?? 'not found' }] : []),
+    ...(genres.length ? [{ label: 'genre', value: genreHit ?? 'not found' }] : []),
+    { label: 'in Tapir: site', value: clip(shortLink(site), 80) },
+    ...(city ? [{ label: 'in Tapir: city', value: city }] : []),
+    ...(genres.length ? [{ label: 'in Tapir: genre', value: genres.join(', ') }] : []),
+    linkRow,
+  ]
+  if (siteHit && (whoHit || !wantWho)) {
+    return { status: 'pass', value: 'says who you are', sentence: `Your YouTube description links your site${whoHit ? ` and says ${whoHit}` : ''}.`, evidence, limits }
+  }
+  const missing = [
+    ...(siteHit ? [] : ['doesn’t link your site']),
+    ...(wantWho && !whoHit ? [`doesn’t say ${listWords([city, ...genres].filter(Boolean), 'or')}`] : []),
+  ]
+  const host = shortLink(site).replace(/^www\./, '')
+  const example = [city, genres[0], host].filter(Boolean).join(' · ')
+  return {
+    status: 'fail',
+    ...(missing.length === 1 && d.trim() ? { lead: 'Almost' as const } : {}),
+    value: siteHit ? 'no city or genre' : wantWho && !whoHit ? 'no site, city or genre' : 'no site link',
+    sentence: `your YouTube channel’s description ${missing.join(' and ')}.`,
+    good: `A line like “${example}” is enough.`,
+    todo: 'In YouTube Studio, open Customization, then Profile, and add it to your description.',
+    action: { kind: 'outside', href: YOUTUBE_STUDIO, label: 'Open YouTube Studio' },
+    evidence,
+    limits,
+  }
+})
+
+export const WHO_TESTS: Record<Id, SeoTest> = { title, desc, bio, genre, place, mb, youtube }

@@ -33,7 +33,7 @@ export const SEO_TEST_PRIORITY: Record<SeoTestId, number> = {
   title: 9, desc: 10, bio: 11, place: 12, genre: 13, card: 14,
   share: 15, preview: 16,
   profiles: 17, apple: 18, shows: 19, releases: 20, alt: 21,
-  mb: 22, bingwm: 23,
+  mb: 22, youtube: 23, bingwm: 24,
 }
 
 /** The site answered, or the run does not say (an older run, no site): its results stand. */

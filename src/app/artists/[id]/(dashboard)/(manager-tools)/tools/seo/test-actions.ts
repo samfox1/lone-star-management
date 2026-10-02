@@ -43,7 +43,7 @@ async function owned(artistId: string): Promise<{ ok: true; supabase: Awaited<Re
 export type SeoRunRefusal = 'busy' | 'cooldown' | 'limit' | 'coalesced' | 'denied' | 'error'
 
 /**
- * "Test again". Runs all 24 tests now and stores the run. Refused (plainly) while a run is going
+ * "Test again". Runs every test now and stores the run. Refused (plainly) while a run is going
  * or within a minute of the last one: the database decides, so two tabs cannot both start one.
  */
 export async function runSeoTestsAction(

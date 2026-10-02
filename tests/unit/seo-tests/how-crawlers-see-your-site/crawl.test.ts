@@ -7,7 +7,7 @@
  *           (prototypes/seo_variants_20260930_r11.html, the Done step's first group)
  * Tier:     STRICT (AGENTS.md "Test depth"): this is stored with the run and shown to the manager
  *           as what their site told each crawler, so it must say what the engine saw, read by
- *           the engine's own rules (a second reading could disagree with the 24 tests).
+ *           the engine's own rules (a second reading could disagree with the tests).
  * Covers:   • robots.txt: the file cut at 2,000 characters; every crawler in SEO_BOTS order with
  *             its verdict, why, and the deciding group and rule as robots.txt lines; a Disallow
  *             for one crawler, a crawler that follows another's group (Applebot → Googlebot),
@@ -19,7 +19,7 @@
  *             meta tag vs the header (the `allowed` test's rule, and never a different verdict
  *             from it), and each VISITING crawler's status
  *           • hostile text stays plain text; junk evidence never throws; otherHost / listing pass through
- * Not here: how the evidence is gathered (can-be-found/evidence.test.ts); what the 24 tests
+ * Not here: how the evidence is gathered (can-be-found/evidence.test.ts); what the tests
  *           conclude (the other folders); asking Google / Bing and the other spelling (runs/
  *           running.test.ts); storing and rendering the section (store / page tests).
  * Fixtures: a Skeen-like site gathered by the REAL gatherer (evidence.ts) from a fake web
