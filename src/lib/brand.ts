@@ -34,7 +34,7 @@ import {
   type EntityChange,
 } from '@/lib/content'
 
-/** The SINGLE-OCCUPANCY brand purposes: one row each, replaced by vacate-then-insert
+/** The SINGLE-OCCUPANCY brand purposes: one row each, replaced insert-first
  *  (`setBrandAsset`). `favicon` and `home_icon` are DERIVED from a logo rather than
  *  uploaded, but stored the same way so they publish, garbage collect and reach the site
  *  through the same path as every other asset. `logo` and `icon_source` are NOT here:
@@ -187,11 +187,17 @@ export function drawFavicon(
 /**
  * Put one brand asset in its slot, or clear it with `storagePath: null`.
  *
- * Single occupancy by vacate-then-insert, the same shape `setImageField` uses for
- * `profile_photo`: a clear is just the delete, and a replace cannot leave two rows
- * claiming one slot even if the insert fails. Pure over an injected client — RLS scopes
- * the write to the caller's tenant — so it is testable without the action's cookie
- * context.
+ * Single occupancy, INSERT FIRST (review of d558c8e, 2026-10-02, the profile photo's twin):
+ * read the rows the slot holds, insert the new one, THEN delete the rows that were read, by
+ * id. It used to vacate first, so a failed insert left the slot empty AND swept the old
+ * file. Now a failed insert changes nothing. A failed delete takes the new row back out
+ * (the slot is as it was, and the caller may remove the new file: no row names it); if that
+ * fails too, two rows stay and this reports success, because the new row names the new file
+ * and every caller's upload (performUpload) removes the file on a failure. The Brand page
+ * shows the newest row, and the next save deletes both old ones. By id, not by purpose: two
+ * overlapping saves (the tab icon autosaves) then leave two rows at worst, never none. A
+ * clear is just the delete. Pure over an injected client — RLS scopes the write to the
+ * caller's tenant — so it is testable without the action's cookie context.
  *
  * The replaced row's file goes at once when that row was NEVER published (`sweepReplaced`,
  * the delete-time rule of storage-gc.ts): the tab icon regenerates on every framing save,
@@ -213,17 +219,36 @@ export async function setBrandAsset(
   if (storagePath !== null && !isOwnedStoragePath(artistId, storagePath))
     return { ok: false, error: 'That file location is not valid.' }
 
+  // The rows this write replaces: exactly the ones the slot holds now.
+  const held = await supabase.from('media').select('id').eq('artist_id', artistId).eq('purpose', purpose)
+  if (held.error) return { ok: false, error: held.error.message }
+  const oldIds = ((held.data ?? []) as { id: unknown }[]).map((r) => String(r.id))
+
+  // The new row first: if it fails, nothing is deleted and nothing is swept.
+  let newId: string | null = null
+  if (storagePath) {
+    const ins = await insertBrandAsset(supabase, artistId, purpose, storagePath)
+    if (!ins.ok) return { ok: false, error: ins.error }
+    newId = ins.id
+  }
+  if (oldIds.length === 0) return { ok: true }
+
   const del = await supabase
     .from('media')
     .delete()
     .eq('artist_id', artistId)
     .eq('purpose', purpose)
+    .in('id', oldIds)
     .select('id, storage_path, source_path')
-  if (del.error) return { ok: false, error: del.error.message }
-  const replaced = (del.data ?? []) as ReplacedRow[]
-  const res: Result = storagePath ? await insertBrandAsset(supabase, artistId, purpose, storagePath) : { ok: true }
-  await sweepReplaced(supabase, replaced, [storagePath])
-  return res
+  if (del.error) {
+    if (!newId) return { ok: false, error: del.error.message }
+    const undo = await supabase.from('media').delete().eq('artist_id', artistId).eq('id', newId)
+    if (!undo.error) return { ok: false, error: `The old file could not be replaced (${del.error.message}). Try again.` }
+    // Two rows, and the new one names the new file: not a failure (see above).
+    return { ok: true }
+  }
+  await sweepReplaced(supabase, (del.data ?? []) as ReplacedRow[], [storagePath])
+  return { ok: true }
 }
 
 async function insertBrandAsset(
@@ -231,15 +256,21 @@ async function insertBrandAsset(
   artistId: string,
   purpose: BrandPurpose,
   storagePath: string,
-): Promise<Result> {
-  const { error } = await supabase.from('media').insert({
-    artist_id: artistId,
-    purpose,
-    storage_path: storagePath,
-    on_site: true,
-    sort_order: Math.floor(Date.now() / 1000),
-  })
-  return error ? { ok: false, error: error.message } : { ok: true }
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from('media')
+    .insert({
+      artist_id: artistId,
+      purpose,
+      storage_path: storagePath,
+      on_site: true,
+      sort_order: Math.floor(Date.now() / 1000),
+    })
+    .select('id')
+    .single()
+  const id = (data as { id?: unknown } | null)?.id
+  if (error || typeof id !== 'string') return { ok: false, error: error?.message ?? 'Could not save that file.' }
+  return { ok: true, id }
 }
 
 /** A media row's id and the files it named, as a delete or a replace left them. */
@@ -688,7 +719,7 @@ const THEME_NOUN = 'Browser bar'
 
 /**
  * Group the diff into the things a manager changed. One subject per ROW NAME, not per
- * database row: replacing the primary logo is a delete and an insert (vacate-then-insert)
+ * database row: replacing the primary logo is an insert and a delete (setBrandAsset)
  * but it is ONE change, "Primary logo changed". An uploaded icon image rides with the icon
  * it feeds, so a new tab icon reads as one change rather than two.
  *

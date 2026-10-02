@@ -583,10 +583,12 @@ describe('icon images nothing uses any more are removed — and only those', () 
  */
 describe('a replaced file goes at once — unless its row was ever published', () => {
   const OLD = `${A}/brand/old-icon.png`
-  /** `media` delete answers with the rows it removed; `revisions` counts `published`. */
+  /** The slot read (setBrandAsset reads the rows it replaces, then deletes them by id) and the
+   *  `media` delete both answer `deleted`; `revisions` counts `published`. */
   const world = (o: { deleted?: Record<string, unknown>[]; published?: number; row?: Record<string, unknown> }) =>
     fakeClient(
       happy((c) => {
+        if (c.table === 'media' && c.op === 'select' && !c.terminal && filterValue(c, 'purpose') !== undefined) return { data: o.deleted ?? [] }
         if (c.table === 'media' && c.op === 'delete') return { data: o.deleted ?? [] }
         if (c.table === 'revisions') return { data: [], count: o.published ?? 0 }
         if (c.table === 'media' && c.terminal === 'maybeSingle' && o.row) return { data: o.row }

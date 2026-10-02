@@ -106,63 +106,166 @@ describe('framing', () => {
 })
 
 describe('setBrandAsset (a single-occupancy slot)', () => {
-  /** The vacate returns `replaced`; the revision count says whether a row was ever published. */
-  const world = (o: { replaced?: unknown[]; published?: number; del?: Reply; ins?: Reply } = {}) =>
-    fakeClient((c: Call) => {
-      // No OTHER row names the replaced file (storage-gc.ts stillNamed, 2026-10-02).
-      if (c.op === 'select' && filterValue(c, 'storage_path') !== undefined) return { data: null, count: 0 }
-      if (c.table === 'media' && c.op === 'delete') return o.del ?? { data: o.replaced ?? [] }
-      if (c.table === 'media' && c.op === 'insert') return o.ins ?? { data: null }
-      if (c.table === 'revisions') return { data: [], count: o.published ?? 0 }
-      return { data: [] }
-    })
-
-  it('CRITICAL: a path outside this artist\'s folder is refused before anything is touched', async () => {
-    const fake = world()
-    expect(await setBrandAsset(fake.client, A, 'logo_primary', FOREIGN)).toEqual({ ok: false, error: 'That file location is not valid.' })
-    expect(fake.calls).toEqual([])
+  type MediaRow = { id: string; artist_id: string; purpose: string; storage_path: string; source_path?: string | null }
+  const OLD = `${A}/brand/old.png`
+  const ORIG = `${A}/brand/orig.png`
+  const row = (id: string, purpose: string, storage_path: string, source_path: string | null = null): MediaRow => ({
+    id,
+    artist_id: A,
+    purpose,
+    storage_path,
+    source_path,
   })
 
-  it('vacates THIS slot of THIS artist, then inserts the new file on the site, stamped now', async () => {
-    const fake = world()
+  /**
+   * An in-memory `media` table behind the PostgREST fake, so a test reads the rows LEFT and the
+   * files removed, never a return value. `published`: row ids with a revision. `fail`: make that
+   * statement answer an error and change nothing; `failDeletes` fails only the first N deletes.
+   */
+  const table = (seed: MediaRow[] = [], o: { published?: string[]; fail?: { select?: string; insert?: string }; failDeletes?: number } = {}) => {
+    const rows = seed.map((r) => ({ ...r }))
+    let made = 0
+    let deletesLeftToFail = o.failDeletes ?? 0
+    const matches = (c: Call) => (r: MediaRow) =>
+      c.filters.every(([m, col, v]) => {
+        const got = (r as Record<string, unknown>)[col]
+        if (m === 'eq') return got === v
+        if (m === 'neq') return got !== v
+        if (m === 'in') return (v as unknown[]).includes(got)
+        return true
+      })
+    const fake = fakeClient((c: Call) => {
+      if (c.table === 'revisions') {
+        const id = filterValue(c, 'entity_id')
+        return { data: [], count: id !== undefined && (o.published ?? []).includes(String(id)) ? 1 : 0 }
+      }
+      if (c.table !== 'media') return { data: [] }
+      if (c.op === 'insert') {
+        if (o.fail?.insert) return { error: { message: o.fail.insert } }
+        const r = { id: `new-${++made}`, ...(c.payload as object) } as MediaRow
+        rows.push(r)
+        return { data: c.terminal ? { id: r.id } : [{ id: r.id }] }
+      }
+      if (c.op === 'delete') {
+        if (deletesLeftToFail > 0) {
+          deletesLeftToFail--
+          return { error: { message: 'delete refused' } }
+        }
+        const gone = rows.filter(matches(c))
+        for (const g of gone) rows.splice(rows.indexOf(g), 1)
+        return { data: gone }
+      }
+      if (o.fail?.select && filterValue(c, 'purpose') !== undefined) return { error: { message: o.fail.select } }
+      const found = rows.filter(matches(c))
+      return { data: found, count: found.length }
+    })
+    return { ...fake, rows, slot: (purpose: string) => rows.filter((r) => r.purpose === purpose).map((r) => r.storage_path) }
+  }
+
+  // The path comes from the browser: another tenant's folder is refused before anything runs.
+  it('CRITICAL: a path outside this artist\'s folder is refused before anything is touched', async () => {
+    const t = table([row('old', 'favicon', OLD)])
+    expect(await setBrandAsset(t.client, A, 'logo_primary', FOREIGN)).toEqual({ ok: false, error: 'That file location is not valid.' })
+    expect(t.calls).toEqual([])
+  })
+
+  // The new row lands FIRST (on the site, stamped now); only then do the rows it replaces go, by id.
+  it('CRITICAL: inserts the new file first, then deletes the replaced rows BY ID; the slot ends with the new file alone', async () => {
+    const t = table([row('old', 'favicon', OLD), row('logo-1', 'logo_primary', PATH)])
     const before = nowSeconds()
-    expect(await setBrandAsset(fake.client, A, 'favicon', PATH)).toEqual({ ok: true })
-    const del = fake.calls.find((c) => c.op === 'delete')!
-    expect([filterValue(del, 'artist_id'), filterValue(del, 'purpose'), del.cols]).toEqual([A, 'favicon', 'id, storage_path, source_path'])
-    const ins = fake.calls.find((c) => c.op === 'insert')!
-    expect(ins.table).toBe('media')
-    const p = ins.payload as Record<string, unknown>
-    expect(p).toMatchObject({ artist_id: A, purpose: 'favicon', storage_path: PATH, on_site: true })
+    expect(await setBrandAsset(t.client, A, 'favicon', NEW)).toEqual({ ok: true })
+    const writes = t.writes().filter((c) => c.table === 'media')
+    expect(writes.map((c) => c.op)).toEqual(['insert', 'delete'])
+    const p = writes[0].payload as Record<string, unknown>
+    expect(p).toMatchObject({ artist_id: A, purpose: 'favicon', storage_path: NEW, on_site: true })
     expect(p.sort_order).toBeGreaterThanOrEqual(before)
     expect(p.sort_order).toBeLessThanOrEqual(nowSeconds())
+    expect([filterValue(writes[1], 'artist_id'), filterValue(writes[1], 'purpose'), filterValue(writes[1], 'id', 'in')]).toEqual([A, 'favicon', ['old']])
+    expect(t.slot('favicon')).toEqual([NEW])
+    expect(t.slot('logo_primary')).toEqual([PATH]) // another slot is never touched
+    expect(t.removed).toEqual([OLD]) // never published, named by nothing now
   })
 
-  it('a failed vacate stops there — no insert, and the error is said', async () => {
-    const fake = world({ del: { error: { message: 'permission denied' } } })
-    expect(await setBrandAsset(fake.client, A, 'favicon', PATH)).toEqual({ ok: false, error: 'permission denied' })
-    expect(fake.calls.filter((c) => c.op === 'insert')).toEqual([])
+  // The bug this guards (review of d558c8e, the profile photo's twin): vacate-then-insert left an
+  // empty slot on a failed insert AND swept the old file, so the live icon lost its file too.
+  it('CRITICAL: a failed insert keeps the old asset row AND its file', async () => {
+    const t = table([row('old', 'favicon', OLD, ORIG)], { fail: { insert: 'insert refused' } })
+    expect(await setBrandAsset(t.client, A, 'favicon', NEW)).toEqual({ ok: false, error: 'insert refused' })
+    expect(t.calls.some((c) => c.op === 'delete')).toBe(false)
+    expect(t.rows).toEqual([row('old', 'favicon', OLD, ORIG)])
+    expect(t.removed).toEqual([])
   })
 
-  it('a refused insert is an error; a clear (null) inserts nothing and is a success', async () => {
-    expect(await setBrandAsset(world({ ins: { error: { message: 'bad' } } }).client, A, 'favicon', PATH)).toEqual({ ok: false, error: 'bad' })
-    const clear = world()
-    expect(await setBrandAsset(clear.client, A, 'logo_secondary', null)).toEqual({ ok: true })
-    expect(clear.calls.filter((c) => c.op === 'insert')).toEqual([])
+  // The delete fails after a good insert: the new row is taken back out, so the slot is exactly as
+  // it was and the error is true. The caller (performUpload) then removes the new file, which no
+  // row names. The old row keeps its file.
+  it('CRITICAL: a failed delete undoes the insert: the old row and file stay, nothing swept, the error is said', async () => {
+    const t = table([row('old', 'favicon', OLD)], { failDeletes: 1 })
+    const res = await setBrandAsset(t.client, A, 'favicon', NEW)
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/could not be replaced.*delete refused/i)
+    expect(t.slot('favicon')).toEqual([OLD])
+    expect(t.removed).toEqual([])
   })
 
-  it('CRITICAL: the replaced row\'s files go when it was never published — but never a file the slot still names', async () => {
-    const fake = world({ replaced: [{ id: 'old', storage_path: `${A}/brand/old.png`, source_path: `${A}/brand/orig.png` }, { id: 'same', storage_path: NEW }] })
-    await setBrandAsset(fake.client, A, 'favicon', NEW)
-    expect(fake.removed.sort()).toEqual([`${A}/brand/old.png`, `${A}/brand/orig.png`])
+  // Worst case, the undo fails too: two rows, never none. The new row names the new file, so this
+  // must not read as a failure (performUpload would remove a file a row names). The Brand page
+  // shows the newest; the next save deletes both old rows by id.
+  it('CRITICAL: a failed delete AND a failed undo leave two rows, keep both files, and do not report a failure', async () => {
+    const t = table([row('old', 'favicon', OLD)], { failDeletes: 2 })
+    expect(await setBrandAsset(t.client, A, 'favicon', NEW)).toEqual({ ok: true })
+    expect(t.slot('favicon').sort()).toEqual([NEW, OLD].sort())
+    expect(t.removed).toEqual([])
+    // …and the next save clears the extra row.
+    expect(await setBrandAsset(t.client, A, 'favicon', PATH)).toEqual({ ok: true })
+    expect(t.slot('favicon')).toEqual([PATH])
   })
 
-  it('a replaced row that WAS published keeps its files (the site may serve them); nothing replaced asks nothing', async () => {
-    const pub = world({ replaced: [{ id: 'old', storage_path: `${A}/brand/old.png` }], published: 1 })
+  // A read of the slot that failed is not "empty": nothing is written.
+  it('a failed read of the slot stops there: no insert, no delete, the error is said', async () => {
+    const t = table([row('old', 'favicon', OLD)], { fail: { select: 'permission denied' } })
+    expect(await setBrandAsset(t.client, A, 'favicon', PATH)).toEqual({ ok: false, error: 'permission denied' })
+    expect(t.writes()).toEqual([])
+    expect(t.slot('favicon')).toEqual([OLD])
+  })
+
+  // Two overlapping saves (the tab icon autosaves) each delete only what they read, so the slot can
+  // end with two rows but never none, and neither new file is removed.
+  it('CRITICAL: two overlapping saves never empty the slot or remove either new file', async () => {
+    const t = table([row('old', 'favicon', OLD)])
+    await Promise.all([setBrandAsset(t.client, A, 'favicon', NEW), setBrandAsset(t.client, A, 'favicon', PATH)])
+    expect(t.slot('favicon').length).toBeGreaterThan(0)
+    expect(t.slot('favicon')).not.toContain(OLD)
+    expect(t.removed).toEqual([OLD])
+  })
+
+  // A clear (null) inserts nothing and empties the slot; its never-published files go with it.
+  it('a clear inserts nothing, empties the slot and takes a never-published file and its original', async () => {
+    const t = table([row('old', 'logo_secondary', OLD, ORIG)])
+    expect(await setBrandAsset(t.client, A, 'logo_secondary', null)).toEqual({ ok: true })
+    expect(t.calls.filter((c) => c.op === 'insert')).toEqual([])
+    expect(t.slot('logo_secondary')).toEqual([])
+    expect(t.removed.sort()).toEqual([OLD, ORIG].sort())
+  })
+
+  // A stray second row (an old race) is cleared by the next replace; a file the slot still names stays.
+  it('CRITICAL: a replace over two rows leaves one, and never removes a file the slot still names', async () => {
+    const t = table([row('old', 'favicon', OLD, ORIG), row('same', 'favicon', NEW)])
+    expect(await setBrandAsset(t.client, A, 'favicon', NEW)).toEqual({ ok: true })
+    expect(t.slot('favicon')).toEqual([NEW])
+    expect(t.removed.sort()).toEqual([OLD, ORIG].sort())
+  })
+
+  // A published row's file may be what the live site serves: it waits for the publish sweep.
+  it('a replaced row that WAS published keeps its files; nothing replaced asks nothing', async () => {
+    const pub = table([row('old', 'favicon', OLD)], { published: ['old'] })
     await setBrandAsset(pub.client, A, 'favicon', NEW)
+    expect(pub.slot('favicon')).toEqual([NEW])
     expect(pub.removed).toEqual([])
-    const none = world()
+    const none = table()
     await setBrandAsset(none.client, A, 'favicon', NEW)
     expect(none.calls.some((c) => c.table === 'revisions')).toBe(false)
+    expect(none.calls.some((c) => c.op === 'delete')).toBe(false)
   })
 })
 

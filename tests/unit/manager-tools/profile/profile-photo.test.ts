@@ -5,16 +5,17 @@
  *
  * Code:     src/lib/profile-photo.ts; src/lib/site-editor/save.ts (setImageField's media branch)
  * Feature:  Profile page · Profile photo (PROFILE_TOOL_PLAN.md, Sam 2026-10-02): ONE `media` row
- *           with purpose profile_photo, by insert-then-delete-the-others. The Profile page picks
+ *           with purpose profile_photo: read the slot, insert, then delete the rows read, by id. The Profile page picks
  *           it from Images (the row SHARES the library photo's file); the Site & profile page and
  *           the editor upload into Images and pick that. All of them write through `setProfilePhoto`.
  * Tier:     STRICT (AGENTS.md "Test depth"): it writes data the live site, the press kit and the
  *           outside profiles read, and a lost row can take the live photo with it on Publish.
- * Covers:   • set = insert ONE row (on the site) FIRST, then delete the OTHER profile rows;
+ * Covers:   • set = read the slot, insert ONE row (on the site), then delete the rows read BY ID;
  *             clear = the delete alone
  *           • a failed insert leaves the old photo in place (nothing deleted)
- *           • a failed delete after a good insert leaves two rows and says so (readers take the
- *             first by sort order; the next save clears the extra)
+ *           • a failed delete takes the new row back out (old photo stays) and says so; if that
+ *             fails too, two rows stay and it still says so (readers take the first by sort order)
+ *           • two overlapping saves never empty the slot (by id, not by purpose)
  *           • two rows left by old pages become one on the next replace
  *           • a file outside the artist's own folder is refused before anything is written
  *           • a pick from Images reads the library row by id AND artist AND purpose, so another
@@ -43,6 +44,7 @@ type Op = {
   values?: Record<string, unknown>
   eq: Record<string, unknown>
   neq: Record<string, unknown>
+  in: Record<string, unknown[]>
 }
 
 const library = (id: string, path: string, artist = ART): Row => ({ id, artist_id: artist, purpose: 'gallery_image', storage_path: path })
@@ -50,18 +52,21 @@ const profile = (id: string, path: string): Row => ({ id, artist_id: ART, purpos
 
 /**
  * An in-memory `media` table. `fail` makes that kind of statement answer an error and change
- * nothing, the way PostgREST does.
+ * nothing, the way PostgREST does; `failDeletes` fails only the first N deletes.
  */
-function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: string; delete?: string } } = {}) {
+function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: string }; failDeletes?: number } = {}) {
   const rows: Row[] = (opts.rows ?? []).map((r) => ({ ...r }))
   const ops: Op[] = []
   let made = 0
+  let deletesLeftToFail = opts.failDeletes ?? 0
   const client = {
     from: (table: string) => {
-      const op: Op = { table, eq: {}, neq: {} }
+      const op: Op = { table, eq: {}, neq: {}, in: {} }
       ops.push(op)
       const hit = (r: Row) =>
-        Object.entries(op.eq).every(([k, v]) => (r as any)[k] === v) && Object.entries(op.neq).every(([k, v]) => (r as any)[k] !== v)
+        Object.entries(op.eq).every(([k, v]) => (r as any)[k] === v) &&
+        Object.entries(op.neq).every(([k, v]) => (r as any)[k] !== v) &&
+        Object.entries(op.in).every(([k, v]) => v.includes((r as any)[k]))
       let done: { data: any; error: { message: string } | null } | null = null
       const run = () => {
         if (done) return done
@@ -72,7 +77,10 @@ function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: str
           return (done = { data: [{ id: row.id }], error: null })
         }
         if (op.type === 'delete') {
-          if (opts.fail?.delete) return (done = { data: null, error: { message: opts.fail.delete } })
+          if (deletesLeftToFail > 0) {
+            deletesLeftToFail--
+            return (done = { data: null, error: { message: 'delete refused' } })
+          }
           for (let i = rows.length - 1; i >= 0; i--) if (hit(rows[i])) rows.splice(i, 1)
           return (done = { data: null, error: null })
         }
@@ -85,6 +93,7 @@ function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: str
         delete: () => ((op.type = 'delete'), b),
         eq: (col: string, val: unknown) => ((op.eq[col] = val), b),
         neq: (col: string, val: unknown) => ((op.neq[col] = val), b),
+        in: (col: string, vals: unknown[]) => ((op.in[col] = vals), b),
         single: () => {
           const r = run()
           const first = Array.isArray(r.data) ? r.data[0] : r.data
@@ -107,17 +116,19 @@ function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: str
 const shape = (ops: Op[]) => ops.map((o) => [o.table, o.type])
 
 describe('setProfilePhoto', () => {
-  // One slot: the new row lands FIRST, then whatever else claimed the slot goes.
-  it('CRITICAL: inserts ONE row naming the file (on the site) first, then deletes the OTHER profile rows', async () => {
+  // One slot: read what it holds, land the new row FIRST, then delete exactly the rows read.
+  it('CRITICAL: inserts ONE row naming the file (on the site) first, then deletes the rows the slot held, by id', async () => {
     const f = fakeClient({ rows: [profile('old', OTHER), library('img-1', LIB)] })
     expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: true })
     expect(shape(f.ops)).toEqual([
+      ['media', 'select'],
       ['media', 'insert'],
       ['media', 'delete'],
     ])
-    expect(f.ops[0].values).toMatchObject({ artist_id: ART, purpose: 'profile_photo', storage_path: LIB, on_site: true })
-    expect(f.ops[1].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
-    expect(f.ops[1].neq).toEqual({ id: 'new-1' })
+    expect(f.ops[0].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+    expect(f.ops[1].values).toMatchObject({ artist_id: ART, purpose: 'profile_photo', storage_path: LIB, on_site: true })
+    expect(f.ops[2].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+    expect(f.ops[2].in).toEqual({ id: ['old'] })
     // The rows left: one profile photo, the new file; the library photo untouched.
     expect(f.profiles()).toEqual([LIB])
     expect(f.rows.find((r) => r.id === 'img-1')).toBeTruthy()
@@ -128,19 +139,39 @@ describe('setProfilePhoto', () => {
   it('CRITICAL: a failed insert leaves the old photo in place and deletes nothing', async () => {
     const f = fakeClient({ rows: [profile('old', OTHER)], fail: { insert: 'insert refused' } })
     expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: false, error: 'insert refused' })
-    expect(shape(f.ops)).toEqual([['media', 'insert']])
+    expect(f.ops.some((o) => o.type === 'delete')).toBe(false)
     expect(f.profiles()).toEqual([OTHER])
   })
 
-  // Worst case is two rows, never none: every reader takes the first by sort order (the old one),
-  // so the caller is told the change did not take, and the next save clears the extra row.
-  it('CRITICAL: a failed delete after a good insert leaves two rows and says the old photo is still there', async () => {
-    const f = fakeClient({ rows: [profile('old', OTHER)], fail: { delete: 'delete refused' } })
+  // The delete fails after a good insert: the new row is taken back out, so the old photo stays
+  // exactly as it was and the error is true.
+  it('CRITICAL: a failed delete removes the new row again: the old photo stays and the error is said', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER)], failDeletes: 1 })
+    const res = await setProfilePhoto(f.client, ART, LIB)
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/could not be replaced.*delete refused/i)
+    expect(f.rows.map((r) => r.id)).toEqual(['old'])
+  })
+
+  // Worst case, the undo fails too: two rows, never none. Every reader takes the first by sort
+  // order (the old one), so the caller is told the change did not take; the next save clears both.
+  it('CRITICAL: a failed delete AND a failed undo leave two rows and say the old photo is still there', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER)], failDeletes: 2 })
     const res = await setProfilePhoto(f.client, ART, LIB)
     expect(res.ok).toBe(false)
     expect(res.error).toMatch(/old profile photo is still there/i)
-    expect(res.error).toContain('delete refused')
     expect(f.profiles().sort()).toEqual([LIB, OTHER].sort())
+    expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: true })
+    expect(f.profiles()).toEqual([LIB])
+  })
+
+  // Two overlapping saves each delete only the rows they read, so neither deletes the other's new
+  // row: two rows at worst, never an empty slot.
+  it('CRITICAL: two overlapping saves never empty the slot', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER)] })
+    await Promise.all([setProfilePhoto(f.client, ART, LIB), setProfilePhoto(f.client, ART, `${ART}/gallery/aaaaaaaa-0000-4000-8000-000000000000.jpg`)])
+    expect(f.profiles().length).toBeGreaterThan(0)
+    expect(f.profiles()).not.toContain(OTHER)
   })
 
   // Old pages could leave two rows in the slot: the next replace leaves exactly one.
@@ -154,8 +185,8 @@ describe('setProfilePhoto', () => {
   it('clearing is the delete alone', async () => {
     const f = fakeClient({ rows: [profile('old', LIB), library('img-1', LIB)] })
     expect(await setProfilePhoto(f.client, ART, null)).toEqual({ ok: true })
-    expect(shape(f.ops)).toEqual([['media', 'delete']])
-    expect(f.ops[0].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+    expect(f.ops.some((o) => o.type === 'insert')).toBe(false)
+    expect(f.ops.find((o) => o.type === 'delete')?.eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
     expect(f.profiles()).toEqual([])
     expect(f.rows.map((r) => r.id)).toEqual(['img-1'])
   })

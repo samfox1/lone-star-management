@@ -3,8 +3,8 @@
 /**
  * setImageField — the editor's single-occupancy image write (hero image / profile photo).
  * Routes by the field's manifest target: an artist URL column (store the object's public
- * URL) vs a media row by purpose (single occupancy through setProfilePhoto: insert the new
- * row, then drop the others, so a failed insert never empties the slot). A
+ * URL) vs a media row by purpose (single occupancy through setProfilePhoto: read the slot,
+ * insert the new row, then drop the rows read, by id, so a failed insert never empties it). A
  * null path CLEARS. Asserted against a recording fake client so the routing is locked
  * without a live round-trip; the auth + revalidate wrapper is setImageFieldAction.
  */
@@ -18,27 +18,29 @@ const TEMPLATE = 'cinematic'
 
 type Op = {
   table: string
-  type?: 'update' | 'insert' | 'delete'
+  type?: 'select' | 'update' | 'insert' | 'delete'
   values?: Record<string, unknown>
   eq: Record<string, unknown>
-  neq?: Record<string, unknown>
+  in?: Record<string, unknown>
 }
 
 /** A tiny recording stub of the Supabase query builder — enough for setImageField's
- *  update / delete / insert chains. Awaiting the chain resolves to `{ error: null }`; an
- *  insert's `.select('id').single()` answers the new row's id. */
+ *  update / delete / insert chains. Awaiting the chain resolves to `{ error: null }`; a read
+ *  of the slot answers one row (`old-row`); an insert's `.select('id').single()` answers the
+ *  new row's id. */
 function fakeClient(): { client: SupabaseClient; ops: Op[] } {
   const ops: Op[] = []
   const build = (op: Op): any => {
     const b: any = {
       update: (values: Record<string, unknown>) => ((op.type = 'update'), (op.values = values), b),
       insert: (values: Record<string, unknown>) => ((op.type = 'insert'), (op.values = values), b),
-      select: () => b,
+      select: () => ((op.type ??= 'select'), b),
       single: () => Promise.resolve({ data: { id: 'new-row' }, error: null }),
       delete: () => ((op.type = 'delete'), b),
       eq: (col: string, val: unknown) => ((op.eq[col] = val), b),
-      neq: (col: string, val: unknown) => (((op.neq ??= {})[col] = val), b),
-      then: (res: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(res),
+      in: (col: string, val: unknown) => (((op.in ??= {})[col] = val), b),
+      then: (res: (v: { data: unknown; error: null }) => unknown) =>
+        Promise.resolve({ data: op.type === 'select' ? [{ id: 'old-row' }] : null, error: null }).then(res),
     }
     return b
   }
@@ -76,24 +78,28 @@ describe('setImageField', () => {
     expect((ops[0].values as any).hero_image_url).toBeNull()
   })
 
-  it('profile photo → inserts the new row, then drops the other rows of that purpose', async () => {
+  it('profile photo → reads the slot, inserts the new row, then drops the rows read, by id', async () => {
     const { client, ops } = fakeClient()
     expect(await setImageField(client, 'a1', TEMPLATE, 'profile_photo', 'a1/profile/22222222-2222-4222-8222-222222222222.jpg')).toEqual({ ok: true })
-    // Fill then vacate the rest — single occupancy per purpose, and never an empty slot
-    // when the insert fails (review of d558c8e, 2026-10-02).
+    // Fill, then vacate what was there — single occupancy per purpose, never an empty slot
+    // when the insert fails, and never another save's new row (review of d558c8e, 2026-10-02).
     expect(ops.map((o) => [o.table, o.type])).toEqual([
+      ['media', 'select'],
       ['media', 'insert'],
       ['media', 'delete'],
     ])
-    expect(ops[0].values).toMatchObject({ artist_id: 'a1', purpose: 'profile_photo', storage_path: 'a1/profile/22222222-2222-4222-8222-222222222222.jpg', on_site: true })
-    expect(ops[1].eq).toEqual({ artist_id: 'a1', purpose: 'profile_photo' })
-    expect(ops[1].neq).toEqual({ id: 'new-row' })
+    expect(ops[1].values).toMatchObject({ artist_id: 'a1', purpose: 'profile_photo', storage_path: 'a1/profile/22222222-2222-4222-8222-222222222222.jpg', on_site: true })
+    expect(ops[2].eq).toEqual({ artist_id: 'a1', purpose: 'profile_photo' })
+    expect(ops[2].in).toEqual({ id: ['old-row'] })
   })
 
   it('clearing the profile photo deletes the row and inserts nothing', async () => {
     const { client, ops } = fakeClient()
     expect(await setImageField(client, 'a1', TEMPLATE, 'profile_photo', null)).toEqual({ ok: true })
-    expect(ops.map((o) => [o.table, o.type])).toEqual([['media', 'delete']])
+    expect(ops.map((o) => [o.table, o.type])).toEqual([
+      ['media', 'select'],
+      ['media', 'delete'],
+    ])
   })
 
   it('CRITICAL: a CUSTOM site’s declared image field saves — its key is in no local manifest', async () => {
@@ -111,6 +117,7 @@ describe('setImageField', () => {
     })
     expect(res).toEqual({ ok: true })
     expect(ops.map((o) => [o.table, o.type])).toEqual([
+      ['media', 'select'],
       ['media', 'insert'],
       ['media', 'delete'],
     ])
@@ -142,6 +149,9 @@ describe('setImageField', () => {
     const { client, ops } = fakeClient()
     const res = await setImageField(client, 'a1', TEMPLATE, 'profile_photo', null, { store: 'artist', column: 'hero_image_url' })
     expect(res).toEqual({ ok: true })
-    expect(ops.map((o) => [o.table, o.type])).toEqual([['media', 'delete']])
+    expect(ops.map((o) => [o.table, o.type])).toEqual([
+      ['media', 'select'],
+      ['media', 'delete'],
+    ])
   })
 })

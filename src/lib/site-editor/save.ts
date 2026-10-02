@@ -371,7 +371,7 @@ function validImageTarget(t: ImageFieldTarget | undefined): ImageFieldTarget | n
  *    uploaded OUTSIDE MEDIA_FOLDERS (the `hero` folder), so publish GC can never sweep the
  *    live hero out from under the URL (storage-gc.ts sweeps only referenced-by-row folders).
  *  • media purpose (profile_photo) — single occupancy through setProfilePhoto: insert the
- *    new row, then delete the other rows of that purpose. A media row references the object,
+ *    new row, then delete the rows the slot held, by id. A media row references the object,
  *    so GC keeps it; the replaced object drops out of `referenced` and the next publish
  *    sweeps it. The editor's tile UPLOADS through Images instead (profile-photo-uploader.tsx);
  *    this branch is its Remove.
