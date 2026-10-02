@@ -1,17 +1,18 @@
 /**
- * The SEO / GEO page has four tabs on the rail, each with its own page, the tool opens on
+ * The SEO / GEO page has five tabs on the rail, each with its own page, the tool opens on
  * Details, and every old section address still lands on the tab (and the row) that now holds it:
  * an SEO tab, or Profile for the facts and the bio (Facts left SEO / GEO on 2026-10-02).
  *
  * Code:     src/lib/manager-tools/seo/sections.ts,
  *           tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
- * Feature:  SEO / GEO page · its tabs: Details · Answers · AI test · Profiles (Facts moved to
+ * Feature:  SEO / GEO page · its tabs: Details · Answers · AI test · Profiles · Search (Search
+ *           added 2026-10-02, "How fans find you"; Facts moved to
  *           the Profile tool 2026-10-02; Profiles added 2026-09-30, outside profiles; Sam, 2026-09-29:
  *           Listing became Details, the tool's own route; Overview was removed; Test became
  *           "AI test". Before that, 2026-09-28, round 2: five tabs replacing seven pill sections)
  * Tier:     STRICT (AGENTS.md "Test depth"): nothing that worked may lose its home, and a bad
  *           address must be a 404, not a crash.
- * Covers:   • four tabs, unique, Details first as the tool's own route
+ * Covers:   • five tabs, unique, Details first as the tool's own route
  *           • the rail lists exactly these tabs; every tab has its own page.tsx
  *           • no folder that is not a tab has a page.tsx (a leftover one would shadow its redirect)
  *           • every old section is still a tab or redirects to one (or to Profile); the redirect
@@ -61,9 +62,9 @@ const moved = async (section: string) => {
 }
 
 describe('the registry', () => {
-  // Four tabs, unique, Details first as the tool's own route, so the tool opens on it.
-  it('four tabs, unique, Details first as the tool’s own route', () => {
-    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Answers', 'AI test', 'Profiles'])
+  // Five tabs, unique, Details first as the tool's own route, so the tool opens on it.
+  it('five tabs, unique, Details first as the tool’s own route', () => {
+    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Answers', 'AI test', 'Profiles', 'Search'])
     expect(new Set(SEO_SECTIONS.map((s) => s.seg)).size).toBe(SEO_SECTIONS.length)
     for (const s of SEO_SECTIONS) expect(isSeoSection(s.seg)).toBe(true)
     expect(isSeoSection('logo')).toBe(false)

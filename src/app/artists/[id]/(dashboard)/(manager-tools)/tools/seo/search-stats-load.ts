@@ -28,7 +28,8 @@ const cachedStats = unstable_cache(
     if (!isCacheable(answer) || answer.period.end !== end) throw new NotCached(answer)
     return answer
   },
-  ['search-stats-v1'],
+  // v2 (2026-10-02): the answer carries `added`, the registration dates; a v1 entry has none.
+  ['search-stats-v2'],
   { revalidate: SIX_HOURS_S, tags: ['search-stats'] },
 )
 
@@ -45,6 +46,6 @@ export async function loadSearchStats(artistId: string, key: SearchPeriodKey): P
     return await cachedStats(artistId, key, period.end)
   } catch (e) {
     if (e instanceof NotCached) return e.answer
-    return { period, askedAt: new Date().toISOString(), google: couldntAsk('google', period, 'error'), bing: couldntAsk('bing', period, 'error') }
+    return { period, askedAt: new Date().toISOString(), added: { google: null, bing: null }, google: couldntAsk('google', period, 'error'), bing: couldntAsk('bing', period, 'error') }
   }
 }

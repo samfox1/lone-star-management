@@ -266,8 +266,9 @@ export async function checkOtherHost(origin: string, opts: GatherOptions = {}): 
 /* ── the crawl: is it listed on Google / Bing? ──────────────────────────────────────── */
 
 /** A search engine the site is registered with (site_verifications, verified), at the address
- *  it was registered as: the Search Console property / the Bing site, exactly. */
-export type SeoRegistration = { provider: 'google' | 'bing'; siteUrl: string }
+ *  it was registered as: the Search Console property / the Bing site, exactly. `verifiedAt`:
+ *  when it was verified (the row's verified_at), which the Search tab reads as "added Sep 30". */
+export type SeoRegistration = { provider: 'google' | 'bing'; siteUrl: string; verifiedAt?: string }
 
 export type ListingClients = {
   google: Pick<GoogleClient, 'inspectUrl'> | null
@@ -298,7 +299,7 @@ export async function readRegistered(writer: SupabaseClient, artistId: string): 
     const provider = row?.provider
     if ((provider !== 'google' && provider !== 'bing') || typeof row.verified_at !== 'string' || !row.verified_at) continue
     const siteUrl = registeredUrl(row.site_url)
-    if (siteUrl && !out.some((r) => r.provider === provider)) out.push({ provider, siteUrl })
+    if (siteUrl && !out.some((r) => r.provider === provider)) out.push({ provider, siteUrl, verifiedAt: row.verified_at })
   }
   return out
 }

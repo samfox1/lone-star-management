@@ -14,6 +14,7 @@
  *             (the other engine's answer still stands); a throw: `error`
  *           • what may be cached: answers only (ok / no_data), never a "couldn't ask"
  *           • the env-backed deps refuse under vitest
+ *           • the answer carries each engine's registration date (the Search tab's "added Sep 30")
  * Not here: the numbers themselves (search-stats.test.ts); the calls (search-stats-calls.test.ts).
  * Fixtures: fake clients answering already-parsed rows; no network, no database.
  */
@@ -29,7 +30,7 @@ const NOW = Date.UTC(2026, 9, 2, 19)
 const answer = (rows: { keys: string[]; clicks: number; impressions: number; position: number | null }[]) => ({ ok: true as const, value: { rows, firstIncompleteDate: null } })
 const DAY = { date: '2026-10-01', clicks: 4, impressions: 19 }
 
-function fakes(over: Partial<{ google: SearchClients['google']; bing: SearchClients['bing']; registered: { provider: 'google' | 'bing'; siteUrl: string }[] }> = {}) {
+function fakes(over: Partial<{ google: SearchClients['google']; bing: SearchClients['bing']; registered: { provider: 'google' | 'bing'; siteUrl: string; verifiedAt?: string }[] }> = {}) {
   const asked: { engine: string; site: string; req?: GoogleSearchRequest }[] = []
   let built = 0
   const google: SearchClients['google'] =
@@ -106,6 +107,16 @@ describe('askSearchStats', () => {
     expect([hang.google.state, hang.bing.state]).toEqual(['timeout', 'ok'])
     const boom = await askSearchStats(ARTIST, '28d', fakes({ bing: { trafficStats: async () => Promise.reject(new Error('x')), queryStats: async () => ({ ok: true, value: [] }), pageStats: async () => ({ ok: true, value: [] }) } }).deps)
     expect([boom.google.state, boom.bing.state]).toEqual(['ok', 'error'])
+  })
+
+  // The answer carries when each engine was registered (the Search tab's "added Sep 30"), and
+  // nothing when that engine isn't registered or the read failed.
+  it('carries each engine’s registration date', async () => {
+    const at = '2026-09-30T18:20:00.000Z'
+    const r = await askSearchStats(ARTIST, '28d', fakes({ registered: [{ provider: 'bing', siteUrl: SITE, verifiedAt: at }] }).deps)
+    expect(r.added).toEqual({ google: null, bing: at })
+    const none = await askSearchStats(ARTIST, '28d', { ...fakes().deps, readRegistered: async () => Promise.reject(new Error('db')) })
+    expect(none.added).toEqual({ google: null, bing: null })
   })
 
   // A broken registration read or client builder is "couldn't ask", never a throw.

@@ -47,7 +47,12 @@ export type SearchStatsDeps = {
   deadlineMs?: number
 }
 
-export type SearchStatsAnswer = { period: SearchPeriod; askedAt: string; google: EngineStats; bing: EngineStats }
+/** `added`: when Tapir registered the site with each engine (site_verifications.verified_at), or
+ *  null. The Search tab says a NEW site's empty answer is normal ("added Sep 30 · usually within
+ *  2 weeks"); it needs the date to know the site is new. */
+export type SearchStatsAnswer = { period: SearchPeriod; askedAt: string; added: Record<SearchEngineId, string | null>; google: EngineStats; bing: EngineStats }
+
+const NOT_ADDED: Record<SearchEngineId, string | null> = { google: null, bing: null }
 
 /** Both engines must answer inside this. Each request also has its client's own 15 s limit. */
 const DEADLINE_MS = 12_000
@@ -83,7 +88,7 @@ export async function askSearchStats(artistId: string, key: SearchPeriodKey, dep
   const now = deps.now ?? Date.now
   const period = searchPeriod(key, now())
   const askedAt = new Date(now()).toISOString()
-  const both = (state: CouldntAsk): SearchStatsAnswer => ({ period, askedAt, google: couldntAsk('google', period, state), bing: couldntAsk('bing', period, state) })
+  const both = (state: CouldntAsk): SearchStatsAnswer => ({ period, askedAt, added: NOT_ADDED, google: couldntAsk('google', period, state), bing: couldntAsk('bing', period, state) })
 
   let registered: SeoRegistration[]
   try {
@@ -95,6 +100,8 @@ export async function askSearchStats(artistId: string, key: SearchPeriodKey, dep
   const google = where('google')
   const bing = where('bing')
   if (!google && !bing) return both('not_registered')
+  const addedOn = (engine: SearchEngineId) => registered.find((r) => r.provider === engine)?.verifiedAt ?? null
+  const added = { google: addedOn('google'), bing: addedOn('bing') }
 
   const stop = new AbortController()
   const timer = setTimeout(() => stop.abort(), deps.deadlineMs ?? DEADLINE_MS)
@@ -114,7 +121,7 @@ export async function askSearchStats(artistId: string, key: SearchPeriodKey, dep
       one('google', google, clients.google, (c, s) => askGoogle(c, s, period)),
       one('bing', bing, clients.bing, (c, s) => askBing(c, s, period)),
     ])
-    return { period, askedAt, google: g, bing: b }
+    return { period, askedAt, added, google: g, bing: b }
   } finally {
     clearTimeout(timer)
     stop.abort()

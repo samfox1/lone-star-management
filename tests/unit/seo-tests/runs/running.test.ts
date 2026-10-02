@@ -40,7 +40,7 @@ import type { BingResult, BingUrlInfo } from '@/lib/search-engines/bing'
 import type { GoogleInspection, GoogleResult } from '@/lib/search-engines/google'
 import { BROWSER_UA } from '@/lib/seo-tests/bots'
 import { buildCrawl } from '@/lib/seo-tests/crawl'
-import { checkOtherHost, runAllTests, runSeoTests, type ListingClients, type RunWho, type SeoEngine, type SeoRegistration, type SitePages, listingClientsFromEnv } from '@/lib/seo-tests/run'
+import { checkOtherHost, readRegistered, runAllTests, runSeoTests, type ListingClients, type RunWho, type SeoEngine, type SeoRegistration, type SitePages, listingClientsFromEnv } from '@/lib/seo-tests/run'
 import type { FinishInput } from '@/lib/seo-tests/store'
 import { SEO_TEST_IDS, type SeoCrawl, type SeoEvidence, type SeoKnown, type SeoTest, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
 import { fakeClient, type Call, type Reply } from '@tests/helpers/fake-client'
@@ -640,6 +640,13 @@ describe('the listing: asked only where the site is registered', () => {
     expect(read?.filters).toContainEqual(['eq', 'artist_id', A])
     expect(l.calls.google).toEqual([[REG, `${ORIGIN}/`]])
     expect(l.calls.bing).toEqual([])
+  })
+
+  // Each registration carries when it was verified: the Search tab says a new site's empty
+  // answer is normal ("added Sep 30"), so it needs the date.
+  it('each registration carries its verified_at', async () => {
+    const writer = world({ verifications: [{ provider: 'google', site_url: REG, verified_at: '2026-09-30T10:00:00+00:00' }] })
+    expect(await readRegistered(writer.client, A)).toEqual([{ provider: 'google', siteUrl: REG, verifiedAt: '2026-09-30T10:00:00+00:00' }])
   })
 
   // A row that isn't a registration we can use (another provider, an address that isn't a
