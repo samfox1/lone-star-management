@@ -289,7 +289,7 @@ describe('remove (Sam, 2026-09-28)', () => {
     const ask = screen.getByRole('dialog', { name: 'Remove maya.chen@example.com?' })
     expect(removeSubscriberAction).not.toHaveBeenCalled()
     await act(async () => {
-      fireEvent.click(within(ask).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     })
     expect(removeSubscriberAction).toHaveBeenCalledWith('a1', 'maya')
     expect(shownEmails()).not.toContain('maya.chen@example.com')
@@ -313,7 +313,7 @@ describe('remove (Sam, 2026-09-28)', () => {
     const before = shownEmails()
     fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Remove' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog', { name: /^Remove .+\?$/ })).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: /^Remove .+\?$/ })).getByRole('button', { name: 'Confirm' }))
     })
     expect(toast).toHaveBeenCalledWith('That subscriber is no longer there.', 'error')
     expect(shownEmails()).toEqual(before)
@@ -323,7 +323,7 @@ describe('remove (Sam, 2026-09-28)', () => {
     mount([ROWS[0]])
     fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Remove' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
     })
     expect(screen.getByText('No subscribers yet.')).toBeInTheDocument()
     expect(screen.queryByRole('list')).toBeNull()

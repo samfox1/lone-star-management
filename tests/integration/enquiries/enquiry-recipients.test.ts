@@ -2,14 +2,15 @@
 /**
  * enquiry_kinds + enquiry_recipients + resolve_enquiry_recipients (2026-09-21).
  *
- * WHAT IS ACTUALLY BEING PINNED. `resolve_booking_recipient`'s four rungs decide the
- * PRIMARY and are covered by enquiry-door.test.ts; nothing here re-tests them. What is new
- * is two rules, and both fail SILENTLY when broken, which is why they get a file:
+ * WHAT IS ACTUALLY BEING PINNED. Two rules, and both fail SILENTLY when broken, which is why
+ * they get a file:
  *
- *   1. A kind's list ADDS to the primary rather than replacing it. Replacing would stop
- *      sending to the booking address published on the artist's own site the moment a
- *      manager is added, and nobody would find out until someone asked why they never got
- *      the email.
+ *   1. A kind goes ONLY to its own list (Sam, 2026-10-02: "I dont want the main address to
+ *      recieve everything, I should have to add each one individually"; 20261002210000). The
+ *      artist's booking_email, the site's booking link and its site text route NOTHING: they
+ *      were a fallback chain in front of every list until that migration. Until it is pushed
+ *      the old chain is live, and the tests that pin rule 1 against it are skipped by name
+ *      (@tests/helpers/routing).
  *   2. Lists do not leak ACROSS kinds. A demo landing on the booking list is not an error
  *      anyone sees; it is just the wrong people reading someone's demo.
  *
@@ -33,6 +34,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
+import { kindListsOnlyLive } from '@tests/helpers/routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const svc = serviceClient()
@@ -44,7 +46,9 @@ let artistB: ThrowawayArtist
 let asA: SupabaseClient
 let asB: SupabaseClient
 
+const OPS_TO = 'booking-email@example.com'
 const LINK_TO = 'booking-link@example.com'
+const CONTENT_TO = 'site-text@example.com'
 const MANAGER_TO = 'the-manager@example.com'
 const ARTIST_TO = 'the-artist@example.com'
 
@@ -71,7 +75,21 @@ async function kindId(artistId: string, slug: string): Promise<string> {
   return (data as { id: string }).id
 }
 
-/** The booking rung `resolve_booking_recipient` reads second: links.role = 'booking'. */
+/**
+ * The three things that USED to route every kind (resolve_booking_recipient's rungs) and must
+ * route nothing now: the artist's booking_email (its OWN mail row, never the house one), the
+ * site's booking link, and its site text. Planted together so "reaches nobody" is a claim about
+ * an artist that HAS all three.
+ */
+async function giveOldRungs(artistId: string): Promise<void> {
+  const mail = await svc.from('artist_mail_settings').upsert({ artist_id: artistId, booking_email: OPS_TO })
+  if (mail.error) throw new Error(`booking_email: ${mail.error.message}`)
+  await giveBookingLink(artistId, LINK_TO)
+  const text = await svc.from('site_content').upsert({ artist_id: artistId, key: 'booking_email', value: CONTENT_TO }, { onConflict: 'artist_id,key' })
+  if (text.error) throw new Error(`site_content booking_email: ${text.error.message}`)
+}
+
+/** links.role = 'booking': the site's public booking contact. */
 async function giveBookingLink(artistId: string, email: string): Promise<void> {
   const { error } = await svc
     .from('links')
@@ -301,128 +319,46 @@ describe('enquiry_kinds — every artist starts with the three the sites send', 
   })
 })
 
-describe('resolve_enquiry_recipients — the list ADDS, and stays in its own kind', () => {
-  it('returns the booking rung alone when no list is configured', async () => {
-    const a = await createThrowawayArtist(svc, 'rung only')
+/** Gate for rule 1 (see the header). Top-level: vitest decides `runIf` while collecting. */
+const LIST_ONLY = await kindListsOnlyLive(svc)
+
+describe.runIf(LIST_ONLY)('resolve_enquiry_recipients — the old fallback routes NOTHING (20261002210000)', () => {
+  it('CRITICAL: booking_email, the booking link and site text reach nobody — a kind with no list resolves NOBODY', async () => {
+    // Before 20261002210000 every kind resolved OPS_TO here (rung 1), for Booking, Demo and
+    // Contact alike: one address receiving everything, which is what Sam asked to end.
+    const a = await createThrowawayArtist(svc, 'old rungs only')
     try {
-      await giveBookingLink(a.id, LINK_TO)
+      await giveOldRungs(a.id)
+
+      expect(await resolve(a.id, 'booking')).toEqual([])
+      expect(await resolve(a.id, 'demo')).toEqual([])
+      expect(await resolve(a.id, 'other')).toEqual([])
+    } finally {
+      await deleteThrowawayArtist(svc, a)
+    }
+  })
+
+  it('CRITICAL: with all three set, a kind reaches EXACTLY its own list — nothing is put in front of it', async () => {
+    const a = await createThrowawayArtist(svc, 'old rungs plus list')
+    try {
+      await giveOldRungs(a.id)
+      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager', '2026-01-01T00:00:00Z')
 
       expect(await resolve(a.id, 'booking')).toEqual([
-        { to_email: LINK_TO, recipient_source: 'link', is_primary: true, ordinal: 0 },
+        { to_email: MANAGER_TO, recipient_source: 'recipient_list', is_primary: true, ordinal: 1 },
       ])
     } finally {
       await deleteThrowawayArtist(svc, a)
     }
   })
+})
 
-  it('keeps the booking rung as primary and appends that kind\'s list', async () => {
-    // RULE 1. Replacing instead of appending would drop LINK_TO — the address published on
-    // the artist's own site — the moment a manager is added.
-    const a = await createThrowawayArtist(svc, 'rung plus list')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager')
-
-      const rows = await resolve(a.id, 'booking')
-
-      expect(rows.map((r) => r.to_email)).toEqual([LINK_TO, MANAGER_TO])
-      expect(rows[0]).toMatchObject({ recipient_source: 'link', is_primary: true })
-      expect(rows[1]).toMatchObject({ recipient_source: 'recipient_list', is_primary: false })
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('keeps each kind\'s list to itself', async () => {
-    // RULE 2, and the reason Sam asked for kinds at all. Both lists exist at once; each
-    // resolution must see only its own. A leak here is invisible — the demo simply arrives
-    // in front of the wrong people.
-    const a = await createThrowawayArtist(svc, 'per kind')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager')
-      await addRecipient(a.id, 'demo', ARTIST_TO, 'Artist')
-
-      expect((await resolve(a.id, 'booking')).map((r) => r.to_email)).toEqual([LINK_TO, MANAGER_TO])
-      expect((await resolve(a.id, 'demo')).map((r) => r.to_email)).toEqual([LINK_TO, ARTIST_TO])
-      // 'other' has a list of its own, which is empty — so the primary and nothing else.
-      expect((await resolve(a.id, 'other')).map((r) => r.to_email)).toEqual([LINK_TO])
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('routes an artist-invented kind to its own list', async () => {
-    const a = await createThrowawayArtist(svc, 'custom routing')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await svc.from('enquiry_kinds').insert({ artist_id: a.id, slug: 'press', label: 'Press' })
-      await addRecipient(a.id, 'press', 'publicist@example.com', 'Publicist')
-      await addRecipient(a.id, 'booking', MANAGER_TO)
-
-      expect((await resolve(a.id, 'press')).map((r) => r.to_email)).toEqual([
-        LINK_TO,
-        'publicist@example.com',
-      ])
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('gives an UNKNOWN kind the primary alone, never another kind\'s list', async () => {
-    // A kind deleted after a site shipped it, or a site sending something we never had.
-    // Falling back to a neighbouring list would route a press enquiry to the demo pile.
-    const a = await createThrowawayArtist(svc, 'unknown kind')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await addRecipient(a.id, 'booking', MANAGER_TO)
-      await addRecipient(a.id, 'demo', ARTIST_TO)
-
-      expect((await resolve(a.id, 'nonexistent-kind')).map((r) => r.to_email)).toEqual([LINK_TO])
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('orders a kind\'s list by when each was added, and says so in `ordinal`', async () => {
-    // The ORDINAL is the contract, not the row order. submit_enquiry aggregates these into
-    // `to_emails` with `order by ordinal`, because SQL does not promise a subquery's
-    // ordering survives a UNION — so a resolver that returned the right rows in the wrong
-    // order, or the right order with useless ordinals, would put the primary somewhere in
-    // the middle of the To: header.
-    const a = await createThrowawayArtist(svc, 'list order')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await addRecipient(a.id, 'booking', ARTIST_TO, 'Artist', '2026-09-22T10:00:00Z')
-      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager', '2026-09-22T10:00:01Z')
-
-      const rows = await resolve(a.id, 'booking')
-      const byOrdinal = [...rows].sort((x, y) => x.ordinal - y.ordinal)
-
-      expect(byOrdinal.map((r) => r.to_email)).toEqual([LINK_TO, ARTIST_TO, MANAGER_TO])
-      expect(byOrdinal.map((r) => r.ordinal)).toEqual([0, 1, 2])
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('does not address the booking rung twice when a list repeats it in another case', async () => {
-    const a = await createThrowawayArtist(svc, 'dedupe')
-    try {
-      await giveBookingLink(a.id, LINK_TO)
-      await addRecipient(a.id, 'booking', LINK_TO.toUpperCase())
-
-      expect((await resolve(a.id, 'booking')).map((r) => r.to_email)).toEqual([LINK_TO])
-    } finally {
-      await deleteThrowawayArtist(svc, a)
-    }
-  })
-
-  it('CRITICAL: with no booking address, the kind’s list alone — its first person is the primary', async () => {
-    // Sam, 2026-09-28: no global inbox; "when the managers log in and put their email it can
-    // be theirs". Rung 4 used to be the primary here (the house default_to_email). Now the
-    // earliest-added person on the list is, so a manager who only filled in the list still
-    // receives mail. NEEDS 20260928141000.
+describe('resolve_enquiry_recipients — a kind reaches its own list, and only its own', () => {
+  // None of these plants a booking address, link or site text, so they hold under the old
+  // rule AND the new one, and run either way.
+  it('CRITICAL: the list, in the order each was added; the first-added is the primary', async () => {
+    // The ORDINAL is the contract: submit_enquiry aggregates `to_emails` with `order by
+    // ordinal` and takes the one `is_primary` row as `to_email`.
     const a = await createThrowawayArtist(svc, 'list alone')
     try {
       await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager', '2026-01-01T00:00:00Z')
@@ -437,38 +373,57 @@ describe('resolve_enquiry_recipients — the list ADDS, and stays in its own kin
     }
   })
 
-  it('CRITICAL: no booking address and no list resolves NOBODY — there is no global inbox', async () => {
-    // RED before 20260928141000 whenever the live house row holds a default_to_email.
-    const a = await createThrowawayArtist(svc, 'nobody')
+  it('CRITICAL: keeps each kind\'s list to itself, and an empty kind reaches nobody', async () => {
+    // RULE 2. Both lists exist at once; each resolution must see only its own.
+    const a = await createThrowawayArtist(svc, 'per kind')
     try {
-      expect(await resolve(a.id, 'booking')).toEqual([])
-      const { data, error } = await svc.rpc('resolve_booking_recipient', { p_artist_id: a.id })
-      expect(error).toBeNull()
-      expect(data ?? []).toEqual([])
+      await addRecipient(a.id, 'booking', MANAGER_TO, 'Manager')
+      await addRecipient(a.id, 'demo', ARTIST_TO, 'Artist')
+
+      expect((await resolve(a.id, 'booking')).map((r) => r.to_email)).toEqual([MANAGER_TO])
+      expect((await resolve(a.id, 'demo')).map((r) => r.to_email)).toEqual([ARTIST_TO])
+      expect(await resolve(a.id, 'other')).toEqual([])
     } finally {
       await deleteThrowawayArtist(svc, a)
     }
   })
 
-  it("a list only makes a primary for ITS kind — another kind's list is never borrowed", async () => {
-    const a = await createThrowawayArtist(svc, 'list per kind')
+  it('routes an artist-invented kind to its own list', async () => {
+    const a = await createThrowawayArtist(svc, 'custom routing')
     try {
+      await svc.from('enquiry_kinds').insert({ artist_id: a.id, slug: 'press', label: 'Press' })
+      await addRecipient(a.id, 'press', 'publicist@example.com', 'Publicist')
+      await addRecipient(a.id, 'booking', MANAGER_TO)
+
+      expect((await resolve(a.id, 'press')).map((r) => r.to_email)).toEqual(['publicist@example.com'])
+    } finally {
+      await deleteThrowawayArtist(svc, a)
+    }
+  })
+
+  it('an UNKNOWN kind reaches nobody, never another kind\'s list', async () => {
+    // submit_enquiry files an unknown purpose under `other` before it ever gets here; this is
+    // the resolver's own floor. Falling back to a neighbouring list would route a press
+    // enquiry to the demo pile.
+    const a = await createThrowawayArtist(svc, 'unknown kind')
+    try {
+      await addRecipient(a.id, 'booking', MANAGER_TO)
       await addRecipient(a.id, 'demo', ARTIST_TO)
-      expect(await resolve(a.id, 'booking')).toEqual([])
-      expect((await resolve(a.id, 'demo')).map((r) => [r.to_email, r.is_primary])).toEqual([[ARTIST_TO, true]])
+
+      expect(await resolve(a.id, 'nonexistent-kind')).toEqual([])
     } finally {
       await deleteThrowawayArtist(svc, a)
     }
   })
 
   it('returns exactly one primary, always', async () => {
-    // The caller takes the single is_primary row as `enquiries.to_email`. Two would make
-    // that read non-deterministic; zero would make a routable artist look unroutable.
+    // The caller takes the single is_primary row as `enquiries.to_email`. Two would make that
+    // read non-deterministic; zero would make a routable kind look unroutable.
     const a = await createThrowawayArtist(svc, 'one primary')
     try {
-      await giveBookingLink(a.id, LINK_TO)
       await addRecipient(a.id, 'booking', MANAGER_TO)
       await addRecipient(a.id, 'booking', ARTIST_TO)
+      await addRecipient(a.id, 'booking', 'third@example.com')
 
       const rows = await resolve(a.id, 'booking')
 

@@ -50,12 +50,19 @@
  * enquiry goes only to addresses the artist's managers set; with none it is stored
  * `unroutable` and nothing is sent.
  *
+ * EACH KIND GOES ONLY TO ITS OWN LIST (Sam, 2026-10-02; 20261002210000): booking_email, the
+ * booking link and site text no longer route anything. So the floor every test starts from is
+ * an address on each seeded kind's OWN list, which routes the same under the old rule and the
+ * new one; the two tests that pin "the old rungs route nothing" are skipped by name until that
+ * migration is live (@tests/helpers/routing).
+ *
  * NEEDS 20260928141000 (the `use_house_mail` column, rung 4 removed). Before it is pushed,
  * beforeAll fails on the unknown column: loudly, and without touching any live config.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { serviceClient } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
+import { kindListsOnlyLive } from '@tests/helpers/routing'
 
 const svc = serviceClient()
 
@@ -129,12 +136,27 @@ async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorR
 }
 
 /**
- * The floor every test starts from: rung 3 (the site-text booking address) holding
- * FLOOR_TO, so a plain submission has somewhere to go — there is no global inbox to fall
- * back on any more. Rung 3 is the LOWEST rung, so every precedence test sets something
- * ABOVE it. Tests about "no recipient at all" remove it (dropFloor).
+ * The floor every test starts from: FLOOR_TO on each seeded kind's OWN list (booking, demo,
+ * other), so a plain submission of any of them has somewhere to go. A list is the one thing
+ * that routes under both the old rule and 20261002210000's. Tests about "no recipient at all",
+ * or about a list of their own, remove it first (dropFloor).
  */
 const FLOOR_TO = 'floor-desk@example.com'
+
+/** This artist's kind id, by slug. */
+async function kindId(slug: string): Promise<string> {
+  const { data, error } = await svc.from('enquiry_kinds').select('id').eq('artist_id', artistA).eq('slug', slug).single()
+  if (error) throw new Error(`kind ${slug}: ${error.message}`)
+  return (data as { id: string }).id
+}
+
+/** Put FLOOR_TO on these kinds' lists. */
+async function setFloor(slugs: string[] = ['booking', 'demo', 'other']) {
+  for (const slug of slugs) {
+    const { error } = await svc.from('enquiry_recipients').insert({ artist_id: artistA, kind_id: await kindId(slug), email: FLOOR_TO })
+    if (error) throw new Error(`floor on ${slug}: ${error.message}`)
+  }
+}
 
 async function setSiteText(value: string) {
   const { error } = await svc
@@ -143,9 +165,9 @@ async function setSiteText(value: string) {
   if (error) throw new Error(`site_content booking_email: ${error.message}`)
 }
 
-/** No rung at all: no floor. On this artist (off the house row) that means no recipient. */
+/** No list at all: no floor. Every recipient row under this artist is this file's own. */
 async function dropFloor() {
-  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'booking_email')
+  await svc.from('enquiry_recipients').delete().eq('artist_id', artistA)
 }
 
 /** Clear the artist's OWN sender. Off the house row, that leaves it with none. */
@@ -171,12 +193,11 @@ async function clearRungs() {
   const { error } = await svc.from('artist_mail_settings').upsert({ artist_id: artistA, ...OWN_MAIL })
   if (error) throw new Error(`reset own mail settings: ${error.message}`)
   await svc.from('links').delete().eq('artist_id', artistA).eq('role', 'booking')
-  await setSiteText(FLOOR_TO)
-  // The lists are not rungs, but they change `to_emails`, so the precedence assertions
-  // above are only about rungs if these start empty. The KINDS are left alone: they were
-  // seeded by the trigger when this file created the artist, and every test below looks
-  // one up by slug.
-  await svc.from('enquiry_recipients').delete().eq('artist_id', artistA)
+  await svc.from('site_content').delete().eq('artist_id', artistA).eq('key', 'booking_email')
+  // The KINDS are left alone: they were seeded by the trigger when this file created the
+  // artist, and every test below looks one up by slug.
+  await dropFloor()
+  await setFloor()
 }
 
 beforeAll(async () => {
@@ -213,7 +234,7 @@ afterAll(async () => {
   if (usedIps.length) await svc.from('contact_attempts').delete().in('ip_hash', usedIps)
 })
 
-describe('submit_enquiry — recipient precedence', () => {
+describe('submit_enquiry — no global inbox', () => {
   it('CRITICAL: there is NO global inbox — an artist nobody gave an address is stored, not sent', async () => {
     // Sam, 2026-09-28: "my email shouldn't be involved here". Rung 4 used to route this to
     // `mail_settings.default_to_email` (his inbox). An artist ON the house row (no mail row
@@ -236,46 +257,46 @@ describe('submit_enquiry — recipient precedence', () => {
     }
   })
 
-  it('rung 3: site_content.booking_email is used when nothing above it is set', async () => {
-    await clearRungs()
-    await setSiteText(CONTENT_TO)
-    const row = await submit()
-    expect(row).toMatchObject({ status: 'ok', recipient_source: 'site_content', to_email: CONTENT_TO })
-  })
+})
 
-  it('rung 2: the booking link beats site_content, and a mailto: prefix is stripped', async () => {
-    await clearRungs()
-    await setSiteText(CONTENT_TO)
-    await svc.from('links').insert({
-      artist_id: artistA,
-      role: 'booking',
-      label: 'Bookings',
-      url: `mailto:${LINK_TO}?subject=Booking%20enquiry`,
-    })
-    const row = await submit()
-    expect(row).toMatchObject({ status: 'ok', recipient_source: 'link', to_email: LINK_TO })
-  })
+/** Gate for the new rule (see the header). Top-level: vitest decides `runIf` while collecting. */
+const LIST_ONLY = await kindListsOnlyLive(svc)
 
-  it('rung 1: the ops override beats everything', async () => {
-    await clearRungs()
-    await setSiteText(CONTENT_TO)
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+describe.runIf(LIST_ONLY)('submit_enquiry — the old fallback routes NOTHING (20261002210000)', () => {
+  /** The three things that used to put one address in front of every kind. */
+  async function giveOldRungs() {
     await svc.from('artist_mail_settings').update({ booking_email: OPS_TO }).eq('artist_id', artistA)
-    const row = await submit()
-    expect(row).toMatchObject({ status: 'ok', recipient_source: 'mail_settings', to_email: OPS_TO })
+    await setSiteText(CONTENT_TO)
+    const { error } = await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    if (error) throw new Error(`booking link: ${error.message}`)
+  }
+
+  it('CRITICAL: booking_email, the booking link and site text with NO list: stored, sent to nobody', async () => {
+    // Sam, 2026-10-02: "I dont want the main address to recieve everything". Before
+    // 20261002210000 this went to OPS_TO (rung 1), for every kind.
+    await clearRungs()
+    await dropFloor()
+    await giveOldRungs()
+
+    for (const purpose of ['booking', 'demo', 'other']) {
+      const row = await submit({ p_purpose: purpose })
+      expect(row.status, purpose).toBe('no_recipient')
+      const { data: stored } = await svc.from('enquiries').select('status, to_email, to_emails').eq('id', row.enquiry_id!).single()
+      expect(stored, purpose).toEqual({ status: 'unroutable', to_email: null, to_emails: null })
+    }
   })
 
-  it('a booking link holding an https page URL FALLS THROUGH instead of being emailed', async () => {
+  it('CRITICAL: with all three set, the kind\'s own list is the WHOLE addressed set', async () => {
     await clearRungs()
-    await setSiteText(CONTENT_TO)
-    await svc.from('links').insert({
-      artist_id: artistA,
-      role: 'booking',
-      label: 'Bookings',
-      url: 'https://example.com/booking-form',
-    })
-    const row = await submit()
-    expect(row).toMatchObject({ status: 'ok', recipient_source: 'site_content', to_email: CONTENT_TO })
+    await dropFloor()
+    await giveOldRungs()
+    const { error } = await svc.from('enquiry_recipients').insert({ artist_id: artistA, kind_id: await kindId('demo'), email: 'ar@example.com' })
+    if (error) throw new Error(error.message)
+
+    const row = await submit({ p_purpose: 'demo' })
+
+    expect(row).toMatchObject({ status: 'ok', to_email: 'ar@example.com', recipient_source: 'recipient_list' })
+    expect(row.to_emails).toEqual(['ar@example.com'])
   })
 })
 
@@ -291,14 +312,15 @@ describe('submit_enquiry — sender identity', () => {
     // A second throwaway with NO mail row of its own: that is an artist on the house row.
     const onHouse = await createThrowawayArtist(svc, 'Enquiry door (house sender)')
     try {
+      const { data: k } = await svc.from('enquiry_kinds').select('id').eq('artist_id', onHouse.id).eq('slug', 'booking').single()
       const { error } = await svc
-        .from('links')
-        .insert({ artist_id: onHouse.id, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-      if (error) throw new Error(`booking link: ${error.message}`)
+        .from('enquiry_recipients')
+        .insert({ artist_id: onHouse.id, kind_id: (k as { id: string }).id, email: FLOOR_TO })
+      if (error) throw new Error(`recipient: ${error.message}`)
       const row = await submit({ p_slug: onHouse.slug })
       expect(row).toMatchObject({
         status: 'ok',
-        to_email: LINK_TO,
+        to_email: FLOOR_TO,
         from_email: `${house.from_local_part}@${house.sending_domain}`,
       })
     } finally {
@@ -378,6 +400,8 @@ describe('submit_enquiry — validation', () => {
     await clearRungs()
     await svc.from('enquiry_kinds').insert({ artist_id: artistA, slug: 'wedding-gig', label: 'Weddings' })
     try {
+      // A kind goes only to its own list, so it needs someone on it to be `ok`.
+      await setFloor(['wedding-gig'])
       const row = await submit({ p_purpose: 'wedding-gig' })
 
       expect(row.status).toBe('ok')
@@ -630,8 +654,8 @@ describe('mark_enquiry_sent', () => {
 })
 
 describe('submit_enquiry — forwarding to more than one person', () => {
-  /** The list for ONE KIND, on top of whichever rung resolved the primary. `createdAt` where
-   *  ORDER is asserted: two inserts can share a clock tick, and the tie-break is a random id. */
+  /** The list for ONE KIND. `createdAt` where ORDER is asserted: two inserts can share a clock
+   *  tick, and the tie-break is a random id. */
   async function addRecipient(slug: string, email: string, label?: string, createdAt?: string) {
     const { data: kind, error: e1 } = await svc
       .from('enquiry_kinds')
@@ -665,35 +689,8 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     }
   }
 
-  it('addresses the primary alone when no list is configured', async () => {
-    await clearRungs()
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-
-    const row = await submit()
-
-    expect(row).toMatchObject({ status: 'ok', to_email: LINK_TO })
-    expect(row.to_emails).toEqual([LINK_TO])
-  })
-
-  it('addresses the primary AND the configured list, primary first', async () => {
-    await clearRungs()
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-    await addRecipient('booking', 'skeen@example.com', 'Skeen')
-    await addRecipient('booking', 'manager@example.com', 'Manager')
-
-    const row = await submit()
-
-    // to_email is UNCHANGED in meaning — still the primary, still what recipient_source
-    // describes. Widening it would have broken every consumer that reads "where did this
-    // one go?" as a single address.
-    expect(row).toMatchObject({ status: 'ok', to_email: LINK_TO, recipient_source: 'link' })
-    expect(row.to_emails).toEqual([LINK_TO, 'skeen@example.com', 'manager@example.com'])
-  })
-
-  it('CRITICAL: a list with no booking address is enough — its first person is the primary', async () => {
-    // Sam, 2026-09-28: "when the managers log in and put their email it can be theirs". A
-    // manager who filled in Settings → Email but never set a booking address must still
-    // receive mail. Before 20260928141000 this was the global inbox's job.
+  it('CRITICAL: a kind\'s list is the whole addressed set, in order — its first person is the primary', async () => {
+    // Sam, 2026-09-28: "when the managers log in and put their email it can be theirs".
     await clearRungs()
     await dropFloor()
     await addRecipient('booking', 'first@example.com', 'First', '2026-01-01T00:00:00Z')
@@ -701,6 +698,7 @@ describe('submit_enquiry — forwarding to more than one person', () => {
 
     const row = await submit()
 
+    // to_email keeps its meaning: one address, the one recipient_source describes.
     expect(row).toMatchObject({ status: 'ok', to_email: 'first@example.com', recipient_source: 'recipient_list' })
     expect(row.to_emails).toEqual(['first@example.com', 'second@example.com'])
     const stored = await storedRow(row.enquiry_id!)
@@ -708,8 +706,8 @@ describe('submit_enquiry — forwarding to more than one person', () => {
   })
 
   it("another kind's list is never borrowed when this kind has nobody", async () => {
-    // Demo has a list; booking has nobody and there is no booking address. A booking
-    // enquiry is stored, not sent to the demo people.
+    // Demo has a list; booking has nobody. A booking enquiry is stored, not sent to the demo
+    // people.
     await clearRungs()
     await dropFloor()
     await addRecipient('demo', 'demo-person@example.com')
@@ -721,12 +719,12 @@ describe('submit_enquiry — forwarding to more than one person', () => {
   })
 
   it('freezes the whole addressed set on the enquiry row', async () => {
-    // Same reason to_email was frozen in the first place: recipient resolution reads
-    // WORKING rows, so after the manager edits the list, the row is the only record of
-    // who actually received a given message.
+    // Recipient resolution reads WORKING rows, so after the manager edits the list, the row is
+    // the only record of who actually received a given message.
     await clearRungs()
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-    await addRecipient('booking', 'frozen@example.com')
+    await dropFloor()
+    await addRecipient('booking', 'kept@example.com', undefined, '2026-01-01T00:00:00Z')
+    await addRecipient('booking', 'frozen@example.com', undefined, '2026-01-02T00:00:00Z')
 
     const row = await submit()
     expect(row.enquiry_id).not.toBeNull()
@@ -735,18 +733,8 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     await svc.from('enquiry_recipients').delete().eq('artist_id', artistA)
 
     const stored = await storedRow(row.enquiry_id!)
-    expect(stored.to_emails).toEqual([LINK_TO, 'frozen@example.com'])
-    expect(stored.to_email).toBe(LINK_TO)
-  })
-
-  it('does not address one inbox twice when the list repeats the rung', async () => {
-    await clearRungs()
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
-    await addRecipient('booking', LINK_TO.toUpperCase())
-
-    const row = await submit()
-
-    expect(row.to_emails).toEqual([LINK_TO])
+    expect(stored.to_emails).toEqual(['kept@example.com', 'frozen@example.com'])
+    expect(stored.to_email).toBe('kept@example.com')
   })
 
   it('records the list on an UNROUTABLE enquiry too', async () => {
@@ -754,7 +742,7 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     // unroutable enquiry that forgot who it was FOR would lose that on the day mail is
     // finally configured and someone goes back through the backlog.
     await clearRungs()
-    await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
+    await dropFloor()
     await addRecipient('booking', 'waiting@example.com')
 
     // Remove the SENDER, not the recipient: no sending domain means unroutable while the
@@ -768,11 +756,7 @@ describe('submit_enquiry — forwarding to more than one person', () => {
 
     const stored = await storedRow(row.enquiry_id!)
     expect(stored.status).toBe('unroutable')
-    // The booking LINK above is rung 2 and still resolves: dropping the sender took away
-    // the SENDER, not the recipients. That is the whole point of this test: an enquiry
-    // nobody can send still records exactly who it was for, so the backlog is answerable on
-    // the day mail is finally configured.
-    expect(stored.to_emails).toEqual([LINK_TO, 'waiting@example.com'])
+    expect(stored.to_emails).toEqual(['waiting@example.com'])
   })
 })
 

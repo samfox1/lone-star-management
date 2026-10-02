@@ -51,4 +51,4 @@ export function ChipPlus({ label, onClick, ref }: { label: string; onClick: () =
 }
 
 /** A one-line field in the chip row, as round and as small as a chip. Width is the caller's. */
-export const CHIP_FIELD = 'rounded-full border border-hairline bg-paper px-2.5 py-1 text-[12px] text-ink outline-none focus:border-ink'
+export const CHIP_FIELD = 'border-b border-hairline bg-transparent px-0 pt-[5px] pb-[4px] text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink'

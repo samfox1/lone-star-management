@@ -76,7 +76,8 @@ describe('the fixed questions', () => {
     show({ [FAQ_KEYS[0]]: 'My own words.' })
     expect(screen.getByText('My own words.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use the automatic answer' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Use automatic' }))
+    const ask = await screen.findByRole('dialog', { name: /^Replace your answer with the automatic one\?/ })
+    fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_KEYS[0], ''))
     expect(screen.getByText(AUTO[0])).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Use the automatic answer' })).toBeNull()
@@ -96,9 +97,10 @@ describe('your own questions', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Answer: Where is Skeen from?' }), { target: { value: 'Chicago.' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[1].a, 'Chicago.'))
     fireEvent.click(screen.getByRole('button', { name: 'Remove: Can I book Skeen?' }))
-    // It asks first: nothing is removed until Remove is pressed.
+    // It asks first: nothing is removed until the question is confirmed.
     expect(seoMock).not.toHaveBeenCalledWith('a1', FAQ_EXTRA[0].q, '')
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
+    const ask = await screen.findByRole('dialog', { name: 'Remove “Can I book Skeen?” and its answer?' })
+    fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[0].q, ''))
     expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[0].a, '')
   })

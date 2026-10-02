@@ -6,7 +6,9 @@
  * verb, and over an already-dimmed card reads as an error rather than a choice.
  *
  * What has to hold, because six destructive controls now depend on it:
- *   - the promise resolves TRUE only on the named action;
+ *   - two answers, the words "Cancel" and "Confirm" (Sam, 2026-10-02: "It should say
+ *     Confirm or cancel") — the QUESTION names the action, so the answer does not;
+ *   - the promise resolves TRUE only on Confirm;
  *   - cancel, Escape and a click outside all resolve FALSE — every way out that is not
  *     the action is a no;
  *   - it never rejects, so `if (!(await ask(…))) return` is safe without a try/catch;
@@ -40,11 +42,11 @@ function open(onAnswer: (a: boolean) => void, action?: string) {
 }
 
 describe('useConfirm', () => {
-  it('CRITICAL: the named action resolves true', async () => {
+  it('CRITICAL: Confirm resolves true', async () => {
     const answer = vi.fn()
-    open(answer)
+    const dialog = open(answer)
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     expect(answer).toHaveBeenCalledWith(true)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -88,10 +90,15 @@ describe('useConfirm', () => {
     expect(answer).toHaveBeenCalledWith(false)
   })
 
-  it('the action is NAMED — never an OK that could mean either half', () => {
-    open(vi.fn(), 'Remove')
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^OK$/i })).toBeNull()
+  it('two words, Cancel and Confirm — the QUESTION names the action, never an OK', () => {
+    // The answer used to be named after the action ("Remove", "Merge"…). Sam (2026-10-02):
+    // "It should say Confirm or cancel" — so the question carries the verb, and the dialog
+    // is named by it, whatever `action` the caller passed.
+    const dialog = open(vi.fn(), 'Remove')
+    expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Cancel', 'Confirm'])
+    expect(screen.getByRole('dialog', { name: 'Delete this release? This cannot be undone.' })).toBe(dialog)
+    expect(within(dialog).getByText('Delete this release? This cannot be undone.')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /^OK$/i })).toBeNull()
   })
 
   it('CRITICAL: a second ask answers the first NO rather than stranding it', async () => {
@@ -120,7 +127,7 @@ describe('useConfirm', () => {
     })
     expect(answers).toEqual([false])
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'second' })).getByRole('button', { name: 'Confirm' }))
     })
     expect(answers).toEqual([false, true])
   })
@@ -185,7 +192,7 @@ describe('the question takes focus, and gives it back', () => {
 describe('the answer button wears the tone it was asked for', () => {
   it('is red by default, because the callers are destructive', () => {
     const dialog = open(() => {})
-    expect(within(dialog).getByRole('button', { name: 'Delete' }).className).toMatch(/text-accent-red/)
+    expect(within(dialog).getByRole('button', { name: 'Confirm' }).className).toMatch(/text-accent-red/)
   })
 
   it('an affirmative action is NOT drawn as a destruction', () => {
@@ -193,7 +200,7 @@ describe('the answer button wears the tone it was asked for', () => {
     // not be painted like one.
     render(<Harness onAnswer={() => {}} action="Continue" tone="solid" />)
     fireEvent.click(screen.getByRole('button', { name: 'go' }))
-    const go = within(screen.getByRole('dialog')).getByRole('button', { name: 'Continue' })
+    const go = within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' })
     expect(go.className).not.toMatch(/text-accent-red/)
   })
 })

@@ -251,11 +251,11 @@ function inspector(
 }
 
 /** Revert asks first (Sam, 2026-09-28: "'are you sure' is good when its a delete or
- *  revert"). Press it, then answer the question with its named action. */
+ *  revert"). Press it, then answer the question: Confirm (Sam, 2026-10-02). */
 async function revertAndConfirm() {
   fireEvent.click(screen.getByRole('button', { name: 'Revert changes' }))
   await act(async () => {
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revert' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
   })
 }
 
@@ -826,12 +826,12 @@ describe('EditorInspector — Links: Contact rows', () => {
     expect(screen.getByText('Bookings')).toBeTruthy()
   })
 
-  it('removes a contact via deleteContentAction once the manager says Delete', async () => {
+  it('removes a contact via deleteContentAction once the manager confirms', async () => {
     openLinks()
     expandLink(1)
     fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
     })
     expect(deleteContentMock).toHaveBeenCalledWith('link', 'c1', 'artist-1')
     expect(screen.queryByText('Bookings')).toBeNull()
@@ -1318,12 +1318,12 @@ describe('EditorInspector — Merch component', () => {
     expect(screen.getByDisplayValue('Tour Tee')).toBeTruthy() // still open, still there
   })
 
-  it('removes a product from inside its editor once the manager says Delete', async () => {
+  it('removes a product from inside its editor once the manager confirms', async () => {
     openMerch()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Tour Tee' }))
     fireEvent.click(screen.getByRole('button', { name: /Remove product/ }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
     })
     expect(deleteContentMock).toHaveBeenCalledWith('merch', 'p1', 'artist-1')
     expect(screen.queryByDisplayValue('Tour Tee')).toBeNull()
@@ -1970,7 +1970,7 @@ describe('EditorInspector — the Revert changes button (session undo; named by 
     expect(restorePublishedAction).not.toHaveBeenCalled()
     // The version picker stays Restore version's (the three-dot menu), not this button's.
     expect(listPublishMomentsAction).not.toHaveBeenCalled()
-    // …and answering Revert is what runs it.
+    // …and confirming is what runs it.
     await revertAndConfirm()
     expect(restorePublishedAction).toHaveBeenCalledTimes(1)
   })
@@ -2383,11 +2383,11 @@ describe('EditorInspector — tour tools', () => {
     expect(screen.getByText('Mohawk')).toBeTruthy()
   })
 
-  it('removes a date via deleteContentAction once the manager says Delete', async () => {
+  it('removes a date via deleteContentAction once the manager confirms', async () => {
     openTour()
     fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
     })
     expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
   })

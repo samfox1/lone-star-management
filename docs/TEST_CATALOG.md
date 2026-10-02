@@ -7,10 +7,10 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**88 test files · 1460 tests**
+**90 test files · 1483 tests**
 
-- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 32 files · 624 tests
-- [SEO / GEO page](#seo--geo-page) · 23 files · 315 tests
+- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 32 files · 625 tests
+- [SEO / GEO page](#seo--geo-page) · 25 files · 337 tests
 - [Profile page](#profile-page) · 2 files · 21 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
@@ -672,7 +672,7 @@ Every publish that changes a page's words schedules ONE SEO / GEO test run in th
 - Nothing went live: a wrong password or a failed publish starts no run.
 - The publish is already live: a scheduler crash must not turn it into a reported failure.
 
-### tests/unit/seo-tests/runs/running.test.ts · 44 tests
+### tests/unit/seo-tests/runs/running.test.ts · 45 tests
 
 Running the SEO / GEO tests: every one runs in order, one broken test never sinks the run, the run keeps to its time budget, and the database decides whether a run may start at all.
 
@@ -717,6 +717,7 @@ Running the SEO / GEO tests: every one runs in order, one broken test never sink
 - Pages are asked about where the site ANSWERED. Registered as the bare spelling while the site lives on www, Google would call every page "Page with redirect" ("0 of 5 on Google"): such a registration is not asked at all, and its rows say "couldn't ask", never "not listed".
 - The deadline ENDS the work, not just the wait: a hung Google / Bing request is aborted (its socket freed) when the run's time is up, and a registration read that never answers can't hold the run open either.
 - The registrations live in a table closed to managers: they are read through the WRITER (service role), never the manager's session, and only a VERIFIED row counts.
+- Each registration carries when it was verified: the Search tab says a new site's empty answer is normal ("added Sep 30"), so it needs the date.
 - A row that isn't a registration we can use (another provider, an address that isn't a registered https property) is never asked about.
 - Checked ONCE per run, for the origin the gather actually landed on.
 - A check that breaks or hangs is "not checked" (null), and nothing else about the run changes.
@@ -1155,6 +1156,21 @@ The SEO / GEO Profiles tab: the Apple Music & Amazon bio card shows the email th
 - Some mail apps cut a long mailto short without a word: past MAILTO_SAFE_LENGTH the card says to use Copy. A 150-word bio and the most releases the email lists is past it.
 - Mark as sent: the artist, the item, and done = true; the row then says it was sent.
 
+### tests/components/manager-tools/seo/search-tab.test.tsx · 4 tests
+
+The SEO / GEO Search tab ("How fans find you"): each engine's numbers side by side, an engine with no numbers says why instead of showing zeros, and the switches change the view.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/search/search-tab.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): the page is new and its look still moving; one test per state. The words it shows are pinned STRICTLY in tests/unit/manager-tools/seo/search-model.test.ts.
+- **Not here:** the words and the side-by-side alignment (search-model.test.ts); the numbers' shape (search-stats.test.ts); the chart's drawing (checked by screenshot).
+
+**Tests**
+
+- Each engine its own column with its OWN four numbers: Google's 15 and Bing's 3, never 18.
+- Skeen on 2026-10-02: Bing registered Sep 30 and answered with nothing. Beside Google's numbers in Both, and on its own in Bing, it says so; it is never a column of zeros.
+- Google broke and Bing refused: each says it couldn't ask; only the error offers Try again, which re-renders the page (the loader asks again after an error).
+- An engine shows at once (no server trip) and goes in the address; a period is new numbers, so it navigates, keeping the engine.
+
 ### tests/components/manager-tools/seo/test-tab.test.tsx · 20 tests
 
 The SEO / GEO AI test tab: start, running and done, the card under an open row, its actions, evidence shown as plain text, and the quiet states (busy, cool-down, failed, no site...).
@@ -1458,7 +1474,35 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 - The type is the registry only; genre and city are trimmed, capped at 120, blank clears.
 - The city follows the fact text rule: no markup, no control characters, no hidden marks.
 
-### tests/unit/manager-tools/seo/search-stats-ask.test.ts · 7 tests
+### tests/unit/manager-tools/seo/search-model.test.ts · 17 tests
+
+The Search tab's words: what the artist reads about their own search numbers, and how the two engines sit side by side without being added together.
+
+- **Code:** src/lib/manager-tools/seo/search-model.ts, src/lib/manager-tools/seo/country-a3.ts
+- **Tier:** STRICT (AGENTS.md "Test depth"): these words decide what the artist is told about their audience (a rounding must never say something false), and a page address from an engine ends up in a link.
+- **Not here:** the numbers' shape (search-stats.test.ts); the page's layout (tests/components/ manager-tools/seo/search-tab.test.tsx).
+
+**Tests**
+
+- Skeen's real 15 of 59 reads 25%, and a rounding never flips a rate to a false 0% or 100%.
+- The plain-words line under it: "1 in N" up to one in two; above that "most"; all is "all".
+- One decimal; a whole number without ".0"; no spot is a dash, never "0".
+- What the list leaves out, said out loud; a zero side is left out, and nothing says nothing.
+- Google Sep 29 – Oct 1, Bing Sep 30 – Oct 3: the axis runs Sep 29 – Oct 3, each engine only on its own days (null outside them, never a zero), Google's still-counting day kept as such.
+- A gap between the engines' runs is on the axis with neither engine on it; a day missing inside a run is a real zero day; one engine alone, or none, works.
+- The chart beside both engines: one line per engine per number on that axis, each engine its own colour, the values the engine's own (never a sum), Seen under Clicks.
+- One engine: Clicks blue with its fill, Seen ink, the Analytics page's colours; an engine without numbers adds no line.
+- "Since Sep 29" only when the numbers start after the period does.
+- Each engine's own row, never merged; the same search from both sits together, Google first; the pairs go busiest first by either engine's row.
+- The bar: seen and clicks on the list's own scale; anything above zero shows a sliver.
+- Bing for a site added Sep 30 (Skeen, 2026-10-02): new, so "usually within 2 weeks"; no date is promised. Day 13 still is; day 14 is not.
+- The day it was added is Search Console's (Pacific) day: 03:00 UTC on Oct 1 is still Sep 30.
+- Every couldn't-ask state (derived from the list, not hand-listed) says which engine and why; only a passing failure (error, timeout) offers Try again.
+- A page links only to http(s) with no credentials, checked again where it is drawn.
+- The engine in the address: the three views, anything else (junk, a prototype key) is Both.
+- The generated table is exactly i18n-iso-countries' alpha-3 → alpha-2 (a stale or hand-edited copy fails here), and Google's codes read as the Analytics page names them.
+
+### tests/unit/manager-tools/seo/search-stats-ask.test.ts · 8 tests
 
 Asking both engines for an artist's search numbers: only where the site is registered, both at once, inside a deadline, and never with the real keys from a test.
 
@@ -1472,6 +1516,7 @@ Asking both engines for an artist's search numbers: only where the site is regis
 - The main path: both engines asked on the registered address, Google with the period's requests exactly (derived, not hand-listed), its total first.
 - A refused total stops Google there: one request, not six.
 - One engine registered; the other's key missing on the server; one that never answers.
+- The answer carries when each engine was registered (the Search tab's "added Sep 30"), and nothing when that engine isn't registered or the read failed.
 - A broken registration read or client builder is "couldn't ask", never a throw.
 - Answers (and the settled "not registered" / "no key") are kept for hours; a refusal, an error or a timeout is asked again next time.
 - Tests load .env.local: the env-backed deps must refuse here, or a test could reach the real keys. A boolean, so a failure prints nothing of what came back.
@@ -1530,7 +1575,7 @@ How Profile (the SEO / GEO Facts tab until 2026-10-02) reads the stored facts ba
 
 ### tests/unit/manager-tools/seo/tabs-and-routes.test.ts · 9 tests
 
-The SEO / GEO page has four tabs on the rail, each with its own page, the tool opens on Details, and every old section address still lands on the tab (and the row) that now holds it: an SEO tab, or Profile for the facts and the bio (Facts left SEO / GEO on 2026-10-02).
+The SEO / GEO page has five tabs on the rail, each with its own page, the tool opens on Details, and every old section address still lands on the tab (and the row) that now holds it: an SEO tab, or Profile for the facts and the bio (Facts left SEO / GEO on 2026-10-02).
 
 - **Code:** src/lib/manager-tools/seo/sections.ts, tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
 - **Tier:** STRICT (AGENTS.md "Test depth"): nothing that worked may lose its home, and a bad address must be a 404, not a crash.
@@ -1538,7 +1583,7 @@ The SEO / GEO page has four tabs on the rail, each with its own page, the tool o
 
 **Tests**
 
-- Four tabs, unique, Details first as the tool's own route, so the tool opens on it.
+- Five tabs, unique, Details first as the tool's own route, so the tool opens on it.
 - The rail shows exactly these tabs for the SEO / GEO tool.
 - Every tab has its own page on disk, so no tab is a dead link.
 - A page.tsx in a folder that is not a tab is a stray route; under an old name it would win over the redirect route (Next matches a static folder first), so the redirect would never run.

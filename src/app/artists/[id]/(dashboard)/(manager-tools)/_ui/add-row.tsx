@@ -14,6 +14,13 @@ export const ADD_BUTTON = cx(
   FOCUS_RING,
 )
 
+/** The open add flow's one-line field: a LINE, not a box (Sam, 2026-10-02: "I dont like the
+ *  border around the container when adding"). 320px everywhere (Batch 2): a 40-character brand
+ *  name fits whole. The text starts where the list's text starts (no side padding), and the
+ *  padding on top makes up the box's lost top border, so the row is exactly as tall as before. */
+export const ADD_FIELD =
+  'w-[320px] max-w-full border-b border-hairline bg-transparent px-0 pt-[8px] pb-[7px] text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink'
+
 /**
  * THE ADD FLOW, every Brand list (Sam, 2026-09-23, BRAND_PAGE_PLAN.md):
  *
@@ -21,7 +28,8 @@ export const ADD_BUTTON = cx(
  *   on hover) and × (red on hover) → focus lands in the new row's note → Enter moves it to
  *   the row's + → that + does the thing.
  *
- * This component owns the first two steps. `onAdd(name)` is where the parent inserts its
+ * This component owns the first two steps. The field is a line and ✓ × are bare glyphs:
+ * no boxes anywhere in the flow (Sam, 2026-10-02). `onAdd(name)` is where the parent inserts its
  * client-only row (saved only once it gets its thing) and renders that row's NoteField
  * with `autoFocus`, which is the third. Enter is ✓, Escape is ×.
  *
@@ -139,11 +147,11 @@ export function AddRow({
             cancel()
           }
         }}
-        // 320px everywhere (Batch 2, Sam 2026-10-02): a 40-character brand name fits whole.
-        className="w-[320px] max-w-full rounded-lg border border-hairline bg-paper px-2.5 py-[7px] text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
+        className={ADD_FIELD}
       />
-      <RowIcon icon="check" label="Add" variant="boxed" size="sm" tone="accent" onClick={confirm} />
-      <RowIcon icon="close" label="Cancel" variant="boxed" size="sm" tone="danger" onClick={cancel} />
+      {/* Bare glyphs, no boxes (Sam dislikes icons in a box, row-icon.tsx). */}
+      <RowIcon icon="check" label="Add" variant="bare" tone="accent" glyphSize={18} onClick={confirm} />
+      <RowIcon icon="close" label="Cancel" variant="bare" tone="danger" glyphSize={18} onClick={cancel} />
     </div>
   )
 }

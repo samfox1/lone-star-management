@@ -81,7 +81,7 @@ describe('TourRow — click to edit', () => {
     const ask = screen.getByRole('dialog', { name: /delete this date/i })
     expect(deleteContentAction).not.toHaveBeenCalled()
     await act(async () => {
-      fireEvent.click(within(ask).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     })
     expect(deleteContentAction).toHaveBeenCalledWith('tour_date', 'td-1', ARTIST)
   })

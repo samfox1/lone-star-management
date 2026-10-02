@@ -140,7 +140,7 @@ describe('PublishRiser', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
     const confirm = await screen.findByRole('dialog', { name: /^Revert/ })
-    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Revert' })))
+    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' })))
     expect(onRevert).toHaveBeenCalledTimes(1)
   })
 
@@ -150,7 +150,7 @@ describe('PublishRiser', () => {
     render(<PublishRiser dirty message="x" onPublish={ok} onRevert={onRevert} />)
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
     const confirm = await screen.findByRole('dialog', { name: /^Revert/ })
-    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Revert' })))
+    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' })))
     expect(onRevert).toHaveBeenCalledTimes(1)
 
     // In flight: a second press asks nothing and reverts nothing.
@@ -164,7 +164,7 @@ describe('PublishRiser', () => {
     render(<PublishRiser dirty message="x" onPublish={ok} onRevert={async () => ({ error: 'Nothing to revert.' })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
     const confirm = await screen.findByRole('dialog', { name: /^Revert/ })
-    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Revert' })))
+    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' })))
     expect(toast).toHaveBeenCalledWith('Nothing to revert.', 'error')
   })
 

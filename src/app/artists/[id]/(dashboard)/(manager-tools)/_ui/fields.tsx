@@ -188,7 +188,7 @@ export function Chips({
                 cancel()
               }
             }}
-            className="w-[140px] rounded-full border border-hairline bg-paper px-2.5 py-1 text-[12px] text-ink outline-none focus:border-ink"
+            className="w-[140px] border-b border-hairline bg-transparent px-0 pt-[5px] pb-[4px] text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
           />
           <RowIcon icon="check" label="Add" variant="primary" tone="accent" onClick={add} />
           <RowIcon icon="close" label="Cancel" variant="primary" tone="danger" onClick={cancel} />

@@ -178,7 +178,7 @@ describe('Remove', () => {
     expect(disconnectConnectionAction).not.toHaveBeenCalled()
     const q = screen.getByRole('dialog', { name: /Remove Spotify/ })
     await act(async () => {
-      fireEvent.click(within(q).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(q).getByRole('button', { name: 'Confirm' }))
     })
     expect(disconnectConnectionAction).toHaveBeenCalledWith('a1', 'spotify', 'l-sp')
     expect(screen.queryByRole('button', { name: 'Spotify' })).toBeNull()

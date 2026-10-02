@@ -24,7 +24,7 @@ const mockDeleteMedia = vi.mocked(deleteMediaAction)
  *  action to run must say yes — otherwise it is testing the declined path by accident.
  *  The dialog is the app's own now (useConfirm), so the answer is a CLICK, after the
  *  trigger rather than stubbed before it. */
-async function say(answer: 'Delete' | 'Cancel') {
+async function say(answer: 'Confirm' | 'Cancel') {
   const dialog = await screen.findByRole('dialog')
   await act(async () => {
     fireEvent.click(within(dialog).getByRole('button', { name: answer }))
@@ -73,7 +73,7 @@ describe('DeleteButton', () => {
     mockDelete.mockResolvedValue({})
     setup()
     fireEvent.click(screen.getByText('Delete'))
-    await say('Delete')
+    await say('Confirm')
     expect(await screen.findByText('Track deleted')).toBeInTheDocument()
     expect(mockDelete).toHaveBeenCalledWith('track', 't1', 'a1')
   })
@@ -82,7 +82,7 @@ describe('DeleteButton', () => {
     mockDelete.mockResolvedValue({ error: 'Delete failed.' })
     setup()
     fireEvent.click(screen.getByText('Delete'))
-    await say('Delete')
+    await say('Confirm')
     expect(await screen.findByText('Delete failed.')).toBeInTheDocument()
   })
 
@@ -90,7 +90,7 @@ describe('DeleteButton', () => {
     mockDelete.mockRejectedValue(new Error('network down'))
     setup()
     fireEvent.click(screen.getByText('Delete'))
-    await say('Delete')
+    await say('Confirm')
     expect(await screen.findByText("Couldn't delete that track.")).toBeInTheDocument()
   })
 
@@ -116,7 +116,7 @@ describe('DeleteButton', () => {
     // of this test is worth more than a reassuring one.
     //
     // It used to read "latches against a double click on the confirm" and it named
-    // `busyRef`. It never reached `busyRef`: both clicks landed on the DIALOG's Delete,
+    // `busyRef`. It never reached `busyRef`: both clicks landed on the DIALOG's answer,
     // and `useConfirm.settle` nulls its resolver before resolving, so the second click
     // resolved nothing whether or not any latch existed. Deleting the ref left the whole
     // suite green — which is how it was found (2026-09-12).
@@ -135,7 +135,7 @@ describe('DeleteButton', () => {
     await doubleClick(screen.getByText('Delete'))
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
 
-    await say('Delete')
+    await say('Confirm')
     expect(mockDelete).toHaveBeenCalledTimes(1)
 
     resolve({})
@@ -157,7 +157,7 @@ describe('MediaDeleteButton', () => {
     mockDeleteMedia.mockResolvedValue({})
     setupMedia()
     fireEvent.click(screen.getByText('Delete'))
-    await say('Delete')
+    await say('Confirm')
     expect(await screen.findByText('Video removed')).toBeInTheDocument()
     expect(mockDeleteMedia).toHaveBeenCalledWith('m1', 'a1/hero.mp4', 'a1')
   })
@@ -166,7 +166,7 @@ describe('MediaDeleteButton', () => {
     mockDeleteMedia.mockRejectedValue(new Error('network down'))
     setupMedia()
     fireEvent.click(screen.getByText('Delete'))
-    await say('Delete')
+    await say('Confirm')
     expect(await screen.findByText("Couldn't remove that video.")).toBeInTheDocument()
   })
 
@@ -189,7 +189,7 @@ describe('MediaDeleteButton', () => {
     await doubleClick(screen.getByText('Delete'))
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
 
-    await say('Delete')
+    await say('Confirm')
     expect(mockDeleteMedia).toHaveBeenCalledTimes(1)
 
     resolve({})

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-// Settings → Email renders: one row per kind, the resolved address, the count.
+// Settings → Email renders: one row per kind, each with its own addresses.
 /**
  * `/artists/[id]/settings/email` — one render through the page's own data plumbing, the
  * same discipline enquiries-page.test.tsx exists for: a server page with no render test is
  * a page whose data-order bugs only the browser finds.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import EmailSettingsPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/page'
 
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
@@ -20,7 +20,13 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () =
 }))
 
 const kinds = [
-  { id: 'k1', slug: 'booking', label: 'Booking', sort_order: 0, enquiry_recipients: [] },
+  {
+    id: 'k1',
+    slug: 'booking',
+    label: 'Booking',
+    sort_order: 0,
+    enquiry_recipients: [{ id: 'r0', email: 'agent@example.com', label: null, created_at: '2026-09-22T08:00:00Z' }],
+  },
   {
     id: 'k2',
     slug: 'demo',
@@ -47,7 +53,6 @@ function queryStub(data: () => unknown[]) {
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (table: string) => queryStub(() => (table === 'enquiry_kinds' ? kinds : [])),
-    rpc: async () => ({ data: [{ to_email: 'booking@lonepine.example', recipient_source: 'link' }] }),
   }),
 }))
 
@@ -62,19 +67,21 @@ const renderPage = async () => {
 describe('/artists/[id]/settings/email', () => {
   it('CRITICAL: renders one row per kind, in order', async () => {
     await renderPage()
-    const rows = screen.getAllByRole('button', { name: /Booking|Demo|Contact/ })
-    expect(rows.map((r) => r.textContent?.match(/Booking|Demo|Contact/)?.[0])).toEqual(['Booking', 'Demo', 'Contact'])
+    const rows = [...document.querySelectorAll('[data-kind]')].map((r) => r.getAttribute('data-kind'))
+    expect(rows).toEqual(['booking', 'demo', 'other'])
   })
 
-  it('shows the resolved booking address on every kind, and the count where people are added', async () => {
+  it('CRITICAL: each row shows its own kind’s addresses, every one clickable', async () => {
     await renderPage()
-    expect(screen.getAllByText('booking@lonepine.example')).toHaveLength(3)
-    expect(screen.getByText('+1')).toBeTruthy()
-    expect(screen.queryByText('+0')).toBeNull()
+    const row = (slug: string) => document.querySelector<HTMLElement>(`[data-kind="${slug}"]`)!
+    // The embedded select reached the rows: without it every kind would look empty.
+    expect(within(row('booking')).getByRole('button', { name: 'agent@example.com' })).toBeTruthy()
+    expect(within(row('demo')).getByRole('button', { name: 'ar@example.com' })).toBeTruthy()
+    expect(within(row('demo')).queryByText('agent@example.com')).toBeNull()
   })
 
-  it('offers Add kind', async () => {
+  it('offers a + on every kind', async () => {
     await renderPage()
-    expect(screen.getByRole('button', { name: /Add kind/ })).toBeTruthy()
+    for (const label of ['Booking', 'Demo', 'Contact']) expect(screen.getByRole('button', { name: `Add email to ${label}` })).toBeTruthy()
   })
 })

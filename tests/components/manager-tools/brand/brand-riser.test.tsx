@@ -39,7 +39,7 @@ describe('BrandRiser', () => {
     fireEvent.click(within(bar()).getByRole('button', { name: 'Revert' }))
     const ask = await screen.findByRole('dialog', { name: /Revert every brand change/ })
     await act(async () => {
-      fireEvent.click(within(ask).getByRole('button', { name: 'Revert' }))
+      fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     })
     expect(revertBrandAction).toHaveBeenCalledWith('a1')
     expect(h.refresh).toHaveBeenCalled()
@@ -54,7 +54,7 @@ describe('BrandRiser', () => {
       fireEvent.click(within(bar()).getByRole('button', { name: 'Revert' }))
       const ask = await screen.findByRole('dialog', { name: /Revert every brand change/ })
       await act(async () => {
-        fireEvent.click(within(ask).getByRole('button', { name: 'Revert' }))
+        fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
       })
     }
     try {

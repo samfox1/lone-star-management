@@ -328,13 +328,13 @@ describe('changing a colour', () => {
 })
 
 describe('removing a colour', () => {
-  it('CRITICAL: asks first; Remove deletes THAT colour and the row goes', async () => {
+  it('CRITICAL: asks first; Confirm deletes THAT colour and the row goes', async () => {
     renderLedger()
     fireEvent.click(within(rowOf('Color 2')).getByRole('button', { name: 'Remove' }))
     const ask = screen.getByRole('dialog', { name: 'Remove Color 2?' })
     expect(deleteBrandColorAction).not.toHaveBeenCalled()
     await act(async () => {
-      fireEvent.click(within(ask).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     })
     expect(deleteBrandColorAction).toHaveBeenCalledWith('a1', 'c2')
     expect(screen.queryByText('Color 2')).toBeNull()
@@ -355,7 +355,7 @@ describe('removing a colour', () => {
     renderLedger()
     fireEvent.click(within(rowOf('Color 2')).getByRole('button', { name: 'Remove' }))
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove Color 2?' })).getByRole('button', { name: 'Remove' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Remove Color 2?' })).getByRole('button', { name: 'Confirm' }))
     })
     expect(toast).toHaveBeenCalledWith('That color is no longer there.', 'error')
     expect(screen.getByText('Color 2')).toBeTruthy()

@@ -74,9 +74,9 @@ describe('ActionButton', () => {
     setup(action, { confirm: 'Disconnect this store?' })
     fireEvent.click(screen.getByText('Publish'))
     const dialog = await screen.findByRole('dialog')
-    // Not a destroy, so the action is named for what it does rather than "Delete".
+    // The answer is always "Confirm" (Sam, 2026-10-02); the question carries the verb.
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     await screen.findByText('Published tracks')
     expect(action).toHaveBeenCalledTimes(1)

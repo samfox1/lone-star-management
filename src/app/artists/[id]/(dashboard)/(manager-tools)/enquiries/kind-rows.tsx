@@ -1,130 +1,169 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { cx } from '@/lib/cx'
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
-import { AddRow } from '../_ui/add-row'
-import { CommitField } from '../_ui/commit-field'
-import { CardAction, CardActions, CardField, DisclosureCard, DisclosureItem, RowFace, RowValue } from '../_ui/disclosure'
-import { LedgerSection } from '../_ui/ledger'
+import { LineField } from '../_ui/fields'
+import { FOCUS_RING } from '../_ui/focus-ring'
+import { LEDGER_ROW_GRID, LedgerSection } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
-import { MONO_META } from '../_ui/styles'
 import {
-  addEnquiryKindAction,
   deleteEnquiryKindAction,
   renameEnquiryKindAction,
   setEnquiryRecipientsAction,
 } from './actions'
-import { LABEL_MAX, PURPOSE_FALLBACK, recipientProblem, type EnquiryKindRow } from '@/lib/enquiries/kinds'
-
-/** What a kind's row and card say when no booking address is set. */
-const NO_PRIMARY = 'No booking address set'
+import { LABEL_MAX, PURPOSE_FALLBACK, kindGuide, recipientProblem, type EnquiryKindRow } from '@/lib/enquiries/kinds'
 
 /**
- * Who receives each kind of enquiry: Settings › Email (Sam, 2026-09-22; Batch 3, 2026-10-02,
- * prototypes/batch3_20261002.html).
+ * Who receives each kind of enquiry: Settings › Email, the ONE place addresses are managed
+ * (Sam, 2026-10-02). What he asked for, in order:
+ *   "Remove email from General."
+ *   "I dont want the main address to recieve everything, I should have to add each one
+ *    individually" (20261002210000: a kind goes ONLY to its own list)
+ *   "work more like genre where you add it and then can see it … Dont put the email in a pill"
+ *   "Dont say add email. Have it be a plus (+)."
+ *   "Have a plus for every row, not in the bottom left" (and no new kinds from here for now:
+ *    "Lets remove the ability to add new email types right now"; addEnquiryKindAction stays)
+ *   "when I click on a submitted email, then I can edit it or delete it … I want minimal stuff"
+ *   "i should be able to edit/delete every email there"; "It should say for x, y and z"
+ *   "I dont like the border around the container when adding an email"
  *
- * ONE "A" ROW PER KIND (_ui/disclosure.tsx, the AI test's row): its name, the address that
- * WOULD receive it and how many more are copied. Clicking OPENS IT IN PLACE (no modal) onto a
- * card: the name (saves itself), the primary (shown, never edited here), the list, and a bare
- * trash. No Save button: every edit saves on its own.
+ * So, at rest: one ledger row per kind, its NAME on the left with what it is FOR under it (only
+ * where there is something worth saying, kindGuide), its OWN addresses as plain text on the
+ * right ending in a + that adds one more to THAT kind. No words on the +, no boxes: it opens an
+ * underline field where the address will sit (Sam: "a line lined up with where the email name
+ * and email address are"). Every address shown is one this kind is sent to, and every one
+ * can be clicked to edit or delete: nothing is read-only, nothing is greyed out. The site's
+ * public booking contact (its link or text) is NOT a recipient and is not shown here.
  *
- * THE PRIMARY IS READ-ONLY ON PURPOSE. It is whatever `resolve_booking_recipient` found, the
- * booking address on the artist's own site, and it is edited under General, in one place,
- * because it is also what the public site displays. Showing it here without letting it be
- * changed is what stops the two screens disagreeing about the same address. These lists only
- * ADD to it (20260921120000).
+ * Click an address (or a kind's name) and it becomes its field, with ✓ and a trash; Enter or ✓
+ * saves, Escape or a click away puts it back. Every kind but `other` can be deleted from its
+ * name's trash (`other` is the fallback every unknown purpose lands on; the database refuses).
  *
- * No captions, no explanatory paragraph: the rows say what they are (no-instruction-copy).
+ * Every save sends the WHOLE list and shows what the server answered.
  */
-export function KindRows({
-  artistId,
-  kinds: initial,
-  primary,
-}: {
-  artistId: string
-  kinds: EnquiryKindRow[]
-  /** The resolved booking recipient, or null when none is set. Shown, never edited here. */
-  primary: string | null
-}) {
+export function KindRows({ artistId, kinds: initial }: { artistId: string; kinds: EnquiryKindRow[] }) {
   const [kinds, setKinds] = useState(initial)
-  const [openId, setOpenId] = useState<string | null>(null)
-  // Re-entry latch for Add (AGENTS.md rule 5): two Enters before the first insert returns
-  // used to mint a duplicate `press-2`, or lose the 23505 race and toast (review 2026-09-23).
-  const addingRef = useRef(false)
 
   const patch = (id: string, next: Partial<EnquiryKindRow>) =>
     setKinds((ks) => ks.map((k) => (k.id === id ? { ...k, ...next } : k)))
 
-  async function addKind(label: string) {
-    if (addingRef.current) return
-    addingRef.current = true
+  /**
+   * ONE SAVE PER KIND AT A TIME, whoever starts it (a row's edit or remove, or the +). Each save
+   * sends the whole list, so two in flight for one kind would interleave and the second would
+   * drop whatever the first changed. The latch is a ref, not state (AGENTS.md rule 5): two fast
+   * clicks both read pre-render state.
+   */
+  const saving = useRef(new Set<string>())
+  async function save(kind: EnquiryKindRow, next: Addr[]): Promise<{ error?: string }> {
+    if (saving.current.has(kind.id)) return { error: STILL_SAVING }
+    saving.current.add(kind.id)
+    const before = kind.recipients
     try {
-      const res = await addEnquiryKindAction(artistId, label)
-      const kind = res.kind
-      if (res.error || !kind) return toast(res.error ?? 'Could not add that kind.', 'error')
-      setKinds((ks) => [...ks, kind])
+      patch(kind.id, { recipients: next.map((r, i) => ({ id: `new-${i}-${r.email}`, ...r })) })
+      const res = await setEnquiryRecipientsAction(artistId, kind.id, next)
+      if (res.error || !res.rows) {
+        // Atomic, so the database still holds `before`: putting it back is TRUE, not cosmetic.
+        patch(kind.id, { recipients: before })
+        return { error: res.error ?? 'Could not save the list.' }
+      }
+      // Server ids and order replace the optimistic ones.
+      patch(kind.id, { recipients: res.rows })
+      return {}
     } finally {
-      addingRef.current = false
+      saving.current.delete(kind.id)
     }
   }
 
   return (
     <LedgerSection label="Enquiries">
-      {/* Pulled out 12px, so an open row's grey reaches past the text column (DisclosureGroup's). */}
-      <div className="-mx-3">
-        {kinds.map((k) => (
-          <KindItem
-            key={k.id}
-            artistId={artistId}
-            kind={k}
-            primary={primary}
-            open={openId === k.id}
-            onToggle={() => setOpenId((o) => (o === k.id ? null : k.id))}
-            onPatch={(next) => patch(k.id, next)}
-            onDeleted={() => {
-              setKinds((ks) => ks.filter((x) => x.id !== k.id))
-              setOpenId(null)
-            }}
-          />
-        ))}
-      </div>
-      {/* The shared add flow (Brand's): "+ Add kind", then a name field with ✓ and ×. */}
-      <AddRow noun="kind" label="Kind name" placeholder="Press" maxLength={LABEL_MAX} onAdd={(label) => void addKind(label)} />
+      {kinds.map((k) => (
+        <KindRow
+          key={k.id}
+          artistId={artistId}
+          kind={k}
+          onSave={(next) => save(k, next)}
+          onRenamed={(label) => patch(k.id, { label })}
+          onDeleted={() => setKinds((ks) => ks.filter((x) => x.id !== k.id))}
+        />
+      ))}
     </LedgerSection>
   )
 }
 
-/** One kind: its row, and its card while open. */
-function KindItem({
+type Addr = { email: string; label: string | null }
+
+const STILL_SAVING = 'Still saving — try that again in a moment.'
+
+/** The grey line under a kind's name: what it is for (LedgerRow's `guide` look). */
+const GUIDE = 'mt-0.5 max-w-[40ch] text-[13px] text-ink-muted'
+
+/** A field that is only a line (Sam: no boxes), in the type of the text it stands in for. */
+const UNDERLINE = 'border-b border-hairline bg-transparent p-0 outline-none placeholder:text-ink-faint focus:border-ink'
+const NAME_TEXT = 'text-[15px] font-medium leading-6 text-ink'
+const EMAIL_TEXT = 'font-space text-[13px] leading-6 text-ink'
+
+/**
+ * One kind: its name and what it is for, its addresses in a line.
+ *
+ * `recipientProblem` runs before any save (ASCII-strict shape, because one pasted zero-width
+ * space makes Resend refuse the whole send; a case-insensitive repeat; the cap of ten). The
+ * database enforces all three too; this is what lets the manager be told in a sentence.
+ */
+function KindRow({
   artistId,
   kind,
-  primary,
-  open,
-  onToggle,
-  onPatch,
+  onSave,
+  onRenamed,
   onDeleted,
 }: {
   artistId: string
   kind: EnquiryKindRow
-  primary: string | null
-  open: boolean
-  onToggle: () => void
-  onPatch: (next: Partial<EnquiryKindRow>) => void
+  /** The whole new list. Resolves `{ error }` (unsaid: the caller does not toast). */
+  onSave: (next: Addr[]) => Promise<{ error?: string }>
+  onRenamed: (label: string) => void
   onDeleted: () => void
 }) {
-  const buttonId = useId()
-  const cardId = useId()
   const { ask, dialog } = useConfirm()
-  /** One delete at a time (AGENTS.md rule 5: a ref, not state). */
+  /** One delete of the kind at a time (rule 5). */
   const deletingRef = useRef(false)
-  // `other` is the fallback every unrecognised purpose lands on, and the database refuses
-  // to delete it. Not offering the trash is kinder than offering one that always fails.
-  const deletable = kind.slug !== PURPOSE_FALLBACK
+  const addresses = kind.recipients
+  const guide = kindGuide(kind.slug)
+
+  /** The row's +: one more address on THIS kind's list. */
+  function add(email: string) {
+    const problem = recipientProblem(addresses.map((r) => r.email), email)
+    if (problem) return { error: problem }
+    return onSave([...addresses, { email: email.trim(), label: null }])
+  }
+
+  function edit(i: number, email: string) {
+    const problem = recipientProblem(addresses.filter((_, j) => j !== i).map((r) => r.email), email)
+    if (problem) return { error: problem }
+    return onSave(addresses.map((r, j) => (j === i ? { email, label: r.label } : r)))
+  }
+
+  /** No question for an ordinary address; asked only for the kind's LAST one, after which
+   *  this kind of enquiry is stored and reaches nobody. */
+  async function remove(i: number) {
+    const email = addresses[i].email
+    if (addresses.length === 1 && !(await ask(`Remove ${email}? No one else gets ${kind.label} enquiries.`, { action: 'Remove' }))) return
+    const res = await onSave(addresses.filter((_, j) => j !== i))
+    if (res.error) toast(res.error, 'error')
+  }
+
+  async function rename(v: string) {
+    if (!v) return { error: 'Give the kind a name.' }
+    const res = await renameEnquiryKindAction(artistId, kind.id, v)
+    // The server stores the first LABEL_MAX characters.
+    if (!res.error) onRenamed(v.slice(0, LABEL_MAX))
+    return res
+  }
 
   async function del() {
     if (deletingRef.current) return
-    // No undo and no trash can: the same question the card modal asked.
+    // No undo and no trash can.
     if (!(await ask(`Delete “${kind.label}” and everyone on its list?`, { action: 'Delete' }))) return
     deletingRef.current = true
     try {
@@ -142,156 +181,280 @@ function KindItem({
     }
   }
 
-  async function saveList(next: Recipient[]) {
-    const before = kind.recipients
-    onPatch({ recipients: next })
-    const res = await setEnquiryRecipientsAction(
-      artistId,
-      kind.id,
-      next.map((r) => ({ email: r.email, label: r.label })),
-    )
-    if (res.error || !res.rows) {
-      // The save is atomic, so on a refusal the database still holds `before` and putting
-      // it back is TRUE, not cosmetic.
-      onPatch({ recipients: before })
-      toast(res.error ?? 'Could not save the list.', 'error')
-      return
-    }
-    // Server ids and server order replace the optimistic `new-…` ones.
-    onPatch({ recipients: res.rows })
-  }
-
   return (
-    <DisclosureItem
-      buttonId={buttonId}
-      cardId={cardId}
-      open={open}
-      onToggle={onToggle}
-      itemData={{ 'data-kind': kind.slug }}
-      face={
-        <RowFace
-          mark={null}
-          name={kind.label}
-          open={open}
-          // The address this kind would actually reach, then how many more are copied. A
-          // missing address is the only thing that speaks up (red): it is the only thing
-          // the manager has to act on.
-          value={
-            <>
-              <RowValue bad={!primary}>{primary ?? NO_PRIMARY}</RowValue>
-              {kind.recipients.length > 0 ? <span className="flex-none font-space text-[12px] text-ink-faint">{`+${kind.recipients.length}`}</span> : null}
-            </>
-          }
+    <div data-ledger-row="" data-kind={kind.slug} className={LEDGER_ROW_GRID}>
+      <div className="min-w-0">
+        <ClickEdit
+          value={kind.label}
+          label="Kind name"
+          text={NAME_TEXT}
+          maxLength={LABEL_MAX}
+          onSave={rename}
+          onDelete={kind.slug !== PURPOSE_FALLBACK ? () => void del() : undefined}
+          deleteLabel={`Delete ${kind.label}`}
         />
-      }
-    >
-      <DisclosureCard id={cardId} labelledBy={buttonId} noMark>
-        <CardField label="Name" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <CommitField
-            label="Name"
-            value={kind.label}
-            onCommit={async (v) => {
-              const res = await renameEnquiryKindAction(artistId, kind.id, v)
-              // The server stores the first LABEL_MAX characters; show what it stored.
-              if (!res.error) onPatch({ label: v.slice(0, LABEL_MAX) })
-              return res
-            }}
-            className="w-[220px] max-w-full"
+        {guide ? <div className={GUIDE}>{guide}</div> : null}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-4 gap-y-1 min-[900px]:justify-end">
+        {addresses.map((r, i) => (
+          // Keyed by POSITION: a refused edit puts the list back, and the field must survive
+          // that with what was typed still in it.
+          <ClickEdit
+            key={i}
+            value={r.email}
+            title={r.label ?? undefined}
+            label="Email"
+            text={EMAIL_TEXT}
+            email
+            maxLength={254}
+            onSave={(v) => edit(i, v)}
+            onDelete={() => void remove(i)}
+            deleteLabel={`Remove ${r.label || r.email}`}
           />
-          {/* The SLUG: the one thing here that cannot be changed, and the one thing the
-              artist's website has to match. */}
-          <span className={MONO_META}>{kind.slug}</span>
-        </CardField>
-        <CardField label="Receives">
-          <span className={primary ? 'font-space text-[13px] text-ink-muted' : 'font-space text-[13px] text-accent-red'}>{primary ?? NO_PRIMARY}</span>
-        </CardField>
-        <CardField label="Also">
-          <Recipients recipients={kind.recipients} onChange={saveList} />
-        </CardField>
-        {deletable ? (
-          <CardActions>
-            <CardAction icon="trash" label="Delete kind" tone="danger" labelAlign="end" className="ml-auto" onClick={() => void del()} />
-          </CardActions>
-        ) : null}
-      </DisclosureCard>
+        ))}
+        <PlusField
+          label={`Add email to ${kind.label}`}
+          fieldLabel={`New email for ${kind.label}`}
+          placeholder="name@example.com"
+          maxLength={254}
+          email
+          text={cx(EMAIL_TEXT, 'min-w-[16ch] max-w-full [field-sizing:content]')}
+          onAdd={add}
+        />
+      </div>
       {dialog}
-    </DisclosureItem>
+    </div>
   )
 }
 
-type Recipient = EnquiryKindRow['recipients'][number]
-
 /**
- * SEVERAL ADDRESSES PER KIND (Sam, 2026-10-02: "Make sure you can add multiple emails for one
- * slot"): one line per address with its ×, then the shared "+ Add email". Each kind holds up
- * to ten (`enquiry_recipients`, one row per address; RECIPIENT_CAP). The whole list is sent on
- * every change and the server answers with the rows as stored.
+ * TEXT YOU CLICK TO EDIT (Sam, 2026-10-02: "The delete icon appears after I click on it, same
+ * with the edit. I want minimal stuff on the screen"). At rest, the text alone, as a button (so
+ * a keyboard reaches it: focus, Enter). Clicked, it is an underline field in the same type, with
+ * ✓ and, when there is something to delete, a trash.
  *
- * TWO GUARDS the first version lacked (review, 2026-09-22):
- *   - `recipientProblem` runs BEFORE the save: address shape (ASCII-strict, because one pasted
- *     zero-width space makes Resend refuse the whole send), case-insensitive duplicates, and
- *     the cap of ten. The database enforces all three too; this is what lets the manager be
- *     told in a sentence instead of a toast of a constraint name. A refused address stays in
- *     the field (AddRow keeps it on `false`), so it is never wiped unsaved.
- *   - `busyRef` is a re-entry LATCH, a ref, not state (AGENTS.md rule 5): two fast edits both
- *     read pre-render state, and letting the second save start before the first returned let
- *     them interleave and lose an address.
+ *   Enter or ✓      saves the trimmed text, only when it changed; a refusal says why in a toast
+ *                   and KEEPS what was typed in the field
+ *   Escape          puts it back
+ *   a click away    puts it back (focus leaving the field and its glyphs)
  *
- * A line shows the address and, after it, the name it was saved with (older entries carry
- * one; a new address is added bare).
+ * The glyphs keep the field focused on mousedown, so clicking ✓ is a save, not a click away.
  */
-function Recipients({ recipients, onChange }: { recipients: Recipient[]; onChange: (next: Recipient[]) => Promise<void> }) {
-  const busyRef = useRef(false)
+function ClickEdit({
+  value,
+  label,
+  text,
+  email = false,
+  maxLength,
+  title,
+  onSave,
+  onDelete,
+  deleteLabel,
+}: {
+  value: string
+  /** The field's accessible name: "Email", "Kind name". */
+  label: string
+  /** The text's look, at rest and while edited. */
+  text: string
+  email?: boolean
+  maxLength: number
+  title?: string
+  onSave: (next: string) => Promise<{ error?: string }> | { error?: string }
+  onDelete?: () => void
+  deleteLabel?: string
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const savingRef = useRef(false)
+  /** Hand focus back to the text after Enter or Escape (a keyboard user's place). */
+  const refocus = useRef(false)
+  const editing = draft !== null
 
-  /** False when a save is already in flight and this one never started. */
-  function busy() {
-    if (!busyRef.current) return false
-    toast('Still saving — try that again in a moment.', 'error')
-    return true
+  useEffect(() => {
+    if (editing) input.current?.focus()
+    else if (refocus.current) {
+      refocus.current = false
+      button.current?.focus()
+    }
+  }, [editing])
+
+  function close(keyboard: boolean) {
+    refocus.current = keyboard
+    setDraft(null)
   }
 
-  async function send(next: Recipient[]) {
-    if (busy()) return
+  async function save() {
+    if (draft === null || savingRef.current) return
+    const next = draft.trim()
+    if (next === value) return close(true)
+    savingRef.current = true
+    try {
+      const res = await onSave(next)
+      if (res?.error) {
+        toast(res.error, 'error')
+        input.current?.focus()
+        return
+      }
+      close(true)
+    } catch {
+      toast(`Couldn’t save that ${label.toLowerCase()}.`, 'error')
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  if (!editing) {
+    return (
+      <button ref={button} type="button" title={title} onClick={() => setDraft(value)} className={cx('max-w-full cursor-text truncate rounded text-left', text, FOCUS_RING)}>
+        {value}
+      </button>
+    )
+  }
+
+  return (
+    <span
+      className="inline-flex max-w-full items-center gap-1.5"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(false)
+      }}
+    >
+      <LineField
+        ref={input}
+        label={label}
+        value={draft}
+        onChange={(v) => setDraft(v.slice(0, maxLength))}
+        mono={email ? 'value' : undefined}
+        inputMode={email ? 'email' : undefined}
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void save()
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            close(true)
+          }
+        }}
+        // As wide as the text (field-sizing where supported), never wider than the row.
+        className={cx('min-w-[8ch] max-w-full [field-sizing:content]', !email && 'font-medium')}
+      />
+      {/* mousedown would blur the field first, and a blur is "put it back". */}
+      <span className="inline-flex items-center gap-1.5" onMouseDown={(e) => e.preventDefault()}>
+        <RowIcon icon="check" label="Save" variant="bare" tone="accent" glyphSize={14} onClick={() => void save()} />
+        {onDelete ? (
+          <RowIcon
+            icon="trash"
+            label={deleteLabel ?? 'Delete'}
+            variant="bare"
+            tone="danger"
+            glyphSize={14}
+            onClick={() => {
+              close(false)
+              onDelete()
+            }}
+          />
+        ) : null}
+      </span>
+    </span>
+  )
+}
+
+/**
+ * A BARE + THAT OPENS A LINE (Sam: "Dont say add email. Have it be a plus"; no boxes). Clicked,
+ * it becomes an underline field in the type of the text it will add, with bare ✓ and ×, in the
+ * place that text will sit: at the end of the row's addresses.
+ *
+ *   Enter or ✓   adds; a refusal says why in a toast and KEEPS what was typed in the field
+ *   Escape or ×  closes it and adds nothing
+ *
+ * The latch is a ref (AGENTS.md rule 5): Enter and ✓ in one tick must add once.
+ */
+function PlusField({
+  label,
+  fieldLabel,
+  placeholder,
+  maxLength,
+  email = false,
+  text,
+  onAdd,
+}: {
+  /** The +'s name and hover label. */
+  label: string
+  /** The open field's accessible name. */
+  fieldLabel: string
+  placeholder: string
+  maxLength: number
+  email?: boolean
+  /** The field's type and width: the look of what it adds. */
+  text: string
+  onAdd: (value: string) => Promise<{ error?: string }> | { error?: string }
+}) {
+  const [value, setValue] = useState<string | null>(null)
+  const field = useRef<HTMLInputElement>(null)
+  const plus = useRef<HTMLButtonElement>(null)
+  const busyRef = useRef(false)
+  /** Focus goes back to the + after a cancel or an add. */
+  const refocus = useRef(false)
+  const open = value !== null
+
+  useEffect(() => {
+    if (open) field.current?.focus()
+    else if (refocus.current) {
+      refocus.current = false
+      plus.current?.focus()
+    }
+  }, [open])
+
+  function close() {
+    refocus.current = true
+    setValue(null)
+  }
+
+  async function confirm() {
+    const next = (value ?? '').trim()
+    if (!next || busyRef.current) return
     busyRef.current = true
     try {
-      await onChange(next)
+      const res = await onAdd(next)
+      if (res?.error) {
+        toast(res.error, 'error')
+        field.current?.focus()
+        return
+      }
+      close()
     } finally {
       busyRef.current = false
     }
   }
 
-  /** AddRow's onAdd: false keeps the typed address in the field. */
-  function add(email: string): boolean {
-    const problem = recipientProblem(recipients.map((r) => r.email), email)
-    if (problem) {
-      // 'error', always: every toast here is a refusal.
-      toast(problem, 'error')
-      return false
-    }
-    if (busy()) return false
-    void send([...recipients, { id: `new-${crypto.randomUUID()}`, email: email.trim(), label: null }])
-    return true
-  }
+  if (!open) return <RowIcon ref={plus} icon="plus" label={label} variant="bare" glyphSize={16} onClick={() => setValue('')} />
 
   return (
-    // An empty list starts with "+ Add email": pulled up past AddRow's own top padding so it
-    // sits on its ALSO label's line, as an address does (from 700px, where they sit side by
-    // side; on a phone the label is above it).
-    <div className={recipients.length > 0 ? 'min-w-0' : 'min-w-0 min-[700px]:-mt-4'}>
-      {recipients.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {recipients.map((r) => (
-            <li key={r.id} className="flex min-w-0 items-center gap-2.5">
-              <span title={r.email} className="min-w-0 truncate font-space text-[13px] text-ink">
-                {r.email}
-              </span>
-              {r.label ? <span className={MONO_META}>{r.label}</span> : null}
-              <RowIcon icon="close" label={`Remove ${r.label || r.email}`} variant="bare" tone="danger" glyphSize={14} onClick={() => void send(recipients.filter((x) => x.id !== r.id))} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <AddRow noun="email" label="Email address" placeholder="name@example.com" maxLength={254} onAdd={add} />
-    </div>
+    <span className="inline-flex max-w-full items-center gap-2">
+      <input
+        ref={field}
+        aria-label={fieldLabel}
+        value={value}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        inputMode={email ? 'email' : undefined}
+        spellCheck={false}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void confirm()
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            close()
+          }
+        }}
+        className={cx(UNDERLINE, text)}
+      />
+      <RowIcon icon="check" label="Add" variant="bare" tone="accent" glyphSize={16} onClick={() => void confirm()} />
+      <RowIcon icon="close" label="Cancel" variant="bare" tone="danger" glyphSize={16} onClick={close} />
+    </span>
   )
 }

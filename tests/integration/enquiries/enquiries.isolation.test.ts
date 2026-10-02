@@ -37,6 +37,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { expectDeniedByMissingPolicy, expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
+import { kindListsOnlyLive } from '@tests/helpers/routing'
 
 const svc = serviceClient()
 
@@ -147,9 +148,11 @@ describe('enquiries — the anon caller cannot reach the door', () => {
 
   it('anon cannot call the internal resolver or the ledger writer', async () => {
     const anon = anonClient()
+    // The resolver that routes (20261002210000 dropped resolve_booking_recipient, the old
+    // fallback chain, so this is the one that must stay shut).
     expectExecuteDenied(
-      (await anon.rpc('resolve_booking_recipient', { p_artist_id: artistA })).error,
-      'resolve_booking_recipient',
+      (await anon.rpc('resolve_enquiry_recipients', { p_artist_id: artistA, p_purpose: 'booking' })).error,
+      'resolve_enquiry_recipients',
     )
     expectExecuteDenied(
       (
@@ -412,7 +415,12 @@ describe('enquiries — a manager may mark read, and nothing else', () => {
   })
 })
 
-describe('booking_recipient_preview — owner-only', () => {
+// 20261002210000 DROPS this function (Settings › Email no longer reads it: each kind's own list
+// is everyone it goes to). Its denials keep running for as long as it exists; delete this block
+// with the gate once that migration is pushed.
+const PREVIEW_DROPPED = await kindListsOnlyLive(svc)
+
+describe.skipIf(PREVIEW_DROPPED)('booking_recipient_preview — owner-only (until 20261002210000 drops it)', () => {
   // THE WITNESS FOR THE TWO DENIALS BELOW. The owner test used to assert only
   // `Array.isArray(data)`, which is true of `[]` — so a preview that resolved NOTHING for
   // anybody would have passed all three tests, and "a non-owner gets []" would have been a

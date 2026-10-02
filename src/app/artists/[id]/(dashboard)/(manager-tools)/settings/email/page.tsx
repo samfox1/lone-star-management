@@ -6,11 +6,11 @@ import { KindRows } from '../../enquiries/kind-rows'
 export const metadata = { title: 'Email — Settings — Lone Star Management' }
 
 /**
- * SETTINGS → EMAIL (Sam, 2026-09-22). Who receives each kind of enquiry: one row per kind,
- * opening in place onto its card (Batch 3, 2026-10-02; was the modal kit). This lived above
- * the inbox on the Enquiries page for one day;
- * Sam wanted the inbox to have the whole page and the editing to sit with the booking
- * address, which General already holds — so all routing is under Settings, in one place.
+ * SETTINGS → EMAIL (Sam, 2026-09-22). Who receives each kind of enquiry: one ledger row per
+ * kind, its addresses as plain text (2026-10-02). The ONLY place addresses are managed (Sam,
+ * 2026-10-02: "Remove email from General"), and each kind goes only to its own list ("I should
+ * have to add each one individually"). This lived above the inbox on the Enquiries page for one
+ * day; Sam wanted the inbox to have the whole page.
  *
  * No caption: the ledger's section word and the second panel name the tab (no-instruction-copy).
  */
@@ -21,21 +21,16 @@ export default async function EmailSettingsPage({ params }: { params: Promise<{ 
 
   // One query with an embedded child rather than one per kind; RLS scopes both sides to
   // this artist's managers (20260921120000). Ordered as the manager arranged them, and each
-  // list as the resolver addresses it.
-  const [{ data: kindRows }, { data: preview }] = await Promise.all([
-    supabase
-      .from('enquiry_kinds')
-      .select('id, slug, label, sort_order, enquiry_recipients(id, email, label, created_at)')
-      .eq('artist_id', id)
-      .order('sort_order')
-      .order('created_at'),
-    // The live resolved booking recipient — what every kind's list is ADDED to. SECURITY
-    // DEFINER with an internal owner guard; edited under General, shown read-only here.
-    supabase.rpc('booking_recipient_preview', { p_artist_id: id }),
-  ])
+  // list as the resolver addresses it. Each kind's OWN list is everyone it goes to
+  // (20261002210000): no booking address or site contact is added, so none is read here.
+  const { data: kindRows } = await supabase
+    .from('enquiry_kinds')
+    .select('id, slug, label, sort_order, enquiry_recipients(id, email, label, created_at)')
+    .eq('artist_id', id)
+    .order('sort_order')
+    .order('created_at')
   const kinds = toKindRows(kindRows as RawKindRow[] | null)
-  const current = ((preview ?? []) as { to_email: string }[])[0]
 
   // No width of its own: ToolsShell sets one for every tool (Batch 3, 2026-10-02).
-  return <KindRows artistId={id} kinds={kinds} primary={current?.to_email ?? null} />
+  return <KindRows artistId={id} kinds={kinds} />
 }

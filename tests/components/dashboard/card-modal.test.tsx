@@ -13,8 +13,8 @@
  * modal or dialogue or something so the user can confirm before"). It used to be
  * `window.confirm`, which the browser draws in its own voice, cannot be styled, and — in
  * a page that already dims behind a card — reads as if something went wrong. The
- * question is a small dialog over the card, and the ACTION it offers is named: "Delete"
- * against a "Cancel", never the browser's OK.
+ * question is a small dialog over the card: it NAMES the action ("Delete this release?"),
+ * and its answers are "Confirm" against "Cancel" (Sam, 2026-10-02), never the browser's OK.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -64,7 +64,7 @@ describe('CardModal delete', () => {
   it('confirming deletes', async () => {
     const action = vi.fn(async () => {})
     const dialog = ask(action)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     await act(async () => {})
     expect(action).toHaveBeenCalledTimes(1)
   })
@@ -89,7 +89,7 @@ describe('CardModal delete', () => {
     const dialogs = screen.getAllByRole('dialog', { name: /delete this release/i })
     expect(dialogs).toHaveLength(1)
     await act(async () => {
-      fireEvent.click(within(dialogs[0]).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(dialogs[0]).getByRole('button', { name: 'Confirm' }))
     })
     expect(action).toHaveBeenCalledTimes(1)
   })
@@ -100,7 +100,7 @@ describe('CardModal delete', () => {
     const action = vi.fn(async () => ({ error: 'nope' }))
     const dialog = ask(action)
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     expect(action).toHaveBeenCalledTimes(1)
 
@@ -110,7 +110,7 @@ describe('CardModal delete', () => {
     })
     const again = screen.getByRole('dialog', { name: /delete this release/i })
     await act(async () => {
-      fireEvent.click(within(again).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(again).getByRole('button', { name: 'Confirm' }))
     })
     expect(action).toHaveBeenCalledTimes(2)
   })

@@ -151,7 +151,7 @@ const openMenu = (title: string) => {
   return screen.getByRole('menu', { name: 'Fonts' })
 }
 
-const say = async (answer: string) => {
+const say = async (answer: 'Confirm' | 'Cancel') => {
   const dialog = await screen.findByRole('dialog', { name: /Remove/ })
   await act(async () => {
     fireEvent.click(within(dialog).getByRole('button', { name: answer }))
@@ -240,7 +240,7 @@ describe('FontsLedger — built-in and added rows', () => {
     const slot = CUSTOM_FONT_SLOTS[2]
     show(data({ custom: [slotRow(slot, BEBAS, 'Gig posters')] }))
     fireEvent.click(within(rowOf('Gig posters')).getByRole('button', { name: 'Remove' }))
-    await say('Remove')
+    await say('Confirm')
     expect(mClear).toHaveBeenCalledWith('a1', slot)
     expect(refresh).toHaveBeenCalled()
   })
@@ -249,7 +249,7 @@ describe('FontsLedger — built-in and added rows', () => {
     mClear.mockResolvedValueOnce({ error: 'That font row is no longer there.' })
     show(data({ custom: [slotRow(CUSTOM_FONT_SLOTS[0], BEBAS, 'Gig posters')] }))
     fireEvent.click(within(rowOf('Gig posters')).getByRole('button', { name: 'Remove' }))
-    await say('Remove')
+    await say('Confirm')
     expect(mToast).toHaveBeenCalledWith('That font row is no longer there.', 'error')
   })
 })
@@ -430,14 +430,14 @@ describe('FontsLedger — Change font', () => {
     mRemove.mockResolvedValueOnce({ error: 'That font is no longer there.' })
     show()
     fireEvent.click(within(openMenu('Primary')).getByRole('menuitem', { name: 'Remove PP Mori' }))
-    await say('Remove')
+    await say('Confirm')
     expect(mToast).toHaveBeenCalledWith('That font is no longer there.', 'error')
   })
 
   it('a font can be removed from the library, after a question', async () => {
     show()
     fireEvent.click(within(openMenu('Primary')).getByRole('menuitem', { name: 'Remove PP Mori' }))
-    await say('Remove')
+    await say('Confirm')
     expect(mRemove).toHaveBeenCalledWith('a1', 'f1')
     expect(refresh).toHaveBeenCalled()
   })

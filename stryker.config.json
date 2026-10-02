@@ -51,6 +51,8 @@
     "src/lib/manager-tools/seo/profiles/outside.ts",
     "src/lib/manager-tools/seo/profiles/outside-check.ts",
     "src/lib/manager-tools/seo/search-stats.ts",
+    "src/lib/manager-tools/seo/search-model.ts",
+    "src/lib/manager-tools/seo/country-a3.ts",
     "src/lib/manager-tools/seo/test-model.ts",
     "src/lib/manager-tools/seo/pending.ts",
     "src/lib/manager-tools/seo/sections.ts",

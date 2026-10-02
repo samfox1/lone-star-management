@@ -115,7 +115,7 @@ function type(el: HTMLElement, text: string) {
   fireEvent.input(el)
 }
 
-async function answer(action: 'Remove' | 'Cancel', question: RegExp) {
+async function answer(action: 'Confirm' | 'Cancel', question: RegExp) {
   const q = await screen.findByRole('dialog', { name: question })
   await act(async () => {
     fireEvent.click(within(q).getByRole('button', { name: action }))
@@ -185,7 +185,7 @@ describe('added rows', () => {
     expect(deleteLogoAction).not.toHaveBeenCalled()
 
     fireEvent.click(within(row('Tour logo')).getByRole('button', { name: 'Remove' }))
-    await answer('Remove', /Remove “Tour logo”/)
+    await answer('Confirm', /Remove “Tour logo”/)
     expect(deleteLogoAction).toHaveBeenCalledTimes(1)
     expect(deleteLogoAction).toHaveBeenCalledWith('a1', 'l1')
     expect(h.refresh).toHaveBeenCalled()
@@ -195,7 +195,7 @@ describe('added rows', () => {
     vi.mocked(deleteLogoAction).mockResolvedValueOnce({ error: 'That logo is no longer there.' })
     mount()
     fireEvent.click(within(row('Tour logo')).getByRole('button', { name: 'Remove' }))
-    await answer('Remove', /Remove “Tour logo”/)
+    await answer('Confirm', /Remove “Tour logo”/)
     expect(toast).toHaveBeenCalledWith('That logo is no longer there.', 'error')
     expect(h.refresh).not.toHaveBeenCalled()
   })
@@ -341,7 +341,7 @@ describe('removing a logo takes the icons made from it', () => {
     fireEvent.click(within(row(title)).getByRole('button', { name: 'Edit' }))
     const editor = screen.getByRole('dialog', { name: title })
     fireEvent.click(within(editor).getByRole('button', { name: 'Remove' }))
-    await answer('Remove', question)
+    await answer('Confirm', question)
   }
 
   it('CRITICAL: the primary also clears every icon made from it, and says so first', async () => {
@@ -400,7 +400,7 @@ describe('removing a logo takes the icons made from it', () => {
     // tab icon was cut from left that PNG live, framed from a file that no longer exists.
     mount({}, iconsFrom('l1', null))
     fireEvent.click(within(row('Tour logo')).getByRole('button', { name: 'Remove' }))
-    await answer('Remove', /^Remove “Tour logo”\? The tab icon is made from it and goes too\.$/)
+    await answer('Confirm', /^Remove “Tour logo”\? The tab icon is made from it and goes too\.$/)
     expect(deleteLogoAction).toHaveBeenCalledWith('a1', 'l1')
     expect(setBrandAssetAction).toHaveBeenCalledTimes(1)
     expect(setBrandAssetAction).toHaveBeenCalledWith('a1', 'favicon', null)
@@ -419,7 +419,7 @@ describe('removing a logo takes the icons made from it', () => {
     vi.mocked(deleteLogoAction).mockResolvedValueOnce({ error: 'That logo is no longer there.' })
     mount({}, iconsFrom('l1', 'l1'))
     fireEvent.click(within(row('Tour logo')).getByRole('button', { name: 'Remove' }))
-    await answer('Remove', /The tab and home-screen icons are made from it/)
+    await answer('Confirm', /The tab and home-screen icons are made from it/)
     expect(toast).toHaveBeenCalledWith('That logo is no longer there.', 'error')
     expect(setBrandAssetAction).not.toHaveBeenCalled()
   })

@@ -57,7 +57,7 @@ describe('BrandRiser', () => {
   async function revert() {
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
     const confirm = await screen.findByRole('dialog', { name: /^Revert/ })
-    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Revert' })))
+    await act(async () => fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' })))
   }
 
   it('CRITICAL: Revert is wired — it reverts THIS artist\'s brand, then refreshes', async () => {

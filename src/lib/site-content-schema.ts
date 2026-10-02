@@ -48,13 +48,11 @@ export const TEMPLATE_FIELDS: Record<string, SiteContentField[]> = {
     { key: 'merch_heading', label: 'Merch heading', type: 'text', default: 'Merch' },
     { key: 'links_heading', label: 'Links heading', type: 'text', default: 'Links' },
     { key: 'community_heading', label: 'Email signup heading', type: 'text', default: 'Stay in touch' },
-    // Where contact-form enquiries are delivered. `cinematic` has had this since it
-    // renders a mailto: block; `classic` needs it too now that the /contact Edge
-    // Function resolves the recipient from it (rung 3 of resolve_booking_recipient).
-    // Custom sites carry the same thing as a links row with role='booking' instead.
-    // NOTE: this takes effect on enquiries IMMEDIATELY, without a publish — routing is
-    // operational config, so correcting a dead address must not require shipping every
-    // other in-progress edit alongside it.
+    // The site's PUBLIC booking contact: `cinematic` renders it as a mailto: block, and the
+    // EPK falls back to it (lib/epk.ts). Custom sites carry the same thing as a links row
+    // with role='booking' instead. It was also rung 3 of enquiry routing until
+    // 20261002210000; since then each enquiry kind goes only to its own recipient list
+    // (Settings › Email), and this field routes nothing.
     { key: 'booking_email', label: 'Booking email', type: 'email', default: '' },
   ],
 }

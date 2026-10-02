@@ -205,7 +205,7 @@ describe('EnquiryTable — deleting an enquiry', () => {
     render(<EnquiryTable rows={[row({ id: 'x' })]} />)
     const dialog = await openAndAskToDelete()
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     expect(del).toHaveBeenCalledWith('a1', 'x')
     expect(screen.queryByText('Jamie Rowe')).toBeNull()
@@ -226,7 +226,7 @@ describe('EnquiryTable — deleting an enquiry', () => {
     render(<EnquiryTable rows={[row({ id: 'x' })]} />)
     const dialog = await openAndAskToDelete()
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     expect(del).toHaveBeenCalledWith('a1', 'x')
     expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()

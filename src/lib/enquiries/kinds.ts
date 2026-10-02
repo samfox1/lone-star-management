@@ -175,3 +175,23 @@ export function recipientProblem(existing: readonly string[], candidate: string)
   if (existing.length >= RECIPIENT_CAP) return `A list holds at most ${RECIPIENT_CAP} people.`
   return null
 }
+
+/**
+ * What each kind is FOR, as the grey line under its name on Settings › Email (Sam, 2026-10-02:
+ * "It should say for x, y and z … not just booking, thats useless description").
+ *
+ * Only the three kinds every artist is seeded with have one. No site's contact form describes
+ * its kinds (Skeen's offers the bare words Booking / Demo / Other), and `enquiry_kinds` has no
+ * description column, so a kind the artist invented shows NO line: nothing is better than
+ * filler. Keyed by SLUG, which never changes, so a renamed Booking keeps its line.
+ */
+const KIND_GUIDES: Readonly<Record<string, string>> = {
+  booking: 'For shows, festivals and private events',
+  demo: 'For music and demo submissions',
+  [PURPOSE_FALLBACK]: 'For everything else',
+}
+
+/** The guide line for a kind, or null when there is nothing worth saying. */
+export function kindGuide(slug: string): string | null {
+  return Object.hasOwn(KIND_GUIDES, slug) ? KIND_GUIDES[slug] : null
+}

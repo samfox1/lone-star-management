@@ -121,7 +121,8 @@ describe('ReleaseCard tracklist merge', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
     fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 'x8' } })
     fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
-    return screen.findByRole('dialog', { name: /Merge/ })
+    // The QUESTION names the action; the answer itself is just "Confirm" (Sam, 2026-10-02).
+    return screen.findByRole('dialog', { name: /^Merge “Beta” into “/ })
   }
 
   it('confirm accepted → calls mergeSongsAction with (artistId, keepId, dropId) — the row song is the one dropped', async () => {
@@ -129,7 +130,7 @@ describe('ReleaseCard tracklist merge', () => {
     const ask = await askToMerge()
     // The question NAMES both songs, so the manager can see which one disappears.
     expect(ask).toHaveTextContent(/“Beta” will be deleted/)
-    fireEvent.click(within(ask).getByRole('button', { name: 'Merge' }))
+    fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => expect(mergeSongsAction).toHaveBeenCalledTimes(1))
     expect(mergeSongsAction).toHaveBeenCalledWith('a1', 'x8', 's2')

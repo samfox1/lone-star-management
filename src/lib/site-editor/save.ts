@@ -33,11 +33,11 @@ import { isTooLong, textLimit, tooLongError, TEXT_LIMITS } from '@/lib/site-edit
  * A custom field key is client-supplied text that becomes a site_content key, and a few
  * of those keys are read by features OTHER than the site's own render path — regardless
  * of the artist's template. Left open, a manifest field named `booking_email` would let
- * the Text panel silently re-route the artist's enquiries to any address.
+ * the Text panel silently change the contact address the artist's press kit shows.
  *
- *  • booking_email — rung 3 of `resolve_booking_recipient` (20260722130000) and the EPK
- *    contact fallback (lib/epk.ts) read it for ANY artist. It takes effect without a
- *    publish, so a bad write is live immediately.
+ *  • booking_email — the EPK contact fallback (lib/epk.ts) reads it for ANY artist, without
+ *    a publish, so a bad write is live immediately. (Until 20261002210000 it also routed
+ *    enquiries, as rung 3; each kind now goes only to its own recipient list.)
  *  • the SEO keys — lib/seo.ts reads them for every artist's <head>.
  *
  * Every OTHER template key is left available. Those are read only through
