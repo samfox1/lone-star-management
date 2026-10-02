@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/icons'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { EYEBROW } from './inspector-shared'
+import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
 
 /**
  * The inspector's ON-SITE PLACEMENT family — the pieces every collection panel (Images,
@@ -190,8 +191,8 @@ export function CoverEditMenu({
 
 /** The hover "Edit" corner button a selectable tile floats over its thumbnail — opens
  *  the tile's edit affordance (a CoverEditMenu, or the full-panel item editor). One
- *  component so the treatment can't drift per panel. Appears on `group/slot` hover,
- *  which `SelectableTile` provides. */
+ *  component so the treatment can't drift per panel. Appears while the tile is hovered
+ *  (`SelectableTile` is its EDIT_TARGET), on keyboard focus, and always on a touch screen. */
 export function TileEditButton({ label, title, onClick }: { label: string; title?: string; onClick: () => void }) {
   return (
     <button
@@ -199,7 +200,7 @@ export function TileEditButton({ label, title, onClick }: { label: string; title
       aria-label={label}
       title={title}
       onClick={onClick}
-      className="absolute right-1.5 top-1.5 rounded-lg bg-black/60 p-2 text-white/90 opacity-0 transition-opacity hover:bg-black/75 hover:text-white group-hover/slot:opacity-100"
+      className={cx('absolute right-1.5 top-1.5 rounded-lg bg-black/60 p-2 text-white/90 transition-opacity hover:bg-black/75 hover:text-white', REVEAL_ON_HOVER)}
     >
       <Icon name="edit" size={16} />
     </button>
@@ -261,7 +262,8 @@ export function SelectableTile({
       ref={scrollRef}
       title={title}
       className={cx(
-        'group/slot relative overflow-hidden border transition-shadow',
+        EDIT_TARGET,
+        'relative overflow-hidden border transition-shadow',
         rounded,
         focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
       )}

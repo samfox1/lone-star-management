@@ -58,10 +58,10 @@ describe('a place missing a part fails', () => {
     expectPlainWords(r)
   })
 
-  // When Tapir has no region or country either, the advice is to add them on the Facts tab.
+  // When Tapir has no region or country either, the advice is to add them on Profile.
   it('advises adding the region and country when Tapir has neither', () => {
     const r = p(withPlace({ '@type': 'Place', name: 'Chicago' }, 'MusicGroup', { known: known({}, { region: null, country: null, countryCode: null }) }))
-    expect(r.todo).toMatch(/^Add the state or region and the country on the Facts tab/)
+    expect(r.todo).toMatch(/^Add the state or region and the country on Profile/)
     expect(rowOf(r, 'in Tapir: place')).toBe('city Chicago, IL · region not set · country not set')
   })
 

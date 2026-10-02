@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { placeLabel, type LabelAlign } from './label-placement'
-import { FOCUS_RING_OFFSET } from './styles'
+import { FOCUS_RING_OFFSET, REVEAL_ON_HOVER } from './styles'
 
 /**
  * ICONS, NOT WORDS (Sam, 2026-09-23, BRAND_PAGE_PLAN.md). Every Brand row action is a
@@ -22,7 +22,8 @@ import { FOCUS_RING_OFFSET } from './styles'
  * server component can still render the `href` form (the brand-kit download).
  */
 export type RowIconVariant =
-  /** A row action: 40% until its LedgerRow is hovered (or it is focused). */
+  /** A row action: 40% until its LedgerRow is hovered (or it is focused). A pencil: hidden
+   *  until then (`reveal`). */
   | 'faint'
   /** The empty state's one action (+): full ink, and a blue focus ring, because focus
    *  lands here after the note (Enter) and the manager must see where it went. */
@@ -52,6 +53,10 @@ export type RowIconProps = {
   tone?: 'default' | 'accent' | 'danger' | 'link'
   /** The glyph's size in px. Default: 20, or the boxed size's own. */
   glyphSize?: number
+  /** Hidden until the pointer is on the thing it edits (its `EDIT_TARGET`, styles.ts), or on
+   *  it; shown on keyboard focus and on a touch screen. Default: on for every `edit` pencil
+   *  (Sam, 2026-10-02: "it should only show when needed"), off for every other glyph. */
+  reveal?: boolean
   /** A real link instead of a button (the brand-kit download). */
   href?: string
   /** How `href` opens: `app`, a page of this app (next/link); `external`, another site in a
@@ -77,7 +82,9 @@ const TONE: Record<NonNullable<RowIconProps['tone']>, string> = {
 const VARIANT: Record<RowIconVariant, string> = {
   // The row is `group/ledger` (ledger.tsx). Its own hover and keyboard focus light it too,
   // so it is never a control that only a mouse over the row can find.
-  faint: 'rounded-lg p-1.5 text-ink-muted opacity-40 hover:bg-surface-hover hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
+  // Its rest opacity is RowIcon's: 40%, or 0 for a pencil (`reveal`). cx joins, it doesn't
+  // resolve a clash, so the two never sit in one class list.
+  faint: 'rounded-lg p-1.5 text-ink-muted hover:bg-surface-hover hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
   primary: 'rounded-lg p-1.5 text-ink hover:bg-surface-hover',
   boxed: 'rounded-xl border border-hairline text-ink-muted hover:bg-surface-hover',
   bare: '',
@@ -85,7 +92,7 @@ const VARIANT: Record<RowIconVariant, string> = {
 
 /** The bare glyph, whole: its own transition and disabled look, none of the boxed base's
  *  centring or padding (test-row.tsx's and the Profiles cards' glyphs, as they were drawn). */
-const BARE = cx('relative inline-flex rounded text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
+const BARE = cx('relative inline-flex rounded text-ink transition-[opacity,color] hover:text-accent disabled:cursor-default disabled:opacity-40 disabled:hover:text-ink', FOCUS_RING_OFFSET)
 
 const BOX: Record<NonNullable<RowIconProps['size']>, { cls: string; glyph: number }> = {
   md: { cls: 'h-11 w-11', glyph: 22 },
@@ -251,6 +258,7 @@ export function RowIcon({
   size = 'md',
   tone,
   glyphSize,
+  reveal = icon === 'edit',
   href,
   link,
   download,
@@ -263,12 +271,14 @@ export function RowIcon({
   const toned = tone ?? (icon === 'plus' ? 'accent' : 'default')
   const cls =
     variant === 'bare'
-      ? cx(BARE, toned === 'accent' && TONE.accent, className)
+      ? cx(BARE, toned === 'accent' && TONE.accent, reveal && REVEAL_ON_HOVER, className)
       : cx(
           'relative inline-flex flex-none items-center justify-center transition-[opacity,color,background-color] duration-150',
           // The shared keyboard ring (focus-ring.ts), which says why it needs its own `outline-solid`.
           FOCUS_RING_OFFSET,
           VARIANT[variant],
+          variant === 'faint' && !reveal && 'opacity-40',
+          reveal && REVEAL_ON_HOVER,
           box?.cls,
           TONE[toned],
           'disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-muted',

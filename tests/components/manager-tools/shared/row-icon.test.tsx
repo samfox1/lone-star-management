@@ -15,6 +15,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { RowIcon, type RowIconVariant } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/row-icon'
+import { LedgerRow } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/ledger'
+import { CardActions, CardField, SentenceAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/_ui/disclosure'
+import { KvField } from '@/app/artists/[id]/(dashboard)/modal-kit'
 import { Icon } from '@/components/ui/icons'
 
 afterEach(cleanup)
@@ -186,6 +189,59 @@ describe('every + turns blue on hover and keyboard focus (Sam, 2026-09-23, said 
     }
     // The scan found the +s it is guarding (logos, colors, fonts, icons, the editors).
     expect(plusSites).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe('an edit pencil shows only when needed (Sam, 2026-10-02)', () => {
+  // "It should only show when needed, when the user hovers over what they want to edit."
+  // Once, in RowIcon: an `edit` glyph is hidden (opacity, so nothing moves) until its target
+  // (`group/edit`) is hovered, and shows on keyboard focus and on a touch screen.
+  const VARIANTS: Record<RowIconVariant, true> = { faint: true, primary: true, boxed: true, bare: true }
+  const REVEALS = ['group-hover/edit:opacity-100', 'focus-visible:opacity-100', 'group-has-[:focus-visible]/edit:opacity-100', '[@media(hover:none)]:opacity-100']
+
+  it('CRITICAL: a pencil in EVERY variant is hidden at rest and revealed by its target, with no prop given', () => {
+    for (const variant of Object.keys(VARIANTS) as RowIconVariant[]) {
+      render(<RowIcon icon="edit" label="Edit" variant={variant} />)
+      const cls = screen.getByRole('button', { name: 'Edit' }).className.split(/\s+/)
+      expect(cls, variant).toContain('opacity-0')
+      // The faint 40% would fight the 0 (cx joins, it doesn't resolve).
+      expect(cls, variant).not.toContain('opacity-40')
+      for (const r of REVEALS) expect(cls, `${variant}: ${r}`).toContain(r)
+      cleanup()
+    }
+  })
+
+  it('other glyphs are not hidden: the faint trash stays at 40%', () => {
+    render(<RowIcon icon="trash" label="Remove" />)
+    const cls = screen.getByRole('button', { name: 'Remove' }).className.split(/\s+/)
+    expect(cls).toContain('opacity-40')
+    expect(cls).not.toContain('opacity-0')
+  })
+
+  it('CRITICAL: the shared rows are the target their pencil listens to', () => {
+    render(
+      <>
+        <LedgerRow title="Bio">
+          <RowIcon icon="edit" label="Edit the bio" />
+        </LedgerRow>
+        <KvField label="Venue" value="The Echo" onSave={() => undefined} />
+        <div>
+          <CardField label="Profile">
+            <SentenceAction icon="edit" label="Edit on Spotify" href="https://artists.spotify.com/" link="external" />
+          </CardField>
+          <CardActions>
+            <RowIcon icon="edit" label="Edit on X" variant="bare" />
+          </CardActions>
+        </div>
+      </>,
+    )
+    const target = (el: Element) => el.parentElement?.closest('[class~="group/edit"]') ?? null
+    for (const name of ['Edit the bio', 'Edit on X']) expect(target(screen.getByRole('button', { name })), name).not.toBeNull()
+    expect(target(screen.getByRole('link', { name: 'Edit on Spotify' }))).not.toBeNull()
+    // The modal row's pencil is a mark beside the value, not a control: the row is its target.
+    const row = screen.getByRole('button', { name: /The Echo/ }).closest('[class~="group/edit"]')!
+    const pencil = row.querySelector('svg')!
+    expect(pencil.getAttribute('class')!.split(/\s+/)).toEqual(expect.arrayContaining(['opacity-0', ...REVEALS]))
   })
 })
 

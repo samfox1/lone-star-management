@@ -5,6 +5,7 @@ import { type EditorMerch } from '../inspector-types'
 import type { SelectTarget } from '@samfox1/site-bridge/protocol'
 import { AddLink } from '../inspector-grid'
 import { onSiteOnly } from '../inspector-shared'
+import { EDIT_TARGET, REVEAL_ON_HOVER } from '../../(manager-tools)/_ui/styles'
 
 /* ── Merch tools: a cover grid like Music, one card per product (Sam, 2026-08-18).
  * The card face SELECTS (outlines the product on the site); the pencil opens the
@@ -45,6 +46,7 @@ export function MerchTools({
               key={m.id}
               {...dragProps(m.id)}
               className={cx(
+                EDIT_TARGET,
                 'relative overflow-hidden rounded-lg border',
                 focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
                 isOver(m.id) && 'ring-2 ring-accent',
@@ -79,12 +81,16 @@ export function MerchTools({
                 </div>
               </button>
               {/* The Edit pencil is a SIBLING overlaid on the card (no button-in-button),
-                  the same layering as the Music cards' on-site toggle. */}
+                  the same layering as the Music cards' on-site toggle. Shown while the card
+                  is hovered (the card is its EDIT_TARGET, _ui/styles.ts). */}
               <button
                 type="button"
                 aria-label={`Edit ${m.title || 'product'}`}
                 onClick={() => onEdit(m)}
-                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-ink shadow-sm hover:bg-accent hover:text-white"
+                className={cx(
+                  'absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-ink shadow-sm transition-opacity hover:bg-accent hover:text-white',
+                  REVEAL_ON_HOVER,
+                )}
               >
                 <Icon name="edit" size={11} />
               </button>

@@ -85,6 +85,8 @@ function world(o: {
       refused = true
       return { error: { message: 'refused' } }
     }
+    // No OTHER row names a removed file (storage-gc.ts stillNamed, 2026-10-02).
+    if (c.op === 'select' && c.table === 'media' && filterValue(c, 'storage_path') !== undefined) return { data: null, count: 0 }
     if (c.op === 'select' && c.table === 'media') return { data: o.media ?? [], count: (o.media ?? []).length }
     if (c.op === 'select' && c.table === 'artist_fonts_with_slots') return { data: db.fonts, count: db.fonts.length }
     if (c.op === 'select' && c.table === 'artist_font_slots') return { data: db.slots.map((s) => ({ ...s })) }

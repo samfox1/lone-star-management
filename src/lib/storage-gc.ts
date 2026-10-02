@@ -51,7 +51,10 @@ async function gcDeletedObject(
   entityType: 'video' | 'media' | 'track',
   bucket: 'videos' | 'media' | 'audio',
   entityId: string,
-  ...paths: (string | null | undefined)[]
+  paths: readonly (string | null | undefined)[],
+  /** Asked of each path once the entity is known never-published: may it go? Media asks
+   *  whether another row still names the file (`stillNamed`). Default: yes. */
+  free: (path: string) => Promise<boolean> = async () => true,
 ): Promise<void> {
   const targets = paths.filter((p): p is string => !!p)
   if (!targets.length) return
@@ -63,8 +66,10 @@ async function gcDeletedObject(
       .eq('entity_id', entityId)
     // A failed count is "unknown", not "never published". Reading it as zero deleted a
     // published file the live site was still serving whenever the count request failed.
-    if (error) return
-    if (!count) await client.storage.from(bucket).remove(targets)
+    if (error || count) return
+    const go: string[] = []
+    for (const p of targets) if (await free(p)) go.push(p)
+    if (go.length) await client.storage.from(bucket).remove(go)
   } catch {
     // best-effort; the next publish's bucket-wide GC is the backstop
   }
@@ -82,7 +87,7 @@ export async function gcDeletedVideoObject(
   videoId: string,
   storagePath: string | null,
 ): Promise<void> {
-  await gcDeletedObject(client, 'video', 'videos', videoId, storagePath)
+  await gcDeletedObject(client, 'video', 'videos', videoId, [storagePath])
 }
 
 /**
@@ -103,7 +108,33 @@ export async function gcDeletedMediaObject(
    *  publish-time sweep. */
   sourcePath?: string | null,
 ): Promise<void> {
-  await gcDeletedObject(client, 'media', 'media', mediaId, storagePath, sourcePath)
+  // `=== false`: an unknown answer (a failed read) keeps the file.
+  await gcDeletedObject(client, 'media', 'media', mediaId, [storagePath, sourcePath], async (p) => (await stillNamed(client, p)) === false)
+}
+
+/**
+ * Does any OTHER media row name this file, or any media snapshot? ONE FILE CAN HAVE TWO ROWS: a
+ * profile photo picked from Images names the library photo's own file (lib/profile-photo.ts,
+ * 2026-10-02), so "this row was never published" no longer means "nothing needs the file".
+ * Deleting the library photo must leave the profile photo its file, and deleting a draft profile
+ * row must leave a published one (the live site may be serving it) its file.
+ *
+ * Called AFTER the row's delete, so a row still naming the path is another row. Any snapshot
+ * counts, not only the latest: being wrong here loses a file, being cautious leaves one for the
+ * publish-time sweep (gcMediaObjects), which knows exactly what is live. Undefined when either
+ * read failed: a failed count is "unknown", and unknown keeps the file.
+ */
+async function stillNamed(client: SupabaseClient, path: string): Promise<boolean | undefined> {
+  try {
+    const [rows, snaps] = await Promise.all([
+      client.from('media').select('id', { count: 'exact', head: true }).eq('storage_path', path),
+      client.from('revisions').select('id', { count: 'exact', head: true }).eq('entity_type', 'media').eq('data->>storage_path', path),
+    ])
+    if (rows.error || snaps.error || rows.count == null || snaps.count == null) return undefined
+    return rows.count > 0 || snaps.count > 0
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -123,7 +154,7 @@ export async function gcDeletedAudioObject(
   trackId: string,
   audioPath: string | null,
 ): Promise<void> {
-  await gcDeletedObject(client, 'track', 'audio', trackId, audioPath)
+  await gcDeletedObject(client, 'track', 'audio', trackId, [audioPath])
 }
 
 /** Every folder the `media` bucket stores an artist's objects under — one per

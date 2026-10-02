@@ -1,9 +1,9 @@
 /**
- * How the Facts tab reads the stored facts back: the page says exactly what the live site's fact
+ * How Profile (the SEO / GEO Facts tab until 2026-10-02) reads the stored facts back: the page says exactly what the live site's fact
  * card states, and flags any stored value the save gate would refuse today.
  *
  * Code:     src/lib/seo-facts.ts (readFacts, factErrors)
- * Feature:  SEO / GEO page · Facts tab; the facts the `place`, `genre` and `card` tests check
+ * Feature:  Profile (was SEO / GEO › Facts); the facts the `place`, `genre` and `card` tests check
  * Tier:     STRICT (AGENTS.md "Test depth"): the page must never say a fact is on the card when
  *           the site would drop it.
  * Covers:   • readFacts: the city, region, country (with its code), other names and the year;
@@ -13,8 +13,8 @@
  *           • factErrors: none for clean facts; each bad value named by its field; an artist with
  *             no name yet; a name taken after a rename; a region judged against the stored
  *             country; a city over its cap
- * Not here: the save rules themselves (save-rules.test.ts); drawing the tab
- *           (tests/components/manager-tools/seo/facts-tab.test.tsx).
+ * Not here: the save rules themselves (save-rules.test.ts); drawing the page
+ *           (tests/components/manager-tools/profile/profile-view.test.tsx).
  * Fixtures: made-up stored facts and artist rows; the combination test builds a public-site
  *           payload for each (tests/helpers/site-data.ts) and asks the real bridge
  *           (`jsonLdGraph`) what it states.

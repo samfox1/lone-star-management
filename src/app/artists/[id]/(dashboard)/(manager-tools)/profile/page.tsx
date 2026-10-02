@@ -1,76 +1,45 @@
-import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
-import { connectionHandle, connectionOfLink, identityUrlOf, isProfileLink, type LinkRowLike } from '@/lib/connections'
-import { listContent } from '@/lib/content'
-import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
+import { Suspense } from 'react'
 import { BIO_MIN_WORDS } from '@/lib/seo-tests/who'
-import { loadSeoBase } from '../load'
-import { FactsTab, type FactsTabProps, type ProfileLink } from './facts-tab'
+import { SitePendingBar } from '../_ui/site-pending'
+import { loadProfile } from './load'
+import { PhotoRow } from './photo-row'
+import { ProfileView } from './profile-view'
 
-const DATABASES = ['musicbrainz', 'discogs', 'wikidata'] as const
+export const metadata = { title: 'Profile — Lone Star Management' }
 
 /**
- * FACTS: what the artist IS (round 2 mock: Who · Where · About · Profiles). The id `bio` is
- * where a test's pencil lands and where the old /about route redirects: facts-tab.tsx keeps
- * it on the bio row, and landing on it opens the bio editor.
+ * PROFILE (Sam, 2026-10-02, PROFILE_TOOL_PLAN.md): who the artist is, on one page in Brand's
+ * ledger, with the rising Publish bar and no tabs. It took the SEO / GEO Facts tab (whose old
+ * address, /tools/seo/facts, redirects here) and the name from Settings › General.
  *
- * Every read is RLS-scoped and flies beside the ownership gate (loadSeoBase).
+ * The id `bio` is where a test's pencil lands and where the old /tools/seo/about route redirects:
+ * bio-row.tsx keeps it on the Bio row, and landing on it opens the bio window.
+ *
+ * The bar is the SEO / GEO tabs' own (_ui/site-pending.tsx): Publish ships the profile, the
+ * site's words and the site's photos, which is everything this page writes.
  */
-export default async function SeoFactsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const base = await loadSeoBase(id)
-  const [links, mail] = await Promise.all([
-    listContent(base.supabase, 'link', id),
-    // Managers may READ their mail settings (Settings reads it the same way).
-    base.supabase.from('artist_mail_settings').select('booking_email').eq('artist_id', id).maybeSingle(),
-  ])
-  const rows: LinkRowLike[] = links.map((l) => ({
-    id: l.id,
-    label: (l.label as string | null) ?? null,
-    url: (l.url as string | null) ?? null,
-    on_site: (l.on_site as boolean | null) ?? null,
-    role: (l.role as string | null) ?? null,
-  }))
-
-  // Connected profiles (one per platform), and the fact databases apart: they have rows of
-  // their own. "In your fact card" is the fact card's own rule (identityUrlOf): a real artist
-  // profile, never a payment handle or a playlist.
-  const profiles: ProfileLink[] = []
-  const databases: FactsTabProps['databases'] = {}
-  for (const r of rows) {
-    const def = connectionOfLink(r)
-    if (!def || !r.url) continue
-    const db = DATABASES.find((d) => d === def.key)
-    if (db) {
-      databases[db] ??= connectionHandle(def, r.url)
-      continue
-    }
-    if (profiles.some((p) => p.slug === def.key)) continue
-    profiles.push({ slug: def.social ?? def.key, label: def.label, display: connectionHandle(def, r.url), inFactCard: !!identityUrlOf(r) })
-  }
-
-  const facts = Object.fromEntries(Object.values(FACT_CONTENT_KEYS).map((k) => [k, base.content[k] ?? '']))
+  const p = await loadProfile(id)
   return (
-    <FactsTab
-      artistId={id}
-      artistName={base.artist.name}
-      schemaType={base.schemaType}
-      genre={base.genre ?? ''}
-      city={base.location ?? ''}
-      facts={facts}
-      bio={base.bio}
-      bioMinWords={BIO_MIN_WORDS}
-      about={{ placement: base.seo.about_placement ?? '', heading: base.seo.about_heading ?? '' }}
-      bookingEmail={((mail.data?.booking_email as string | null) ?? '').trim()}
-      profiles={profiles}
-      databases={databases}
-      musicBrainzCreate={musicBrainzCreateUrl({
-        name: base.artist.name,
-        // Only "Visual artist" says person; "Musician" says nothing about person vs group.
-        type: base.schemaType === 'Person' ? 'person' : null,
-        area: base.location,
-        homepage: base.siteUrl,
-        links: rows.filter(isProfileLink),
-      })}
-    />
+    <div className="max-w-[1180px] pb-28">
+      <ProfileView
+        artistId={id}
+        artistName={p.artist.name as string}
+        schemaType={p.schemaType}
+        genre={p.genre}
+        city={p.city}
+        facts={p.facts}
+        bio={p.bio}
+        bioMinWords={BIO_MIN_WORDS}
+        about={p.about}
+        bioNudge={p.bioNudge}
+        photo={<PhotoRow artistId={id} />}
+      />
+      {/* Its own boundary, so the pending check never holds up the page above it. */}
+      <Suspense fallback={null}>
+        <SitePendingBar artistId={id} />
+      </Suspense>
+    </div>
   )
 }

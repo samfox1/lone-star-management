@@ -1,17 +1,19 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { publishEntityAction, publishSiteWithPasswordAction } from '../../../actions'
-import { PublishRiser } from '../../_ui/publish-riser'
+import { publishEntityAction, publishSiteWithPasswordAction } from '../../actions'
+import { PublishRiser } from './publish-riser'
 
 /**
- * THE SEO / GEO PUBLISH BAR: the rising bar Brand uses (Sam's round 2 mock), on every SEO tab.
- * It ships what these tabs change: the site's words, the profile and the site's photos
- * (`publishSiteWithPasswordAction`, as the old floating bar did), and the artist's links when a
- * test's fix changed one (the Apple Music store fix is a DRAFT until published). One password,
- * each part only when it is waiting.
+ * THE SITE PUBLISH BAR: the rising bar Brand uses (Sam's round 2 mock), on every SEO / GEO tab and
+ * on Profile (site-pending.tsx renders it). It ships what those pages change: the site's words,
+ * the profile and the site's photos (`publishSiteWithPasswordAction`, as the old floating bar did),
+ * and the artist's links when an SEO test's fix changed one (the Apple Music store fix is a DRAFT
+ * until published). One password, each part only when it is waiting.
+ *
+ * Was tools/seo/seo-riser.tsx (`SeoRiser`) until Profile shared it (2026-10-02).
  */
-export function SeoRiser({ artistId, site, links, message }: { artistId: string; site: boolean; links: boolean; message: string }) {
+export function SiteRiser({ artistId, site, links, message }: { artistId: string; site: boolean; links: boolean; message: string }) {
   const router = useRouter()
   return (
     <PublishRiser

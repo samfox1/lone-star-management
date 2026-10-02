@@ -62,7 +62,7 @@ describe('a genre on your own node passes', () => {
 })
 
 describe('a missing or wrong genre fails', () => {
-  // No genre while Tapir has one: the advice is "publish", pointing to the Facts tab.
+  // No genre while Tapir has one: the advice is "publish", pointing to Profile.
   it('fails with no genre, advising publish when Tapir has one', () => {
     const r = g(withArtist({ genre: undefined }))
     expect(r.status).toBe('fail')

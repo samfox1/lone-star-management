@@ -1,29 +1,32 @@
 // @vitest-environment jsdom
 /**
- * The SEO / GEO Facts tab: each fact saves through its own gate, a value the gate would refuse
- * shows the gate's own words and is never sent, and the bio keeps its rules.
+ * The Profile page: each row saves through its own gate, a value the gate would refuse shows the
+ * gate's own words and is never sent, the bio keeps its rules, and the nudge under it leads to
+ * the outside bios. Moved here with the SEO / GEO Facts tab (2026-10-02, PROFILE_TOOL_PLAN.md).
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/facts/facts-tab.tsx
- * Feature:  SEO / GEO page · Facts tab (round 2, prototypes/seo_variants_20260928_r2.html);
- *           feeds the `place`, `genre`, `bio`, `profiles` and `mb` tests (Says who you are)
- * Tier:     STRICT (AGENTS.md "Test depth") for what gets saved: the city to artists.location,
- *           region / country / other names / the year to their fact keys, the bio to artists.bio
- *           through the editor's gate and never over its cap. LIGHT for the rest (the
- *           visual-artist note, the profile rows).
- * Covers:   • where: the city and region save to their places; a refused value shows the
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/profile/profile-view.tsx, bio-row.tsx
+ * Feature:  Profile (prototypes/profile_tool_20261001.html); feeds the `place`, `genre`, `bio`
+ *           tests (Says who you are)
+ * Tier:     STRICT (AGENTS.md "Test depth") for what gets saved: the name to artists.name through
+ *           its action, the city to artists.location, region / country / other names / the year
+ *           to their fact keys, the bio to artists.bio through the editor's gate and never over
+ *           its cap. LIGHT for the rest (the visual-artist note, the nudge line).
+ * Covers:   • who: the name (saved; a blank one refused, unsent), the year (four digits only),
+ *             the visual-artist note, other names (never the artist's own), a genre chip, the
+ *             type, and a stored value the gate would now refuse
+ *           • where: the city and region save to their places; a refused value shows the
  *             validator's words and is never sent; the country is a pick from exactly the table
  *             the gate accepts; a country with regions turns Region into its list, saved AFTER
  *             the country (waiting for it); a new country drops a region not on its list; a
  *             country stored in another spelling is shown in the table's
- *           • who: the year (four digits only), the visual-artist note, other names (never the
- *             artist's own), a genre chip, the type, and a stored value the gate would now refuse
  *           • the bio: a calm row, the id a test's pencil lands on, the save and its cap, "Where
- *             it shows" offering only what can take effect
- *           • profiles: how many reach the fact card; MusicBrainz's own editor, or what is linked
+ *             it shows" offering only what can take effect; the nudge to SEO / GEO › Profiles
  * Not here: the save rules themselves (tests/unit/manager-tools/seo/save-rules.test.ts); how the
- *           page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts).
- * Fixtures: the three save actions and the router are mocks; the refusal words asserted are the
- *           validator's own (`cleanFactValue`), read from it, never copied.
+ *           page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts); the
+ *           connected profiles and MusicBrainz, now on SEO / GEO › Profiles
+ *           (tests/components/manager-tools/seo/connected-rows.test.tsx).
+ * Fixtures: the save actions and the router are mocks; the refusal words asserted are the
+ *           validators' own (`cleanFactValue`, `artistNameError`), read from them, never copied.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -31,7 +34,10 @@ import { ABOUT_PLACEMENTS, COUNTRIES, FACT_CONTENT_KEYS } from '@samfox1/site-br
 import { REGIONS } from '@/lib/seo-regions'
 import { cleanFactValue, thisYearAt } from '@/lib/seo-facts'
 import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
-import { FactsTab, type FactsTabProps } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/facts/facts-tab'
+import { ProfileView, type ProfileViewProps } from '@/app/artists/[id]/(dashboard)/(manager-tools)/profile/profile-view'
+import { saveArtistNameAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/profile/actions'
+import { artistNameError } from '@/lib/manager-tools/profile/profile'
+import { seoTabSeg } from '@/lib/manager-tools/seo/sections'
 import { SEO_EDIT_TARGETS } from '@/lib/manager-tools/seo/sections'
 import { saveArtistFactAction, saveEditorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
 
@@ -40,11 +46,15 @@ vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   saveArtistFactAction: vi.fn(async () => ({ ok: true })),
   saveEditorFieldAction: vi.fn(async () => ({ ok: true })),
 }))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/actions', () => ({
+  saveArtistNameAction: vi.fn(async () => ({})),
+}))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const seoMock = vi.mocked(saveSeoFieldAction)
 const factMock = vi.mocked(saveArtistFactAction)
 const fieldMock = vi.mocked(saveEditorFieldAction)
+const nameMock = vi.mocked(saveArtistNameAction)
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
@@ -53,7 +63,7 @@ afterEach(() => {
 })
 
 const EMPTY_FACTS = Object.fromEntries(Object.values(FACT_CONTENT_KEYS).map((k) => [k, '']))
-const props = (over: Partial<FactsTabProps> = {}): FactsTabProps => ({
+const props = (over: Partial<ProfileViewProps> = {}): ProfileViewProps => ({
   artistId: 'a1',
   artistName: 'Skeen',
   schemaType: 'MusicGroup',
@@ -63,13 +73,9 @@ const props = (over: Partial<FactsTabProps> = {}): FactsTabProps => ({
   bio: 'Old',
   bioMinWords: 100,
   about: { placement: '', heading: '' },
-  bookingEmail: '',
-  profiles: [{ slug: 'spotify', label: 'Spotify', display: 'open.spotify.com/artist/x', inFactCard: true }],
-  databases: {},
-  musicBrainzCreate: 'https://musicbrainz.org/artist/create?edit-artist.name=Skeen',
   ...over,
 })
-const show = (over: Partial<FactsTabProps> = {}) => render(<FactsTab {...props(over)} />)
+const show = (over: Partial<ProfileViewProps> = {}) => render(<ProfileView {...props(over)} />)
 const ctx = () => ({ artistName: 'Skeen', thisYear: thisYearAt(new Date()) })
 const refusal = (key: (typeof FACT_CONTENT_KEYS)[keyof typeof FACT_CONTENT_KEYS], raw: string) => {
   const r = cleanFactValue(key, raw, ctx())
@@ -158,11 +164,30 @@ describe('where', () => {
 })
 
 describe('who', () => {
-  // The year: four digits only; anything else shows the validator's words and is not sent.
-  it('CRITICAL: Active since takes a four-digit year and refuses anything else, unsent', async () => {
+  // The name saves through its own action (moved from Settings); a blank name shows the rule's words and is never sent.
+  it('CRITICAL: the name saves through its action; a blank one is refused in the rule’s words and never sent', async () => {
     vi.useFakeTimers()
     show()
-    const year = screen.getByRole('textbox', { name: 'Active since' })
+    const box = screen.getByRole('textbox', { name: 'Name' })
+    expect((box as HTMLInputElement).value).toBe('Skeen')
+    fireEvent.change(box, { target: { value: '  ' } })
+    expect(screen.getByRole('alert').textContent).toBe(artistNameError('  '))
+    await act(async () => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(nameMock).not.toHaveBeenCalled()
+    fireEvent.change(box, { target: { value: 'Skeen Live' } })
+    await act(async () => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(nameMock).toHaveBeenCalledWith('a1', 'Skeen Live')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+  // The year: four digits only; anything else shows the validator's words and is not sent.
+  it('CRITICAL: Started takes a four-digit year and refuses anything else, unsent', async () => {
+    vi.useFakeTimers()
+    show()
+    const year = screen.getByRole('textbox', { name: 'Started' })
     fireEvent.change(year, { target: { value: '20x4' } })
     expect(screen.getByRole('alert').textContent).toBe(refusal(FACT_CONTENT_KEYS.activeSince, '20x4'))
     await act(async () => {
@@ -264,24 +289,14 @@ describe('the bio', () => {
   })
 })
 
-describe('profiles', () => {
-  // Profiles: how many reach the fact card, and MusicBrainz's own editor filled in with the name.
-  it('connected profiles and how many reach the fact card; MusicBrainz offers its own editor, filled in', () => {
-    show({
-      profiles: [
-        { slug: 'spotify', label: 'Spotify', display: 'x', inFactCard: true },
-        { slug: 'cash app', label: 'Cash App', display: 'y', inFactCard: false },
-      ],
-    })
-    expect(screen.getByText('1 of 2 shown to search engines')).toBeTruthy()
-    const create = screen.getByRole('link', { name: 'Create the page' })
-    expect(create.getAttribute('href')).toBe('https://musicbrainz.org/artist/create?edit-artist.name=Skeen')
-    expect(create.getAttribute('target')).toBe('_blank')
-  })
-  // A linked fact database shows what is linked instead of the create link.
-  it('a connected fact database shows what is linked instead', () => {
-    show({ databases: { musicbrainz: 'musicbrainz.org/artist/abc' } })
-    expect(screen.getByText('musicbrainz.org/artist/abc')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Create the page' })).toBeNull()
+describe('the nudge', () => {
+  // After a Publish changed a fact, the Bio row says how many outside bios may be out of date, linking to SEO / GEO › Profiles.
+  it('the Bio row shows the nudge, linking to SEO / GEO › Profiles; nothing when there is none', () => {
+    show({ bioNudge: '2 outside bios may be out of date' })
+    const link = screen.getByRole('link', { name: /2 outside bios may be out of date/ })
+    expect(link.getAttribute('href')).toBe(`/artists/a1/${seoTabSeg('profiles')}`)
+    cleanup()
+    show()
+    expect(document.querySelector('[data-bio-nudge]')).toBeNull()
   })
 })

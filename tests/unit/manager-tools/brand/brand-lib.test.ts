@@ -109,6 +109,8 @@ describe('setBrandAsset (a single-occupancy slot)', () => {
   /** The vacate returns `replaced`; the revision count says whether a row was ever published. */
   const world = (o: { replaced?: unknown[]; published?: number; del?: Reply; ins?: Reply } = {}) =>
     fakeClient((c: Call) => {
+      // No OTHER row names the replaced file (storage-gc.ts stillNamed, 2026-10-02).
+      if (c.op === 'select' && filterValue(c, 'storage_path') !== undefined) return { data: null, count: 0 }
       if (c.table === 'media' && c.op === 'delete') return o.del ?? { data: o.replaced ?? [] }
       if (c.table === 'media' && c.op === 'insert') return o.ins ?? { data: null }
       if (c.table === 'revisions') return { data: [], count: o.published ?? 0 }
@@ -243,6 +245,8 @@ describe('logos', () => {
   describe('setLogoFile', () => {
     const world = (o: { row?: unknown; up?: Reply; published?: number } = {}) =>
       fakeClient((c: Call) => {
+        // No OTHER row names the old files (storage-gc.ts stillNamed, 2026-10-02).
+        if (c.op === 'select' && filterValue(c, 'storage_path') !== undefined) return { data: null, count: 0 }
         if (c.op === 'select' && c.table === 'media')
           return { data: o.row === undefined ? { storage_path: `${A}/brand/cut.png`, source_path: `${A}/brand/orig.png` } : o.row }
         if (c.op === 'update') return o.up ?? { data: [{ id: 'l1' }] }

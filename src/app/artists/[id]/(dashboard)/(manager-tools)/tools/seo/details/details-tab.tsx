@@ -16,9 +16,9 @@ import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
 import { ShareImageModal, type OgSource } from '../og-image-picker'
 import type { NamedSwatch } from '../../../../editor/color-picker'
-import { AreaField, Count, EndSlot, LineField } from '../_ui/parts'
+import { AreaField, Count, EndSlot, LineField } from '../../../_ui/fields'
 import { FieldError } from '../../../_ui/field-error'
-import { clearHash, useOpenOnHash } from '../_ui/hash'
+import { clearHash, useOpenOnHash } from '../../../_ui/hash'
 
 export type AltPhoto = { id: string; url: string; alt: string; slug: string; caption: string | null }
 

@@ -187,7 +187,7 @@ function cardCountry(artist: LdNode | null): string | null {
 /**
  * Where the artist is based, for the store comparison. TAPIR'S PUBLISHED FACTS FIRST: the
  * question is "the store vs where you are", and the artist's own answer is the Country they
- * published on the Facts tab. The card's own country is used only when Tapir has none (a site
+ * published on Profile. The card's own country is used only when Tapir has none (a site
  * that states it by hand), and is labelled as the site's.
  */
 function basedIn(pub: SeoKnown['published'], artist: LdNode | null): { code: string; from: 'tapir' | 'card' } | null {
@@ -252,7 +252,7 @@ const apple = make('apple', (e) => {
       action: facts,
       evidence: [
         ...evidence, { label: 'store', value: first.known ? `${first.store} = ${storeName(first.store)}` : `${first.store} (not an Apple store)` },
-        { label: 'in Tapir: you’re based in', value: typed ? `${typed} (a country we don’t recognise)` : 'no country on the Facts tab' },
+        { label: 'in Tapir: you’re based in', value: typed ? `${typed} (a country we don’t recognise)` : 'no country on Profile' },
         { label: 'fact card: based in', value: 'no country' },
       ],
       limits,

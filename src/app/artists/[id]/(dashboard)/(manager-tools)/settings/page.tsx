@@ -6,9 +6,10 @@ import { SettingsView } from './settings-view'
 export const metadata = { title: 'Settings — Lone Star Management' }
 
 /**
- * SETTINGS (2026-09-13). Four rows, instant: the booking email, the site's address, the
- * name, the platform address. Was a redirect to the Overview for months — a tool in the
- * rail that led nowhere. See lib/settings.ts for the rows and the view for the layout.
+ * SETTINGS (2026-09-13). Three rows, instant: the booking email, the site's address, the
+ * platform address (the name moved to Profile, 2026-10-02). Was a redirect to the Overview
+ * for months — a tool in the rail that led nowhere. See lib/settings.ts for the rows and the
+ * view for the layout.
  */
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

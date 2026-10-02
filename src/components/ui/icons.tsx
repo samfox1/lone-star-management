@@ -50,6 +50,7 @@ export type IconName =
   | 'compass'
   | 'package'
   | 'userGroup'
+  | 'user'
   | 'mailbox'
   | 'chevronsUpDown'
   | 'eraser'
@@ -343,6 +344,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
       <path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15" />
+    </>
+  ),
+  /** Profile · one person, head and shoulders (prototypes/profile_tool_20261001.html), drawn on
+   *  the 24 grid in the rail's own stroke. */
+  user: (
+    <>
+      <circle cx="12" cy="8.2" r="3.4" />
+      <path d="M5.5 19.5c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8" />
     </>
   ),
   /** Subscribers · Heroicons `user-group` (MIT) */

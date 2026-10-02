@@ -1,11 +1,57 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
 import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
-import { BIO_FACTS, connectedBios, factChanges, type BiosInput, type ProfileRevision } from '@/lib/manager-tools/seo/profiles/bio-state'
+import {
+  BIO_FACTS,
+  connectedBios,
+  factChanges,
+  mergeChanges,
+  photoChanges,
+  type BiosInput,
+  type PhotoRevision,
+  type ProfileRevision,
+} from '@/lib/manager-tools/seo/profiles/bio-state'
+import { PROFILE_PHOTO } from '@/lib/profile-photo'
 
 /** The newest profile Publishes read. A Publish only writes the profile when it changed, so this
  *  is years of history; the oldest row of a full window is never taken for the first (factChanges). */
 const REVISION_CAP = 300
+
+/** The newest profile-photo snapshots read. One per photo Published, so years of history too. */
+const PHOTO_CAP = 300
+
+/**
+ * The profile photo's published history (photoChanges): every snapshot of a profile-photo media
+ * row, with ONLY its file (`data->>storage_path`), and the tombstones that took those rows off the
+ * site. A tombstone carries no purpose (`{ _deleted: true }`), so it is found by the row ids the
+ * snapshots named. Null when either read failed: the rows then say "couldn't check".
+ */
+async function readPhotoHistory(supabase: SupabaseClient, artistId: string): Promise<{ rows: PhotoRevision[]; complete: boolean } | null> {
+  const snaps = await supabase
+    .from('revisions')
+    .select('entity_id, published_at, path:data->>storage_path')
+    .eq('artist_id', artistId)
+    .eq('entity_type', 'media')
+    .eq('data->>purpose', PROFILE_PHOTO)
+    .order('published_at', { ascending: false })
+    .limit(PHOTO_CAP)
+  if (snaps.error) return null
+  const named = (snaps.data ?? []) as unknown as { entity_id: string; published_at: string; path: string | null }[]
+  if (named.length === 0) return { rows: [], complete: true }
+  const tombs = await supabase
+    .from('revisions')
+    .select('entity_id, published_at')
+    .eq('artist_id', artistId)
+    .eq('entity_type', 'media')
+    .in('entity_id', [...new Set(named.map((r) => r.entity_id))])
+    .eq('data->>_deleted', 'true')
+  if (tombs.error) return null
+  const rows: PhotoRevision[] = [
+    ...named.map((r) => ({ entity_id: String(r.entity_id), published_at: String(r.published_at), path: r.path ?? null })),
+    ...((tombs.data ?? []) as { entity_id: string; published_at: string }[]).map((r) => ({ entity_id: String(r.entity_id), published_at: String(r.published_at), path: null })),
+  ]
+  return { rows, complete: named.length < PHOTO_CAP }
+}
 
 /** One row's facts, read back from their JSON text. A fact the snapshot doesn't carry (SQL null)
  *  is LEFT OUT, never null: factChanges compares a fact only when both snapshots carry it. */
@@ -25,8 +71,9 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
 
 /**
  * What the Outside bios rows are built from (lib/manager-tools/seo/profiles/bio-state.ts): the
- * artist's links (which platforms are connected), the "updated" ticks, and the published
- * profiles, newest first, reading ONLY the fact fields out of each snapshot.
+ * artist's links (which platforms are connected), the "updated" ticks, the published profiles,
+ * newest first, reading ONLY the fact fields out of each snapshot, and the profile photo's
+ * published history (readPhotoHistory), so a new photo counts as a fact change.
  *
  * Every read runs on the manager's own session after the page's ownership gate, so RLS decides
  * (`revisions_rw`, `links`, `profile_marks`: the artist's managers). NEVER THROWS: a read that
@@ -41,7 +88,7 @@ export async function loadOutsideBios(
   marksRead?: Promise<ProfileMarks | null>,
 ): Promise<BiosInput> {
   const id = artist.id
-  const [links, marks, revisions] = await Promise.all([
+  const [links, marks, revisions, photos] = await Promise.all([
     supabase
       .from('links')
       .select('id, label, url, role')
@@ -65,12 +112,18 @@ export async function loadOutsideBios(
         (r) => (r.error ? null : ((r.data ?? []) as unknown as Record<string, unknown>[])),
         () => null,
       ),
+    readPhotoHistory(supabase, id).catch(() => null),
   ])
   const rows: ProfileRevision[] | null = revisions?.map((r) => ({ published_at: String(r.published_at), data: factsOf(r) })) ?? null
+  // Both halves or neither: a photo history that failed to read could hide the change that
+  // makes a bio out of date, so the rows say "couldn't check" rather than "updated".
+  const known = rows !== null && photos !== null
   return {
     bios: links ? connectedBios(links, artist) : null,
     marks,
-    factsKnown: rows !== null,
-    changes: rows ? factChanges(rows, { complete: rows.length < REVISION_CAP }) : [],
+    factsKnown: known,
+    changes: known
+      ? mergeChanges(factChanges(rows, { complete: rows.length < REVISION_CAP }), photoChanges(photos.rows, { complete: photos.complete }))
+      : [],
   }
 }

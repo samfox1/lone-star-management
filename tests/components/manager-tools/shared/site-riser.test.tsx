@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /**
- * The SEO / GEO Publish bar: it publishes what the SEO tabs changed with one password, each part
- * only when it is waiting, and it is gone when nothing waits.
+ * The site Publish bar (SEO / GEO and Profile): it publishes what those pages changed with one
+ * password, each part only when it is waiting, and it is gone when nothing waits.
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/seo-riser.tsx,
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-riser.tsx (was
+ *           tools/seo/seo-riser.tsx until Profile shared it, 2026-10-02),
  *           src/lib/manager-tools/seo/pending.ts (pendingMessage)
- * Feature:  SEO / GEO page · the Publish bar shared by every tab
+ * Feature:  SEO / GEO page and Profile · the Publish bar
  * Tier:     STRICT (AGENTS.md "Test depth"): publishing is what the live site receives.
  * Covers:   • hidden means gone (invisible and inert) while nothing waits
  *           • site and links waiting: both published, site first, with the one password
@@ -19,7 +20,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { SeoRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/seo-riser'
+import { SiteRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-riser'
 import { pendingMessage } from '@/lib/manager-tools/seo/pending'
 import { publishEntityAction, publishSiteWithPasswordAction } from '@/app/artists/[id]/(dashboard)/actions'
 import type { UnpublishedDiff } from '@/lib/content'
@@ -47,19 +48,19 @@ async function publish(password = 'hunter2') {
   await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' })))
 }
 
-describe('the Publish bar (SeoRiser)', () => {
+describe('the Publish bar (SiteRiser)', () => {
   // Hidden means gone: invisible and inert while nothing waits, so no dot or button shows under the fold.
   it('hidden means GONE: invisible while nothing waits, so no dot or button shows under the fold', () => {
-    render(<SeoRiser artistId="a1" site={false} links={false} message="" />)
+    render(<SiteRiser artistId="a1" site={false} links={false} message="" />)
     expect(bar().className).toMatch(/(^|\s)invisible(\s|$)/)
     expect(bar().hasAttribute('inert')).toBe(true)
     cleanup()
-    render(<SeoRiser artistId="a1" site links={false} message="Site text changed" />)
+    render(<SiteRiser artistId="a1" site links={false} message="Site text changed" />)
     expect(bar().className).not.toMatch(/(^|\s)invisible(\s|$)/)
   })
   // Both waiting: the site first, then the links, with the one password.
   it('CRITICAL: site and links waiting: both published, site first, with the one password', async () => {
-    render(<SeoRiser artistId="a1" site links message="Site text and 1 link changed" />)
+    render(<SiteRiser artistId="a1" site links message="Site text and 1 link changed" />)
     await publish()
     await waitFor(() => expect(linkMock).toHaveBeenCalledWith('link', 'a1', 'hunter2'))
     expect(siteMock).toHaveBeenCalledWith('a1', 'hunter2')
@@ -68,7 +69,7 @@ describe('the Publish bar (SeoRiser)', () => {
   })
   // Only links waiting (a test's fix): the site publish is not run.
   it('CRITICAL: only links waiting (a test’s fix): the site publish is not run', async () => {
-    render(<SeoRiser artistId="a1" site={false} links message="1 link changed" />)
+    render(<SiteRiser artistId="a1" site={false} links message="1 link changed" />)
     await publish()
     await waitFor(() => expect(linkMock).toHaveBeenCalledTimes(1))
     expect(siteMock).not.toHaveBeenCalled()
@@ -76,7 +77,7 @@ describe('the Publish bar (SeoRiser)', () => {
   // A refused site publish (wrong password) stops before the links.
   it('CRITICAL: a refused site publish (wrong password) stops before the links', async () => {
     siteMock.mockResolvedValueOnce({ ok: false, error: 'Wrong password.' })
-    render(<SeoRiser artistId="a1" site links message="x" />)
+    render(<SiteRiser artistId="a1" site links message="x" />)
     await publish('nope')
     await waitFor(() => expect(siteMock).toHaveBeenCalled())
     expect(linkMock).not.toHaveBeenCalled()

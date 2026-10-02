@@ -12,8 +12,8 @@ import { HoverLabel } from './row-icon'
  * different things (a genre is a word; an email recipient is an address with an optional name,
  * added through two fields), so each composes these and keeps its own add flow and save.
  *
- * Users: Settings › Email (enquiries/kind-rows.tsx). The SEO Facts `Chips`
- * (tools/seo/_ui/parts.tsx) still draws the same look inline; it moves onto these next.
+ * Users: Settings › Email (enquiries/kind-rows.tsx). The ledger's `Chips` (_ui/fields.tsx,
+ * Profile's genre and other names) still draws the same look inline; it moves onto these next.
  */
 
 /** One chip: its text, and a × that is always visible (a touch screen has no hover). */

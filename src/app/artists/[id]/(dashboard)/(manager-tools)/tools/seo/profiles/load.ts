@@ -1,7 +1,7 @@
 import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 import { listContent } from '@/lib/content'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
-import { photoTypeOf, type BioPackInput, type BioPackRelease } from '@/lib/manager-tools/seo/profiles/bio-pack'
+import { packPhotoRows, photoTypeOf, type BioPackInput, type BioPackRelease } from '@/lib/manager-tools/seo/profiles/bio-pack'
 import type { loadSeoBase } from '../load'
 
 type Base = Awaited<ReturnType<typeof loadSeoBase>>
@@ -34,12 +34,9 @@ export async function loadBioPack(b: Base): Promise<{ input: Omit<BioPackInput, 
     b.supabase.auth.getUser(),
   ])
 
-  // A profile photo first, then the site's own photos, then the rest of the library. Artwork
-  // (a cover) and pieces marked "none" are not press photos; only files a mail app can attach.
-  const rank = (m: { purpose: string; on_site: boolean | null }) => (m.purpose === 'profile_photo' ? 0 : m.on_site ? 1 : 2)
-  const photos: PackPhoto[] = ((media.data ?? []) as { purpose: string; storage_path: string; kind: string | null; on_site: boolean | null }[])
-    .filter((m) => m.kind !== 'artwork' && m.kind !== 'none' && photoTypeOf(m.storage_path))
-    .sort((x, y) => rank(x) - rank(y))
+  // The profile photo first (attached by default), then the site's own photos, then the rest of
+  // the library, each file once (packPhotoRows).
+  const photos: PackPhoto[] = packPhotoRows((media.data ?? []) as { purpose: string; storage_path: string; kind: string | null; on_site: boolean | null }[])
     .map((m) => ({ url: mediaUrl(m.storage_path), thumb: mediaThumbUrl(m.storage_path, { size: 160 }), type: photoTypeOf(m.storage_path), name: m.storage_path.split('/').pop() ?? 'photo' }))
   if (b.heroUrl && photoTypeOf(b.heroUrl) && b.heroUrl.startsWith('https://')) photos.push({ url: b.heroUrl, thumb: b.heroUrl, type: photoTypeOf(b.heroUrl), name: 'hero' })
 

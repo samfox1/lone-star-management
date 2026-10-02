@@ -225,11 +225,12 @@ export function epkReadiness(input: {
   const hasContact = !!site && resolveEpkContact(site).address !== null
 
   const requirements: EpkRequirement[] = [
-    { key: 'bio', label: 'A bio', hint: 'Add one on the Site page, then publish.', met: hasBio },
+    // Both live on Profile now (PROFILE_TOOL_PLAN.md, 2026-10-02). A hero image still counts.
+    { key: 'bio', label: 'A bio', hint: 'Add one on Profile, then publish.', met: hasBio },
     {
       key: 'photo',
       label: 'A photo',
-      hint: 'Add a profile photo or a hero image on the Site page, then publish.',
+      hint: 'Add a profile photo on Profile, then publish.',
       met: hasPhoto,
     },
     {

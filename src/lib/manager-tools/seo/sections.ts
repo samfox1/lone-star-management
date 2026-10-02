@@ -1,8 +1,10 @@
 import type { SeoTestAction } from '@/lib/seo-tests/types'
+import { BIO_ANCHOR, PROFILE_SEG } from '../profile/route'
 
 /**
- * THE SEO / GEO TOOL'S TABS (Sam, 2026-09-29): Details · Facts · Answers · AI test, and Profiles
- * (2026-09-30: outside profiles, starting with the Apple Music & Amazon bio email). Tabs on
+ * THE SEO / GEO TOOL'S TABS (Sam, 2026-09-29): Details · Answers · AI test, and Profiles
+ * (2026-09-30: outside profiles, starting with the Apple Music & Amazon bio email). Facts left
+ * on 2026-10-02 for the Profile tool (PROFILE_TOOL_PLAN.md); its old address redirects there. Tabs on
  * the thin rail's second panel, exactly like Brand and Settings: tools-registry.ts builds its
  * `tabs` from SEO_TABS below, so the rail, the routes and the tests all derive from this one list.
  *
@@ -14,7 +16,6 @@ import type { SeoTestAction } from '@/lib/seo-tests/types'
  */
 export const SEO_SECTIONS = [
   { seg: '', label: 'Details' },
-  { seg: 'facts', label: 'Facts' },
   { seg: 'answers', label: 'Answers' },
   { seg: 'test', label: 'AI test' },
   { seg: 'profiles', label: 'Profiles' },
@@ -39,20 +40,22 @@ export const SEO_TABS: readonly { seg: string; label: string }[] = SEO_SECTIONS.
 
 /**
  * WHERE THE OLD ROUTES WENT. Nothing that worked was dropped: each old route now redirects to
- * its new home, to the row that holds it ([section]/page.tsx).
+ * its new home, to the row that holds it ([section]/page.tsx). `to` is a path under
+ * /artists/[id]/: an SEO tab (seoTabSeg) or, since 2026-10-02, the Profile tool.
  *   Search listing → Details          Share image → Details, #share
- *   Alt tags       → Details, #alt    Facts       → Facts
- *   About (bio + where it shows) → Facts, #bio
+ *   Alt tags       → Details, #alt    Facts       → Profile
+ *   About (bio + where it shows) → Profile, #bio
  *   AI visibility  → Answers          Test        → AI test (the 24 plain-language tests)
  * `listing` was a tab of its own from 2026-09-28 until 2026-09-29, when it became Details, the
- * tool's own route. `facts` and `test` keep their names, so only the five below need a redirect.
+ * tool's own route. `facts` was a tab until 2026-10-02. `test` keeps its name.
  */
-export const MOVED_SEO_SECTIONS: Readonly<Record<string, { to: SeoSection; hash?: string }>> = {
-  listing: { to: '' },
-  logo: { to: '', hash: 'share' },
-  alt: { to: '', hash: 'alt' },
-  about: { to: 'facts', hash: 'bio' },
-  ai: { to: 'answers' },
+export const MOVED_SEO_SECTIONS: Readonly<Record<string, { to: string; hash?: string }>> = {
+  listing: { to: seoTabSeg('') },
+  logo: { to: seoTabSeg(''), hash: 'share' },
+  alt: { to: seoTabSeg(''), hash: 'alt' },
+  facts: { to: PROFILE_SEG },
+  about: { to: PROFILE_SEG, hash: BIO_ANCHOR },
+  ai: { to: seoTabSeg('answers') },
 }
 
 type EditTarget = Extract<SeoTestAction, { kind: 'edit' }>['target']
@@ -60,15 +63,16 @@ type EditTarget = Extract<SeoTestAction, { kind: 'edit' }>['target']
 /**
  * Where a test's pencil goes (SeoTestAction `edit`), as a path under /artists/[id]/. A Record
  * over the engine's own target union, so a target added to types.ts is a compile error here
- * until it has a home. The anchors (#share, #alt, #bio) are ids the Details and Facts pages
- * carry on the rows that hold those settings.
+ * until it has a home. The anchors (#share, #alt, #bio) are ids the Details and Profile pages
+ * carry on the rows that hold those settings. The facts and the bio live on Profile since
+ * 2026-10-02.
  */
 export const SEO_EDIT_TARGETS: Readonly<Record<EditTarget, string>> = {
   listing: seoTabSeg(''),
   share: `${seoTabSeg('')}#share`,
   alt: `${seoTabSeg('')}#alt`,
-  facts: seoTabSeg('facts'),
-  bio: `${seoTabSeg('facts')}#bio`,
+  facts: PROFILE_SEG,
+  bio: `${PROFILE_SEG}#${BIO_ANCHOR}`,
   answers: seoTabSeg('answers'),
   connections: 'connections',
   tour: 'tour',

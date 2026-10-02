@@ -1,7 +1,7 @@
 /**
  * SETTINGS — the few artist-level facts that have no other home (Sam, 2026-09-13):
- * the booking email, the site's address, the name, and the platform address. Instant;
- * nothing here is published.
+ * the booking email, the site's address and the platform address. Instant; nothing here
+ * is published. The name moved to Profile on 2026-10-02 (PROFILE_TOOL_PLAN.md).
  *
  * Pure. The page reads and passes in; the view renders what comes out.
  */
@@ -35,9 +35,9 @@ export function recipientLine(bookingEmail: string, recipient: Recipient): strin
   return `Enquiries currently go to ${recipient.to_email}`
 }
 
-export type SettingsRow = { key: 'booking_email' | 'site' | 'name' | 'address'; label: string; value: string; editable: boolean; mono: boolean; sub?: string | null }
+export type SettingsRow = { key: 'booking_email' | 'site' | 'address'; label: string; value: string; editable: boolean; mono: boolean; sub?: string | null }
 
-/** The four rows, in order. Site and Address are read-only — a domain is not something
+/** The three rows, in order. Site and Address are read-only — a domain is not something
  *  a manager changes from a settings page (Sam, 2026-09-13). */
 export function settingsRows(artist: SettingsArtist, bookingEmail: string, recipient: Recipient): SettingsRow[] {
   const site = displayAddress(publicSiteOrigin(artist))
@@ -46,7 +46,6 @@ export function settingsRows(artist: SettingsArtist, bookingEmail: string, recip
   return [
     { key: 'booking_email', label: 'Booking email', value: bookingEmail, editable: true, mono: true, sub: recipientLine(bookingEmail, recipient) },
     { key: 'site', label: 'Site', value: site || address, editable: false, mono: true },
-    { key: 'name', label: 'Name', value: artist.name, editable: true, mono: false },
     { key: 'address', label: 'Address', value: address, editable: false, mono: true },
   ]
 }

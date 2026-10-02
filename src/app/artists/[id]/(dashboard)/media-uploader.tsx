@@ -1,5 +1,6 @@
 'use client'
 
+import type { ComponentProps } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SiteMedia } from '@/lib/site'
 import { orientationOf, type Orientation } from '@/lib/site-editor/gallery'
@@ -38,6 +39,7 @@ export function MediaUploader({
   label,
   budget,
   onUploaded,
+  trigger,
 }: {
   artistId: string
   purpose: SiteMedia['purpose']
@@ -49,6 +51,9 @@ export function MediaUploader({
   budget?: AssetBudget | null
   /** Fires after the row is written, with the new media id + path (for optimistic UI). */
   onUploaded?: (media: { id: string; storage_path: string }) => void
+  /** UploadField's trigger mode: a tile of the caller's over a hidden input, instead of the
+   *  drop zone (the Profile photo picker's upload tile). The gate still applies. */
+  trigger?: ComponentProps<typeof UploadField>['trigger']
 }) {
   const isVideo = accept.includes('video')
   const noun = isVideo ? 'video' : accept.includes('image') ? 'image' : 'file'
@@ -59,6 +64,7 @@ export function MediaUploader({
       label={label}
       kind={isVideo ? 'video' : 'image'}
       budget={budget}
+      trigger={trigger}
       bucket="media"
       artistId={artistId}
       category={folder}

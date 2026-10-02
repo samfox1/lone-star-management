@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { formatCount, isTooLong, nearLimit, tooLongError } from '@/lib/site-editor/text-limits'
+import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
 
 /**
  * The shared vocabulary of the editor inspector — the primitives every panel (Style,
@@ -181,7 +182,8 @@ export function FieldRow({
 
 /**
  * THE unified list row (Sam, 2026-08-12): a mono-caps KEY over its current VALUE, with
- * a bare grey edit pencil that appears only on row hover (no bordered button). One row
+ * a bare grey edit pencil that appears only on row hover (no bordered button) — the
+ * dashboard's one pencil rule (EDIT_TARGET / REVEAL_ON_HOVER, _ui/styles.ts). One row
  * shape for Text, Links, Merch, and Style — the "version A" prototype. An empty value
  * renders muted so a blank reads as "nothing set yet", not broken.
  */
@@ -222,7 +224,7 @@ export function EditRow({
 }) {
   const singleLine = value === undefined
   return (
-    <div className={cx('group flex items-center gap-3 py-2.5 hover:bg-surface', !flush && 'px-4')}>
+    <div className={cx(EDIT_TARGET, 'group flex items-center gap-3 py-2.5 hover:bg-surface', !flush && 'px-4')}>
       {grip && (
         <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
           <Icon name="grip" size={16} />
@@ -254,7 +256,7 @@ export function EditRow({
         aria-expanded={expanded}
         className={cx(
           'flex-none text-ink-faint transition-opacity hover:text-ink focus-visible:opacity-100',
-          expanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+          expanded ? 'opacity-100' : REVEAL_ON_HOVER,
         )}
       >
         <Icon name={expanded ? 'close' : 'edit'} size={16} />

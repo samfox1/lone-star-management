@@ -3,7 +3,7 @@
  * lib/settings (2026-09-13). What has to hold:
  *
  *   - the addresses are read-only — a manager cannot change a domain from here;
- *   - the booking email and the name are the only editable rows;
+ *   - the booking email is the only editable row (the name moved to Profile, 2026-10-02);
  *   - an address reads as a person says it (no scheme, no www, no trailing slash);
  *   - the line under the email is STATE: where enquiries actually go, only when that
  *     differs from what is written above it.
@@ -53,13 +53,12 @@ describe('recipientLine — state, not instruction', () => {
 describe('settingsRows', () => {
   const skeen = { name: 'Skeen', slug: 'skeen', site_kind: 'custom', custom_site_url: 'https://www.skeenmusic.com' }
 
-  it('CRITICAL: Site and Address are read-only; Booking email and Name are the editable ones', () => {
+  it('CRITICAL: Site and Address are read-only; Booking email is the editable one', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'https://lonestar.site/' // a trailing slash on the origin must not double up
     const rows = settingsRows(skeen, 'ross@example.com', null)
     expect(rows).toEqual([
       { key: 'booking_email', label: 'Booking email', value: 'ross@example.com', editable: true, mono: true, sub: null },
       { key: 'site', label: 'Site', value: 'skeenmusic.com', editable: false, mono: true },
-      { key: 'name', label: 'Name', value: 'Skeen', editable: true, mono: false },
       { key: 'address', label: 'Address', value: 'lonestar.site/skeen', editable: false, mono: true },
     ])
   })

@@ -201,12 +201,18 @@ export function FontMenu({
               >
                 <FontSample family={font.family} googleFamily={font.googleFamily} cap={11} fallback={15}>{font.label}</FontSample>
               </button>
+              {/* The pencil rule (EDIT_TARGET / REVEAL_ON_HOVER, _ui/styles.ts) keyed on THIS item,
+                  not on group/edit: the menu opens inside its ledger row, which is an edit target,
+                  so group-hover/edit would light every font's pencil at once. */}
               <button
                 type="button"
                 role="menuitem"
                 aria-label={`Rename ${font.label}`}
                 onClick={() => setEditing(font.id)}
-                className={cx('flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/fo:opacity-100', FOCUS_RING)}
+                className={cx(
+                  'flex-none rounded-md p-1.5 text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/fo:opacity-100 group-has-[:focus-visible]/fo:opacity-100 [@media(hover:none)]:opacity-100',
+                  FOCUS_RING,
+                )}
               >
                 <Icon name="edit" size={14} />
               </button>

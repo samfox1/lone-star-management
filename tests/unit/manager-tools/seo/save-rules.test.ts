@@ -23,8 +23,8 @@
  *             itself, refuses when that read fails, and writes nothing for hostile input
  *           • no custom site field or built-in template can write a fact key
  *           • the artist-row facts (city, genre, type): only those columns, each with its rule
- * Not here: how the Facts tab reads the stored facts back (seo-facts.test.ts); the tabs
- *           that call these (tests/components/manager-tools/seo/*-tab.test.tsx).
+ * Not here: how Profile reads the stored facts back (seo-facts.test.ts); the pages that call
+ *           these (tests/components/manager-tools/seo/*-tab.test.tsx, profile/profile-view.test.tsx).
  * Fixtures: a fake Supabase client that records what reaches each table (site_content upserts
  *           and deletes, the artist-name and country reads) and throws if a fact ever writes the
  *           artists row. No database.

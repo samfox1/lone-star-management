@@ -5,6 +5,7 @@ import { type EditorTour } from '../inspector-types'
 import { OnSiteToggle, onSiteOnly } from '../inspector-shared'
 import { AddLink, useScrollIntoFocus } from '../inspector-grid'
 import { useConfirm } from '../../confirm-dialog'
+import { EDIT_TARGET, REVEAL_ON_HOVER } from '../../(manager-tools)/_ui/styles'
 import { type SelectTarget } from '@samfox1/site-bridge/protocol'
 
 /* ── Tour tools: pick which dates are on the site, drag to reorder them ─ */
@@ -103,6 +104,7 @@ export function TourTools({
           focused={focusedKey === `item:tour_date:${t.id}`}
           {...dragProps(t.id)}
           className={cx(
+            EDIT_TARGET,
             'flex items-start gap-2.5 rounded-lg border p-2.5',
             focusedKey === `item:tour_date:${t.id}` ? 'border-accent ring-2 ring-accent' : 'border-hairline',
             isOver(t.id) && 'ring-2 ring-accent',
@@ -145,7 +147,8 @@ export function TourTools({
             aria-label={`Edit ${t.venue || 'date'}`}
             title="Supporting acts and their links"
             onClick={() => onEditTour(t, showLabel(t))}
-            className="mt-0.5 flex-none rounded-md p-1.5 text-ink-faint hover:bg-surface hover:text-ink"
+            // Shown while the row is hovered (the row is its EDIT_TARGET, _ui/styles.ts).
+            className={cx('mt-0.5 flex-none rounded-md p-1.5 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
           >
             <Icon name="edit" size={15} />
           </button>

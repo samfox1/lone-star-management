@@ -1,24 +1,24 @@
 // @vitest-environment jsdom
-// Settings: four centred rows — two you can click to edit, two you cannot.
+// Settings: three rows — one you can click to edit, two you cannot.
 /**
  * SettingsView (2026-09-13). What has to hold:
  *
  *   - Site and Address are text, not controls: nothing to click, no input ever;
  *   - Booking email saves through its door on blur or Enter, and only when CHANGED;
  *   - a refused save puts the old value back and says why;
- *   - Escape puts the old value back without saving;
- *   - Name saves through the name action.
+ *   - Escape puts the old value back without saving.
+ *
+ * The name moved to Profile on 2026-10-02 (tests/components/manager-tools/profile/).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SettingsView } from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/settings-view'
-import { saveArtistNameAction, saveBookingEmailAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/actions'
+import { saveBookingEmailAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import type { SettingsRow } from '@/lib/settings'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/actions', () => ({
   saveBookingEmailAction: vi.fn(async (_a: string, email: string) => ({ value: email || null })),
-  saveArtistNameAction: vi.fn(async () => ({})),
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
@@ -30,7 +30,6 @@ afterEach(() => {
 const ROWS: SettingsRow[] = [
   { key: 'booking_email', label: 'Booking email', value: 'ross@example.com', editable: true, mono: true, sub: 'Enquiries from the site go here' },
   { key: 'site', label: 'Site', value: 'skeenmusic.com', editable: false, mono: true },
-  { key: 'name', label: 'Name', value: 'Skeen', editable: true, mono: false },
   { key: 'address', label: 'Address', value: 'lonestar.site/skeen', editable: false, mono: true },
 ]
 
@@ -57,10 +56,10 @@ describe('the rows', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('the editable rows are Booking email and Name, and the state line sits under the email', () => {
+  it('the editable row is Booking email, and the state line sits under it', () => {
     mount()
     expect(screen.getByRole('button', { name: 'Booking email' })).toHaveTextContent('ross@example.com')
-    expect(screen.getByRole('button', { name: 'Name' })).toHaveTextContent('Skeen')
+    expect(screen.queryByRole('button', { name: 'Name' })).toBeNull()
     expect(screen.getByText('Enquiries from the site go here')).toBeInTheDocument()
   })
 })
@@ -106,14 +105,5 @@ describe('Booking email', () => {
     edit('Booking email', '')
     await waitFor(() => expect(saveBookingEmailAction).toHaveBeenCalledWith('a1', ''))
     await waitFor(() => expect(screen.getByText('No address for enquiries yet')).toBeInTheDocument())
-  })
-})
-
-describe('Name', () => {
-  it('saves through the name action', async () => {
-    mount()
-    edit('Name', 'Skeen Live')
-    await waitFor(() => expect(saveArtistNameAction).toHaveBeenCalledWith('a1', 'Skeen Live'))
-    expect(screen.getByRole('button', { name: 'Name' })).toHaveTextContent('Skeen Live')
   })
 })

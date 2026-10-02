@@ -1,7 +1,7 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { NoteField, RowTitle } from './inline-text'
-import { CAPS_SECTION, MONO_META } from './styles'
+import { CAPS_SECTION, EDIT_TARGET, MONO_META } from './styles'
 
 /**
  * LAYOUT A, "LEDGER" (Sam, 2026-09-23; prototypes/brand_variants_20260923.html). No cards:
@@ -70,9 +70,12 @@ export type LedgerRowProps = LedgerRowBase & ({ guide?: string; note?: never } |
 export const END_SLOT = 'w-8 flex-none items-center justify-center'
 
 /** The ledger row's grid, its two columns centred (the SEO Answers tab's row being written
- *  wears it too, around its own fields). */
-export const LEDGER_ROW_GRID =
-  'group/ledger grid grid-cols-1 items-center gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]'
+ *  wears it too, around its own fields). The whole row is its pencil's EDIT_TARGET (styles.ts):
+ *  the pencil appears while the row is hovered, as a faint icon lights with it. */
+export const LEDGER_ROW_GRID = cx(
+  EDIT_TARGET,
+  'group/ledger grid grid-cols-1 items-center gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]',
+)
 
 export function LedgerRow({ title, onRename, guide, note, meta, children, remove, end, wrap = false }: LedgerRowProps) {
   return (

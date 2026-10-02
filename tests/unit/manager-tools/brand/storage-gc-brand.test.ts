@@ -243,7 +243,8 @@ describe('a failed reference read sweeps NOTHING', () => {
 
 describe('gcDeletedMediaObject takes the original with it', () => {
   it('CRITICAL: a never-published logo loses BOTH files at delete — from the media bucket', async () => {
-    const { client, removed, buckets } = fake({ reads: { revisions: { count: 0 } } })
+    // `media: count 0`: no OTHER row names either file (stillNamed, 2026-10-02).
+    const { client, removed, buckets } = fake({ reads: { revisions: { count: 0 }, media: { count: 0 } } })
     await gcDeletedMediaObject(client, 'm1', `${A}/brand/cutout.png`, `${A}/brand/original.png`)
     expect(removed.sort()).toEqual([`${A}/brand/cutout.png`, `${A}/brand/original.png`])
     expect(buckets).toEqual(['media'])
@@ -264,7 +265,7 @@ describe('gcDeletedMediaObject takes the original with it', () => {
   })
 
   it('without an original, only the file itself goes (the old call shape)', async () => {
-    const { client, removed } = fake({ reads: { revisions: { count: 0 } } })
+    const { client, removed } = fake({ reads: { revisions: { count: 0 }, media: { count: 0 } } })
     await gcDeletedMediaObject(client, 'm1', `${A}/gallery/a.jpg`)
     expect(removed).toEqual([`${A}/gallery/a.jpg`])
   })

@@ -7,10 +7,11 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**81 test files · 1375 tests**
+**84 test files · 1388 tests**
 
 - [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 597 tests
-- [SEO / GEO page](#seo--geo-page) · 20 files · 294 tests
+- [SEO / GEO page](#seo--geo-page) · 21 files · 286 tests
+- [Profile page](#profile-page) · 2 files · 21 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 93 tests
@@ -281,7 +282,7 @@ Proves the "Your Apple Music link opens your home country's store" test compares
 - A right artist link does not hide a wrong release link beside it. (verify-found AP2)
 - "/uk/" is not an Apple store (Apple sends it to /us/): it fails, and is never called "the United Kingdom store". (verify-found AP7)
 - Country names that take "the" never read "the the", in a pass or a fail. (verify-found AP5)
-- Neither Tapir nor the card says a country: "couldn't check", pointing to the Facts tab.
+- Neither Tapir nor the card says a country: "couldn't check", pointing to Profile.
 - CRITICAL: the country comes from the Facts published in Tapir first; a card from an older bridge states none, and the test still judges (with the fix).
 - CRITICAL: Tapir's country wins over a card that says otherwise, and both are shown, each labelled with where it came from.
 - With no country in Tapir, the card's is used and labelled as the site's, never as Tapir's.
@@ -862,7 +863,7 @@ Proves the "Your genre is named" test reads the genre from the artist's OWN node
 - A card can be written three ways (a list of nodes, one node, or @graph): each is read.
 - The artist can be in the second of several blocks.
 - A card under another name that carries the artist's own site address is the artist's. (verify-found G1)
-- No genre while Tapir has one: the advice is "publish", pointing to the Facts tab.
+- No genre while Tapir has one: the advice is "publish", pointing to Profile.
 - No genre and none in Tapir: the advice is "add it".
 - The details name the sound Tapir has, labelled as Tapir's, when the card has none.
 - No fact card, or one that doesn't parse, names no genre.
@@ -926,7 +927,7 @@ Proves the "Where you're based is clear" test passes only when the artist's node
 - The one exact-wording check: the pass sentence names all three parts.
 - A person's homeLocation is read like a band's foundingLocation, and a Country object counts as a country.
 - CRITICAL: a city only (the shape skeen ships today) is a soft fail; Tapir HAS the region and country, so the advice is publish, not "add", and the details show Tapir's place.
-- When Tapir has no region or country either, the advice is to add them on the Facts tab.
+- When Tapir has no region or country either, the advice is to add them on Profile.
 - "Chicago, IL" in one line is not a region: search engines want separate facts, and the result says "one line", never "has Chicago, IL but not the state". (verify-found P1)
 - City + country with no region fails, and the details say the region is missing.
 - City + region with no country fails, and the details say the country is missing.
@@ -1032,6 +1033,19 @@ The Profiles tab's Outside bios: a bio whose facts changed after its tick says s
 - Instagram ticked Aug 15, facts changed Sep 29: the row says so; the card's tick re-confirms bio_instagram.
 - The server's render carries the state but no date: the date is written in the viewer's zone after mount.
 
+### tests/components/manager-tools/seo/connected-rows.test.tsx · 2 tests
+
+SEO / GEO › Profiles: the connected profiles and MusicBrainz rows, moved there from the Facts tab (2026-10-02, when Facts became the Profile tool). These two cases came with them from facts-tab.test.tsx.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/connected-rows.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): what the rows say and where they link; nothing saves.
+- **Not here:** how the links are split (connectedProfiles, src/lib/manager-tools/seo/profiles/connected.ts, the rules it calls are pinned in tests/unit/manager-tools/connections/).
+
+**Tests**
+
+- How many connected profiles reach the fact card.
+- No MusicBrainz page: its own editor, filled in with the name, in a new tab.
+
 ### tests/components/manager-tools/seo/crawl-section.test.tsx · 11 tests
 
 "How crawlers see your site" on the AI test tab: the five rows above the four test groups, and the white card each one opens.
@@ -1074,36 +1088,6 @@ The SEO / GEO Details tab: the page title and description save through the SEO g
 - Arrow keys move between photos, except while typing.
 - Calm rows: a count only while typing in its field, and no descriptor lines (Sam's notes).
 
-### tests/components/manager-tools/seo/facts-tab.test.tsx · 19 tests
-
-The SEO / GEO Facts tab: each fact saves through its own gate, a value the gate would refuse shows the gate's own words and is never sent, and the bio keeps its rules.
-
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/facts/facts-tab.tsx
-- **Tier:** STRICT (AGENTS.md "Test depth") for what gets saved: the city to artists.location, region / country / other names / the year to their fact keys, the bio to artists.bio through the editor's gate and never over its cap. LIGHT for the rest (the visual-artist note, the profile rows).
-- **Not here:** the save rules themselves (tests/unit/manager-tools/seo/save-rules.test.ts); how the page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts).
-
-**Tests**
-
-- Where each place saves: the city to the artist row, the region to its fact key.
-- A refused value: the validator's own words show, and nothing is sent.
-- The country list is exactly the table the gate accepts, so a pick is never refused.
-- A country with regions turns Region into its list, and the region is saved after the country.
-- A quick region waits for the country's save, since the gate reads the country back to judge the region.
-- A new country drops a region not on its list, and saves the clear.
-- A country stored as "USA" shows as the table's "United States", with the US region list.
-- The year: four digits only; anything else shows the validator's words and is not sent.
-- A visual artist: the year is kept but not on the fact card, and the page says so.
-- Other names: the artist's own name is refused in the validator's words, unsent.
-- A genre chip is added and saved to the artist row as one list.
-- A stored value the gate would now refuse is flagged on arrival.
-- The type saves as the artist's schema type.
-- The bio row is calm: its first words only; the counts live in the editor, and no 2,500 anywhere (Sam's call).
-- The bio test's pencil lands here: the row carries its id, and arriving opens the editor.
-- The bio saves to artists.bio; over the cap it is kept, refused and never sent (never cut).
-- "Where it shows" offers only what can take effect here (no site declaration on this page).
-- Profiles: how many reach the fact card, and MusicBrainz's own editor filled in with the name.
-- A linked fact database shows what is linked instead of the create link.
-
 ### tests/components/manager-tools/seo/outside-rows.test.tsx · 3 tests
 
 The Profiles tab's Discogs and Wikidata rows show what the check found, and open a card with the link and the one thing to do.
@@ -1131,22 +1115,6 @@ The SEO / GEO Profiles tab: the Apple Music & Amazon bio card shows the email th
 - The card shows the email the builder makes, and Open in Mail opens exactly that one.
 - Some mail apps cut a long mailto short without a word: past MAILTO_SAFE_LENGTH the card says to use Copy. A 150-word bio and the most releases the email lists is past it.
 - Mark as sent: the artist, the item, and done = true; the row then says it was sent.
-
-### tests/components/manager-tools/seo/publish-bar.test.tsx · 5 tests
-
-The SEO / GEO Publish bar: it publishes what the SEO tabs changed with one password, each part only when it is waiting, and it is gone when nothing waits.
-
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/seo-riser.tsx, src/lib/manager-tools/seo/pending.ts (pendingMessage)
-- **Tier:** STRICT (AGENTS.md "Test depth"): publishing is what the live site receives.
-- **Not here:** the publish actions themselves (tests/unit/publish/); the run a publish starts (tests/unit/seo-tests/runs/publish-hook.test.ts).
-
-**Tests**
-
-- Hidden means gone: invisible and inert while nothing waits, so no dot or button shows under the fold.
-- Both waiting: the site first, then the links, with the one password.
-- Only links waiting (a test's fix): the site publish is not run.
-- A refused site publish (wrong password) stops before the links.
-- The message says what is waiting, in a few words.
 
 ### tests/components/manager-tools/seo/test-tab.test.tsx · 20 tests
 
@@ -1179,6 +1147,18 @@ The SEO / GEO AI test tab: start, running and done, the card under an open row, 
 - A failed run: the server's sentence shows, and Test again stays on.
 - The lines under the header: a failed attempt after the latest run (after a reload), a run over 30 days old, a run of an old address.
 
+### tests/unit/manager-tools/seo/bio-pack-photos.test.ts · 1 test
+
+The Apple Music & Amazon bio email offers the profile photo first, so it is the one attached by default, and a file shared with a library photo only once.
+
+- **Code:** src/lib/manager-tools/seo/profiles/bio-pack.ts (packPhotoRows), read by tools/seo/profiles/load.ts
+- **Tier:** LIGHT (AGENTS.md "Test depth"): one main path. It picks the default; the manager can pick another.
+- **Not here:** the email itself (bio-pack.test.ts); the picker on screen.
+
+**Tests**
+
+- The order is the default: the profile photo, then the site's photos, then the rest, each file once.
+
 ### tests/unit/manager-tools/seo/bio-pack.test.ts · 8 tests
 
 The Apple Music & Amazon bio email: what we ask AllMusic / Xperi to write from, and the `mailto:` link that opens it in the manager's mail app.
@@ -1197,6 +1177,29 @@ The Apple Music & Amazon bio email: what we ask AllMusic / Xperi to write from, 
 - Subject: name, city, genre; the parts that are missing are left out.
 - Releases: newest first, unreleased left out, ten at most.
 - The checks: each fires on its own gap and is quiet once the gap is filled.
+
+### tests/unit/manager-tools/seo/bio-state-photo.test.ts · 12 tests
+
+The profile photo joins the change nudge (PROFILE_TOOL_PLAN.md, Sam 2026-10-02): a Publish that changes it may leave every outside bio out of date, like a new bio or city.
+
+- **Code:** src/lib/manager-tools/seo/profiles/bio-state.ts (photoChanges, mergeChanges, bioRows)
+- **Tier:** STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo.
+- **Not here:** the facts themselves (bio-state.test.ts); the read (bios-load.ts).
+
+**Tests**
+
+- None → a photo: the outside bios don't have it yet.
+- The case the plan names: picking the SAME image again is a new row (vacate-then-insert).
+- A row whose other columns changed (sort order, alt) republishes with the same file.
+- A new photo is what the outside profiles miss, whichever way the row changed.
+- Taking the photo off is a change too: the bios may still show it.
+- Rows arrive in any order; moments are compared oldest to newest.
+- The read is capped: its oldest moment has an unknown photo before it, so it is no change.
+- Nothing to read is no change; a row that can't be placed in time is left out, not guessed.
+- One Publish shipped the bio AND the photo: one change, both named, the first-ness kept.
+- A photo change on its own Publish slots in by time, newest first.
+- The nudge itself: ticked after the bio change, then the photo changed. Out of date since the photo, naming only the photo.
+- "Photo · Sep 29" on the row: its own word, shared with no other fact.
 
 ### tests/unit/manager-tools/seo/bio-state.test.ts · 27 tests
 
@@ -1356,7 +1359,7 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 
 - **Code:** src/lib/site-editor/save.ts (seoValueError, saveSeoField, SEO_LIMITS, saveEditorField), src/lib/seo-facts.ts (FACT_KEYS, isFactKey, factTextError, cleanFactValue, joinAliases, thisYearAt), src/lib/seo-regions.ts (REGIONS), src/lib/artist-facts.ts (artistFactUpdate)
 - **Tier:** STRICT (AGENTS.md "Test depth"): every value here reaches the live site's <head> or its fact card, and they are validators (markup, control characters, links).
-- **Not here:** how the Facts tab reads the stored facts back (seo-facts.test.ts); the tabs that call these (tests/components/manager-tools/seo/*-tab.test.tsx).
+- **Not here:** how Profile reads the stored facts back (seo-facts.test.ts); the pages that call these (tests/components/manager-tools/seo/*-tab.test.tsx, profile/profile-view.test.tsx).
 
 **Tests**
 
@@ -1415,11 +1418,11 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 
 ### tests/unit/manager-tools/seo/seo-facts.test.ts · 12 tests
 
-How the Facts tab reads the stored facts back: the page says exactly what the live site's fact card states, and flags any stored value the save gate would refuse today.
+How Profile (the SEO / GEO Facts tab until 2026-10-02) reads the stored facts back: the page says exactly what the live site's fact card states, and flags any stored value the save gate would refuse today.
 
 - **Code:** src/lib/seo-facts.ts (readFacts, factErrors)
 - **Tier:** STRICT (AGENTS.md "Test depth"): the page must never say a fact is on the card when the site would drop it.
-- **Not here:** the save rules themselves (save-rules.test.ts); drawing the tab (tests/components/manager-tools/seo/facts-tab.test.tsx).
+- **Not here:** the save rules themselves (save-rules.test.ts); drawing the page (tests/components/manager-tools/profile/profile-view.test.tsx).
 
 **Tests**
 
@@ -1436,9 +1439,9 @@ How the Facts tab reads the stored facts back: the page says exactly what the li
 - A stored region is judged against the stored country; a country off the list is flagged.
 - A city over its cap is flagged.
 
-### tests/unit/manager-tools/seo/tabs-and-routes.test.ts · 8 tests
+### tests/unit/manager-tools/seo/tabs-and-routes.test.ts · 9 tests
 
-The SEO / GEO page has five tabs on the rail, each with its own page, the tool opens on Details, and every old section address still lands on the tab (and the row) that now holds it.
+The SEO / GEO page has four tabs on the rail, each with its own page, the tool opens on Details, and every old section address still lands on the tab (and the row) that now holds it: an SEO tab, or Profile for the facts and the bio (Facts left SEO / GEO on 2026-10-02).
 
 - **Code:** src/lib/manager-tools/seo/sections.ts, tools/seo/[section]/page.tsx (the redirect route), _shell/tools-registry.ts
 - **Tier:** STRICT (AGENTS.md "Test depth"): nothing that worked may lose its home, and a bad address must be a 404, not a crash.
@@ -1446,13 +1449,14 @@ The SEO / GEO page has five tabs on the rail, each with its own page, the tool o
 
 **Tests**
 
-- Five tabs, unique, Details first as the tool's own route, so the tool opens on it.
+- Four tabs, unique, Details first as the tool's own route, so the tool opens on it.
 - The rail shows exactly these tabs for the SEO / GEO tool.
 - Every tab has its own page on disk, so no tab is a dead link.
 - A page.tsx in a folder that is not a tab is a stray route; under an old name it would win over the redirect route (Next matches a static folder first), so the redirect would never run.
-- Every old section still has a home: it is a tab, or it redirects to one.
+- Every old section still has a home: it is a tab, or it redirects to one, or to Profile.
 - The redirect route sends each moved section to its tab and row; anything else is a 404.
 - The old Listing tab's address (Sam's bookmarks, old links) lands on Details, the tool's own page.
+- The old Facts tab's address (bookmarks, old links) lands on Profile, which now holds the facts.
 - An old address and a test's pencil for the same setting land on the same tab and row.
 
 ### tests/unit/manager-tools/seo/test-actions.test.ts · 11 tests
@@ -1515,6 +1519,53 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 - WHAT WE SAW: consecutive rows with the same label show it once (repeat), a label that comes back later is said again.
 - Stored evidence is untrusted: anything that isn't a list reads as none, and each odd row becomes plain strings (never dropped silently mid-list, never an object).
 - The running clock reads minutes:seconds from whole seconds, and never goes below 0:00 (a browser clock behind the server's).
+
+## Profile page
+
+Who the artist is, on one page: the name, bio, type, genre, other names, the year they started and where they are based (the SEO/GEO Facts tab until 2026-10-02).
+
+### tests/components/manager-tools/profile/profile-view.test.tsx · 19 tests
+
+The Profile page: each row saves through its own gate, a value the gate would refuse shows the gate's own words and is never sent, the bio keeps its rules, and the nudge under it leads to the outside bios. Moved here with the SEO / GEO Facts tab (2026-10-02, PROFILE_TOOL_PLAN.md).
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/profile/profile-view.tsx, bio-row.tsx
+- **Tier:** STRICT (AGENTS.md "Test depth") for what gets saved: the name to artists.name through its action, the city to artists.location, region / country / other names / the year to their fact keys, the bio to artists.bio through the editor's gate and never over its cap. LIGHT for the rest (the visual-artist note, the nudge line).
+- **Not here:** the save rules themselves (tests/unit/manager-tools/seo/save-rules.test.ts); how the page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts); the connected profiles and MusicBrainz, now on SEO / GEO › Profiles (tests/components/manager-tools/seo/connected-rows.test.tsx).
+
+**Tests**
+
+- Where each place saves: the city to the artist row, the region to its fact key.
+- A refused value: the validator's own words show, and nothing is sent.
+- The country list is exactly the table the gate accepts, so a pick is never refused.
+- A country with regions turns Region into its list, and the region is saved after the country.
+- A quick region waits for the country's save, since the gate reads the country back to judge the region.
+- A new country drops a region not on its list, and saves the clear.
+- A country stored as "USA" shows as the table's "United States", with the US region list.
+- The name saves through its own action (moved from Settings); a blank name shows the rule's words and is never sent.
+- The year: four digits only; anything else shows the validator's words and is not sent.
+- A visual artist: the year is kept but not on the fact card, and the page says so.
+- Other names: the artist's own name is refused in the validator's words, unsent.
+- A genre chip is added and saved to the artist row as one list.
+- A stored value the gate would now refuse is flagged on arrival.
+- The type saves as the artist's schema type.
+- The bio row is calm: its first words only; the counts live in the editor, and no 2,500 anywhere (Sam's call).
+- The bio test's pencil lands here: the row carries its id, and arriving opens the editor.
+- The bio saves to artists.bio; over the cap it is kept, refused and never sent (never cut).
+- "Where it shows" offers only what can take effect here (no site declaration on this page).
+- After a Publish changed a fact, the Bio row says how many outside bios may be out of date, linking to SEO / GEO › Profiles.
+
+### tests/unit/manager-tools/profile/profile.test.ts · 2 tests
+
+Profile's pure parts: the name's rule (one copy for the row and the action) and the nudge under the Bio row.
+
+- **Code:** src/lib/manager-tools/profile/profile.ts
+- **Tier:** STRICT for the name's rule (a validator); LIGHT for the nudge's words.
+- **Not here:** the bios' states themselves (bio-state.test.ts).
+
+**Tests**
+
+- Something, and not too long; spaces around it don't count.
+- Only "may be out of date" counts; unread rows say nothing.
 
 ## SEO / GEO saved runs (database)
 

@@ -14,6 +14,31 @@ import { FOCUS_RING } from './focus-ring'
  *  2px off the control: icons, glyphs, quiet links. A control inside a field takes no offset. */
 export const FOCUS_RING_OFFSET = cx(FOCUS_RING, 'focus-visible:outline-offset-2')
 
+/**
+ * AN EDIT PENCIL SHOWS ONLY WHEN IT IS NEEDED (Sam, 2026-10-02: "the edit button should only
+ * show up when hovering over the text area … It should only show when needed, when the user
+ * hovers over what they want to edit"). Every pencil in the dashboard, one rule:
+ *
+ *   EDIT_TARGET      on the thing the pencil edits: a ledger row, a modal's LABEL/value row, a
+ *                    card's line, an editor row or tile. Ledger, KvRow, CardField and
+ *                    CardActions already carry it.
+ *   REVEAL_ON_HOVER  on the pencil (or a span around it). Invisible until the pointer is on its
+ *                    target or on the pencil itself; shown while anything in the target has
+ *                    keyboard focus; always shown on a touch screen, which has no hover.
+ *
+ * OPACITY ONLY: the pencil keeps its box at rest, so nothing moves when it appears. The caller
+ * transitions opacity (RowIcon does), because two `transition-*` classes on one element fight.
+ * RowIcon applies it to every `edit` glyph by default (`reveal`). Only pencils: +, ✓, ↗ and ×
+ * keep their own look.
+ *
+ * Targets must not nest: `group-hover/edit` fires for ANY hovered ancestor target, so a pencil
+ * inside a popover inside a ledger row would light with the whole row. The Brand font menu,
+ * which opens inside its row, keys its rename pencil on its own item instead (font-menu.tsx).
+ */
+export const EDIT_TARGET = 'group/edit'
+export const REVEAL_ON_HOVER =
+  'opacity-0 hover:opacity-100 focus-visible:opacity-100 group-hover/edit:opacity-100 group-has-[:focus-visible]/edit:opacity-100 [@media(hover:none)]:opacity-100'
+
 /** Small faint Space Mono: a count ("4 of 5"), "Saved as …", a row's small print. */
 export const MONO_META = 'font-space text-[11px] text-ink-faint'
 

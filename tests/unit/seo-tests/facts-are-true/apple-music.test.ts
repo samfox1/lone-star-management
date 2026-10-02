@@ -156,7 +156,7 @@ describe('a link on another country’s store fails', () => {
 })
 
 describe('where you’re based', () => {
-  // Neither Tapir nor the card says a country: "couldn't check", pointing to the Facts tab.
+  // Neither Tapir nor the card says a country: "couldn't check", pointing to Profile.
   it('is unknown when neither Tapir nor the site says the country', () => {
     const r = a(cardApple(NORWAY, null))
     expect(r.status).toBe('unknown')

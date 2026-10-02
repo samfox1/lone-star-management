@@ -25,12 +25,20 @@ import { OUTSIDE_BIOS, bioItem, type OutsideBio } from './bios'
  * hero banner, not the artist's photo), the template, the press kit, the JSON-LD type and the
  * Spotify id, none of which a bio says. The Facts tab's region and country are site text.
  */
-// The profile photo (media purpose 'profile_photo') joins once Sam settles where it lives.
 export const BIO_FACTS = ['name', 'bio', 'location', 'genre'] as const satisfies readonly (typeof ARTIST_SNAPSHOT)[number][]
-export type BioFact = (typeof BIO_FACTS)[number]
+
+/**
+ * The profile photo is a fact too (PROFILE_TOOL_PLAN.md, Sam 2026-10-02): every outside profile
+ * shows one. It is not an artist column but the `media` row with purpose 'profile_photo', so its
+ * history is the media log, read on its own (photoChanges) and merged in (mergeChanges).
+ */
+export const PHOTO_FACT = 'photo'
+export type BioFact = (typeof BIO_FACTS)[number] | typeof PHOTO_FACT
+/** Every fact, in the order a row names them. */
+export const ALL_BIO_FACTS: readonly BioFact[] = [...BIO_FACTS, PHOTO_FACT]
 
 /** Each fact as the manager reads it: "bio and city changed". */
-export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', location: 'city', genre: 'genre' }
+export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', location: 'city', genre: 'genre', photo: 'photo' }
 
 /** After this long, a tick asks to be looked at again ("changes + 6 months", decided 2026-10-01). */
 export const RECHECK_AFTER_DAYS = 183
@@ -84,6 +92,73 @@ export function factChanges(revisions: readonly ProfileRevision[], { complete = 
     }
   })
   return changes
+}
+
+/** One published revision of a profile-photo `media` row: its file, or null for the tombstone
+ *  that took the row off the site. Shaped as bios-load.ts reads it (`data->>storage_path`). */
+export type PhotoRevision = { entity_id: string; published_at: string; path: string | null }
+
+/**
+ * Every Publish that changed the profile photo, newest first, each naming 'photo'.
+ *
+ * Compared by FILE, never by row. Picking a photo vacates the slot and inserts a new row
+ * (lib/profile-photo.ts), so picking the same image again is a new row with the same file,
+ * published in one moment with the old row's tombstone: the photo did not change, and it must not
+ * nudge anyone. A republish of the same row (its sort order or alt text moved) is no change either.
+ * A first photo, a different one and a removed one all count.
+ *
+ * One Publish is one insert with one `published_at` (content.ts, publishTogether), so the rows
+ * that share a time are applied together before the photo is compared.
+ *
+ * `complete: false`: the rows are a capped window, so the oldest moment has an unknown photo
+ * before it and is never counted (the same rule factChanges keeps).
+ */
+export function photoChanges(revisions: readonly PhotoRevision[], { complete = true }: { complete?: boolean } = {}): FactsChange[] {
+  const moments = new Map<number, { at: string; rows: PhotoRevision[] }>()
+  for (const r of revisions) {
+    const t = Date.parse(r.published_at)
+    if (!r.entity_id || !Number.isFinite(t)) continue
+    const m = moments.get(t)
+    if (m) m.rows.push(r)
+    else moments.set(t, { at: r.published_at, rows: [r] })
+  }
+  const live = new Map<string, string>()
+  // What the site showed: every live row's file, as one value (two rows can exist from before
+  // the slot held one, and a change to either is a change).
+  const shown = () => [...new Set(live.values())].sort().join('\n') || null
+  const changes: FactsChange[] = []
+  let before: string | null = null
+  let known = complete
+  for (const [, m] of [...moments.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const r of m.rows) {
+      const path = r.path?.trim()
+      if (path) live.set(r.entity_id, path)
+      else live.delete(r.entity_id)
+    }
+    const now = shown()
+    if (known && now !== before) changes.push({ at: m.at, fields: [PHOTO_FACT], first: false })
+    before = now
+    known = true
+  }
+  return changes.reverse()
+}
+
+/**
+ * The profile's fact changes and the photo's, as one list, newest first. A photo change in the
+ * same Publish as a fact change (the same instant) is ONE change naming both, in ALL_BIO_FACTS
+ * order, and stays the first Publish when it was one.
+ */
+export function mergeChanges(...lists: readonly (readonly FactsChange[])[]): FactsChange[] {
+  const byTime = new Map<number, FactsChange>()
+  for (const c of lists.flat()) {
+    const t = Date.parse(c.at)
+    const prev = byTime.get(t)
+    byTime.set(
+      t,
+      prev ? { at: prev.at, fields: ALL_BIO_FACTS.filter((f) => prev.fields.includes(f) || c.fields.includes(f)), first: prev.first || c.first } : c,
+    )
+  }
+  return [...byTime.entries()].sort((a, b) => b[0] - a[0]).map(([, c]) => c)
 }
 
 /**
@@ -145,7 +220,7 @@ export type BioRow = ConnectedBio & {
   state: BioState | null
   /** Stale only: the OLDEST change after this bio's tick ("may be out of date since"). */
   since: string | null
-  /** Stale only: every fact changed after this bio's tick, in BIO_FACTS order. */
+  /** Stale only: every fact changed after this bio's tick, in ALL_BIO_FACTS order. */
   changed: BioFact[]
 }
 
@@ -170,7 +245,7 @@ export function bioRows(input: BiosInput, now: Date | number): BioRow[] | null {
       confirmedAt,
       state,
       since: after[after.length - 1].at,
-      changed: BIO_FACTS.filter((f) => after.some((c) => c.fields.includes(f))),
+      changed: ALL_BIO_FACTS.filter((f) => after.some((c) => c.fields.includes(f))),
     }
   })
 }

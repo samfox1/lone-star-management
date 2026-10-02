@@ -174,14 +174,14 @@ export type SeoKnown = {
      *  `contentChangedAt` over the door payload. null/absent on a database with no
      *  `changed_at`; the stale-site check then judges by `publishedAt` alone. */
     contentAt?: string | null
-    /** The Facts "Region" (`fact_region`), as the bridge reads it (`siteFacts`): '' → null. */
+    /** Profile's "Region" (`fact_region`), as the bridge reads it (`siteFacts`): '' → null. */
     region: string | null
-    /** The Facts "Country" (`fact_country`): the bridge table's spelling when it knows the
+    /** Profile's "Country" (`fact_country`): the bridge table's spelling when it knows the
      *  country, else as typed. null = not set. */
     country: string | null
     /** `country` as ISO 3166-1 alpha-2 ("US"), when the bridge's table knows it; else null. */
     countryCode: string | null
-    /** The Facts "Artist type" (`artists.schema_type`): 'Person' = Visual artist, anything
+    /** Profile's "Type" (`artists.schema_type`): 'Person' = Visual artist, anything
      *  else = Musician ('MusicGroup'), the bridge's own rule. */
     artistType: 'MusicGroup' | 'Person'
     /** `artists.spotify_artist_id` when it is the shape the bridge accepts. The bridge adds

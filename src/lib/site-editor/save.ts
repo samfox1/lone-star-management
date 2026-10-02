@@ -20,6 +20,7 @@ import { acceptsValue, CURSOR_KEYS, cursorValueError, FAQ_EXTRA, FAQ_KEYS, FAQ_Q
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
+import { setProfilePhoto } from '@/lib/profile-photo'
 import { ABOUT_PLACEMENTS, FACT_CONTENT_KEYS, MAX_PLACE_PART_LENGTH, safeHttpUrl } from '@samfox1/site-bridge/seo'
 import { cleanFactValue, isFactKey, thisYearAt, type FactContext, type FactKey } from '@/lib/seo-facts'
 import { INDEXNOW_CONTENT_KEY } from '@samfox1/site-bridge/indexnow'
@@ -414,22 +415,9 @@ export async function setImageField(
     return error ? { ok: false, error: error.message } : { ok: true }
   }
 
-  if (field.target.store === 'media') {
-    const purpose = field.target.purpose
-    // Vacate the purpose first (single occupancy), so a clear is just this delete and a
-    // replace can't leave two rows claiming the same slot.
-    const del = await supabase.from('media').delete().eq('artist_id', artistId).eq('purpose', purpose)
-    if (del.error) return { ok: false, error: del.error.message }
-    if (!storagePath) return { ok: true }
-    const { error } = await supabase.from('media').insert({
-      artist_id: artistId,
-      purpose,
-      storage_path: storagePath,
-      on_site: true,
-      sort_order: Math.floor(Date.now() / 1000),
-    })
-    return error ? { ok: false, error: error.message } : { ok: true }
-  }
+  // The one media target is the profile photo, and the Profile page and the Site & profile page
+  // write it too: one function, so the three doors write the same record (lib/profile-photo.ts).
+  if (field.target.store === 'media') return setProfilePhoto(supabase, artistId, storagePath)
 
   return { ok: false, error: 'That field is not an image.' }
 }

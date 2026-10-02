@@ -10,7 +10,7 @@ import type { OgSource } from './og-image-picker'
 import type { AltPhoto } from './details/details-tab'
 
 /**
- * What the Details, Facts and Answers tabs read, moved here from the old seven-section
+ * What the Details, Answers and Profiles tabs read, moved here from the old seven-section
  * `[section]/page.tsx` (2026-09-29) so each tab's page asks only for what it shows. Every query
  * is RLS-scoped and flies in ONE round beside the ownership gate (`requireArtist`): nothing
  * waits on the gate to be safe, only to render.

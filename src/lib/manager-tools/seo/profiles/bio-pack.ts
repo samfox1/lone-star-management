@@ -282,6 +282,23 @@ export function emailText(pack: Pick<BioPack, 'to' | 'subject' | 'body'>, opts: 
   return [`To: ${pack.to.filter(isPlainAddress).join(', ')}`, cc ? `Cc: ${cc}` : '', `Subject: ${oneLine(pack.subject)}`, '', pack.body].filter((l, i) => l || i === 3).join('\n')
 }
 
+/**
+ * The photos the email can attach, in the order offered; the first is attached by default. The
+ * profile photo first (PROFILE_TOOL_PLAN.md: the email attaches it by default), then the site's
+ * own photos, then the rest of Images. Artwork (a cover) and pieces marked "none" are not press
+ * photos, and only files a mail app can attach are offered. A file listed twice (a profile photo
+ * picked from Images SHARES its library photo's file, lib/profile-photo.ts) is offered once.
+ * Stable: rows keep their order within a rank.
+ */
+export function packPhotoRows<T extends { purpose: string; storage_path: string; kind: string | null; on_site: boolean | null }>(rows: readonly T[]): T[] {
+  const rank = (m: T) => (m.purpose === 'profile_photo' ? 0 : m.on_site ? 1 : 2)
+  const seen = new Set<string>()
+  return rows
+    .filter((m) => m.kind !== 'artwork' && m.kind !== 'none' && photoTypeOf(m.storage_path))
+    .sort((x, y) => rank(x) - rank(y))
+    .filter((m) => !seen.has(m.storage_path) && !!seen.add(m.storage_path))
+}
+
 /** "JPEG", "PNG", "WebP" from a file path or url, or null. */
 export function photoTypeOf(path: string): string | null {
   const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(path)?.[1]?.toLowerCase()

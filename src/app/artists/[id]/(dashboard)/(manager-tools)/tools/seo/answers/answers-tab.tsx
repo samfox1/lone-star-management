@@ -15,7 +15,7 @@ import { LEDGER_ROW_GRID, LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { FieldError } from '../../../_ui/field-error'
-import { AreaField, EndSlot, LineField } from '../_ui/parts'
+import { AreaField, EndSlot, LineField } from '../../../_ui/fields'
 
 /** Where an automatic-only answer comes from, and the tool that holds it. */
 const FROM = {

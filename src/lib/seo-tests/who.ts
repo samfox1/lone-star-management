@@ -28,7 +28,7 @@ import {
 import { distinctiveTitle, matchFold, matchSquash, namesPhrase, ownArtistNode, sentencesOf, wordCount } from './match'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
 
-/** Published in Tapir as a visual artist (Facts "Artist type"). Unknown when nothing is
+/** Published in Tapir as a visual artist (Profile "Type"). Unknown when nothing is
  *  published: then no test can say it does not apply. */
 const visualArtist = (e: SeoEvidence) => e.known.published?.artistType === 'Person'
 
@@ -359,7 +359,7 @@ const genre = make('genre', (e) => {
   if ('cut' in a) return tooBig('the fact card about you')
   const facts = { kind: 'edit', target: 'facts', label: 'Change your genre' } as const
   const saved = (e.known.published?.genre ?? '').split(',').map(collapse).filter(Boolean)
-  const todo = saved.length ? 'Your genre is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your genre on the Facts tab, then publish.'
+  const todo = saved.length ? 'Your genre is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your genre on Profile, then publish.'
   const tapirRow = saved.length ? [{ label: 'in Tapir: genre', value: clip(saved.join(', '), 120) }] : []
   if ('none' in a) {
     return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your genre for search engines: ${a.none}.`, todo, action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
@@ -411,7 +411,7 @@ const place = make('place', (e) => {
   const part = (v: string | null | undefined) => collapse(v ?? '') || 'not set'
   const tapirRow = pub ? [{ label: 'in Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : []
   if ('none' in a) {
-    return { status: 'fail', value: 'not said', sentence: `your site doesn’t say where you’re based: ${a.none}.`, todo: 'Add your city, state and country on the Facts tab, then publish.', action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
+    return { status: 'fail', value: 'not said', sentence: `your site doesn’t say where you’re based: ${a.none}.`, todo: 'Add your city, state and country on Profile, then publish.', action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
   }
   const p = placeOf(a.node)
   const address = isObj(p) ? (isObj(p.address) ? p.address : null) : null
@@ -433,11 +433,11 @@ const place = make('place', (e) => {
   // One line ("Chicago, IL"): the words may all be there, but not as the separate facts
   // search engines read. Said as such, never as "says Chicago, IL, but not the state".
   if (line && !address) {
-    return { status: 'fail', lead: 'Almost', value: 'one line', sentence: `your site gives your place as one line (“${clip(line, 40)}”). Search engines want the city, state and country as separate facts.`, todo: pub?.region && pub?.country ? publish : 'Add your city, state and country on the Facts tab, then publish.', action: facts, evidence, limits }
+    return { status: 'fail', lead: 'Almost', value: 'one line', sentence: `your site gives your place as one line (“${clip(line, 40)}”). Search engines want the city, state and country as separate facts.`, todo: pub?.region && pub?.country ? publish : 'Add your city, state and country on Profile, then publish.', action: facts, evidence, limits }
   }
   const bad = [region && !meaningful(region) && 'the state or region', country && !countryCode(country) && 'the country'].filter((x): x is string => !!x)
   if (bad.length) {
-    return { status: 'fail', value: 'not a real place', sentence: `your site gives ${bad.join(' and ')} as “${clip([region, country].filter(Boolean).join(', '), 40)}”, which isn’t a real place.`, todo: 'Set your state and country on the Facts tab, then publish.', action: facts, evidence, limits }
+    return { status: 'fail', value: 'not a real place', sentence: `your site gives ${bad.join(' and ')} as “${clip([region, country].filter(Boolean).join(', '), 40)}”, which isn’t a real place.`, todo: 'Set your state and country on Profile, then publish.', action: facts, evidence, limits }
   }
   if (city && region && country) {
     // Compared with what Tapir published: a site that says Austin when Tapir says Chicago is
@@ -454,7 +454,7 @@ const place = make('place', (e) => {
     return { status: 'pass', value: clip(`${city}, ${region}, ${country}`, 28), sentence: `Your site says you’re based in ${city}, ${region}, ${country}.`, evidence, limits }
   }
   if (!city && !region && !country) {
-    return { status: 'fail', value: 'not said', sentence: 'your site doesn’t say where you’re based.', todo: 'Add your city, state and country on the Facts tab, then publish.', action: { ...facts, label: 'Add where you’re based' }, evidence, limits }
+    return { status: 'fail', value: 'not said', sentence: 'your site doesn’t say where you’re based.', todo: 'Add your city, state and country on Profile, then publish.', action: { ...facts, label: 'Add where you’re based' }, evidence, limits }
   }
   const missing = [!city && 'the city', !region && 'the state or region', !country && 'the country'].filter((x): x is string => !!x)
   const has = [city, region, country].filter(Boolean).join(', ')
@@ -466,7 +466,7 @@ const place = make('place', (e) => {
   return {
     status: 'fail', lead: 'Almost', value: city && !region && !country ? 'city only' : `missing ${missing.length}`,
     sentence: `your site says ${has}, but not ${list}.`,
-    todo: lacks.length ? `Add ${lacks.join(' and ')} on the Facts tab, then publish.` : publish, action: facts, evidence, limits,
+    todo: lacks.length ? `Add ${lacks.join(' and ')} on Profile, then publish.` : publish, action: facts, evidence, limits,
   }
 })
 

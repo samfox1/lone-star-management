@@ -18,7 +18,8 @@ function FocusableCard({ focused, label, children }: { focused: boolean; label: 
       ref={ref}
       aria-current={focused ? 'true' : undefined}
       aria-label={label}
-      className={cx('overflow-hidden rounded-lg border', focused ? 'border-accent ring-2 ring-accent' : 'border-hairline')}
+      // The card is its pencil's EDIT_TARGET (_ui/styles.ts): the pencil shows while it is hovered.
+      className={cx(EDIT_TARGET, 'overflow-hidden rounded-lg border', focused ? 'border-accent ring-2 ring-accent' : 'border-hairline')}
     >
       {children}
     </div>
@@ -27,6 +28,7 @@ function FocusableCard({ focused, label, children }: { focused: boolean; label: 
 import { SlotGroupLabel, SaveLine, NoSlots } from '../inspector-shared'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { renameVideoAction } from '../../actions'
+import { EDIT_TARGET, REVEAL_ON_HOVER } from '../../(manager-tools)/_ui/styles'
 
 /* ── Video tools: the site's video slots ─────────────────────────────────────────
  *
@@ -111,7 +113,7 @@ export function VideoTools({
                   aria-label={`Edit the ${label} slot`}
                   title="Customize this video"
                   onClick={() => onEditItem({ type: 'videoSlot', role, label })}
-                  className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+                  className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
                 >
                   <Icon name="edit" size={13} />
                 </button>
@@ -154,7 +156,7 @@ export function VideoTools({
               aria-label={`Edit video slot ${i + 1}`}
               title="Customize this video"
               onClick={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
-              className="flex-none rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink"
+              className={cx('flex-none rounded-md p-1 text-ink-faint transition-opacity hover:bg-surface hover:text-ink', REVEAL_ON_HOVER)}
             >
               <Icon name="edit" size={14} />
             </button>

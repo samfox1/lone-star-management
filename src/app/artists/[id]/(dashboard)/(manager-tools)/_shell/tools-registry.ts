@@ -1,5 +1,6 @@
 import type { IconName } from '@/components/ui/icons'
 import { SEO_TABS } from '@/lib/manager-tools/seo/sections'
+import { PROFILE_SEG } from '@/lib/manager-tools/profile/route'
 
 /**
  * The manager-tools registry. A PLAIN module on purpose: tools-rail.tsx is 'use client',
@@ -35,6 +36,9 @@ export type Tool = {
  *  <Icon> wrapper (24 grid, 1.6 stroke). Notices in LICENSES/icons.md. */
 export const TOOLS: readonly Tool[] = [
   { seg: 'tools', icon: 'home', label: 'Overview', desc: 'Status, publish, quick links' },
+  // One home for who the artist is (Sam, 2026-10-02, PROFILE_TOOL_PLAN.md): the photo, name,
+  // bio and facts the site, the press kit and the SEO tests all read. No tabs.
+  { seg: PROFILE_SEG, icon: 'user', label: 'Profile', desc: 'Photo, name, bio & facts' },
   { seg: 'site', icon: 'internet', label: 'Site & profile', short: 'Site', desc: 'Template, site text, photos & video', templateOnly: true },
   {
     seg: 'brand',

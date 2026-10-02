@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
-import { CAPS_LABEL } from './(manager-tools)/_ui/styles'
+import { CAPS_LABEL, EDIT_TARGET, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
 
 /**
  * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11):
@@ -104,7 +104,9 @@ export function KvLabel({ children, top = false }: { children: ReactNode; top?: 
   return <span className={cx(CAPS_LABEL, 'w-[100px] flex-none text-ink-faint', top && 'pt-2')}>{children}</span>
 }
 
-/** The row shell: a mono label on the left, whatever the row holds on the right. */
+/** The row shell: a mono label on the left, whatever the row holds on the right. The row is
+ *  its pencil's EDIT_TARGET (_ui/styles.ts): the pencil shows while the row is hovered or its
+ *  value has keyboard focus. */
 export function KvRow({
   label,
   labelNode,
@@ -125,6 +127,7 @@ export function KvRow({
   return (
     <div
       className={cx(
+        EDIT_TARGET,
         'group flex min-h-[44px] gap-4 border-b border-hairline-soft py-3 last:border-b-0',
         align === 'start' ? 'items-start' : 'items-center',
         className,
@@ -250,6 +253,12 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
   )
 }
 
+/** The row's pencil: a mark, not a control (the value is the click). Hidden until the row is
+ *  hovered or its value is focused, always there on a touch screen (REVEAL_ON_HOVER). */
+function RowPencil() {
+  return <Icon name="edit" size={14} className={cx('flex-none text-ink-faint transition-opacity', REVEAL_ON_HOVER)} />
+}
+
 /** One `LABEL  value` row that saves its own field. `trailing` sits after the value —
  *  an "open in a new tab" mark beside a link, say — and shows whatever the hover state. */
 export function KvField({ trailing, labelNode, ...props }: EditableProps & { trailing?: ReactNode; labelNode?: ReactNode }) {
@@ -257,7 +266,7 @@ export function KvField({ trailing, labelNode, ...props }: EditableProps & { tra
     <KvRow label={props.label} labelNode={labelNode}>
       <Editable {...props} size="row" />
       {trailing}
-      {props.readOnly ? null : <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />}
+      {props.readOnly ? null : <RowPencil />}
     </KvRow>
   )
 }
@@ -275,7 +284,7 @@ export function KvCells({ label, cells }: { label: string; cells: EditableProps[
           </div>
         ))}
       </div>
-      <Icon name="edit" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover:opacity-100" />
+      <RowPencil />
     </KvRow>
   )
 }

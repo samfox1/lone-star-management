@@ -7,7 +7,7 @@ import { recipientLine, type SettingsRow } from '@/lib/settings'
 import { toast } from '../../toast'
 import { KvLabel } from '../../modal-kit'
 import { useSeeded } from '../_ui/use-seeded'
-import { saveArtistNameAction, saveBookingEmailAction } from './actions'
+import { saveBookingEmailAction } from './actions'
 
 /**
  * SETTINGS (Sam, 2026-09-13): rows, left-aligned, in the same grammar as Brand — a mono
@@ -15,8 +15,9 @@ import { saveArtistNameAction, saveBookingEmailAction } from './actions'
  * evening; Sam moved it back beside Brand so the two tool pages read as one family. No
  * panel, no border, no arrows, no headings.
  *
- * Booking email and Name are rows you click to edit — the whole row, with the same hover
- * the tour dates and connections wear (`rowHoverClass`) — and they save on blur or Enter.
+ * Booking email is a row you click to edit — the whole row, with the same hover the tour
+ * dates and connections wear (`rowHoverClass`) — and it saves on blur or Enter. The name
+ * moved to Profile (2026-10-02).
  * Site and Address are plain text: "the user can't just change their domain name like
  * that". They carry no hover, no pencil, no input, nothing to click.
  */
@@ -31,11 +32,6 @@ export function SettingsView({ artistId, rows: initial }: { artistId: string; ro
       const res = await saveBookingEmailAction(artistId, value)
       // The address just saved is where enquiries now go, so the line is the resolver's own.
       if (!res.error) patch(row.key, { value: res.value ?? '', sub: recipientLine(res.value ?? '', res.value ? { to_email: res.value, recipient_source: 'artist' } : null) })
-      return res
-    }
-    if (row.key === 'name') {
-      const res = await saveArtistNameAction(artistId, value)
-      if (!res.error) patch(row.key, { value })
       return res
     }
   }
