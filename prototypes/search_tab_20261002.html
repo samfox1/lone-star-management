@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search Tab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* SEO/GEO › Search ("How fans find you"), mock 1, 2026-10-02.
+   Frame copied from prototypes/profile_tool_20261001.html + the live tabbed rail (tools-rail.tsx).
+   Numbers + chart copied from the dashboard's Analytics page (metric-explorer.tsx, timeline-chart.tsx,
+   city-table.tsx, device-glyphs.tsx). Caps in the 3 sizes of _ui/styles.ts: 10px label .10em, 11px section
+   .10em, 11px meta .06em. Data: the REAL normalised snapshot for Skeen (2026-10-02, 28d + 3m). */
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--red:#e5484d;--pending:#d99a2b;--avatar:#ececef;--avatar-ink:#3f3f46;--track:#f4f4f5;--seen:#d9dade}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8;--track:#1f1f21;--seen:#3a3b3f}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8;--track:#1f1f21;--seen:#3a3b3f}
+*{box-sizing:border-box}
+html{overflow-x:clip;overscroll-behavior-y:none}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
+.ic{flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.gl{flex:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* the caps ladder (_ui/styles.ts) */
+.cl{font:10px "Space Mono",monospace;text-transform:uppercase;letter-spacing:.1em}
+.cs{font:11px "Space Mono",monospace;text-transform:uppercase;letter-spacing:.1em}
+.cm{font:11px "Space Mono",monospace;text-transform:uppercase;letter-spacing:.06em}
+.mm{font:11px "Space Mono",monospace}
+
+/* HoverLabel (row-icon.tsx CHIP) */
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);font:500 12px/1 "Instrument Sans",system-ui,sans-serif;letter-spacing:0;text-transform:none;padding:6px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:90}
+[data-tip]:hover::after,[data-tip]:focus-visible::after{display:block}
+[data-tip].tip-l::after{left:0;transform:none}
+
+/* ── prototype chrome (not the product) ── */
+.proto{position:sticky;top:0;z-index:60;height:44px;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--hair)}
+.proto .t{font:10px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.proto .vs{display:flex;flex:none;gap:2px;padding:3px;border:1px solid var(--hair);border-radius:10px;background:var(--paper)}
+.proto .vs button{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.proto .vs button:hover{color:var(--ink)}
+.proto .vs button.on{background:var(--ink);color:var(--paper)}
+.proto .note{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+/* ── header (dashboard layout.tsx) ── */
+.hdr{position:sticky;top:44px;z-index:30;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 20px;border-bottom:1px solid var(--hair);background:var(--paper)}
+.who{display:flex;align-items:center;gap:8px;min-width:0}
+.who .bk{display:inline-flex;width:26px;height:26px;flex:none;align-items:center;justify-content:center;border-radius:8px;color:var(--muted)}
+.who b{font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.av{display:inline-flex;flex:none;align-items:center;justify-content:center;border-radius:50%;background:var(--avatar);color:var(--avatar-ink);font-family:"Space Mono",monospace;font-weight:700}
+.anav{display:flex;justify-content:center;gap:2px}
+.anav a{display:inline-flex;align-items:center;padding:10px;border-radius:8px;color:var(--muted);transition:color .15s}
+.anav a:hover{color:var(--ink)}
+.anav a.on{color:var(--accent)}
+.tr{display:flex;justify-content:flex-end;align-items:center;gap:14px;color:var(--muted)}
+.mnav{display:none;gap:4px;overflow-x:auto;border-bottom:1px solid var(--hair);padding:0 16px;scrollbar-width:none}
+.mnav a{display:flex;flex:none;align-items:center;gap:8px;border-bottom:2px solid transparent;padding:12px;font:12px "Space Mono",monospace;color:var(--muted)}
+.mnav a.on{border-color:var(--accent);color:var(--accent)}
+
+/* ── tools rail, THIN (a tabbed tool) + the second panel. Nav hover = colour only (NAV_HOVER). ── */
+.rail{position:fixed;left:0;top:0;z-index:20;height:100vh;width:52px;overflow:hidden;border-right:1px solid var(--hair);background:var(--paper);transition:width .15s}
+.rail:hover{width:84px}
+.rail .col{margin-top:50vh;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;padding:0 6px}
+.rail a{height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:8px;color:var(--muted);transition:color .15s}
+.rail a:hover{color:var(--ink)}
+.rail a:hover .ic{stroke-width:2.1}
+.rail a.on{color:var(--accent)}
+.rail a span{max-width:84px;overflow:hidden;white-space:nowrap;font:10px/12px "Space Mono",monospace;letter-spacing:.02em;opacity:0;transition:opacity .15s}
+.rail:hover a span{opacity:1}
+.sub{position:fixed;left:52px;top:0;z-index:10;height:100vh;width:max-content;min-width:96px;border-right:1px solid var(--hair);background:var(--paper)}
+/* the RAIL's offset (9 tools: 9×52 + 8×4 = 500 → 250) */
+.sub .col{margin-top:calc(50vh - 250px);display:flex;flex-direction:column;gap:4px;padding:0 8px}
+.sub a{display:flex;align-items:center;padding:8px 10px;border-radius:8px;color:var(--muted);font:13px "Space Mono",monospace;letter-spacing:.02em;white-space:nowrap;transition:color .15s}
+.sub a:hover{color:var(--ink);text-shadow:0 0 .45px currentColor}
+.sub a.on{color:var(--ink);font-weight:700}
+.strip{display:none;flex-wrap:wrap;gap:4px;margin:-12px 0 20px}
+.strip a{white-space:nowrap;border-radius:8px;padding:8px 10px;font:13px "Space Mono",monospace;letter-spacing:.02em;color:var(--muted)}
+.strip a.on{background:var(--surface);font-weight:700;color:var(--ink)}
+
+/* ── main: px-7 py-8; slots reserve the rail + panel in the flow; ONE 1180px left frame ── */
+main{width:100%;padding:32px 28px}
+.shell{display:flex;gap:32px}
+.slots{flex:none;display:flex;margin:0 0 -32px -28px}
+.slots .r{width:52px;border-right:1px solid var(--hair)}
+.slots .s{display:flex;flex-direction:column;min-width:96px;padding:0 8px;border-right:1px solid var(--hair)}
+.slots .s span{visibility:hidden;padding:0 10px;font:700 13px "Space Mono",monospace;letter-spacing:.02em;white-space:nowrap}
+.content{flex:1;min-width:0;max-width:1180px;padding-bottom:112px}
+
+/* ── the switches: quiet mono words, the current one bold ink (like the sub-tab panel) ── */
+.bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px}
+.tog{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px}
+.tog button{display:inline-flex;align-items:center;gap:7px;padding:6px 0;font:12px "Space Mono",monospace;letter-spacing:.02em;color:var(--muted);white-space:nowrap;transition:color .15s}
+.tog button:hover{color:var(--ink)}
+.tog button.on{color:var(--ink);font-weight:700}
+.tog .gl{width:13px;height:13px}
+.dot{width:6px;height:6px;flex:none;border-radius:50%;background:var(--pending)}
+.dot.red{background:var(--red)}
+
+/* ── HEADLINE: four numbers in the Analytics page's number style (mono bold, caps labels), the small line under ── */
+.nums{margin-top:28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 16px}
+@media (min-width:900px){.nums{grid-template-columns:repeat(4,minmax(0,1fr));gap:0 32px}}
+.num{min-width:0}
+.lab{font:700 10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.num dd{margin:8px 0 0;font:700 44px/1 "Space Mono",monospace;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.num .m{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font:11px "Space Mono",monospace;color:var(--faint)}
+.num .m .gl{width:11px;height:11px}
+.num .m.ai{display:block}
+.num .m.ai .gl{display:inline-block;margin-right:5px;vertical-align:-1px}
+.num .m button{display:inline-flex;align-items:center;gap:6px;font:inherit;color:inherit;transition:color .15s}
+.num .m button:hover{color:var(--ink)}
+.line{margin-top:36px}
+.legend{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px;color:var(--faint)}
+.legend ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 20px}
+.legend li{display:flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:16px;height:3px;border-radius:99px}
+.sw.dash{height:0;border-top:2px dashed var(--faint);border-radius:0}
+.ch{margin-top:14px;display:flex;gap:12px}
+.yax{position:relative;width:24px;flex:none;font:10px "Space Mono",monospace;font-variant-numeric:tabular-nums;color:var(--faint)}
+.yax span{position:absolute;right:0;transform:translateY(-50%)}
+.plot{position:relative;flex:1;min-width:0;touch-action:pan-y}
+.plot svg{display:block;overflow:visible}
+.xax{position:relative;height:18px;margin:8px 0 0 36px;font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.xax span{position:absolute;top:0;white-space:nowrap;transform:translateX(-50%)}
+.xax span:first-child{transform:none}
+.xax span:last-child{transform:translateX(-100%)}
+.ring{position:absolute;width:10px;height:10px;border-radius:50%;border:2px solid;background:var(--paper);transform:translate(-50%,-50%);pointer-events:none}
+.readout{position:absolute;width:168px;border-radius:12px;background:var(--paper);padding:10px 12px;box-shadow:0 8px 24px rgba(17,17,17,.12);pointer-events:none;z-index:5}
+.readout b{display:block;font:700 15px "Space Mono",monospace}
+.readout dl{margin:6px 0 0;display:grid;gap:2px;color:var(--faint)}
+.readout dl div{display:flex;justify-content:space-between;gap:12px}
+.readout dd{margin:0;font:700 11px "Space Mono",monospace;font-variant-numeric:tabular-nums;color:var(--ink)}
+.readout .pre{margin-top:6px;color:var(--faint)}
+
+/* ── the lists: Analytics' two-column grid (Source | Device, map | countries) ── */
+.lists{margin-top:52px;display:grid;gap:44px}
+.lists>div{display:flex;flex-direction:column;gap:44px;min-width:0}
+@media (min-width:1024px){.lists{grid-template-columns:minmax(0,1fr) 400px;column-gap:48px}}
+.blk h2{margin:0;display:flex;align-items:center;gap:8px;font:400 11px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.blk h2 .gl{width:12px;height:12px;color:var(--faint)}
+.tbl{margin-top:10px}
+.tr2{display:grid;align-items:center;gap:0 14px;border-bottom:1px solid var(--hair-soft);padding:8px 0}
+.tr2.th{border-bottom:1px solid var(--hair);padding:0 0 8px}
+.q .tr2{grid-template-columns:minmax(0,1fr) minmax(56px,200px) 46px 40px 40px}
+.p .tr2{grid-template-columns:minmax(0,1fr) minmax(56px,200px) 46px 40px}
+.c .tr2{grid-template-columns:minmax(0,1fr) minmax(48px,140px) 46px 40px}
+.th span{font:700 10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-align:right;white-space:nowrap}
+.th .k{display:inline-flex;align-items:center;justify-content:flex-end;gap:5px}
+.th .k i{width:7px;height:7px;border-radius:2px;background:var(--accent)}
+.th .k i.s{background:var(--seen)}
+.nm{min-width:0;display:flex;align-items:center;gap:10px}
+.nm .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--ink)}
+.nm .u{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px "Space Mono",monospace;color:var(--faint)}
+.nm .gl{width:19px;height:19px;color:var(--ink)}
+.nm>span{min-width:0}
+.nm .go{width:14px;height:14px;opacity:0;color:var(--faint);transition:opacity .15s}
+.tr2:hover .nm .go{opacity:1}
+.n{text-align:right;font:11px "Space Mono",monospace;font-variant-numeric:tabular-nums;color:var(--muted)}
+.n.b{font-weight:700;color:var(--ink)}
+/* the bar: the grey run is SEEN, the blue inside it is CLICKS — one scale per list */
+.bt{position:relative;display:block;height:7px;border-radius:99px;background:var(--track)}
+.bt i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--seen)}
+.bt i+i{background:var(--accent)}
+.rare{margin-top:10px;display:inline-flex;align-items:center;gap:7px;color:var(--faint)}
+.rare .gl{width:14px;height:14px}
+.more{margin-top:10px;display:inline-flex;align-items:center;gap:6px;font:12px "Space Mono",monospace;color:var(--muted);transition:color .15s}
+.more:hover{color:var(--ink)}
+
+/* ── an engine with no numbers: NEVER a page of zeros ── */
+.none{margin-top:48px;display:flex;align-items:flex-start;gap:16px;max-width:560px}
+.none .mk{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--hair);color:var(--faint)}
+.none .mk .gl{width:20px;height:20px}
+.none h3{margin:2px 0 0;font-size:22px;font-weight:600;letter-spacing:-.015em;line-height:1.25}
+.none p{margin:6px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font:12px "Space Mono",monospace;color:var(--muted)}
+.none p i{width:3px;height:3px;border-radius:50%;background:var(--faint)}
+.none p b{font-weight:400;color:var(--ink)}
+.again{margin-top:14px;display:inline-flex;align-items:center;gap:8px;padding:6px 2px;font:13px "Space Mono",monospace;color:var(--ink);transition:color .15s}
+.again:hover{color:var(--accent)}
+.again .ic{width:15px;height:15px}
+
+@media (max-width:767px){
+  .anav,.rail,.sub,.slots{display:none}
+  .mnav{display:flex}
+  .strip{display:flex}
+  .hdr{grid-template-columns:1fr auto}
+  main{padding:28px 16px}
+}
+@media (max-width:480px){
+  .q .tr2{grid-template-columns:minmax(0,1fr) 44px 34px 34px 32px;gap:0 8px}
+  .p .tr2{grid-template-columns:minmax(0,1fr) 44px 34px 34px;gap:0 8px}
+  .c .tr2{grid-template-columns:minmax(0,1fr) 44px 34px 34px;gap:0 8px}
+  .th .k i{display:none}
+}
+@media (max-width:600px){.proto .t{display:none}.proto{gap:10px;padding:0 12px}}
+@media (prefers-reduced-motion:reduce){.rail,.rail a span{transition:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M2 8l9.73-4.87a.6.6 0 0 1 .54 0L22 8"/><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.4"/><path d="M5.5 19.5c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><g transform="scale(0.09375)" fill="currentColor" stroke="none"><path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z"/></g></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><path d="M10.59 10.59l6.36-3.54-3.54 6.36-6.36 3.54 3.54-6.36z"/><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15"/></symbol>
+  <symbol id="i-userGroup" viewBox="0 0 24 24"><path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/></symbol>
+  <symbol id="i-mailbox" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z"/><path d="M15 9h3v2M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2M6 10h1"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-analytics" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></symbol>
+  <symbol id="i-tour" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-merch" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-chevronLeft" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chevronRight" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-chevronDown" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></symbol>
+  <symbol id="i-arrowUpRight" viewBox="0 0 24 24"><path d="M7 17L17 7M8 7h9v9"/></symbol>
+  <!-- source-glyphs.tsx (filled marks) -->
+  <symbol id="g-google" viewBox="0 0 24 24"><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" stroke-width="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor"/></symbol>
+  <symbol id="g-bing" viewBox="0 0 24 24"><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor"/></symbol>
+  <symbol id="g-ai" viewBox="0 0 24 24"><path d="M12 2.1 C13.05 8 16 10.95 21.9 12 16 13.05 13.05 16 12 21.9 10.95 16 8 13.05 2.1 12 8 10.95 10.95 8 12 2.1 Z" fill="currentColor"/></symbol>
+  <!-- device-glyphs.tsx -->
+  <symbol id="g-mobile" viewBox="0 0 24 24"><rect x="7.1" y="2.5" width="9.8" height="19" rx="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.6 5.6 h2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="18.4" r="0.95" fill="currentColor"/></symbol>
+  <symbol id="g-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="18.2" r="0.95" fill="currentColor"/></symbol>
+  <symbol id="g-desktop" viewBox="0 0 24 24"><rect x="4.1" y="4.6" width="15.8" height="10.8" rx="1.9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.1 18.7 h19.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="g-hidden" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c5 0 8.7 4.2 9.8 7-.4 1-1.2 2.3-2.3 3.5M6.6 6.6C4.5 8 3 10 2.2 12c1.1 2.8 4.8 7 9.8 7 1.9 0 3.6-.6 5-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+ </defs>
+</svg>
+
+<div class="proto">
+  <span class="t">SEO/GEO · Search · mock 1</span>
+  <div class="vs" role="tablist" aria-label="State">
+    <button data-go="today" class="on">Today</button>
+    <button data-go="cant">Couldn't ask</button>
+  </div>
+  <span class="note" id="note"></span>
+</div>
+
+<header class="hdr">
+  <a class="who" href="#"><span class="bk"><svg class="ic" width="18" height="18"><use href="#i-chevronLeft"/></svg></span><span class="av" style="width:24px;height:24px;font-size:8px">S</span><b>Skeen</b></a>
+  <nav class="anav" aria-label="Artist">
+    <a href="#" aria-label="Analytics"><svg class="ic" width="22" height="22"><use href="#i-analytics"/></svg></a>
+    <a href="#" aria-label="Assets"><svg class="ic" width="22" height="22"><use href="#i-folder"/></svg></a>
+    <a href="#" aria-label="Edit site"><svg class="ic" width="22" height="22"><use href="#i-edit"/></svg></a>
+    <a href="#" aria-label="Tour"><svg class="ic" width="22" height="22"><use href="#i-tour"/></svg></a>
+    <a href="#" aria-label="Merch"><svg class="ic" width="22" height="22"><use href="#i-merch"/></svg></a>
+    <a href="#" class="on" aria-label="Manager tools"><svg class="ic" width="22" height="22"><use href="#i-tools"/></svg></a>
+  </nav>
+  <div class="tr"><svg class="ic" width="18" height="18"><use href="#i-search"/></svg><svg class="ic" width="18" height="18"><use href="#i-settings"/></svg><span class="av" style="width:30px;height:30px;font-size:10px">S</span></div>
+</header>
+<nav class="mnav" aria-label="Artist">
+  <a href="#"><svg class="ic" width="16" height="16"><use href="#i-analytics"/></svg>Analytics</a>
+  <a href="#"><svg class="ic" width="16" height="16"><use href="#i-folder"/></svg>Assets</a>
+  <a href="#"><svg class="ic" width="16" height="16"><use href="#i-edit"/></svg>Edit site</a>
+  <a href="#"><svg class="ic" width="16" height="16"><use href="#i-tour"/></svg>Tour</a>
+  <a href="#"><svg class="ic" width="16" height="16"><use href="#i-merch"/></svg>Merch</a>
+  <a href="#" class="on"><svg class="ic" width="16" height="16"><use href="#i-tools"/></svg>Manager tools</a>
+</nav>
+
+<nav class="rail" aria-label="Manager tools"><div class="col">
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-home"/></svg><span>Overview</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-user"/></svg><span>Profile</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-sparkles"/></svg><span>Brand</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-plug"/></svg><span>Connections</span></a>
+  <a href="#" class="on"><svg class="ic" width="20" height="20"><use href="#i-compass"/></svg><span>SEO/GEO</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-package"/></svg><span>Press kit</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-userGroup"/></svg><span>Subscribers</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-mailbox"/></svg><span>Enquiries</span></a>
+  <a href="#"><svg class="ic" width="20" height="20"><use href="#i-settings"/></svg><span>Settings</span></a>
+</div></nav>
+<nav class="sub" aria-label="SEO / GEO"><div class="col">
+  <a href="#">Details</a><a href="#">Answers</a><a href="#">AI test</a><a href="#">Profiles</a><a href="#" class="on" aria-current="page">Search</a>
+</div></nav>
+
+<main><div class="shell">
+  <div class="slots" aria-hidden="true"><div class="r"></div><div class="s"><span>Details</span><span>Answers</span><span>AI test</span><span>Profiles</span><span>Search</span></div></div>
+  <div class="content">
+    <nav class="strip" aria-label="SEO / GEO tabs"><a href="#">Details</a><a href="#">Answers</a><a href="#">AI test</a><a href="#">Profiles</a><a href="#" class="on">Search</a></nav>
+
+    <div class="bar">
+      <div class="tog" role="group" aria-label="Engine" id="engTog"></div>
+      <div class="tog" role="group" aria-label="Period" id="perTog"></div>
+    </div>
+    <div id="page"></div>
+  </div>
+</div></main>
+
+<script>
+/* ── the REAL snapshots (scratchpad/skeen-search-stats.json + -28d.json, asked 2026-10-02) ── */
+const G_STATS = (period) => ({engine:"google",period,totals:{clicks:15,impressions:57,ctr:0.2631578947368421,position:2.456140350877193},
+  series:[{date:"2026-09-29",clicks:6,impressions:23,final:true},{date:"2026-09-30",clicks:5,impressions:14,final:false},{date:"2026-10-01",clicks:4,impressions:19,final:false},{date:"2026-10-02",clicks:0,impressions:1,final:false}],
+  queries:[{key:"skeen dj",clicks:9,impressions:35,ctr:0.2571428571428571,position:2.5428571428571427},{key:"skeen music",clicks:2,impressions:4,ctr:0.5,position:2.25},{key:"dj skeen",clicks:1,impressions:3,ctr:0.3333333333333333,position:2.666666666666667}],
+  pages:[{key:"https://www.skeenmusic.com/",clicks:15,impressions:57,ctr:0.2631578947368421,position:2.456140350877193}],
+  countries:[{key:"USA",clicks:11,impressions:37},{key:"NLD",clicks:1,impressions:4},{key:"BMU",clicks:1,impressions:2},{key:"GBR",clicks:1,impressions:2},{key:"IND",clicks:1,impressions:1},{key:"AUS",clicks:0,impressions:3},{key:"DEU",clicks:0,impressions:2},{key:"AUT",clicks:0,impressions:1},{key:"CHE",clicks:0,impressions:1},{key:"ITA",clicks:0,impressions:1},{key:"KOR",clicks:0,impressions:1},{key:"NOR",clicks:0,impressions:1},{key:"SWE",clicks:0,impressions:1}],
+  devices:[{key:"desktop",clicks:13,impressions:39,ctr:0.3333333333333333,position:2.4871794871794872},{key:"mobile",clicks:2,impressions:18,ctr:0.1111111111111111,position:2.388888888888889}],
+  unlisted:{clicks:3,impressions:15},coverage:{from:"2026-09-29",to:"2026-10-02"},preliminaryFrom:"2026-09-30"})
+const PERIODS = {'28d':{key:'28d',days:28,start:'2026-09-05',end:'2026-10-02'},'3m':{key:'3m',days:90,start:'2026-07-05',end:'2026-10-02'}}
+const SNAP = Object.fromEntries(Object.entries(PERIODS).map(([k,p]) => [k, {period:p, askedAt:'2026-10-02T20:00:51.997Z',
+  google:{engine:'google',state:'ok',stats:G_STATS(p)}, bing:{engine:'bing',state:'no_data',period:p}}]))
+/* When Tapir registered each engine (site_verifications) — the "expected" line needs it. */
+const ADDED = {google:'2026-09-29', bing:'2026-09-30'}
+/* The second state: Bing couldn't be asked (its daily limit); Google answered as today. */
+const STATES = {
+  today: (s) => s,
+  cant: (s) => ({...s, bing:{engine:'bing',state:'quota',period:s.period}}),
+}
+const NOTES = {today:'Real numbers, 2 Oct · Google answered, Bing has none yet', cant:'Same day, but Bing refused (daily limit)'}
+
+const ui = {s:'today', e:'both', p:'28d', moreC:false}
+const q = new URLSearchParams(location.search)
+if (STATES[q.get('s')]) ui.s = q.get('s')
+if (['both','google','bing'].includes(q.get('e'))) ui.e = q.get('e')
+if (PERIODS[q.get('p')]) ui.p = q.get('p')
+if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme')
+
+/* ── words ── */
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const day = (d) => { const [y,m,dd] = d.split('-').map(Number); return `${MON[m-1]} ${dd}` }
+const addDays = (d,n) => new Date(Date.parse(d+'T00:00:00Z') + n*864e5).toISOString().slice(0,10)
+const NAME = {google:'Google', bing:'Bing'}
+const COUNTRY = {USA:'United States',NLD:'Netherlands',BMU:'Bermuda',GBR:'United Kingdom',IND:'India',AUS:'Australia',DEU:'Germany',AUT:'Austria',CHE:'Switzerland',ITA:'Italy',KOR:'South Korea',NOR:'Norway',SWE:'Sweden'}
+const DEVICE = {mobile:'Phone', desktop:'Computer', tablet:'Tablet'}
+const WHY = {quota:"Bing's daily limit", error:'Something went wrong', timeout:'No answer in time', no_key:'Not set up yet', not_registered:'Site not added yet'}
+const fmt = (n) => n.toLocaleString('en-US')
+const pct = (r) => r == null ? '—' : `${Math.round(r*100)}%`
+const oneIn = (r) => r ? `1 in ${Math.round(1/r)} clicked` : ''
+const pos = (p) => p == null ? '—' : p.toFixed(1)
+const glyph = (id, cls='gl') => `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+/* ── Both = the engines that ANSWERED, added up. An engine with no numbers adds nothing and is said. ── */
+function combine(list) {
+  const ok = list.filter((e) => e.state === 'ok').map((e) => e.stats)
+  if (!ok.length) return null
+  if (ok.length === 1) return ok[0]
+  const sumRows = (rows) => { const m = new Map(); for (const r of rows) { const h = m.get(r.key) ?? {key:r.key,clicks:0,impressions:0,pw:0}; h.clicks += r.clicks; h.impressions += r.impressions; h.pw += (r.position ?? 0)*r.impressions; m.set(r.key,h) } return [...m.values()].map((r) => ({...r, ctr:r.impressions ? r.clicks/r.impressions : null, position:r.impressions ? r.pw/r.impressions : null})).sort((a,b) => b.clicks-a.clicks || b.impressions-a.impressions) }
+  const t = ok.reduce((a,s) => ({clicks:a.clicks+s.totals.clicks, impressions:a.impressions+s.totals.impressions, pw:a.pw+(s.totals.position??0)*s.totals.impressions}), {clicks:0,impressions:0,pw:0})
+  const days = new Map(); for (const s of ok) for (const d of s.series) { const h = days.get(d.date) ?? {date:d.date,clicks:0,impressions:0,final:true}; h.clicks += d.clicks; h.impressions += d.impressions; h.final = h.final && d.final; days.set(d.date,h) }
+  return {totals:{clicks:t.clicks,impressions:t.impressions,ctr:t.impressions?t.clicks/t.impressions:null,position:t.impressions?t.pw/t.impressions:null},
+    series:[...days.values()].sort((a,b) => a.date < b.date ? -1 : 1), queries:sumRows(ok.flatMap((s) => s.queries)), pages:sumRows(ok.flatMap((s) => s.pages)),
+    countries:sumRows(ok.flatMap((s) => s.countries ?? [])), devices:sumRows(ok.flatMap((s) => s.devices ?? [])),
+    unlisted:ok.reduce((a,s) => ({clicks:a.clicks+s.unlisted.clicks, impressions:a.impressions+s.unlisted.impressions}), {clicks:0,impressions:0}),
+    coverage:{from:ok.map((s) => s.coverage.from).sort()[0], to:ok.map((s) => s.coverage.to).sort().at(-1)}}
+}
+
+/* ── the toolbar ── */
+function renderBar(snap) {
+  const st = (e) => snap[e].state
+  const dot = (e) => st(e) === 'ok' ? '' : st(e) === 'no_data' ? `<i class="dot" data-tip="No numbers yet"></i>` : `<i class="dot red" data-tip="Couldn't ask"></i>`
+  const eng = [['both','Both',''],['google','Google','g-google'],['bing','Bing','g-bing']]
+  document.getElementById('engTog').innerHTML = eng.map(([k,l,g]) =>
+    `<button data-e="${k}" class="${ui.e===k?'on':''}" aria-pressed="${ui.e===k}">${g?glyph(g):''}${l}${k!=='both'?dot(k):''}</button>`).join('')
+  document.getElementById('perTog').innerHTML = [['28d','28 days'],['3m','3 months']].map(([k,l]) =>
+    `<button data-p="${k}" class="${ui.p===k?'on':''}" aria-pressed="${ui.p===k}">${l}</button>`).join('')
+}
+
+/* ── an engine with no numbers ── */
+function noneBlock(e, snap) {
+  const s = snap[e]
+  if (s.state === 'no_data') {
+    const by = addDays(ADDED[e], 14)
+    return `<div class="none"><span class="mk">${glyph('g-'+e)}</span><div>
+      <h3>No numbers yet</h3>
+      <p>New site<i></i>added ${day(ADDED[e])}<i></i>expected by <b>${day(by)}</b></p></div></div>`
+  }
+  return `<div class="none"><span class="mk">${glyph('g-'+e)}</span><div>
+    <h3>Couldn't ask ${NAME[e]}</h3>
+    <p>${WHY[s.state] ?? 'Something went wrong'}${s.state === 'quota' ? '<i></i>asks again tomorrow' : ''}</p>
+    ${s.state === 'quota' ? '' : `<button class="again">${glyph('i-refresh','ic')}Try again</button>`}</div></div>`
+}
+
+/* ── the page ── */
+function render() {
+  const snap = STATES[ui.s](SNAP[ui.p])
+  document.getElementById('note').textContent = NOTES[ui.s]
+  document.querySelectorAll('.proto .vs button').forEach((b) => b.classList.toggle('on', b.dataset.go === ui.s))
+  renderBar(snap)
+  const engines = ui.e === 'both' ? ['google','bing'] : [ui.e]
+  const s = combine(engines.map((e) => snap[e]))
+  const page = document.getElementById('page')
+  if (!s) { page.innerHTML = engines.map((e) => noneBlock(e, snap)).join(''); return }
+
+  const missing = engines.filter((e) => snap[e].state !== 'ok')
+  const answered = engines.filter((e) => snap[e].state === 'ok')
+  const hasGoogle = answered.includes('google')
+  const t = s.totals
+  // "Google only · Bing not yet": the total is never passed off as both engines'.
+  const only = missing.length ? `<div class="m">${answered.map((e) => `<span>${NAME[e]} only</span>`).join('')}${missing.map((e) =>
+      `<button data-e="${e}">${snap[e].state === 'no_data' ? `<i class="dot"></i>${NAME[e]} not yet` : `<i class="dot red"></i>Couldn't ask ${NAME[e]}`}</button>`).join('')}</div>` : ''
+  const since = s.coverage && s.coverage.from > snap.period.start ? `<span class="cl">Since ${day(s.coverage.from)}</span>` : ''
+  const anyPre = s.series.some((d) => !d.final)
+
+  const maxQ = Math.max(...s.queries.map((r) => r.impressions), 1)
+  const bar = (r, max) => `<span class="bt" data-tip="${pct(r.ctr ?? (r.impressions ? r.clicks/r.impressions : null))} clicked"><i style="width:${Math.max(2, r.impressions/max*100)}%"></i><i style="width:${r.clicks ? Math.max(2, r.clicks/max*100) : 0}%"></i></span>`
+  const headK = `<span class="k"><i></i>Clicks</span><span class="k"><i class="s"></i>Seen</span>`
+  const gOnly = ui.e === 'both' ? `<span data-tip="Google only · Bing doesn't say" class="tip-l" tabindex="0">${glyph('g-google')}</span>` : ''
+
+  const queries = `<section class="blk q"><h2>What people searched</h2><div class="tbl">
+      <div class="tr2 th"><span></span><span></span>${headK}<span data-tip="1 = top result">Spot</span></div>
+      ${s.queries.map((r) => `<div class="tr2"><span class="nm"><span class="t">${esc(r.key)}</span></span>${bar(r,maxQ)}<span class="n b">${fmt(r.clicks)}</span><span class="n">${fmt(r.impressions)}</span><span class="n">${pos(r.position)}</span></div>`).join('')}
+    </div>
+    ${s.unlisted.clicks || s.unlisted.impressions ? `<div class="rare mm" data-tip="Searches too rare for Google to name" tabindex="0">${glyph('g-hidden')}+ ${fmt(s.unlisted.clicks)} clicks · ${fmt(s.unlisted.impressions)} seen from rare searches</div>` : ''}
+  </section>`
+
+  const maxP = Math.max(...s.pages.map((r) => r.impressions), 1)
+  const pages = `<section class="blk p"><h2>Pages they landed on</h2><div class="tbl">
+      <div class="tr2 th"><span></span><span></span>${headK}</div>
+      ${s.pages.map((r) => { const u = new URL(r.key); const path = u.pathname === '/' ? 'Home' : u.pathname.replace(/\/$/,''); return `<div class="tr2"><a class="nm" href="${esc(r.key)}" target="_blank" rel="noopener"><span style="min-width:0"><span class="t">${esc(path)}</span><span class="u">${esc(u.host.replace(/^www\./,''))}${esc(u.pathname)}</span></span>${glyph('i-arrowUpRight','ic go')}</a>${bar(r,maxP)}<span class="n b">${fmt(r.clicks)}</span><span class="n">${fmt(r.impressions)}</span></div>` }).join('')}
+    </div></section>`
+
+  const C = s.countries ?? []
+  const maxC = Math.max(...C.map((r) => r.impressions), 1)
+  const shownC = ui.moreC ? C : C.slice(0, 8)
+  const countries = C.length ? `<section class="blk c"><h2>Where${gOnly}</h2><div class="tbl">
+      <div class="tr2 th"><span></span><span></span>${headK}</div>
+      ${shownC.map((r) => `<div class="tr2"><span class="nm"><span class="t">${esc(COUNTRY[r.key] ?? r.key)}</span></span>${bar(r,maxC)}<span class="n b">${fmt(r.clicks)}</span><span class="n">${fmt(r.impressions)}</span></div>`).join('')}
+    </div>${C.length > 8 ? `<button class="more" id="moreC">${ui.moreC ? 'Fewer' : `+ ${C.length - 8} more`}</button>` : ''}</section>` : ''
+
+  const D = s.devices ?? []
+  const maxD = Math.max(...D.map((r) => r.impressions), 1)
+  const devices = D.length ? `<section class="blk c"><h2>Phone or computer${gOnly}</h2><div class="tbl">
+      <div class="tr2 th"><span></span><span></span>${headK}</div>
+      ${D.map((r) => `<div class="tr2"><span class="nm">${glyph('g-'+r.key)}<span class="t">${DEVICE[r.key] ?? r.key}</span></span>${bar(r,maxD)}<span class="n b">${fmt(r.clicks)}</span><span class="n">${fmt(r.impressions)}</span></div>`).join('')}
+    </div></section>` : ''
+
+  page.innerHTML = `
+    <dl class="nums">
+      <div class="num"><dt class="lab">Clicks</dt><dd>${fmt(t.clicks)}</dd>${only}</div>
+      <div class="num"><dt class="lab">Seen in search</dt><dd>${fmt(t.impressions)}</dd>${hasGoogle ? `<div class="m ai">${glyph('g-ai')}incl. Google's AI answers</div>` : ''}</div>
+      <div class="num"><dt class="lab">Click rate</dt><dd>${pct(t.ctr)}</dd><div class="m">${oneIn(t.ctr)}</div></div>
+      <div class="num"><dt class="lab">Average spot</dt><dd>${pos(t.position)}</dd><div class="m">1 = top result</div></div>
+    </dl>
+    <div class="line">
+      <div class="legend"><ul class="cl">
+        <li><span class="sw" style="background:var(--accent)"></span>Clicks</li>
+        <li><span class="sw" style="background:var(--ink)"></span>Seen</li>
+        ${anyPre ? `<li><span class="sw dash"></span>Still counting</li>` : ''}
+      </ul>${since}</div>
+      <div class="ch"><div class="yax" id="yax"></div><div class="plot" id="plot"></div></div>
+      <div class="xax" id="xax"></div>
+    </div>
+    <div class="lists"><div>${queries}${pages}</div><div>${countries}${devices}</div></div>`
+  drawChart(s.series)
+}
+
+/* ── the daily line (timeline-chart.tsx, small): ONE scale from zero; days Google is still counting are dashed + lighter ── */
+let lastSeries = []
+function drawChart(series) {
+  lastSeries = series
+  const plot = document.getElementById('plot'); if (!plot) return
+  const W = plot.clientWidth, H = window.innerWidth < 768 ? 120 : 150, PT = 8
+  const n = series.length
+  const peak = Math.max(1, ...series.map((d) => d.impressions))
+  const step = peak <= 10 ? 5 : peak <= 40 ? 10 : Math.ceil(peak / 3 / 10) * 10
+  const top = Math.ceil(peak / step) * step
+  const x = (i) => n < 2 ? W / 2 : (i / (n - 1)) * W
+  const y = (v) => PT + (1 - v / top) * (H - PT)
+  const ticks = []; for (let v = step; v < top; v += step) ticks.push(v)
+  const lastFinal = series.map((d) => d.final).lastIndexOf(true)
+  const pts = (k, from, to) => series.slice(from, to + 1).map((d, j) => `${x(from + j).toFixed(1)},${y(d[k]).toFixed(1)}`).join(' ')
+  const area = (from, to) => to <= from ? '' : `${pts('clicks', from, to)} ${x(to).toFixed(1)},${H} ${x(from).toFixed(1)},${H}`
+  const solidTo = Math.max(0, lastFinal)
+  const line = (k, color, w) => `
+    ${lastFinal > 0 ? `<polyline points="${pts(k, 0, lastFinal)}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+    ${lastFinal < n - 1 ? `<polyline points="${pts(k, solidTo, n - 1)}" fill="none" stroke="${color}" stroke-width="${w}" stroke-dasharray="4 4" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>` : ''}`
+  const dots = (k, color) => series.map((d, i) => d.final
+    ? `<circle cx="${x(i)}" cy="${y(d[k])}" r="4" fill="${color}"/>`
+    : `<circle cx="${x(i)}" cy="${y(d[k])}" r="3.5" fill="var(--paper)" stroke="${color}" stroke-width="1.6" opacity=".7"/>`).join('')
+  plot.style.height = H + 'px'
+  plot.innerHTML = `<svg width="${W}" height="${H}" aria-label="Clicks and times seen, by day" role="img">
+      ${ticks.map((v) => `<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--hair)"/>`).join('')}
+      <line x1="0" x2="${W}" y1="${H - .5}" y2="${H - .5}" stroke="var(--faint)" opacity=".6"/>
+      ${lastFinal > 0 ? `<polygon points="${area(0, lastFinal)}" fill="var(--accent)" opacity=".2"/>` : ''}
+      ${lastFinal < n - 1 ? `<polygon points="${area(solidTo, n - 1)}" fill="var(--accent)" opacity=".08"/>` : ''}
+      ${line('impressions', 'var(--ink)', 1.6)}${line('clicks', 'var(--accent)', 2.4)}
+      ${dots('impressions', 'var(--ink)')}${dots('clicks', 'var(--accent)')}
+      <line id="xh" x1="0" x2="0" y1="${PT}" y2="${H}" stroke="var(--faint)" visibility="hidden"/>
+    </svg>`
+  document.getElementById('yax').style.height = H + 'px'
+  document.getElementById('yax').innerHTML = [...ticks, top].map((v) => `<span style="top:${y(v)}px">${v}</span>`).join('') + `<span style="top:${H}px">0</span>`
+  const every = n > 8 ? Math.ceil(n / 5) : 1
+  document.getElementById('xax').innerHTML = series.map((d, i) => (i % every === 0 || i === n - 1) ? `<span style="left:${(n < 2 ? 50 : i / (n - 1) * 100)}%">${day(d.date)}</span>` : '').join('')
+
+  const hover = (i) => {
+    plot.querySelectorAll('.ring,.readout').forEach((e) => e.remove())
+    const xh = document.getElementById('xh')
+    if (i == null) { xh.setAttribute('visibility', 'hidden'); return }
+    const d = series[i]
+    xh.setAttribute('x1', x(i)); xh.setAttribute('x2', x(i)); xh.setAttribute('visibility', 'visible')
+    for (const [k, c] of [['impressions', 'var(--ink)'], ['clicks', 'var(--accent)']]) {
+      const r = document.createElement('span'); r.className = 'ring'; r.style.left = x(i) + 'px'; r.style.top = y(d[k]) + 'px'; r.style.borderColor = c; plot.appendChild(r)
+    }
+    const flip = x(i) / W > .6
+    const ro = document.createElement('div'); ro.className = 'readout'; ro.setAttribute('role', 'status')
+    ro.style.top = Math.min(H - 96, Math.max(-20, y(d.clicks) - 40)) + 'px'
+    if (flip) ro.style.right = (W - x(i) + 12) + 'px'; else ro.style.left = (x(i) + 12) + 'px'
+    ro.innerHTML = `<b>${day(d.date)}</b><dl class="cl"><div><dt>Clicks</dt><dd>${d.clicks}</dd></div><div><dt>Seen</dt><dd>${d.impressions}</dd></div></dl>${d.final ? '' : `<div class="pre cl">Still counting</div>`}`
+    plot.appendChild(ro)
+  }
+  plot.onpointermove = (e) => { const r = plot.getBoundingClientRect(); hover(Math.round(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (n - 1))) }
+  plot.onpointerleave = () => hover(null)
+}
+
+/* ── wiring ── */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  if (b.dataset.go) { ui.s = b.dataset.go; render() }
+  else if (b.dataset.e) { ui.e = b.dataset.e; render() }
+  else if (b.dataset.p) { ui.p = b.dataset.p; render() }
+  else if (b.id === 'moreC') { ui.moreC = !ui.moreC; render() }
+})
+addEventListener('resize', () => drawChart(lastSeries))
+render()
+document.fonts?.ready.then(() => drawChart(lastSeries))
+</script>
+</body>
+</html>
