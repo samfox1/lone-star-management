@@ -88,7 +88,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-paper px-5 py-3.5 before:absolute before:inset-x-0 before:bottom-full before:h-screen before:bg-paper before:content-['']">
         {/* brand: back to roster + small avatar + name */}
         <Link href="/roster" title="Back to roster" className="group flex min-w-0 items-center gap-2">
-          <span className="inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:bg-surface group-hover:text-ink">
+          <span className="inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors group-hover:text-ink">
             <Icon name="chevronLeft" size={18} />
           </span>
           <Avatar initials={initials(artist.name)} size={24} />

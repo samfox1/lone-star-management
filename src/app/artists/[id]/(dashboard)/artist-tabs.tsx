@@ -84,7 +84,7 @@ export function ArtistNav({
               aria-current={active ? 'page' : undefined}
               className={cx(
                 'group relative inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
-                active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
+                active ? 'text-accent' : 'text-ink-muted hover:text-ink',
               )}
             >
               <Icon name={t.icon} size={22} />

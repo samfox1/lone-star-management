@@ -50,7 +50,7 @@ function AssetsRail({ artistId, active }: { artistId: string; active: AssetKind 
                 aria-current={it.key === active ? 'page' : undefined}
                 className={cx(
                   'flex flex-col items-center gap-1 rounded-lg py-2.5 transition-colors',
-                  it.key === active ? 'text-accent' : 'text-ink-muted hover:bg-surface hover:text-ink',
+                  it.key === active ? 'text-accent' : 'text-ink-muted hover:text-ink',
                 )}
               >
                 <Icon name={it.icon} size={22} />
