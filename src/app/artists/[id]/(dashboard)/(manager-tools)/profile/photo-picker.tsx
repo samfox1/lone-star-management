@@ -36,16 +36,26 @@ const PICK_TILE = cx(
  *
  * The tile shows the pick at once and puts the old one back if the save is refused. `busy` is a
  * ref, not state: two fast picks both read the state before React re-renders.
+ *
+ * ONE SAVE AT A TIME, AND THE LATER ACTION WINS: a pick or an upload that arrives while another
+ * is still saving waits in `queued` and runs next (a newer one replaces it). An upload that
+ * finished mid-save used to land in Images and silently not become the profile photo.
  */
 export function ProfilePhotoControl({ artistId, current, photos }: { artistId: string; current: CurrentPhoto | null; photos: LibraryPhoto[] }) {
   const [shown, setShown] = useSeeded(current)
   const [open, setOpen] = useState(false)
   const busy = useRef(false)
+  const queued = useRef<LibraryPhoto | null>(null)
 
-  async function pick(photo: LibraryPhoto) {
-    if (busy.current) return
+  /** `was`: what to put back if this save is refused. A queued save gets the photo the save
+   *  before it left in place, not the stale render's. */
+  async function pick(photo: LibraryPhoto, was: CurrentPhoto | null = shown) {
+    if (busy.current) {
+      queued.current = photo
+      return
+    }
     busy.current = true
-    const was = shown
+    let now = was
     setShown({ path: photo.path, thumb: photo.thumb })
     setOpen(false)
     try {
@@ -53,12 +63,15 @@ export function ProfilePhotoControl({ artistId, current, photos }: { artistId: s
       if (res.error) {
         setShown(was)
         toast(res.error, 'error')
-      }
+      } else now = { path: photo.path, thumb: photo.thumb }
     } catch {
       setShown(was)
       toast('Could not set the profile photo.', 'error')
     } finally {
       busy.current = false
+      const next = queued.current
+      queued.current = null
+      if (next) void pick(next, now)
     }
   }
 

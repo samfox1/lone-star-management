@@ -79,8 +79,8 @@ export function MediaPanel({ artistId, media }: { artistId: string; media: Media
           <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint">
             Profile photo
           </span>
-          {/* The same write as the Profile page (lib/profile-photo.ts): a replace never
-              leaves two profile photos. */}
+          {/* Lands in Images too, then becomes the profile photo: the Profile page's own
+              write (lib/profile-photo.ts), so a replaced photo can be picked again. */}
           <ProfilePhotoUploader artistId={artistId} label={profile ? 'Replace photo' : 'Add photo'} />
         </div>
         {profile ? (

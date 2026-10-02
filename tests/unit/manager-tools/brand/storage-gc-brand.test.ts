@@ -25,7 +25,7 @@ type ListObj = { name: string; created_at: string | null }
 type Read = { data?: unknown[] | null; error?: { message: string } | null; count?: number }
 
 const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString() // past the 15-minute age gate
-const A = 'artist-1'
+const A = '0f3c2b1a-5d4e-4c3b-9a8f-7e6d5c4b3a21' // real-shaped: storage-gc scopes a path by the artist id in front
 
 function fake(opts: { reads?: Record<string, Read>; byPrefix?: Record<string, ListObj[]> }) {
   const { reads = {}, byPrefix = {} } = opts

@@ -7,10 +7,12 @@
  *           round 3): the round tile and the big Images picker
  * Tier:     LIGHT (AGENTS.md "Test depth"): the UI is new and still moving. One main path.
  * Covers:   the empty tile shows the + inside the circle; picking an image calls the set action
- *           with THAT image's id, closes the picker and shows it in the tile
- * Not here: the write (tests/unit/manager-tools/profile/profile-photo.test.ts); the upload path
+ *           with THAT image's id, closes the picker and shows it in the tile; an upload that
+ *           finishes while a pick is still saving is saved next (the later action wins)
+ * Not here: the write (tests/unit/manager-tools/profile/profile-photo.test.ts); the upload itself
  *           (the uploader's own tests); looks (screenshots)
- * Fixtures: two library photos. Mocked: the server action, toast, the uploader.
+ * Fixtures: two library photos. Mocked: the server action, toast, the uploader (it records the
+ *           onUploaded it was given, so a test can finish an upload).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -19,9 +21,18 @@ import { setProfilePhotoAction } from '@/app/artists/[id]/(dashboard)/(manager-t
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions', () => ({ setProfilePhotoAction: vi.fn(async () => ({})) }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
-vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({ MediaUploader: () => null }))
+const uploader: { onUploaded?: (m: { id: string; storage_path: string }) => void } = {}
+vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
+  MediaUploader: (props: { onUploaded?: (m: { id: string; storage_path: string }) => void }) => {
+    uploader.onUploaded = props.onUploaded
+    return null
+  },
+}))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+})
 
 const PHOTOS = [
   { id: 'img-1', path: 'a1/gallery/one.jpg', thumb: 'https://x/one.jpg' },
@@ -50,5 +61,29 @@ describe('ProfilePhotoControl', () => {
     expect(setProfilePhotoAction).toHaveBeenCalledWith('a1', 'img-2')
     expect(screen.queryByRole('dialog', { name: 'Images' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Change the profile photo' }).querySelector('img')?.getAttribute('src')).toBe('https://x/two.jpg')
+  })
+
+  // The upload tile and a pick can overlap: an upload that finishes while a pick is still saving
+  // used to land in Images and silently NOT become the profile photo. The later action wins.
+  it('an upload that finishes while a pick is saving becomes the profile photo next', async () => {
+    let release: (v: { error?: string }) => void = () => {}
+    vi.mocked(setProfilePhotoAction).mockImplementationOnce(() => new Promise((r) => (release = r)))
+    render(<ProfilePhotoControl artistId="a1" current={null} photos={PHOTOS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add a profile photo' }))
+    const finishUpload = uploader.onUploaded!
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Use this photo' })[0])
+    })
+    await act(async () => {
+      finishUpload({ id: 'up-1', storage_path: 'a1/gallery/up.jpg' })
+    })
+    // The pick is still saving: the upload waits its turn rather than being dropped.
+    expect(setProfilePhotoAction).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      release({})
+    })
+    expect(setProfilePhotoAction).toHaveBeenCalledTimes(2)
+    expect(setProfilePhotoAction).toHaveBeenLastCalledWith('a1', 'up-1')
+    expect(screen.getByRole('button', { name: 'Change the profile photo' }).querySelector('img')?.getAttribute('src')).toContain('up.jpg')
   })
 })

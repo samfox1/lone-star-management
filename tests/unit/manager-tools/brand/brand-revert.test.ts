@@ -11,7 +11,7 @@ import { restoreBrandToPublished } from '@/lib/brand'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
 import { fakeClient, filterValue, type Call } from '@tests/helpers/fake-client'
 
-const A = 'a1'
+const A = '0f3c2b1a-5d4e-4c3b-9a8f-7e6d5c4b3a21' // real-shaped: storage-gc scopes a path by the artist id in front
 
 const media = (id: string, purpose: string, extra: Record<string, unknown> = {}): ContentRow => ({
   id,

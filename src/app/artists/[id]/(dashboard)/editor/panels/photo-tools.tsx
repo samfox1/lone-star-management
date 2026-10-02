@@ -23,6 +23,7 @@ import {
 import { GallerySlotUploader } from '../../media-uploader'
 import { budgetFor, budgetSlotKey, type AssetBudget, type AssetBudgets } from '@/lib/site-editor/asset-budget'
 import { UploadField } from '../../upload-field'
+import { ProfilePhotoUploader } from '../../profile-photo-uploader'
 import { toast } from '../../toast'
 import { setImageFieldAction } from '../../actions'
 
@@ -170,8 +171,9 @@ function ImageFieldTile({
 }
 
 /** The shared small portaled modal around an upload-only drop zone for one image field.
- *  Owns the field write (`setImageFieldAction`) and derives its title and storage folder
- *  from the field, so call sites just say which field. The hero folder choice keeps the
+ *  Owns the field write and derives its title and storage folder from the field, so call
+ *  sites just say which field: the hero writes by path (`setImageFieldAction`), the profile
+ *  photo uploads into Images and picks that (ProfilePhotoUploader). The hero folder choice keeps the
  *  publish-GC invariant: `hero` sits outside MEDIA_FOLDERS so GC can't sweep the live
  *  hero object (save.ts). */
 function ImageUploadModal({
@@ -197,23 +199,29 @@ function ImageUploadModal({
   return (
     <PortalModal ariaLabel={title} onClose={onClose}>
       <div className={cx(EYEBROW, 'mb-2 pr-6')}>{title}</div>
-      <UploadField
-        accept="image/*"
-        label="Drop an image or click to upload"
-        kind="image"
-        budget={budget}
-        bucket="media"
-        artistId={artistId}
-        category={field.target.store === 'artist' ? 'hero' : 'profile'}
-        noun="image"
-        rules={IMAGE_UPLOAD_RULES}
-        writeRow={async (path) => {
-          const res = await setImageFieldAction(artistId, field.key, path, field.target)
-          if (!res.ok) return res.error ?? 'Save failed'
-          onSaved(path)
-          return null
-        }}
-      />
+      {field.target.store === 'media' ? (
+        // The profile photo lands in Images too, then that photo is picked (Sam, 2026-10-02):
+        // the same door as the Site & profile page, so a replaced photo can be picked again.
+        <ProfilePhotoUploader artistId={artistId} label="Drop an image or click to upload" budget={budget} onSet={onSaved} />
+      ) : (
+        <UploadField
+          accept="image/*"
+          label="Drop an image or click to upload"
+          kind="image"
+          budget={budget}
+          bucket="media"
+          artistId={artistId}
+          category="hero"
+          noun="image"
+          rules={IMAGE_UPLOAD_RULES}
+          writeRow={async (path) => {
+            const res = await setImageFieldAction(artistId, field.key, path, field.target)
+            if (!res.ok) return res.error ?? 'Save failed'
+            onSaved(path)
+            return null
+          }}
+        />
+      )}
     </PortalModal>
   )
 }

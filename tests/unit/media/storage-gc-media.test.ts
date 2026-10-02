@@ -73,10 +73,14 @@ function fake(
 
 const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString() // 1h ago (past the age gate)
 
+/** A real-shaped path: the delete-time GC scopes its checks by the artist id in front, and keeps
+ *  a file whose path has none (storage-gc.ts artistOfPath). */
+const PHOTO = '0f3c2b1a-5d4e-4c3b-9a8f-7e6d5c4b3a21/gallery/a.jpg'
+
 describe('gcDeletedMediaObject', () => {
   it('KEEPS the object when the media was published (a revision references it)', async () => {
     const { client, removed, eqCalls } = fake({ revCount: 1 })
-    await gcDeletedMediaObject(client, 'm1', 'artist-1/gallery/a.jpg')
+    await gcDeletedMediaObject(client, 'm1', PHOTO)
     expect(removed).toEqual([]) // live site still serves it from its snapshot
     // The publish check must be scoped to THIS media row — a query filtered on the wrong
     // entity_type (e.g. 'video') would count someone else's revisions and still pass here.
@@ -86,8 +90,8 @@ describe('gcDeletedMediaObject', () => {
 
   it('removes the object when the media was never published (draft-only)', async () => {
     const { client, removed, eqCalls } = fake({ revCount: 0 })
-    await gcDeletedMediaObject(client, 'm1', 'artist-1/gallery/a.jpg')
-    expect(removed).toEqual(['artist-1/gallery/a.jpg'])
+    await gcDeletedMediaObject(client, 'm1', PHOTO)
+    expect(removed).toEqual([PHOTO])
     expect(eqCalls).toContainEqual(['entity_type', 'media'])
     expect(eqCalls).toContainEqual(['entity_id', 'm1'])
   })

@@ -55,6 +55,10 @@ export async function renameMedia(
     if (/exists|duplicate|409/i.test(copyErr.message)) return { error: 'That file name is taken.' }
     return { error: copyErr.message }
   }
+  // Only THIS row moves to the new file. A profile photo picked from this library photo is a
+  // second row naming the OLD path (lib/profile-photo.ts), and it keeps it: the old file stays
+  // because that row names it (storage-gc.ts stillNamed / gcMediaObjects), so nothing breaks,
+  // but the two rows no longer share a file. Known and accepted (review of d558c8e, 2026-10-02).
   const { error: rowErr } = await client
     .from('media')
     .update({ storage_path: newPath, slug: clean })

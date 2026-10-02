@@ -1,26 +1,31 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Setting, replacing and clearing the one profile photo writes one record, whichever door it
- * comes through.
+ * comes through, and a write that fails half way never leaves the slot empty.
  *
  * Code:     src/lib/profile-photo.ts; src/lib/site-editor/save.ts (setImageField's media branch)
  * Feature:  Profile page · Profile photo (PROFILE_TOOL_PLAN.md, Sam 2026-10-02): ONE `media` row
- *           with purpose profile_photo, by vacate-then-insert. The Profile page picks it from
- *           Images (the row SHARES the library photo's file); the Site & profile page and the
- *           editor upload one. All three write through `setProfilePhoto`.
+ *           with purpose profile_photo, by insert-then-delete-the-others. The Profile page picks
+ *           it from Images (the row SHARES the library photo's file); the Site & profile page and
+ *           the editor upload into Images and pick that. All of them write through `setProfilePhoto`.
  * Tier:     STRICT (AGENTS.md "Test depth"): it writes data the live site, the press kit and the
- *           outside profiles read.
- * Covers:   • set = vacate the slot, then insert ONE row (on the site), clear = the vacate alone
+ *           outside profiles read, and a lost row can take the live photo with it on Publish.
+ * Covers:   • set = insert ONE row (on the site) FIRST, then delete the OTHER profile rows;
+ *             clear = the delete alone
+ *           • a failed insert leaves the old photo in place (nothing deleted)
+ *           • a failed delete after a good insert leaves two rows and says so (readers take the
+ *             first by sort order; the next save clears the extra)
+ *           • two rows left by old pages become one on the next replace
  *           • a file outside the artist's own folder is refused before anything is written
- *           • a failed vacate writes nothing more
  *           • a pick from Images reads the library row by id AND artist AND purpose, so another
  *             artist's photo, or a logo, can never become the profile photo
  *           • picking the photo that is already the profile photo writes nothing (no draft change)
  *           • the editor's write (setImageField) is the same write, op for op
  * Not here: the file a shared photo leaves behind on delete (tests/unit/media/storage-gc-shared-file.test.ts);
- *           the tile and picker (tests/components/manager-tools/profile/photo-picker.test.tsx).
- * Fixtures: Skeen's artist id and two of his real library file names; a recording stub of the
- *           query builder (every from() is one op with its filters).
+ *           the tile and picker (tests/components/manager-tools/profile/photo-picker.test.tsx);
+ *           the upload doors (tests/components/manager-tools/profile/profile-photo-uploader.test.tsx).
+ * Fixtures: Skeen's artist id and two of his real library file names; an in-memory `media` table
+ *           behind a query-builder stub, so every assertion reads the rows LEFT, not a return value.
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -31,128 +36,195 @@ const ART = 'c6c2ea6e-4135-4ebb-afbe-8c9e21785f57'
 const LIB = `${ART}/gallery/cd13861d-0819-406b-abc1-0dd28a5d7b3e.jpg`
 const OTHER = `${ART}/gallery/73e6b920-9e83-413d-b646-44f766eedead.jpg`
 
-type Op = { table: string; type?: 'select' | 'insert' | 'delete'; values?: Record<string, unknown>; eq: Record<string, unknown> }
+type Row = { id: string; artist_id: string; purpose: string; storage_path: string; on_site?: boolean; sort_order?: number }
+type Op = {
+  table: string
+  type?: 'select' | 'insert' | 'delete'
+  values?: Record<string, unknown>
+  eq: Record<string, unknown>
+  neq: Record<string, unknown>
+}
 
-/** `reads`: what each select answers, in order (a maybeSingle answers its first row or null). */
-function fakeClient(opts: { reads?: { data: unknown[] | null; error?: { message: string } | null }[]; deleteError?: string } = {}) {
+const library = (id: string, path: string, artist = ART): Row => ({ id, artist_id: artist, purpose: 'gallery_image', storage_path: path })
+const profile = (id: string, path: string): Row => ({ id, artist_id: ART, purpose: PROFILE_PHOTO, storage_path: path })
+
+/**
+ * An in-memory `media` table. `fail` makes that kind of statement answer an error and change
+ * nothing, the way PostgREST does.
+ */
+function fakeClient(opts: { rows?: Row[]; fail?: { select?: string; insert?: string; delete?: string } } = {}) {
+  const rows: Row[] = (opts.rows ?? []).map((r) => ({ ...r }))
   const ops: Op[] = []
-  const reads = [...(opts.reads ?? [])]
+  let made = 0
   const client = {
     from: (table: string) => {
-      const op: Op = { table, eq: {} }
+      const op: Op = { table, eq: {}, neq: {} }
       ops.push(op)
-      let read: { data: unknown; error: unknown } = { data: null, error: null }
+      const hit = (r: Row) =>
+        Object.entries(op.eq).every(([k, v]) => (r as any)[k] === v) && Object.entries(op.neq).every(([k, v]) => (r as any)[k] !== v)
+      let done: { data: any; error: { message: string } | null } | null = null
+      const run = () => {
+        if (done) return done
+        if (op.type === 'insert') {
+          if (opts.fail?.insert) return (done = { data: null, error: { message: opts.fail.insert } })
+          const row = { id: `new-${++made}`, ...(op.values as object) } as Row
+          rows.push(row)
+          return (done = { data: [{ id: row.id }], error: null })
+        }
+        if (op.type === 'delete') {
+          if (opts.fail?.delete) return (done = { data: null, error: { message: opts.fail.delete } })
+          for (let i = rows.length - 1; i >= 0; i--) if (hit(rows[i])) rows.splice(i, 1)
+          return (done = { data: null, error: null })
+        }
+        if (opts.fail?.select) return (done = { data: null, error: { message: opts.fail.select } })
+        return (done = { data: rows.filter(hit).map((r) => ({ ...r })), error: null })
+      }
       const b: any = {
-        select: () => {
-          op.type ??= 'select'
-          if (op.type === 'select') {
-            const r = reads.shift() ?? { data: [] }
-            read = { data: r.data, error: r.error ?? null }
-          }
-          return b
-        },
-        delete: () => ((op.type = 'delete'), (read = { data: null, error: opts.deleteError ? { message: opts.deleteError } : null }), b),
-        insert: (values: Record<string, unknown>) => ((op.type = 'insert'), (op.values = values), Promise.resolve({ error: null })),
+        select: () => ((op.type ??= 'select'), b),
+        insert: (values: Record<string, unknown>) => ((op.type = 'insert'), (op.values = values), b),
+        delete: () => ((op.type = 'delete'), b),
         eq: (col: string, val: unknown) => ((op.eq[col] = val), b),
-        maybeSingle: () => Promise.resolve({ data: Array.isArray(read.data) ? (read.data[0] ?? null) : read.data, error: read.error }),
-        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(read).then(res, rej),
+        neq: (col: string, val: unknown) => ((op.neq[col] = val), b),
+        single: () => {
+          const r = run()
+          const first = Array.isArray(r.data) ? r.data[0] : r.data
+          if (r.error) return Promise.resolve({ data: null, error: r.error })
+          return Promise.resolve(first ? { data: first, error: null } : { data: null, error: { message: 'no rows' } })
+        },
+        maybeSingle: () => {
+          const r = run()
+          return Promise.resolve({ data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: r.error })
+        },
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(run()).then(res, rej),
       }
       return b
     },
   } as unknown as SupabaseClient
-  return { client, ops }
+  const profiles = () => rows.filter((r) => r.purpose === PROFILE_PHOTO).map((r) => r.storage_path)
+  return { client, ops, rows, profiles }
 }
 
 const shape = (ops: Op[]) => ops.map((o) => [o.table, o.type])
 
 describe('setProfilePhoto', () => {
-  // One slot: whatever was there goes, then exactly one row names the new file.
-  it('CRITICAL: vacates the slot, then inserts ONE row naming the file, on the site', async () => {
-    const { client, ops } = fakeClient()
-    expect(await setProfilePhoto(client, ART, LIB)).toEqual({ ok: true })
-    expect(shape(ops)).toEqual([
-      ['media', 'delete'],
+  // One slot: the new row lands FIRST, then whatever else claimed the slot goes.
+  it('CRITICAL: inserts ONE row naming the file (on the site) first, then deletes the OTHER profile rows', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER), library('img-1', LIB)] })
+    expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: true })
+    expect(shape(f.ops)).toEqual([
       ['media', 'insert'],
+      ['media', 'delete'],
     ])
-    expect(ops[0].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
-    expect(ops[1].values).toMatchObject({ artist_id: ART, purpose: 'profile_photo', storage_path: LIB, on_site: true })
+    expect(f.ops[0].values).toMatchObject({ artist_id: ART, purpose: 'profile_photo', storage_path: LIB, on_site: true })
+    expect(f.ops[1].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+    expect(f.ops[1].neq).toEqual({ id: 'new-1' })
+    // The rows left: one profile photo, the new file; the library photo untouched.
+    expect(f.profiles()).toEqual([LIB])
+    expect(f.rows.find((r) => r.id === 'img-1')).toBeTruthy()
   })
 
-  // A clear leaves the slot empty and inserts nothing.
-  it('clearing is the vacate alone', async () => {
-    const { client, ops } = fakeClient()
-    expect(await setProfilePhoto(client, ART, null)).toEqual({ ok: true })
-    expect(shape(ops)).toEqual([['media', 'delete']])
-    expect(ops[0].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+  // The bug this guards (review of d558c8e): delete first, then a failed insert left the slot
+  // empty; the upload then removed the new file and a Publish took the live photo off the site.
+  it('CRITICAL: a failed insert leaves the old photo in place and deletes nothing', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER)], fail: { insert: 'insert refused' } })
+    expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: false, error: 'insert refused' })
+    expect(shape(f.ops)).toEqual([['media', 'insert']])
+    expect(f.profiles()).toEqual([OTHER])
+  })
+
+  // Worst case is two rows, never none: every reader takes the first by sort order (the old one),
+  // so the caller is told the change did not take, and the next save clears the extra row.
+  it('CRITICAL: a failed delete after a good insert leaves two rows and says the old photo is still there', async () => {
+    const f = fakeClient({ rows: [profile('old', OTHER)], fail: { delete: 'delete refused' } })
+    const res = await setProfilePhoto(f.client, ART, LIB)
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/old profile photo is still there/i)
+    expect(res.error).toContain('delete refused')
+    expect(f.profiles().sort()).toEqual([LIB, OTHER].sort())
+  })
+
+  // Old pages could leave two rows in the slot: the next replace leaves exactly one.
+  it('a replace over two old rows leaves exactly one', async () => {
+    const f = fakeClient({ rows: [profile('a', OTHER), profile('b', OTHER)] })
+    expect(await setProfilePhoto(f.client, ART, LIB)).toEqual({ ok: true })
+    expect(f.profiles()).toEqual([LIB])
+  })
+
+  // A clear leaves the slot empty and inserts nothing; the library photo stays.
+  it('clearing is the delete alone', async () => {
+    const f = fakeClient({ rows: [profile('old', LIB), library('img-1', LIB)] })
+    expect(await setProfilePhoto(f.client, ART, null)).toEqual({ ok: true })
+    expect(shape(f.ops)).toEqual([['media', 'delete']])
+    expect(f.ops[0].eq).toEqual({ artist_id: ART, purpose: PROFILE_PHOTO })
+    expect(f.profiles()).toEqual([])
+    expect(f.rows.map((r) => r.id)).toEqual(['img-1'])
   })
 
   // The path comes from the browser on the upload doors: it must be this artist's own file.
   it('CRITICAL: a file outside the artist’s own folder is refused before anything is written', async () => {
     for (const bad of [`other-artist/gallery/x.jpg`, `${ART}/gallery/../../x.jpg`, `${ART}/x.jpg`]) {
-      const { client, ops } = fakeClient()
-      expect((await setProfilePhoto(client, ART, bad)).ok).toBe(false)
-      expect(ops).toEqual([])
+      const f = fakeClient({ rows: [profile('old', OTHER)] })
+      expect((await setProfilePhoto(f.client, ART, bad)).ok).toBe(false)
+      expect(f.ops).toEqual([])
+      expect(f.profiles()).toEqual([OTHER])
     }
-  })
-
-  // An insert after a refused delete could leave two photos claiming the slot.
-  it('a failed vacate writes nothing more', async () => {
-    const { client, ops } = fakeClient({ deleteError: 'denied' })
-    expect(await setProfilePhoto(client, ART, LIB)).toEqual({ ok: false, error: 'denied' })
-    expect(shape(ops)).toEqual([['media', 'delete']])
   })
 
   // "Make sure both write the same record": the editor's tile and the Profile page are one write.
   it('CRITICAL: the editor’s profile-photo write (setImageField) is the same write, op for op', async () => {
-    const a = fakeClient()
-    const b = fakeClient()
+    const a = fakeClient({ rows: [profile('old', OTHER)] })
+    const b = fakeClient({ rows: [profile('old', OTHER)] })
     await setProfilePhoto(a.client, ART, LIB)
     await setImageField(b.client, ART, null, 'portrait', LIB, { store: 'media', purpose: 'profile_photo' })
     const strip = (ops: Op[]) => ops.map((o) => ({ ...o, values: o.values && { ...o.values, sort_order: 0 } }))
     expect(strip(b.ops)).toEqual(strip(a.ops))
+    expect(b.profiles()).toEqual([LIB])
   })
 })
 
 describe('setProfilePhotoFromImage', () => {
   // The browser names a photo, never a path: the server reads the file from this artist's Images.
   it('CRITICAL: reads the library photo by id, artist AND purpose, then makes its file the profile photo', async () => {
-    const { client, ops } = fakeClient({ reads: [{ data: [{ storage_path: LIB }] }, { data: [] }] })
-    expect(await setProfilePhotoFromImage(client, ART, 'img-1')).toEqual({ ok: true })
-    expect(ops[0]).toMatchObject({ table: 'media', type: 'select', eq: { id: 'img-1', artist_id: ART, purpose: 'gallery_image' } })
-    expect(shape(ops).slice(-2)).toEqual([
-      ['media', 'delete'],
-      ['media', 'insert'],
-    ])
-    expect(ops[ops.length - 1].values).toMatchObject({ artist_id: ART, purpose: PROFILE_PHOTO, storage_path: LIB })
+    const f = fakeClient({ rows: [library('img-1', LIB)] })
+    expect(await setProfilePhotoFromImage(f.client, ART, 'img-1')).toEqual({ ok: true })
+    expect(f.ops[0]).toMatchObject({ table: 'media', type: 'select', eq: { id: 'img-1', artist_id: ART, purpose: 'gallery_image' } })
+    expect(f.profiles()).toEqual([LIB])
   })
 
   // Another artist's photo (RLS hides it, or the artist filter misses it) or a logo: no row.
   it('CRITICAL: an id that is not one of this artist’s Images writes nothing', async () => {
-    const { client, ops } = fakeClient({ reads: [{ data: [] }] })
-    expect(await setProfilePhotoFromImage(client, ART, 'someone-elses')).toEqual({ ok: false, error: 'That photo is not in Images.' })
-    expect(ops.filter((o) => o.type !== 'select')).toEqual([])
+    const theirs = library('someone-elses', `other-artist/gallery/x.jpg`, 'other-artist')
+    const logo = { ...library('logo-1', `${ART}/brand/logo.png`), purpose: 'logo_primary' }
+    for (const id of ['someone-elses', 'logo-1']) {
+      const f = fakeClient({ rows: [theirs, logo, profile('old', OTHER)] })
+      expect(await setProfilePhotoFromImage(f.client, ART, id)).toEqual({ ok: false, error: 'That photo is not in Images.' })
+      expect(f.ops.filter((o) => o.type !== 'select')).toEqual([])
+      expect(f.profiles()).toEqual([OTHER])
+    }
   })
 
   // A read that failed is not "no photo": nothing is written and the reason comes back.
   it('a failed read writes nothing and says why', async () => {
-    const { client, ops } = fakeClient({ reads: [{ data: null, error: { message: 'boom' } }] })
-    expect(await setProfilePhotoFromImage(client, ART, 'img-1')).toEqual({ ok: false, error: 'boom' })
-    expect(ops.filter((o) => o.type !== 'select')).toEqual([])
+    const f = fakeClient({ rows: [library('img-1', LIB), profile('old', OTHER)], fail: { select: 'boom' } })
+    expect(await setProfilePhotoFromImage(f.client, ART, 'img-1')).toEqual({ ok: false, error: 'boom' })
+    expect(f.ops.filter((o) => o.type !== 'select')).toEqual([])
+    expect(f.profiles()).toEqual([OTHER])
   })
 
   // Re-picking the photo that is already there would make a new row with the same file: a
   // change for the Publish bar to count that changes nothing.
   it('picking the photo that is already the profile photo writes nothing', async () => {
-    const { client, ops } = fakeClient({ reads: [{ data: [{ storage_path: LIB }] }, { data: [{ storage_path: LIB }] }] })
-    expect(await setProfilePhotoFromImage(client, ART, 'img-1')).toEqual({ ok: true })
-    expect(ops.filter((o) => o.type !== 'select')).toEqual([])
-    expect(ops[1]).toMatchObject({ table: 'media', type: 'select', eq: { artist_id: ART, purpose: PROFILE_PHOTO } })
+    const f = fakeClient({ rows: [library('img-1', LIB), profile('old', LIB)] })
+    expect(await setProfilePhotoFromImage(f.client, ART, 'img-1')).toEqual({ ok: true })
+    expect(f.ops.filter((o) => o.type !== 'select')).toEqual([])
+    expect(f.ops[1]).toMatchObject({ table: 'media', type: 'select', eq: { artist_id: ART, purpose: PROFILE_PHOTO } })
+    expect(f.rows.find((r) => r.purpose === PROFILE_PHOTO)?.id).toBe('old')
   })
 
-  // A new pick over an old one is a replace, through the same vacate-then-insert.
+  // A new pick over an old one is a replace, through the same insert-then-delete.
   it('a different photo replaces the one there', async () => {
-    const { client, ops } = fakeClient({ reads: [{ data: [{ storage_path: LIB }] }, { data: [{ storage_path: OTHER }] }] })
-    expect(await setProfilePhotoFromImage(client, ART, 'img-1')).toEqual({ ok: true })
-    expect(ops[ops.length - 1].values).toMatchObject({ storage_path: LIB })
+    const f = fakeClient({ rows: [library('img-1', LIB), profile('old', OTHER)] })
+    expect(await setProfilePhotoFromImage(f.client, ART, 'img-1')).toEqual({ ok: true })
+    expect(f.profiles()).toEqual([LIB])
   })
 })

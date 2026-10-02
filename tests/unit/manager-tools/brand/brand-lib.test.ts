@@ -35,7 +35,7 @@ import {
 import type { ContentRow } from '@/lib/content'
 import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/fake-client'
 
-const A = 'a1'
+const A = '0f3c2b1a-5d4e-4c3b-9a8f-7e6d5c4b3a21' // real-shaped: storage-gc scopes a path by the artist id in front
 const PATH = `${A}/brand/0a0a0a0a-0000-4000-8000-000000000000.png`
 const NEW = `${A}/brand/1b1b1b1b-0000-4000-8000-000000000000.png`
 const FOREIGN = `b2/brand/0a0a0a0a-0000-4000-8000-000000000000.png`

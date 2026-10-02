@@ -13,13 +13,16 @@
  *           • a failed or unknown check: kept (a failed count is "unknown", not "nothing")
  *           • nothing else names it and the row was never published: removed, as before
  *           • the two halves of a logo (file + original) are judged one by one
+ *           • both checks are scoped to the artist the path names (`<artist_id>/…`), and a path
+ *             with no artist id in front keeps the file (it cannot be scoped)
  * Fake:     answers each count by the filters the query carried, so an assertion lands on the
- *           question asked, not on a canned number.
+ *           question asked, not on a canned number. Paths start with a real-shaped artist id.
  */
 import { describe, expect, it } from 'vitest'
 import { gcDeletedMediaObject } from '@/lib/storage-gc'
 
-const FILE = 'artist-1/gallery/a.jpg'
+const ART = 'c6c2ea6e-4135-4ebb-afbe-8c9e21785f57'
+const FILE = `${ART}/gallery/a.jpg`
 
 type Counts = {
   /** Other media rows naming the path, by path. */
@@ -34,9 +37,11 @@ type Counts = {
 
 function fake(c: Counts = {}) {
   const removed: string[] = []
+  const asked: { table: string; eq: Record<string, unknown> }[] = []
   const client = {
     from(table: string) {
       const eq: Record<string, unknown> = {}
+      asked.push({ table, eq })
       const q: Record<string, unknown> = {
         select: () => q,
         eq: (col: string, val: unknown) => ((eq[col] = val), q),
@@ -61,7 +66,7 @@ function fake(c: Counts = {}) {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any
-  return { client, removed }
+  return { client, removed, asked }
 }
 
 describe('gcDeletedMediaObject: a file another row names', () => {
@@ -94,7 +99,7 @@ describe('gcDeletedMediaObject: a file another row names', () => {
   })
 
   it('a logo’s file and original are judged one by one', async () => {
-    const original = 'artist-1/brand/original.png'
+    const original = `${ART}/brand/original.png`
     const { client, removed } = fake({ rows: { [FILE]: 1 } })
     await gcDeletedMediaObject(client, 'm1', FILE, original)
     expect(removed).toEqual([original])
@@ -104,5 +109,24 @@ describe('gcDeletedMediaObject: a file another row names', () => {
     const { client, removed } = fake({ own: 1 })
     await gcDeletedMediaObject(client, 'm1', FILE)
     expect(removed).toEqual([])
+  })
+
+  // Paths are `<artist_id>/<folder>/<file>` (buildStoragePath), so the snapshot scan can use the
+  // revisions index by artist instead of reading every artist's media snapshots.
+  it('both checks are scoped to the artist the path belongs to', async () => {
+    const { client, asked } = fake()
+    await gcDeletedMediaObject(client, 'm1', FILE)
+    const snaps = asked.find((a) => a.table === 'revisions' && 'data->>storage_path' in a.eq)
+    expect(snaps?.eq).toEqual({ artist_id: ART, entity_type: 'media', 'data->>storage_path': FILE })
+    expect(asked.find((a) => a.table === 'media')?.eq).toEqual({ artist_id: ART, storage_path: FILE })
+  })
+
+  // No artist id in front: the check cannot be scoped, so it is "unknown", and unknown keeps the file.
+  it('CRITICAL: a path with no artist id in front keeps the file', async () => {
+    for (const bad of ['gallery/a.jpg', 'artist-1/gallery/a.jpg', `/${ART}/gallery/a.jpg`, ART, `${ART}/`]) {
+      const { client, removed } = fake()
+      await gcDeletedMediaObject(client, 'm1', bad)
+      expect(removed, bad).toEqual([])
+    }
   })
 })

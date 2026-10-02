@@ -112,6 +112,17 @@ export async function gcDeletedMediaObject(
   await gcDeletedObject(client, 'media', 'media', mediaId, [storagePath, sourcePath], async (p) => (await stillNamed(client, p)) === false)
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The artist a storage path belongs to: its first part, when that is an artist id and a file
+ *  follows it. Null otherwise. */
+function artistOfPath(path: string): string | null {
+  const slash = path.indexOf('/')
+  if (slash < 0 || slash === path.length - 1) return null
+  const first = path.slice(0, slash)
+  return UUID.test(first) ? first : null
+}
+
 /**
  * Does any OTHER media row name this file, or any media snapshot? ONE FILE CAN HAVE TWO ROWS: a
  * profile photo picked from Images names the library photo's own file (lib/profile-photo.ts,
@@ -123,12 +134,23 @@ export async function gcDeletedMediaObject(
  * counts, not only the latest: being wrong here loses a file, being cautious leaves one for the
  * publish-time sweep (gcMediaObjects), which knows exactly what is live. Undefined when either
  * read failed: a failed count is "unknown", and unknown keeps the file.
+ *
+ * Both reads are scoped to the artist the path belongs to (paths are `<artist_id>/<folder>/<file>`,
+ * buildStoragePath), so the snapshot count uses the revisions index by artist instead of reading
+ * every artist's media snapshots. A path with no artist id in front cannot be scoped: unknown.
  */
 async function stillNamed(client: SupabaseClient, path: string): Promise<boolean | undefined> {
   try {
+    const artistId = artistOfPath(path)
+    if (!artistId) return undefined
     const [rows, snaps] = await Promise.all([
-      client.from('media').select('id', { count: 'exact', head: true }).eq('storage_path', path),
-      client.from('revisions').select('id', { count: 'exact', head: true }).eq('entity_type', 'media').eq('data->>storage_path', path),
+      client.from('media').select('id', { count: 'exact', head: true }).eq('artist_id', artistId).eq('storage_path', path),
+      client
+        .from('revisions')
+        .select('id', { count: 'exact', head: true })
+        .eq('artist_id', artistId)
+        .eq('entity_type', 'media')
+        .eq('data->>storage_path', path),
     ])
     if (rows.error || snaps.error || rows.count == null || snaps.count == null) return undefined
     return rows.count > 0 || snaps.count > 0

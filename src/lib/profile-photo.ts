@@ -9,8 +9,10 @@
  * snapshot, so a change shows after Publish.
  *
  * Three doors write it, all through `setProfilePhoto`, so they write the same record: the Profile
- * page (a pick from Images, or an upload that lands in Images first), the Site & profile page's
- * upload (template sites) and the editor's image tile (setImageField's media branch).
+ * page (a pick from Images, or an upload that lands in Images first), and the Site & profile page's
+ * and the editor's uploads, which also land in Images first and then pick that photo
+ * (profile-photo-uploader.tsx), so a replaced photo can always be picked again. The editor's
+ * Remove clears it through setImageField's media branch.
  *
  * A PICK SHARES THE LIBRARY PHOTO'S FILE: the profile row names the same storage path as the
  * Images row, no copy. So deleting either row must not take the file while the other names it;
@@ -31,26 +33,44 @@ const LIBRARY = 'gallery_image'
 export type ProfilePhotoResult = { ok: boolean; error?: string }
 
 /**
- * Put a file in the profile photo slot, or clear it with `null`. Vacate-then-insert, the shape
- * `setBrandAsset` and the editor share: a clear is just the delete, and a replace cannot leave two
- * rows claiming the slot, even when old pages left two behind (the Site page's uploader once only
- * inserted). The replaced row's file is not removed here: it may be the live photo, or a library
- * photo's file; the publish-time sweep knows which (storage-gc.ts).
+ * Put a file in the profile photo slot, or clear it with `null`.
+ *
+ * INSERT FIRST, THEN DELETE THE OTHERS (review of d558c8e, 2026-10-02). It used to vacate the slot
+ * and then insert, so an insert that failed left the draft with NO photo: an upload then removed
+ * its new file (performUpload), and the next Publish took the live photo off the site with the old
+ * file left for the sweep. Now the worst case is two rows, never none: a failed insert changes
+ * nothing, and a failed delete leaves the old and the new row side by side. Every reader takes the
+ * first row by sort order (the old one, the new row's sort order is now), so that case reports an
+ * error: the change did not take, and the next save clears the extra row. A clear is just the
+ * delete. Old pages that left two rows behind (the Site page's uploader once only inserted) end
+ * with one on the next replace.
+ *
+ * The replaced rows' files are not removed here: one may be the live photo, or a library photo's
+ * file; the publish-time sweep knows which (storage-gc.ts).
  */
 export async function setProfilePhoto(supabase: SupabaseClient, artistId: string, storagePath: string | null): Promise<ProfilePhotoResult> {
   // The path comes from the browser on the upload doors: it must be this artist's own file.
   if (storagePath !== null && !isOwnedStoragePath(artistId, storagePath)) return { ok: false, error: 'That file location is not valid.' }
-  const del = await supabase.from('media').delete().eq('artist_id', artistId).eq('purpose', PROFILE_PHOTO)
-  if (del.error) return { ok: false, error: del.error.message }
-  if (!storagePath) return { ok: true }
-  const { error } = await supabase.from('media').insert({
-    artist_id: artistId,
-    purpose: PROFILE_PHOTO,
-    storage_path: storagePath,
-    on_site: true,
-    sort_order: Math.floor(Date.now() / 1000),
-  })
-  return error ? { ok: false, error: error.message } : { ok: true }
+  if (!storagePath) {
+    const del = await supabase.from('media').delete().eq('artist_id', artistId).eq('purpose', PROFILE_PHOTO)
+    return del.error ? { ok: false, error: del.error.message } : { ok: true }
+  }
+  const ins = await supabase
+    .from('media')
+    .insert({
+      artist_id: artistId,
+      purpose: PROFILE_PHOTO,
+      storage_path: storagePath,
+      on_site: true,
+      sort_order: Math.floor(Date.now() / 1000),
+    })
+    .select('id')
+    .single()
+  const newId = (ins.data as { id?: unknown } | null)?.id
+  if (ins.error || typeof newId !== 'string') return { ok: false, error: ins.error?.message ?? 'Could not save the profile photo.' }
+  const del = await supabase.from('media').delete().eq('artist_id', artistId).eq('purpose', PROFILE_PHOTO).neq('id', newId)
+  if (del.error) return { ok: false, error: `The old profile photo is still there (${del.error.message}). Try again.` }
+  return { ok: true }
 }
 
 /**
