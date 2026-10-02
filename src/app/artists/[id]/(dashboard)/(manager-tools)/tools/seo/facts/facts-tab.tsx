@@ -15,8 +15,9 @@ import { CardModal } from '../../../../card-modal'
 import { HeaderIcon, KvRow, MetaDot, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
-import { FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
-import { AreaField, Chips, EndSlot, FieldError, IconLink, LineField } from '../_ui/parts'
+import { CAPS_LABEL, FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
+import { AreaField, Chips, EndSlot, LineField } from '../_ui/parts'
+import { FieldError } from '../../../_ui/field-error'
 import { PlatformMark } from '../_ui/mark'
 import { clearHash, useOpenOnHash } from '../_ui/hash'
 
@@ -321,7 +322,7 @@ export function FactsTab(p: FactsTabProps) {
           guide="Comes with a release."
           shown={p.databases.discogs}
           missing={<span className={MONO_META}>not yet</span>}
-          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} />}
+          add={<ToConnections artistId={artistId} />}
         />
         <DatabaseRow
           artistId={artistId}
@@ -330,18 +331,24 @@ export function FactsTab(p: FactsTabProps) {
           guide="Needs press coverage first."
           shown={p.databases.wikidata}
           missing={<span className={MONO_META}>not yet</span>}
-          add={<IconLink icon="plus" label="Add in Connections" href={`/artists/${artistId}/connections`} />}
+          add={<ToConnections artistId={artistId} />}
         />
       </LedgerSection>
     </div>
   )
 }
 
+/** "+ Add in Connections": a full-ink + that turns blue on hover AND keyboard focus, like every
+ *  other + (RowIcon's every-+ rule; Batch 2, Sam 2026-10-02), its label on either. */
+function ToConnections({ artistId }: { artistId: string }) {
+  return <RowIcon icon="plus" label="Add in Connections" variant="primary" labelAlign="end" href={`/artists/${artistId}/connections`} link="app" />
+}
+
 /** A small labelled cell (city · region · country), modal-kit's KvCells look. */
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span aria-hidden="true" className="font-space text-[9px] uppercase tracking-[0.12em] text-ink-faint">
+      <span aria-hidden="true" className={cx(CAPS_LABEL, 'text-ink-faint')}>
         {label}
       </span>
       {children}

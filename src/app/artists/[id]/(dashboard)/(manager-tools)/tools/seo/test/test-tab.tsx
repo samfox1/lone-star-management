@@ -8,7 +8,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import type { StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoTestId } from '@/lib/seo-tests/types'
 import { toast } from '../../../../toast'
-import { EYEBROW, FOCUS_RING_OFFSET } from '../../../_ui/styles'
+import { CAPS_TITLE, EYEBROW, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useSeeded } from '../../../_ui/use-seeded'
 import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
 import { useMounted, useNow } from '../_ui/clock'
@@ -346,7 +346,7 @@ export function TestTab({
     return (
       <div className={COLUMN}>
         <div ref={topRef} className={MIDDLE}>
-          <h2 className="mb-[30px] font-space text-[26px] font-bold uppercase leading-[1.1] tracking-[0.12em] text-ink">{COPY.title}</h2>
+          <h2 className={cx(CAPS_TITLE, 'mb-[30px] font-bold leading-[1.1] text-ink')}>{COPY.title}</h2>
           <StartArt host={host} name={artistName.trim() || 'Your name'} />
           <p className="mx-auto max-w-[60ch] text-[15px] leading-normal text-ink-muted">{COPY.lede}</p>
           <div className="mt-[18px] flex justify-center">
@@ -418,13 +418,11 @@ export function TestTab({
           {groups.map((g) => (
             <section key={g.id} aria-label={g.label}>
               <DisclosureGroup title={g.label} count={`${g.pass} of ${g.applicable}`}>
-                {g.rows.map((row, i) => (
+                {g.rows.map((row) => (
                   <TestRowItem
                     key={row.def.id}
                     row={row}
                     open={openId === row.def.id}
-                    // No line against an open row: it is its own grey block.
-                    divider={i > 0 && openId !== row.def.id && openId !== g.rows[i - 1].def.id}
                     onToggle={() => setOpenId((o) => (o === row.def.id ? null : row.def.id))}
                     ctx={ctxFor(row)}
                   />

@@ -7,21 +7,24 @@ import { MAILTO_SAFE_LENGTH, buildBioPack, ccAddress, emailText, mailtoHref, typ
 import { dayLabel } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { ERROR_TEXT, MONO_META } from '../../../_ui/styles'
+import { FieldError } from '../../../_ui/field-error'
+import { MONO_META } from '../../../_ui/styles'
 import { useNow } from '../_ui/clock'
-import { CardAction, CardActions, Field, LABEL, ProfileCard, ProfileRow, QuietRow, RoundMark } from './_ui/profile-row'
+import { CardAction, CardActions, CardField, DisclosureGroup, RowMark } from '../_ui/disclosure'
+import { ProfileCard, ProfileRow, QuietRow } from './_ui/profile-row'
 import { markProfileItemAction } from './actions'
 import type { PackPhoto } from './load'
 
 /**
- * PROFILES (Sam, 2026-09-30, prototypes/profiles_bio_pack_20260930.html): the artist's profiles
- * on other services that Tapir can't fill in by itself. One row each: a round mark, the name,
+ * PROFILES (Sam, 2026-09-30, prototypes/profiles_bio_pack_20260930.html; rows and cards in the
+ * AI test's look since Batch 2, profile-row.tsx): the artist's profiles on other services that
+ * Tapir can't fill in by itself. One row each: a round mark, the name,
  * whether it was sent, a chevron. The first live one is the Apple Music & Amazon bio: an email to
  * AllMusic (Xperi), who write the bio both apps show. Its card holds the email, built in the
  * browser (bio-pack.ts) so a picked photo, its size and the CC change it at once:
  *
- *   TO · CC · SUBJECT · EMAIL · PHOTO · CHECK FIRST, then bare glyphs: Open in Mail, Copy email,
- *   Download photo, Mark as sent (or undo).
+ *   TO · CC · SUBJECT · EMAIL · PHOTO · CHECK FIRST, then a line of bare glyphs: Open in Mail,
+ *   Copy email, Download photo, Mark as sent (or undo).
  *
  * The CC is the artist's own address, typed here and kept nowhere (Tapir doesn't store it, and
  * the booking email is often an agent's). Only one valid address is ever used (`ccAddress`).
@@ -60,26 +63,25 @@ function downloadHref(url: string, fileName: string): string {
 }
 
 export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, marksOk, outside, bios }: ProfilesTabProps) {
-  const cardId = useId()
+  const id = useId()
   const [sentAt, setSentAt] = useState<string | null>(initialSent)
   const [open, setOpen] = useState(!initialSent)
   const now = useNow(false)
 
   return (
-    <div className="mx-auto max-w-[800px] pt-10">
-      <div className={LABEL}>Outside profiles</div>
-      <div className="mt-3.5 border-t border-hairline">
+    // pt-3.5 + the group's own 26px: the title sits where it did (40px down).
+    <div className="mx-auto max-w-[800px] pt-3.5">
+      <DisclosureGroup title="Outside profiles">
         <ProfileRow
+          id={id}
           open={open}
-          controls={cardId}
           onToggle={() => setOpen((o) => !o)}
-          mark={<RoundMark done={!!sentAt} />}
+          mark={<RowMark kind={sentAt ? 'check' : 'ring'} />}
           name="Apple Music & Amazon bio"
           status={marksOk ? (sentAt ? sentLabel(sentAt, now) : 'not sent') : ''}
-        />
-        {open ? (
+        >
           <BioCard
-            id={cardId}
+            id={id}
             artistId={artistId}
             input={input}
             photos={photos}
@@ -87,12 +89,12 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
             canMark={marksOk}
             onMarked={(done) => setSentAt(done ? new Date().toISOString() : null)}
           />
-        ) : null}
+        </ProfileRow>
         {outside}
         {LATER.map((label) => (
           <QuietRow key={label} name={label} status="later" later />
         ))}
-      </div>
+      </DisclosureGroup>
       <div className="mt-2.5 text-center font-space text-[12px] text-ink-faint">Xperi writes the bio · usually takes months</div>
       {bios}
     </div>
@@ -183,14 +185,14 @@ function BioCard({
 
   return (
     <ProfileCard id={id}>
-      <Field label="To">
+      <CardField label="To">
         <div className="font-space text-[13px] leading-[1.7]">
           {pack.to.map((a) => (
             <div key={a}>{a}</div>
           ))}
         </div>
-      </Field>
-      <Field label="Cc">
+      </CardField>
+      <CardField label="Cc">
         <input
           type="email"
           aria-label="Cc"
@@ -205,17 +207,17 @@ function BioCard({
             ccBad ? 'text-accent-red' : 'text-ink',
           )}
         />
-      </Field>
-      <Field label="Subject">
+      </CardField>
+      <CardField label="Subject">
         <div className="font-space text-[13px] leading-[1.7]">{pack.subject}</div>
-      </Field>
-      <Field label="Email">
+      </CardField>
+      <CardField label="Email">
         <pre aria-label="Email" className="m-0 max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[10px] bg-surface px-4 py-3.5 font-space text-[12px] leading-[1.65] text-ink">
           {pack.body}
         </pre>
-      </Field>
+      </CardField>
       {photo ? (
-        <Field label="Photo">
+        <CardField label="Photo">
           <div className="flex items-center gap-3.5">
             {/* eslint-disable-next-line @next/next/no-img-element -- a storage preview, not a page image */}
             <img src={photo.thumb} alt="" className="h-16 w-16 flex-none rounded-lg bg-surface object-cover" />
@@ -248,21 +250,19 @@ function BioCard({
               ))}
             </div>
           ) : null}
-        </Field>
+        </CardField>
       ) : null}
       {pack.checks.length ? (
-        <Field label="Check first">
+        <CardField label="Check first">
           <ul className="m-0 list-none p-0">
             {pack.checks.map((c) => (
               <li key={c.id} data-check={c.id} className="flex items-start gap-2.5 py-[3px] text-[13.5px]">
-                <span aria-hidden="true" className="mt-[3px] flex w-5 flex-none justify-center">
-                  <span className="h-[13px] w-[13px] rounded-full border-[1.6px] border-dashed border-ink-faint" />
-                </span>
+                <RowMark kind="dashed" className="mt-[3px]" />
                 <span>{c.text}</span>
               </li>
             ))}
           </ul>
-        </Field>
+        </CardField>
       ) : null}
       <CardActions>
         <CardAction icon="mailbox" label="Open in Mail" href={mailHref} />
@@ -273,11 +273,7 @@ function BioCard({
         {canMark ? (
           <CardAction icon={sent ? 'replay' : 'check'} label={sent ? 'Mark as not sent' : 'Mark as sent'} onClick={() => void mark()} disabled={busy} className="ml-auto" />
         ) : null}
-        {error ? (
-          <span role="alert" className={ERROR_TEXT}>
-            {error}
-          </span>
-        ) : null}
+        {error ? <FieldError>{error}</FieldError> : null}
       </CardActions>
     </ProfileCard>
   )

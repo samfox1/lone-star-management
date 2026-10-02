@@ -1,7 +1,7 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { NoteField, RowTitle } from './inline-text'
-import { MONO_META } from './styles'
+import { CAPS_SECTION, MONO_META } from './styles'
 
 /**
  * LAYOUT A, "LEDGER" (Sam, 2026-09-23; prototypes/brand_variants_20260923.html). No cards:
@@ -21,7 +21,7 @@ export function LedgerSection({ label, children }: { label: string; children?: R
       // `group/ledger-list`: its rows reserve the trash column when the list can hold one.
       className="group/ledger-list grid grid-cols-1 gap-x-8 border-b border-hairline pb-7 pt-2 last-of-type:border-b-0 min-[900px]:grid-cols-[150px_minmax(0,1fr)]"
     >
-      <h2 id={id} className="pt-4 font-space text-[11px] uppercase tracking-[0.1em] text-ink-faint min-[900px]:pt-[22px]">
+      <h2 id={id} className={cx(CAPS_SECTION, 'pt-4 text-ink-faint min-[900px]:pt-[22px]')}>
         {label}
       </h2>
       <div className="flex min-w-0 flex-col">{children}</div>
@@ -44,6 +44,11 @@ type LedgerRowBase = {
   /** An added row's trash (`<RowIcon icon="trash" … />`). It goes in the row's END SLOT, a
    *  fixed-width column every row in the list reserves, so the controls line up. */
   remove?: ReactNode
+  /** Any other control that ends the row in that same END SLOT (an SEO answer's pencil, or
+   *  its ✓ while it is written). A row passes `remove` or `end`, never both. */
+  end?: ReactNode
+  /** The fixed title may wrap (an SEO question); otherwise it stays on one line. */
+  wrap?: boolean
 }
 
 /**
@@ -64,23 +69,23 @@ export type LedgerRowProps = LedgerRowBase & ({ guide?: string; note?: never } |
  */
 export const END_SLOT = 'w-8 flex-none items-center justify-center'
 
-/** The ledger row's grid, without its vertical alignment: LedgerRow centres its two columns;
- *  the SEO Answers tab tops them (a question and its answer wrap). */
+/** The ledger row's grid, its two columns centred (the SEO Answers tab's row being written
+ *  wears it too, around its own fields). */
 export const LEDGER_ROW_GRID =
-  'group/ledger grid grid-cols-1 gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]'
+  'group/ledger grid grid-cols-1 items-center gap-6 border-b border-hairline-soft py-4 last:border-b-0 min-[900px]:grid-cols-[minmax(180px,1fr)_minmax(0,1.4fr)]'
 
-export function LedgerRow({ title, onRename, guide, note, meta, children, remove }: LedgerRowProps) {
+export function LedgerRow({ title, onRename, guide, note, meta, children, remove, end, wrap = false }: LedgerRowProps) {
   return (
     <div
       data-ledger-row=""
       // `group/ledger`: a faint RowIcon (row-icon.tsx) lights up while its row is hovered.
-      className={cx(LEDGER_ROW_GRID, 'items-center')}
+      className={LEDGER_ROW_GRID}
     >
       <div className="min-w-0">
         {onRename ? (
           <RowTitle value={title} onRename={onRename} />
         ) : (
-          <div className="whitespace-nowrap text-[15px] font-medium text-ink">{title}</div>
+          <div className={cx('text-[15px] font-medium text-ink', !wrap && 'whitespace-nowrap')}>{title}</div>
         )}
         {guide ? <div className="mt-0.5 max-w-[40ch] text-[13px] text-ink-muted">{guide}</div> : null}
         {note ? <NoteField {...note} /> : null}
@@ -88,15 +93,18 @@ export function LedgerRow({ title, onRename, guide, note, meta, children, remove
       </div>
       <div className="flex min-w-0 items-center justify-start gap-2.5 min-[900px]:justify-end">
         {children}
-        {remove ? (
-          <div data-ledger-end="remove" className={cx(END_SLOT, 'flex')}>
-            {remove}
+        {remove || end ? (
+          <div data-ledger-end={remove ? 'remove' : 'control'} className={cx(END_SLOT, 'flex')}>
+            {remove ?? end}
           </div>
         ) : (
           <div
             data-ledger-end="empty"
             aria-hidden="true"
-            className={cx(END_SLOT, 'hidden group-has-[[data-ledger-end=remove]]/ledger-list:flex group-has-[[data-ledger-add]]/ledger-list:flex')}
+            className={cx(
+              END_SLOT,
+              'hidden group-has-[[data-ledger-end=remove]]/ledger-list:flex group-has-[[data-ledger-end=control]]/ledger-list:flex group-has-[[data-ledger-add]]/ledger-list:flex',
+            )}
           />
         )}
       </div>

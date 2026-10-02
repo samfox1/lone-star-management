@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { buttonClass } from '@/components/ui/ui'
+import { cx } from '@/lib/cx'
+import { CAPS_META } from '../../_ui/styles'
 
 /** The card: a FIXED shape. At most the viewport minus 32px tall, never taller, so a
  *  long control column can never push Save off the screen. Only the middle scrolls. */
@@ -75,7 +77,7 @@ export function BrandModal({
       <header className="flex flex-none items-center gap-3 border-b border-hairline py-4 pl-5 pr-14">
         {square ? <div className="h-9 w-9 flex-none overflow-hidden rounded-[10px] bg-surface">{square}</div> : null}
         <h2 className="min-w-0 truncate text-[15px] font-bold">{label}</h2>
-        {meta ? <span className="flex-none font-space text-[11px] uppercase tracking-[0.06em] text-ink-faint">{meta}</span> : null}
+        {meta ? <span className={cx(CAPS_META, 'flex-none text-ink-faint')}>{meta}</span> : null}
       </header>
       <div data-modal-body="" className="min-h-0 flex-1 overflow-auto p-5">
         {board && fit ? (

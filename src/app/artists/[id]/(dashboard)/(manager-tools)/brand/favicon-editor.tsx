@@ -31,6 +31,7 @@ import { UploadField } from '../../upload-field'
 import { BrandModal } from './_ui/brand-modal'
 import { ModalBoard } from './_ui/modal-board'
 import { RowIcon } from '../_ui/row-icon'
+import { CAPS_SECTION } from '../_ui/styles'
 import { addIconSourceAction, saveFramingAction, setBrandAssetAction, setIconSourceAction } from './actions'
 
 /** How long after the last change the icon is written. Long enough to drag a slider. */
@@ -322,7 +323,7 @@ function IconCanvas({
   return <canvas ref={ref} width={size} height={size} role={role} aria-label={label} className={className} />
 }
 
-const LABEL = 'font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint'
+const LABEL = cx(CAPS_SECTION, 'text-ink-faint')
 const OUTPUT = 'min-w-[44px] text-right font-space text-[12px] text-ink-muted'
 
 /** Size and Up / down (Reset lives in the footer, beside Save). Disabled — greyed, never

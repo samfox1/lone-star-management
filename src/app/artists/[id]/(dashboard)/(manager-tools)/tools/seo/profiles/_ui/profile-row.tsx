@@ -1,68 +1,75 @@
 import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
-import { Icon } from '@/components/ui/icons'
 import { FOCUS_RING } from '../../../../_ui/focus-ring'
-import { RowIcon, type RowIconProps } from '../../../../_ui/row-icon'
+import { DisclosureCard, DisclosureItem, QuietItem, RowFace, RowMark, RowValue } from '../../_ui/disclosure'
 
 /**
- * THE PROFILES TAB'S ROW AND CARD (Sam, 2026-09-30, prototypes/profiles_bio_pack_20260930.html),
- * drawn once for its three lists: the Apple Music & Amazon bio (profiles-tab.tsx), Discogs and
- * Wikidata (outside-rows.tsx), and the Outside bios (bio-rows.tsx).
+ * THE PROFILES TAB'S ROWS, in the AI test's row and card (Batch 2, Sam 2026-10-02,
+ * prototypes/batch2_compare_20261002.html §1 "A"): the look is tools/seo/_ui/disclosure.tsx's;
+ * this file only puts its pieces together for the tab's three lists, the Apple Music & Amazon
+ * bio (profiles-tab.tsx), Discogs and Wikidata (outside-rows.tsx), and the Outside bios
+ * (bio-rows.tsx).
  *
- *   a row:   a round mark, the name, its state in Space Mono, a chevron; a quiet row has no
- *            chevron and nothing to open
- *   a card:  a white box under the open row, LABEL | value rows, then the bare action glyphs
+ *   a row:   a round mark (a check once done), the name, its state in Space Mono, a chevron
+ *   a quiet row: a dashed ring, nothing to open (`later`: a profile still to come, greyed)
+ *   a card:  ProfileCard, LABEL | value rows (disclosure.tsx's CardField)
  *
  * No directive: only client components render these.
  */
 
-/** A group's mono caps label ("OUTSIDE PROFILES"), and a card row's. */
-export const LABEL = 'font-space text-[10.5px] font-bold uppercase leading-none tracking-[0.14em] text-ink-faint'
-const ROW = 'flex w-full items-center gap-3.5 border-b border-hairline px-2.5 py-[13px] text-left'
+/** The ids a row and its card share: `base` is the caller's useId(). */
+const rowId = (base: string) => `${base}row`
+const cardId = (base: string) => `${base}card`
 
-/** A card value in plain text. */
-export const VALUE = 'text-[13.5px] leading-[1.6]'
-
-/** The round mark at a row's start: a ring, filled with a check once done. */
-export function RoundMark({ done }: { done: boolean }) {
-  return (
-    <span aria-hidden="true" className={cx('flex h-4 w-4 flex-none items-center justify-center rounded-full border-[1.5px] border-ink', done && 'bg-ink text-paper')}>
-      {done ? <Icon name="check" size={10} /> : null}
-    </span>
-  )
-}
-
-/** The dashed ring: a row that couldn't be checked, or isn't here yet. */
-export function DashedMark() {
-  return <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border-[1.5px] border-dashed border-ink-faint" />
-}
-
-/** A row that opens a card. `mark` is one or more glyphs before the name; `statusClassName`
- *  replaces the state's grey (a red "may be out of date"). */
+/** A row that opens a card. `mark` is one or more glyphs before the name; `bad` turns the state
+ *  red ("may be out of date"). `note`: a small link under the state, outside the button. */
 export function ProfileRow({
+  id,
   open,
-  controls,
   onToggle,
   mark,
   name,
   status,
-  statusClassName,
+  bad = false,
+  itemData,
+  note,
+  children,
 }: {
+  id: string
   open: boolean
-  controls: string
   onToggle: () => void
   mark: ReactNode
   name: string
   status: string
-  statusClassName?: string
+  bad?: boolean
+  itemData?: { [key: `data-${string}`]: string | undefined }
+  note?: ReactNode
+  /** The card (ProfileCard with the same `id`), shown while open. */
+  children: ReactNode
 }) {
   return (
-    <button type="button" aria-expanded={open} aria-controls={controls} onClick={onToggle} className={cx(ROW, 'transition-colors hover:bg-surface-hover', FOCUS_RING, 'focus-visible:-outline-offset-2')}>
-      {mark}
-      <span className="flex-1 text-[15px]">{name}</span>
-      <span className={cx('font-space text-[12px]', statusClassName ?? 'text-ink-muted')}>{status}</span>
-      <Icon name="chevronRight" size={16} className={cx('flex-none text-ink-faint transition-transform', open && 'rotate-90 text-ink')} />
-    </button>
+    <DisclosureItem
+      buttonId={rowId(id)}
+      cardId={cardId(id)}
+      open={open}
+      onToggle={onToggle}
+      itemData={itemData}
+      note={note}
+      face={
+        <RowFace
+          mark={mark}
+          name={name}
+          value={
+            <RowValue bad={bad} whole>
+              {status}
+            </RowValue>
+          }
+          open={open}
+        />
+      }
+    >
+      {children}
+    </DisclosureItem>
   )
 }
 
@@ -70,32 +77,32 @@ export function ProfileRow({
  *  still to come, greyed whole). */
 export function QuietRow({ name, status, later = false }: { name: string; status: string; later?: boolean }) {
   return (
-    <div className={cx(ROW, later ? 'text-ink-faint' : 'text-ink-muted')}>
-      <DashedMark />
-      <span className={cx('flex-1 text-[15px]', !later && 'text-ink')}>{name}</span>
-      <span className="font-space text-[12px]">{status}</span>
-    </div>
+    <QuietItem>
+      <RowFace
+        mark={<RowMark kind="dashed" />}
+        name={name}
+        tone={later ? 'faint' : 'ink'}
+        value={
+          <RowValue bad={false} whole>
+            {status}
+          </RowValue>
+        }
+      />
+    </QuietItem>
   )
 }
 
-/** The white card under an open row. */
+/** The white card under an open row; `id` is its row's. */
 export function ProfileCard({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <div id={id} className="mb-[18px] mt-1.5 rounded-[14px] border border-hairline bg-paper px-6 py-[22px] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <DisclosureCard id={cardId(id)} labelledBy={rowId(id)}>
       {children}
-    </div>
+    </DisclosureCard>
   )
 }
 
-/** One LABEL | value row of a card; the label above its value on a phone. */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-1.5 border-t border-hairline-soft py-3 first:border-t-0 first:pt-0.5 min-[600px]:grid-cols-[120px_minmax(0,1fr)] min-[600px]:gap-[18px]">
-      <span className={cx(LABEL, 'pt-[3px]')}>{label}</span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
+/** A card value in plain text. */
+export const VALUE = 'text-[13.5px] leading-[1.6]'
 
 /** A link to another site, as a card value: underlined Space Mono, a new tab. */
 export function OutLink({ href, children }: { href: string; children: ReactNode }) {
@@ -104,14 +111,4 @@ export function OutLink({ href, children }: { href: string; children: ReactNode 
       {children}
     </a>
   )
-}
-
-/** The card's last line: its actions, left to right (`ml-auto` sends one to the right edge). */
-export function CardActions({ children }: { children: ReactNode }) {
-  return <div className="mt-1.5 flex flex-wrap items-center gap-4 border-t border-hairline-soft pt-4">{children}</div>
-}
-
-/** One action: a bare 18px glyph (RowIcon `bare`), its name on hover. */
-export function CardAction({ className, ...props }: Omit<RowIconProps, 'variant' | 'glyphSize'>) {
-  return <RowIcon {...props} variant="bare" glyphSize={18} className={cx('p-1', className)} />
 }

@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { MAX_FONT_LABEL, type BrandFont } from '@/lib/fonts'
 import { FOCUS_RING } from '../../_ui/focus-ring'
+import { CAPS_LABEL } from '../../_ui/styles'
 import { RowTitle, type SaveResult } from '../../_ui/inline-text'
 import { FontSample } from './font-sample'
 
@@ -153,7 +154,7 @@ export function FontMenu({
       )}
     >
       {fonts.length ? (
-        <p aria-hidden="true" className="mx-1.5 mb-1.5 mt-1 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+        <p aria-hidden="true" className={cx(CAPS_LABEL, 'mx-1.5 mb-1.5 mt-1 text-ink-faint')}>
           Fonts
         </p>
       ) : null}

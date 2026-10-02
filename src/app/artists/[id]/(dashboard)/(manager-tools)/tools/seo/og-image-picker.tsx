@@ -7,7 +7,8 @@ import { HeaderIcon, KvLabel, MetaDot, ModalHeader, SelectMenu } from '../../../
 import { BrandSwatchProvider, ColorPalette, type NamedSwatch } from '../../../editor/color-picker'
 import { saveOgCardAction } from './actions'
 import { RowIcon } from '../../_ui/row-icon'
-import { ERROR_TEXT, MONO_META } from '../../_ui/styles'
+import { MONO_META } from '../../_ui/styles'
+import { FieldError } from '../../_ui/field-error'
 
 export type OgSource = { url: string; label: string }
 
@@ -108,11 +109,7 @@ export function ShareImageModal({
   const footer = (
     <div className="flex items-center justify-between gap-5">
       <div className="min-w-0">
-        {error ? (
-          <p role="alert" className={ERROR_TEXT}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <FieldError>{error}</FieldError> : null}
       </div>
       {sources.length ? (
         // ONE explicit action, as the kit's boxed icon (not a pill), and deliberately not an

@@ -2,10 +2,13 @@
 
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from '@/components/ui/icons'
-import { buttonClass } from '@/components/ui/ui'
+import { cx } from '@/lib/cx'
 import { CardModal } from '../../card-modal'
 import { HeaderIcon, KvField, KvRow, ModalHeader } from '../../modal-kit'
 import { toast } from '../../toast'
+import { AddRow } from '../_ui/add-row'
+import { CHIP_FIELD, Chip, ChipPlus } from '../_ui/chips'
+import { RowIcon } from '../_ui/row-icon'
 import {
   addEnquiryKindAction,
   deleteEnquiryKindAction,
@@ -44,7 +47,6 @@ export function KindRows({
 }) {
   const [kinds, setKinds] = useState(initial)
   const [openId, setOpenId] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
   // Re-entry latch for Add (AGENTS.md rule 5): two Enters before the first insert returns
   // used to mint a duplicate `press-2`, or lose the 23505 race and toast (review 2026-09-23).
   const addingRef = useRef(false)
@@ -62,7 +64,6 @@ export function KindRows({
       const kind = res.kind
       if (res.error || !kind) return toast(res.error ?? 'Could not add that kind.', 'error')
       setKinds((ks) => [...ks, kind])
-      setAdding(false)
     } finally {
       addingRef.current = false
     }
@@ -81,11 +82,11 @@ export function KindRows({
           <span className="min-w-[110px] flex-none text-sm font-medium">{k.label}</span>
           {/* The address this kind would actually reach. A missing one is the only thing
               that speaks up, because it is the only thing the manager has to act on. */}
-          <span className="truncate font-mono text-xs text-ink-muted">
+          <span className="truncate font-space text-xs text-ink-muted">
             {primary ?? 'No booking address set'}
           </span>
           {k.recipients.length > 0 ? (
-            <span className="flex-none font-mono text-xs text-ink-faint">
+            <span className="flex-none font-space text-xs text-ink-faint">
               +{k.recipients.length}
             </span>
           ) : null}
@@ -97,18 +98,11 @@ export function KindRows({
         </button>
       ))}
 
-      {adding ? (
-        <AddKind onCancel={() => setAdding(false)} onAdd={addKind} />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-ink-muted transition-colors hover:text-ink"
-        >
-          <Icon name="plus" size={14} />
-          Add kind
-        </button>
-      )}
+      {/* The shared add flow (Brand's): "+ Add kind", then a name field with ✓ and ×. Inset
+          like the rows, so the field starts under their squares. */}
+      <div className="px-2">
+        <AddRow noun="kind" label="Kind name" placeholder="Press" maxLength={LABEL_MAX} onAdd={(label) => void addKind(label)} />
+      </div>
 
       {open ? (
         <KindModal
@@ -124,35 +118,6 @@ export function KindRows({
           }}
         />
       ) : null}
-    </div>
-  )
-}
-
-/** The inline "Add kind" input. Enter commits, Escape backs out. */
-function AddKind({ onAdd, onCancel }: { onAdd: (label: string) => void; onCancel: () => void }) {
-  const [value, setValue] = useState('')
-  return (
-    <div className="flex items-center gap-2 px-2 py-1.5">
-      <input
-        autoFocus
-        aria-label="Kind name"
-        value={value}
-        placeholder="Press"
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === 'Enter' && value.trim()) onAdd(value)
-          if (e.key === 'Escape') onCancel()
-        }}
-        className="w-[180px] rounded-md border border-hairline bg-transparent px-2 py-1 text-sm outline-none focus:border-ink"
-      />
-      <button
-        type="button"
-        disabled={!value.trim()}
-        onClick={() => onAdd(value)}
-        className={buttonClass('solid', 'px-3 py-1 text-xs disabled:opacity-40')}
-      >
-        Add
-      </button>
     </div>
   )
 }
@@ -199,7 +164,7 @@ function KindModal({
         title={kind.label}
         // The SLUG, because it is the one thing here that cannot be changed and the one
         // thing the artist's website has to match.
-        meta={<span className="font-mono">{kind.slug}</span>}
+        meta={<span className="font-space">{kind.slug}</span>}
       />
 
       <KvField
@@ -214,7 +179,7 @@ function KindModal({
       />
 
       <KvRow label="Receives">
-        <span className="font-mono text-sm text-ink-muted">
+        <span className="font-space text-sm text-ink-muted">
           {primary ?? <span className="text-accent-red">No booking address set</span>}
         </span>
       </KvRow>
@@ -249,8 +214,9 @@ function KindModal({
 type Recipient = EnquiryKindRow['recipients'][number]
 
 /**
- * The list as chips, the grammar SupportActs set for a tour date's lineup: a chip per
- * person, a dashed "+" to add. Optimistic, with the whole list sent on every change.
+ * The list as chips: a chip per person, a dashed "+" to add, ✓ and × beside the two fields. The
+ * look is the shared one (_ui/chips.tsx, batch 2, 2026-10-02); the two fields, the checks and
+ * the save stay here. Optimistic, with the whole list sent on every change.
  *
  * TWO GUARDS the first version lacked (review, 2026-09-22):
  *   - `recipientProblem` runs BEFORE the save: address shape (ASCII-strict, because one
@@ -320,25 +286,17 @@ function Chips({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {recipients.map((r) => (
-        <span
+        <Chip
           key={r.id}
+          text={r.label || r.email}
           title={r.email}
-          className="inline-flex items-center gap-1.5 rounded-full border border-hairline py-1 pl-2.5 pr-1.5 text-xs"
-        >
-          {r.label || r.email}
-          <button
-            type="button"
-            aria-label={`Remove ${r.label || r.email}`}
-            onClick={() => void send(recipients.filter((x) => x.id !== r.id))}
-            className="grid size-4 place-items-center rounded-full text-ink-faint transition-colors hover:bg-ink/10 hover:text-ink"
-          >
-            <Icon name="close" size={10} />
-          </button>
-        </span>
+          removeLabel={`Remove ${r.label || r.email}`}
+          onRemove={() => void send(recipients.filter((x) => x.id !== r.id))}
+        />
       ))}
 
       {adding ? (
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1">
           <input
             autoFocus
             aria-label="Email address"
@@ -346,7 +304,7 @@ function Chips({
             placeholder="name@example.com"
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={onKey}
-            className="w-[190px] rounded-full border border-hairline bg-transparent px-2.5 py-1 text-xs outline-none focus:border-ink"
+            className={cx(CHIP_FIELD, 'w-[190px]')}
           />
           <input
             aria-label="Who this is"
@@ -354,18 +312,13 @@ function Chips({
             placeholder="Who"
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={onKey}
-            className="w-[84px] rounded-full border border-hairline bg-transparent px-2.5 py-1 text-xs outline-none focus:border-ink"
+            className={cx(CHIP_FIELD, 'w-[84px]')}
           />
+          <RowIcon icon="check" label="Add" variant="primary" tone="accent" onClick={commit} />
+          <RowIcon icon="close" label="Cancel" variant="primary" tone="danger" onClick={() => setAdding(false)} />
         </span>
       ) : (
-        <button
-          type="button"
-          aria-label="Add someone"
-          onClick={() => setAdding(true)}
-          className="grid size-6 place-items-center rounded-full border border-dashed border-hairline text-ink-faint transition-colors hover:border-ink hover:text-ink"
-        >
-          <Icon name="plus" size={12} />
-        </button>
+        <ChipPlus label="Add someone" onClick={() => setAdding(true)} />
       )}
     </div>
   )

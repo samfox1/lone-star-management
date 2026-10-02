@@ -22,10 +22,11 @@
  * wherever the missing part could change the answer (verify-content.md H1).
  */
 import { JSON_LD_REQUIRED, isIdentityProfileUrl } from '@samfox1/site-bridge/seo'
+import { shortLink } from '@/lib/manager-tools/format'
 import { appleLinkOf, appleStorefrontFix, countryCode, countryName, storeName } from './apple-storefront'
 import {
   clip, collapse, dayOf, hasType, homeOf, isObj, ldNodes, linkKey, num, pageNodes, pagesOf, plural, prettyDay,
-  shortUrl, textOf, typesOf, type LdNode, type Page, type PageState,
+  textOf, typesOf, type LdNode, type Page, type PageState,
 } from './html'
 import { matchFold, ownArtistNode, sameAsUrls, titleShown } from './match'
 import type { SeoEvidence, SeoKnown, SeoTest, SeoTestId, SeoTestResult } from './types'
@@ -126,11 +127,11 @@ const profiles = make('profiles', (e) => {
   const limits = `We check the links match the profiles you published in Tapir. We don’t open each profile, so we can’t confirm an account is really yours. ${HOME_CARD}`
   const cardRow: Row[] = card.none ? [{ label: 'fact card', value: 'none on the home page' }] : card.artist ? [] : card.others.length ? [{ label: 'fact card', value: `describes ${card.others.map((o) => `“${clip(o, 40)}”`).join(', ')}, not you` }] : [{ label: 'fact card', value: 'no artist in it' }]
   const evidence = [
-    { label: 'listed on your site', value: live.length ? listOf(live.map((u) => shortUrl(u, 50)), 8) : 'none' },
-    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing.map((u) => shortUrl(u, 50))) }] : []),
-    ...(extra.length ? [{ label: 'not in Tapir', value: listOf(extra.map((u) => shortUrl(u, 50))) }] : []),
-    ...(notProfile.length ? [{ label: 'not a profile page', value: listOf(notProfile.map((u) => shortUrl(u, 50))) }] : []),
-    ...(twice.length ? [{ label: 'listed twice', value: listOf(twice.map((u) => shortUrl(u, 50))) }] : []),
+    { label: 'listed on your site', value: live.length ? listOf(live.map((u) => clip(shortLink(u), 50)), 8) : 'none' },
+    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing.map((u) => clip(shortLink(u), 50))) }] : []),
+    ...(extra.length ? [{ label: 'not in Tapir', value: listOf(extra.map((u) => clip(shortLink(u), 50))) }] : []),
+    ...(notProfile.length ? [{ label: 'not a profile page', value: listOf(notProfile.map((u) => clip(shortLink(u), 50))) }] : []),
+    ...(twice.length ? [{ label: 'listed twice', value: listOf(twice.map((u) => clip(shortLink(u), 50))) }] : []),
     ...cardRow,
   ]
   const n = expected.size
@@ -231,8 +232,8 @@ const apple = make('apple', (e) => {
     else judged.push({ u, store: info.store, known: info.known, kind: info.kind })
   }
   const evidence: Row[] = [
-    { label: 'Apple Music links', value: listOf(links.filter((u) => !others.includes(u)).map((u) => shortUrl(u, 60))) },
-    ...(others.length ? [{ label: 'other artists’ Apple links, not checked', value: listOf(others.map((u) => shortUrl(u, 60))) }] : []),
+    { label: 'Apple Music links', value: listOf(links.filter((u) => !others.includes(u)).map((u) => clip(shortLink(u), 60))) },
+    ...(others.length ? [{ label: 'other artists’ Apple links, not checked', value: listOf(others.map((u) => clip(shortLink(u), 60))) }] : []),
   ]
   if (!judged.length) {
     return { status: 'pass', value: 'no country store', sentence: 'Your Apple Music links aren’t tied to one country’s store.', evidence, limits }
@@ -272,7 +273,7 @@ const apple = make('apple', (e) => {
   const inTapir = (e.known.published?.links ?? []).some((l) => linkKey(l.url) === linkKey(w.u))
   const fix = w.known && w.kind === 'artist' && country === 'US' && inTapir ? appleStorefrontFix(w.u) : null
   const what = w.kind === 'artist' ? 'link' : `${w.kind.replace('-', ' ')} link`
-  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: w.known ? `${w.store} = ${storeName(w.store)}` : `${w.store} (not an Apple store)` }, ...(wrong.length > 1 ? [{ label: 'other links with the wrong store', value: listOf(wrong.slice(1).map((x) => shortUrl(x.u, 60))) }] : []), ...(fix ? [{ label: 'in Tapir: after the fix', value: fix.fixed }] : [])]
+  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: w.known ? `${w.store} = ${storeName(w.store)}` : `${w.store} (not an Apple store)` }, ...(wrong.length > 1 ? [{ label: 'other links with the wrong store', value: listOf(wrong.slice(1).map((x) => clip(shortLink(x.u), 60))) }] : []), ...(fix ? [{ label: 'in Tapir: after the fix', value: fix.fixed }] : [])]
   const sentence = w.known
     ? `your Apple Music ${what} opens the ${storeName(w.store)} store, but you’re based in ${countryName(country)}.`
     : `your Apple Music ${what} names a store Apple doesn’t have (“/${w.store}/”); you’re based in ${countryName(country)}.`

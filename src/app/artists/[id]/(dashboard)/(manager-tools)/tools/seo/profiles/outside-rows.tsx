@@ -5,13 +5,16 @@ import { cx } from '@/lib/cx'
 import type { DiscogsCheck, OutsideChecks, WikidataCheck } from '@/lib/manager-tools/seo/profiles/outside'
 import { shortLink } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { CardAction, CardActions, Field, OutLink, ProfileCard, ProfileRow, QuietRow, RoundMark, VALUE } from './_ui/profile-row'
+import { CardField, RowMark, SentenceAction } from '../_ui/disclosure'
+import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
 
 /**
  * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/seo/profiles/outside.ts), read
  * live: a round mark (a check when all is well, a ring when something is missing or it's only
  * news), the status in Space Mono, a chevron. Each opens a small card: what we found, the link,
- * and the one thing to do. `checks` null = still asking (the page streams them in).
+ * and the one thing to do, its action a bare glyph at the end of that sentence (or after the
+ * link when there is nothing to do), as the AI test's cards end theirs. `checks` null = still
+ * asking (the page streams them in).
  *
  * Tapir never edits either service: every action happens there, by the artist.
  */
@@ -19,22 +22,18 @@ import { CardAction, CardActions, Field, OutLink, ProfileCard, ProfileRow, Quiet
 /** One row. No `children`: a quiet row with nothing to open (still checking, no site). `note`: a
  *  small link under the status, outside the button (a link can't sit inside one). */
 function Row({ name, ok, status, note, children }: { name: string; ok: boolean | null; status: string; note?: ReactNode; children?: ReactNode }) {
-  const cardId = useId()
+  const id = useId()
   const [open, setOpen] = useState(false)
   if (!children) return <QuietRow name={name} status={status} />
   return (
-    <>
-      <div className="relative">
-        <ProfileRow open={open} controls={cardId} onToggle={() => setOpen((o) => !o)} mark={<RoundMark done={!!ok} />} name={name} status={status} />
-        {note ? <span className="absolute bottom-1 right-10 leading-none">{note}</span> : null}
-      </div>
-      {open ? <ProfileCard id={cardId}>{children}</ProfileCard> : null}
-    </>
+    <ProfileRow id={id} open={open} onToggle={() => setOpen((o) => !o)} mark={<RowMark kind={ok ? 'check' : 'ring'} />} name={name} status={status} note={note}>
+      <ProfileCard id={id}>{children}</ProfileCard>
+    </ProfileRow>
   )
 }
 
 function ToConnections({ artistId }: { artistId: string }) {
-  return <CardAction icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" />
+  return <SentenceAction icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" />
 }
 
 /** No site to look for: nothing was asked, and there is nothing to open. */
@@ -70,23 +69,29 @@ export function DiscogsRow({ artistId, check }: { artistId: string; check: Disco
   const url = check.kind === 'unlinked' ? null : check.url
   const next = DISCOGS_NEXT[check.kind]
   const fromDiscogs = check.kind === 'listed' || check.kind === 'missing' || check.kind === 'gone'
+  const action =
+    check.kind === 'unlinked' || check.kind === 'gone' ? (
+      <ToConnections artistId={artistId} />
+    ) : url ? (
+      <SentenceAction icon="external" label="Open on Discogs" href={url} link="external" />
+    ) : null
   return (
     <Row name="Discogs" ok={check.kind === 'listed'} status={DISCOGS_STATUS[check.kind]} note={fromDiscogs ? <DiscogsCredit /> : null}>
-      <Field label="Page">{url ? <OutLink href={url}>{shortLink(url)}</OutLink> : <span className={VALUE}>None linked</span>}</Field>
+      <CardField label="Page">
+        {url ? <OutLink href={url}>{shortLink(url)}</OutLink> : <span className={VALUE}>None linked</span>}
+        {next ? null : action}
+      </CardField>
       {check.kind === 'listed' || check.kind === 'missing' ? (
-        <Field label="Your site">
+        <CardField label="Your site">
           <span className={VALUE}>{check.kind === 'listed' ? 'Listed' : 'Not listed'}</span>
-        </Field>
+        </CardField>
       ) : null}
       {next ? (
-        <Field label="Next">
+        <CardField label="Next">
           <span className={VALUE}>{next}</span>
-        </Field>
+          {action}
+        </CardField>
       ) : null}
-      <CardActions>
-        {url && check.kind !== 'gone' ? <CardAction icon="external" label="Open on Discogs" href={url} link="external" /> : null}
-        {check.kind === 'unlinked' || check.kind === 'gone' ? <ToConnections artistId={artistId} /> : null}
-      </CardActions>
     </Row>
   )
 }
@@ -105,6 +110,7 @@ export function WikidataRow({ check }: { check: WikidataCheck }) {
   if (check.kind === 'nosite') return <Row name="Wikidata" ok={null} status={NO_SITE} />
   const found = check.kind === 'found' ? check : null
   const complete = !!found && found.hasSite !== false && found.hasMbid
+  const open = found ? <SentenceAction icon="external" label="Open on Wikidata" href={found.url} link="external" /> : null
   const next =
     check.kind === 'none'
       ? 'Wikidata needs press first; then the artist can create an item.'
@@ -115,28 +121,27 @@ export function WikidataRow({ check }: { check: WikidataCheck }) {
           : null
   return (
     <Row name="Wikidata" ok={complete} status={wikidataStatus(check)}>
-      <Field label="Item">{found ? <OutLink href={found.url}>{shortLink(found.url)}</OutLink> : <span className={VALUE}>{check.kind === 'none' ? 'None yet' : '—'}</span>}</Field>
+      <CardField label="Item">
+        {found ? <OutLink href={found.url}>{shortLink(found.url)}</OutLink> : <span className={VALUE}>{check.kind === 'none' ? 'None yet' : '—'}</span>}
+        {found && !next ? open : null}
+      </CardField>
       {found ? (
         <>
           {found.hasSite !== null ? (
-            <Field label="Your site">
+            <CardField label="Your site">
               <span className={VALUE}>{found.hasSite ? 'Listed' : 'Missing'}</span>
-            </Field>
+            </CardField>
           ) : null}
-          <Field label="MusicBrainz">
+          <CardField label="MusicBrainz">
             <span className={VALUE}>{found.hasMbid ? 'Listed' : 'Missing'}</span>
-          </Field>
+          </CardField>
         </>
       ) : null}
       {next ? (
-        <Field label="Next">
+        <CardField label="Next">
           <span className={VALUE}>{next}</span>
-        </Field>
-      ) : null}
-      {found ? (
-        <CardActions>
-          <CardAction icon="external" label="Open on Wikidata" href={found.url} link="external" />
-        </CardActions>
+          {found ? open : null}
+        </CardField>
       ) : null}
     </Row>
   )

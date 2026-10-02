@@ -155,6 +155,20 @@ describe('the chips', () => {
     ])
   })
 
+  it('adds on ✓ the same as on Enter', async () => {
+    // The shared chips (batch 2) gave the two fields a ✓; it must run the same checked commit.
+    renderRows([kind()])
+    const card = openCard('Booking')
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Add someone' }))
+    fireEvent.change(within(card).getByLabelText('Email address'), { target: { value: 'mgr@x.com' } })
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: 'Add' }))
+    })
+
+    expect(setRecipients).toHaveBeenCalledWith('a1', 'k-booking', [{ email: 'mgr@x.com', label: null }])
+  })
+
   it('sends the list WITHOUT the one removed', async () => {
     renderRows([
       kind({

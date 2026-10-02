@@ -9,7 +9,7 @@ import { connectedCount } from '../../integrations'
 import { dirtyBySeg, isSegDirty } from '../../sections'
 import { TOOLS } from '../_shell/tools-registry'
 import { OverviewPublish } from './overview-publish'
-import { MONO_META } from '../_ui/styles'
+import { CAPS_LABEL, MONO_META } from '../_ui/styles'
 
 /**
  * The Overview of the manager-tools dashboard (Sam, 2026-08-28): what state the site is
@@ -57,7 +57,7 @@ export default async function ToolsPage({ params }: { params: Promise<{ id: stri
           <Link key={s.label} href={s.href}>
             <Card className="h-full p-5 transition-colors hover:border-ink-faint">
               <div className={`font-space text-[25px] font-bold tracking-[-0.02em] ${s.tone === 'accent' ? 'text-accent' : ''}`}>{s.value}</div>
-              <div className="mt-1.5 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint">{s.label}</div>
+              <div className={cx(CAPS_LABEL, 'mt-1.5 text-ink-faint')}>{s.label}</div>
             </Card>
           </Link>
         ))}

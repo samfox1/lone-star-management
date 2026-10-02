@@ -14,7 +14,7 @@
  */
 import { SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoBot, SeoCrawl } from '@/lib/seo-tests/types'
-import { plural, shortDay } from '../format'
+import { plural, shortDay, shortLink } from '../format'
 
 export type CrawlBot = SeoCrawl['robots']['bots'][number]
 export type CrawlPage = SeoCrawl['pages'][number]
@@ -89,18 +89,6 @@ export const opens = (s: number | null | undefined): s is number => typeof s ===
 
 /** "answered 200", or "no answer". */
 export const answered = (s: number | null | undefined): string => (typeof s === 'number' ? `answered ${s}` : 'no answer')
-
-/** An address as a person reads it: "www.skeenmusic.com/robots.txt", the home page as the host
- *  alone. Not a web address: returned as it came. */
-export function shortUrl(url: string | null | undefined): string {
-  if (!url) return ''
-  try {
-    const u = new URL(url)
-    return `${u.host}${u.pathname === '/' ? '' : u.pathname}${u.search}`
-  } catch {
-    return url
-  }
-}
 
 /** The site's origin as the run tested it: robots.txt is read at origin + "/robots.txt". */
 export function crawlOrigin(crawl: SeoCrawl, fallback?: string | null): string | null {
@@ -290,7 +278,7 @@ export const canonicalDiffers = (p: CrawlPage): boolean => p.canonical.person !=
 
 /** "/about: a person gets www.x.com/about, Google www.x.com, Bing no tag". */
 export function canonicalDiffText(p: CrawlPage): string {
-  const say = (u: string | null) => (u ? shortUrl(u) : 'no tag')
+  const say = (u: string | null) => (u ? shortLink(u) : 'no tag')
   return `${p.path}: a person gets ${say(p.canonical.person)}, Google ${say(p.canonical.google)}, Bing ${say(p.canonical.bing)}`
 }
 

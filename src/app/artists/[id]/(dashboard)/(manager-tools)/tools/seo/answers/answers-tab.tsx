@@ -3,17 +3,19 @@
 import { useRef, useState, type FocusEvent } from 'react'
 import Link from 'next/link'
 import { FAQ_AUTO_ONLY, probePrompts } from '@samfox1/site-bridge/seo'
-import { FAQ_EXTRA, FAQ_KEYS } from '@/lib/site-content-schema'
+import { FAQ_EXTRA, FAQ_KEYS, FAQ_QUESTION_MAX } from '@/lib/site-content-schema'
 import { cx } from '@/lib/cx'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction } from '../../../../actions'
 import { useConfirm } from '../../../../confirm-dialog'
-import { LEDGER_ROW_GRID, LedgerSection } from '../../../_ui/ledger'
+import { AddRow } from '../../../_ui/add-row'
+import { LEDGER_ROW_GRID, LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { AreaField, EndSlot, FieldError, LineField } from '../_ui/parts'
+import { FieldError } from '../../../_ui/field-error'
+import { AreaField, EndSlot, LineField } from '../_ui/parts'
 
 /** Where an automatic-only answer comes from, and the tool that holds it. */
 const FROM = {
@@ -34,14 +36,16 @@ type Row =
  * the latest releases are AUTOMATIC ONLY (the bridge's FAQ_AUTO_ONLY): read-only rows that say
  * where the answer comes from, with the way to that tool, because a written one went stale the
  * day after the show and the site ignores it. Up to five questions of the manager's own sit
- * under them ("Add question").
+ * under them ("Add question", the Brand lists' AddRow).
+ *
+ * Every row is the ledger's (LedgerRow), centred like every other (Sam, 2026-10-02: "answers to
+ * questions centered"); a question wraps.
  *
  * An answer edits in place and autosaves to the draft; the layout's Publish bar ships it.
  */
 export function AnswersTab({ artistId, name, schemaType, initial, auto }: { artistId: string; name: string; schemaType: string; initial: Record<string, string>; auto: string[] }) {
   const [values, setValues] = useState(initial)
   const [editing, setEditing] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const save = useDebouncedFieldSave<string>({
     persist: async (k, val) => {
@@ -97,39 +101,25 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
             artistId={artistId}
             row={r}
             editing={editing === r.key}
-            onEdit={() => {
-              setAdding(false)
-              setEditing(r.key)
-            }}
+            onEdit={() => setEditing(r.key)}
             onDone={() => setEditing((e) => (e === r.key ? null : e))}
             onAnswer={(v) => set(r.key, v)}
             onQuestion={r.kind === 'extra' ? (v) => set(r.qKey, v) : undefined}
             onClear={() => void clear(r)}
           />
         ))}
-        {adding && freeSlot ? (
-          <AddQuestion
+        {freeSlot ? (
+          // The question first (Enter or ✓), then its answer opens in place.
+          <AddRow
+            noun="question"
+            label="New question"
+            placeholder="A question people ask"
+            maxLength={FAQ_QUESTION_MAX}
             onAdd={(q) => {
               setNow([[freeSlot.q, q]])
-              setAdding(false)
               setEditing(freeSlot.a)
             }}
-            onCancel={() => setAdding(false)}
           />
-        ) : freeSlot ? (
-          <div className="pt-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(null)
-                setAdding(true)
-              }}
-              className={cx('inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted transition-colors hover:text-ink focus-visible:outline-offset-2', FOCUS_RING)}
-            >
-              <Icon name="plus" size={16} />
-              Add question
-            </button>
-          </div>
         ) : null}
         {error ? <FieldError>{error}</FieldError> : null}
       </LedgerSection>
@@ -138,7 +128,8 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
   )
 }
 
-/** One question and its answer, on the ledger's row grid (ledger.tsx), topped so a question wraps. */
+/** One question and its answer: a LedgerRow, or, while it is written, the same centred grid
+ *  around its fields. */
 function AnswerRow({
   artistId,
   row,
@@ -178,14 +169,14 @@ function AnswerRow({
             onDone()
           }
         }}
-        className={cx(LEDGER_ROW_GRID, 'items-start')}
+        className={LEDGER_ROW_GRID}
       >
         {onQuestion ? (
           <LineField label="Question" value={row.question} onChange={onQuestion} className="w-full font-medium" />
         ) : (
           <div className="text-[15px] font-medium text-ink">{row.question}</div>
         )}
-        <div className="flex min-w-0 items-start gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <AnswerDraft label={`Answer: ${row.question}`} start={row.written || (row.kind === 'fixed' ? row.auto : '')} onAnswer={onAnswer} />
           <EndSlot>
             <RowIcon icon="check" label="Done" variant="primary" tone="accent" onClick={onDone} />
@@ -196,43 +187,37 @@ function AnswerRow({
   }
 
   return (
-    <div data-answer-row={row.key} className={cx(LEDGER_ROW_GRID, 'items-start')}>
-      <div className="text-[15px] font-medium text-ink">{row.question}</div>
-      <div className="flex min-w-0 items-start gap-2.5">
-        {/* An automatic-only answer has no editor to open, so it is never cut short. */}
-        <span className={cx('min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', !from && 'line-clamp-3', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
-        {from ? (
-          <>
-            {/* r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow
-                means "leaves Tapir" elsewhere on these tabs). */}
-            <Link
-              href={`/artists/${artistId}/${from.seg}`}
-              className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded pt-[3px] font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
-            >
-              <Icon name={from.icon} size={14} aria-hidden="true" />
-              {`comes from ${from.label}`}
-            </Link>
-            <EndSlot />
-          </>
-        ) : (
-          <>
-            {row.written.trim() ? (
-              <RowIcon
-                icon={row.kind === 'extra' ? 'trash' : 'replay'}
-                label={row.kind === 'extra' ? `Remove: ${row.question}` : 'Use the automatic answer'}
-                tone={row.kind === 'extra' ? 'danger' : 'default'}
-                onClick={onClear}
-              />
-            ) : row.kind === 'extra' ? (
-              <RowIcon icon="trash" label={`Remove: ${row.question}`} tone="danger" onClick={onClear} />
-            ) : null}
-            <EndSlot>
-              <RowIcon icon="edit" label={`Edit: ${row.question}`} onClick={onEdit} />
-            </EndSlot>
-          </>
-        )}
-      </div>
-    </div>
+    <LedgerRow
+      title={row.question}
+      wrap
+      end={from ? undefined : <RowIcon icon="edit" label={`Edit: ${row.question}`} onClick={onEdit} />}
+    >
+      {/* An automatic-only answer has no editor to open, so it is never cut short. `mr-auto`
+          keeps the answer at its column's left edge however wide the column grows. */}
+      <span className={cx('mr-auto min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', !from && 'line-clamp-3', answer ? 'text-ink-muted' : 'text-ink-faint')}>
+        {answer || 'No answer yet'}
+      </span>
+      {from ? (
+        // r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow means
+        // "leaves Tapir" elsewhere on these tabs).
+        <Link
+          href={`/artists/${artistId}/${from.seg}`}
+          className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
+        >
+          <Icon name={from.icon} size={14} aria-hidden="true" />
+          {`comes from ${from.label}`}
+        </Link>
+      ) : row.written.trim() ? (
+        <RowIcon
+          icon={row.kind === 'extra' ? 'trash' : 'replay'}
+          label={row.kind === 'extra' ? `Remove: ${row.question}` : 'Use the automatic answer'}
+          tone={row.kind === 'extra' ? 'danger' : 'default'}
+          onClick={onClear}
+        />
+      ) : row.kind === 'extra' ? (
+        <RowIcon icon="trash" label={`Remove: ${row.question}`} tone="danger" onClick={onClear} />
+      ) : null}
+    </LedgerRow>
   )
 }
 
@@ -257,41 +242,5 @@ function AnswerDraft({ label, start, onAnswer }: { label: string; start: string;
       }}
       className="w-full max-w-[60ch] flex-1"
     />
-  )
-}
-
-/** "Add question": the question first (Enter or ✓), then its answer opens in place. */
-function AddQuestion({ onAdd, onCancel }: { onAdd: (q: string) => void; onCancel: () => void }) {
-  const [q, setQ] = useState('')
-  const done = useRef(false)
-  const confirm = () => {
-    const v = q.trim()
-    if (!v || done.current) return
-    done.current = true
-    onAdd(v)
-  }
-  return (
-    <div className="flex items-center gap-2 pt-2.5">
-      <input
-        autoFocus
-        aria-label="New question"
-        value={q}
-        placeholder="A question people ask"
-        spellCheck={false}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            confirm()
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            onCancel()
-          }
-        }}
-        className="w-[320px] max-w-full rounded-lg border border-hairline bg-paper px-2.5 py-[7px] text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
-      />
-      <RowIcon icon="check" label="Add" variant="boxed" size="sm" tone="accent" onClick={confirm} />
-      <RowIcon icon="close" label="Cancel" variant="boxed" size="sm" tone="danger" onClick={onCancel} />
-    </div>
   )
 }

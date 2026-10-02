@@ -1,13 +1,11 @@
 'use client'
 
 import { forwardRef, useRef, useState, type ReactNode, type TextareaHTMLAttributes } from 'react'
-import Link from 'next/link'
 import { cx } from '@/lib/cx'
-import { Icon, type IconName } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icons'
 import { HoverLabel, RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { END_SLOT } from '../../../_ui/ledger'
-import { ERROR_TEXT, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 
 /**
  * THE SEO / GEO TABS' SMALL PIECES, in round 2's row grammar (prototypes/seo_variants_20260928_r2.html,
@@ -15,30 +13,6 @@ import { ERROR_TEXT, FOCUS_RING_OFFSET } from '../../../_ui/styles'
  * icons with hover labels for every action (Sam, 2026-09-28: "I dont like the white pill form
  * buttons to take action... I like icons"), chips for lists.
  */
-
-/**
- * A full-ink in-app link glyph that turns blue on hover, its label on hover and as its
- * accessible name: the Facts tab's two "+ Add in Connections". Everything else is a RowIcon
- * (`href` + `link`). These two stay apart for now because a RowIcon + also turns blue on
- * KEYBOARD FOCUS (Sam's every-+ rule), which these never did: moving them is a visible change,
- * left for a pass that may change pixels.
- */
-export function IconLink({ icon, label, href }: { icon: IconName; label: string; href: string }) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      className={cx(
-        'relative inline-flex flex-none items-center justify-center rounded-lg p-1.5 transition-[opacity,color,background-color] duration-150 hover:bg-surface-hover',
-        FOCUS_RING_OFFSET,
-        'text-ink hover:text-accent',
-      )}
-    >
-      <Icon name={icon} size={20} />
-      <HoverLabel label={label} align="end" />
-    </Link>
-  )
-}
 
 /** The ledger row's end column (32px, ledger.tsx END_SLOT), for a row whose action sits there. */
 export function EndSlot({ children }: { children?: ReactNode }) {
@@ -48,15 +22,6 @@ export function EndSlot({ children }: { children?: ReactNode }) {
 /** "37 of 70" — faint, red once over. */
 export function Count({ n, max, className }: { n: number; max: number; className?: string }) {
   return <span className={cx('whitespace-nowrap font-space text-[11px]', n > max ? 'text-accent-red' : 'text-ink-faint', className)}>{`${n} of ${max}`}</span>
-}
-
-/** A refusal, in the validator's own words, under the value. */
-export function FieldError({ children }: { children: ReactNode }) {
-  return (
-    <p role="alert" className={cx(ERROR_TEXT, 'leading-snug')}>
-      {children}
-    </p>
-  )
 }
 
 /** The value look every in-place field shares: no box, a thin underline on focus only. No

@@ -9,7 +9,8 @@
  *   alt      every content `<img>` on the pages read has a real description; with no photo
  *            on the pages or in Tapir it does not apply (`na`)
  */
-import { clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, shortUrl, siteName, type PageState } from './html'
+import { shortLink } from '@/lib/manager-tools/format'
+import { clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, siteName, type PageState } from './html'
 import { describes } from './match'
 import { SHARE_MAX_BYTES } from './share-image'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
@@ -69,13 +70,13 @@ const share = make('share', (e) => {
   const limits = 'We open the picture that shows when someone shares your link and check its size, shape and file, not what’s in it. X can use a different picture your site names just for X, which we list but don’t open. Each app keeps its own copy, so a change can take days to show there.'
   const good = 'A wide picture, 1200 × 630 pixels.'
   const todo = 'Make a new preview picture on the Listing tab, then publish.'
-  const xRow = forX && (!named || !sameUrl(forX, named, `${e.origin}/`)) ? [{ label: 'X picture', value: `${shortUrl(forX, 80)} (not opened)` }] : []
+  const xRow = forX && (!named || !sameUrl(forX, named, `${e.origin}/`)) ? [{ label: 'X picture', value: `${clip(shortLink(forX), 80)} (not opened)` }] : []
   if (!img) {
-    if (named) return { status: 'unknown', value: 'couldn’t open', sentence: 'your site names a preview picture, but we didn’t open it this time.', evidence: [{ label: 'picture', value: shortUrl(named, 80) }, ...xRow], limits }
+    if (named) return { status: 'unknown', value: 'couldn’t open', sentence: 'your site names a preview picture, but we didn’t open it this time.', evidence: [{ label: 'picture', value: clip(shortLink(named), 80) }, ...xRow], limits }
     if (home.truncated) return tooBig('a preview picture')
     return { status: 'fail', value: 'none', sentence: 'your site doesn’t name a preview picture, so apps pick one or show none.', good, todo, action, evidence: [{ label: 'picture', value: 'none named on the home page' }, ...xRow], limits }
   }
-  const evidence: { label: string; value: string }[] = [{ label: 'picture', value: shortUrl(img.url, 80) }, ...xRow]
+  const evidence: { label: string; value: string }[] = [{ label: 'picture', value: clip(shortLink(img.url), 80) }, ...xRow]
   if (img.status === null) {
     const why: Record<string, string> = {
       'not-https': 'your preview picture isn’t on a secure address, so some apps won’t show it.',
@@ -224,7 +225,7 @@ const alt = make('alt', (e) => {
       const ok = describes(a.alt)
       const was = seen.get(key)
       if (was) was.described = was.described && ok
-      else seen.set(key, { where: `${p.path}: ${shortUrl(src ?? '(no address)', 70)}`, described: ok })
+      else seen.set(key, { where: `${p.path}: ${clip(shortLink(src ?? '(no address)'), 70)}`, described: ok })
     }
   }
   const total = seen.size

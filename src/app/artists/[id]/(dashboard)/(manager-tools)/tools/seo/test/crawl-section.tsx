@@ -4,9 +4,10 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import type { SeoCrawl, SeoTestStatus } from '@/lib/seo-tests/types'
-import { FOCUS_RING_OFFSET } from '../../../_ui/styles'
+import { shortLink } from '@/lib/manager-tools/format'
+import { CAPS_LABEL, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useMounted } from '../_ui/clock'
-import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowChevron, RowValue, SentenceAction } from '../_ui/disclosure'
+import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowFace, RowValue, SentenceAction } from '../_ui/disclosure'
 import {
   ASK_GOOGLE,
   BING_WEBMASTER,
@@ -34,7 +35,6 @@ import {
   robotsNotes,
   ruleText,
   sendsHome,
-  shortUrl,
   sitemapPages,
   visitOf,
   type CrawlFace,
@@ -107,7 +107,7 @@ export function CrawlSection({ crawl, site }: { crawl: SeoCrawl | null | undefin
   return (
     <section aria-label={TITLE} data-crawl-section="" onKeyDown={onKey}>
       <DisclosureGroup title={TITLE} count={`${fine} of ${total} fine`} countData={{ 'data-crawl-fine': '' }}>
-        {CRAWL_ROWS.map((r, i) => {
+        {CRAWL_ROWS.map((r) => {
           const open = openId === r.id
           return (
             <CrawlRow
@@ -116,7 +116,6 @@ export function CrawlSection({ crawl, site }: { crawl: SeoCrawl | null | undefin
               name={r.name}
               face={faces[r.id]}
               open={open}
-              divider={i > 0 && !open && openId !== CRAWL_ROWS[i - 1].id}
               onToggle={() => setOpenId((o) => (o === r.id ? null : r.id))}
             >
               {open ? <CardBody id={r.id} crawl={c} origin={origin} mounted={mounted} /> : null}
@@ -128,28 +127,27 @@ export function CrawlSection({ crawl, site }: { crawl: SeoCrawl | null | undefin
   )
 }
 
-function CrawlRow({ id, name, face, open, divider, onToggle, children }: { id: CrawlRowId; name: string; face: CrawlFace; open: boolean; divider: boolean; onToggle: () => void; children: ReactNode }) {
+function CrawlRow({ id, name, face, open, onToggle, children }: { id: CrawlRowId; name: string; face: CrawlFace; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <DisclosureItem
       buttonId={rowId(id)}
       cardId={cardId(id)}
       open={open}
-      divider={divider}
       onToggle={onToggle}
       itemData={{ 'data-crawl-item': id }}
       rowData={{ 'data-crawl-row': '', 'data-mark': face.mark }}
       face={
-        <>
-          <StatusMark status={MARK_STATUS[face.mark]} />
-          <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
-            <span className="min-w-0 flex-1 text-[15px] font-medium leading-[1.35] text-ink [overflow-wrap:anywhere]">{name}</span>
-            <span className="sr-only">, {MARK_WORD[face.mark]}</span>
+        <RowFace
+          mark={<StatusMark status={MARK_STATUS[face.mark]} />}
+          name={name}
+          srWord={MARK_WORD[face.mark]}
+          value={
             <RowValue bad={face.mark === 'bad'} data={{ 'data-crawl-value': '' }}>
               {face.value}
             </RowValue>
-          </span>
-          <RowChevron open={open} />
-        </>
+          }
+          open={open}
+        />
       }
     >
       <DisclosureCard id={cardId(id)} labelledBy={rowId(id)}>
@@ -206,7 +204,7 @@ function Mark({ mark, word }: { mark: CrawlMark | null; word?: string }) {
   )
 }
 
-const TH = 'border-b border-hairline pb-2 pr-3 text-left align-bottom font-space text-[10px] font-normal uppercase tracking-[0.1em] text-ink-faint'
+const TH = cx(CAPS_LABEL, 'border-b border-hairline pb-2 pr-3 text-left align-bottom font-normal text-ink-faint')
 const TD = 'border-b border-hairline-soft py-[7px] pr-3 align-middle text-ink'
 const MONO = 'font-space text-[12px] text-ink-faint'
 
@@ -223,7 +221,7 @@ function Table({ head, children }: { head?: ReactNode; children: ReactNode }) {
 function CompanyRow({ name, span, first }: { name: string; span: number; first: boolean }) {
   return (
     <tr data-company={name}>
-      <td colSpan={span} className={cx('border-b-0 pb-1 font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint', first ? 'pt-1.5' : 'pt-3.5')}>
+      <td colSpan={span} className={cx(CAPS_LABEL, 'border-b-0 pb-1 text-ink-faint', first ? 'pt-1.5' : 'pt-3.5')}>
         {name}
       </td>
     </tr>
@@ -246,7 +244,8 @@ function AskGoogleLink({ href, path }: { href: string; path: string }) {
       aria-label={`${ASK_GOOGLE} to list ${path}`}
       data-ask-google
       className={cx(
-        'ml-2.5 inline-flex items-center gap-1 whitespace-nowrap rounded align-middle font-space text-[10px] uppercase tracking-[0.1em] text-ink transition-colors hover:text-accent',
+        CAPS_LABEL,
+        'ml-2.5 inline-flex items-center gap-1 whitespace-nowrap rounded align-middle text-ink transition-colors hover:text-accent',
         FOCUS_RING_OFFSET,
       )}
     >
@@ -285,7 +284,7 @@ function RobotsCard({ crawl }: { crawl: SeoCrawl }) {
   const r = crawl.robots
   const lead = robotsLead(r.bots)
   const notes = robotsNotes(r.text)
-  const where = [shortUrl(r.url), answered(r.status), r.truncated ? 'first 2,000 characters' : null].filter(Boolean).join(' · ')
+  const where = [shortLink(r.url), answered(r.status), r.truncated ? 'first 2,000 characters' : null].filter(Boolean).join(' · ')
   const groups = byCompany(r.bots)
   return (
     <>
@@ -354,7 +353,7 @@ function SitemapCard({ crawl, day }: { crawl: SeoCrawl; day: (iso: string | null
       <CardField label="Address" name="address">
         {s.url ? (
           <>
-            <p className="text-[14px] leading-normal text-ink [overflow-wrap:anywhere]">{shortUrl(s.url)}</p>
+            <p className="text-[14px] leading-normal text-ink [overflow-wrap:anywhere]">{shortLink(s.url)}</p>
             <Caption>
               {answered(s.status)} · named in robots.txt <Mark mark={s.namedInRobots ? 'ok' : 'bad'} />
             </Caption>
@@ -415,8 +414,8 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
         <CardField label="Address" name="address">
           {/* One line that wraps on a phone: the other spelling → where it sends you · how. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-space text-[12px] text-ink-faint [overflow-wrap:anywhere]">
-            <span className="text-ink">{shortUrl(oh.url)}</span>
-            {oh.to ? <span>{`→ ${shortUrl(oh.to)}`}</span> : opens(oh.status) ? <span>opens on its own</span> : null}
+            <span className="text-ink">{shortLink(oh.url)}</span>
+            {oh.to ? <span>{`→ ${shortLink(oh.to)}`}</span> : opens(oh.status) ? <span>opens on its own</span> : null}
             {oh.to ? <Mark mark={toOwn ? (permanent ? 'ok' : null) : 'bad'} word={redirectWord(oh.status)} /> : <Mark mark={opens(oh.status) ? null : 'bad'} word={answered(oh.status)} />}
           </div>
           {toOwn && permanent ? <Caption>One address for the whole site, so search engines don’t split you in two.</Caption> : null}
@@ -442,7 +441,7 @@ function TagsCard({ crawl, origin }: { crawl: SeoCrawl; origin: string | null })
                 return (
                   <tr key={p.path} data-page={p.path}>
                     <td className={cx(TD, MONO, 'text-ink')}>{p.path}</td>
-                    <td className={cx(TD, MONO, '[overflow-wrap:anywhere]')}>{p.canonical.person ? shortUrl(p.canonical.person) : ''}</td>
+                    <td className={cx(TD, MONO, '[overflow-wrap:anywhere]')}>{p.canonical.person ? shortLink(p.canonical.person) : ''}</td>
                     <td className={TD}>
                       <Mark mark={c.mark} word={c.word} />
                     </td>

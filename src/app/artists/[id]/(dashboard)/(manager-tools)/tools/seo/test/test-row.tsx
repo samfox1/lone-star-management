@@ -4,7 +4,8 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import type { SeoTestStatus } from '@/lib/seo-tests/types'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
-import { CardField, DIVIDER, DisclosureCard, DisclosureItem, RowChevron, RowValue, SentenceAction } from '../_ui/disclosure'
+import { CAPS_VALUE } from '../../../_ui/styles'
+import { CardField, DisclosureCard, DisclosureItem, QuietItem, RowFace as Face, RowMark, RowValue, SentenceAction, type RowMarkKind } from '../_ui/disclosure'
 import { checkItYourself, editHref, evidenceRows, leadOf, safeHttps, sentenceOf, type TestRow } from '@/lib/manager-tools/seo/test-model'
 
 /**
@@ -39,24 +40,12 @@ export type RowContext = {
   onFix: (fix: 'apple-storefront') => void
 }
 
+const MARK_KIND: Record<SeoTestStatus, RowMarkKind> = { pass: 'check', fail: 'alert', na: 'minus', unknown: 'dashed' }
+
 /** The mark at the start of the row. `untested`: a plain hollow ring, so a row that has not been
  *  tested never reads as a statement of fact (review L3). */
 export function StatusMark({ status, untested = false }: { status: SeoTestStatus | null; untested?: boolean }) {
-  return (
-    <span aria-hidden="true" data-status-mark="" className="flex w-5 flex-none justify-center">
-      {untested ? (
-        <span data-mark="untested" className="h-[13px] w-[13px] rounded-full border-[1.6px] border-ink-faint" />
-      ) : status === 'pass' ? (
-        <Icon name="check" size={17} className="text-ink" />
-      ) : status === 'fail' ? (
-        <Icon name="alert" size={17} className="text-accent-red" />
-      ) : status === 'na' ? (
-        <Icon name="minus" size={17} className="text-ink-faint" />
-      ) : status === 'unknown' ? (
-        <span className="h-[13px] w-[13px] rounded-full border-[1.6px] border-dashed border-ink-faint" />
-      ) : null}
-    </span>
-  )
+  return <RowMark kind={untested ? 'faint-ring' : status ? MARK_KIND[status] : null} data={{ 'data-status-mark': '' }} />
 }
 
 const MARK_WORD: Record<SeoTestStatus, string> = { pass: 'passing', fail: 'needs you', unknown: 'couldn’t check', na: 'doesn’t apply' }
@@ -66,7 +55,7 @@ function Tags({ row }: { row: TestRow }) {
   return (
     <>
       {row.def.outside ? (
-        <span className="whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 font-space text-[10px] uppercase tracking-[0.06em] text-ink-faint">Outside Tapir</span>
+        <span className={cx(CAPS_VALUE, 'whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 text-ink-faint')}>Outside Tapir</span>
       ) : null}
       {row.def.source ? (
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-space text-[12px] text-ink-faint">
@@ -78,42 +67,32 @@ function Tags({ row }: { row: TestRow }) {
   )
 }
 
-/**
- * The inside of a row. The NAME WRAPS, never truncates, at every width (review L6: on a phone
- * six rows read "Nothing on your site tu…"). On a phone the tags and the value drop under the
- * name; from `sm` up they sit on the right.
- */
+/** The inside of a row (disclosure.tsx's RowFace): the tags and the value sit on the right. */
 function RowFace({ row, open }: { row: TestRow; open?: boolean }) {
   const r = row.result
   return (
-    <>
-      <StatusMark status={r?.status ?? null} untested={!r} />
-      <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3.5">
-        <span data-test-name="" className={cx('min-w-0 flex-1 text-[15px] font-medium leading-[1.35] [overflow-wrap:anywhere]', r?.status === 'na' ? 'text-ink-muted' : 'text-ink')}>
-          {row.def.name}
-        </span>
-        {r ? <span className="sr-only">, {MARK_WORD[r.status]}</span> : null}
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 sm:flex-none sm:flex-nowrap sm:gap-3.5">
-          <Tags row={row} />
-          {r?.value ? <RowValue bad={r.status === 'fail'}>{r.value}</RowValue> : null}
-        </span>
-      </span>
-      {open !== undefined ? <RowChevron open={open} /> : null}
-    </>
+    <Face
+      mark={<StatusMark status={r?.status ?? null} untested={!r} />}
+      name={row.def.name}
+      nameData={{ 'data-test-name': '' }}
+      tone={r?.status === 'na' ? 'muted' : 'ink'}
+      srWord={r ? MARK_WORD[r.status] : undefined}
+      extra={<Tags row={row} />}
+      value={r?.value ? <RowValue bad={r.status === 'fail'}>{r.value}</RowValue> : null}
+      open={open}
+    />
   )
 }
 
-export function TestRowItem({ row, open, divider, onToggle, ctx }: { row: TestRow; open: boolean; divider: boolean; onToggle: () => void; ctx: RowContext }) {
+export function TestRowItem({ row, open, onToggle, ctx }: { row: TestRow; open: boolean; onToggle: () => void; ctx: RowContext }) {
   const id = row.def.id
   if (!row.result) {
     // A test this run has no result for (new since, or a malformed stored result): a hollow
     // ring and nothing to open. Never shown as a pass or a fail.
     return (
-      <div data-test-item={id} className={cx('rounded-xl', divider && DIVIDER)}>
-        <div className="flex items-center gap-3.5 p-3 opacity-60">
-          <RowFace row={row} />
-        </div>
-      </div>
+      <QuietItem itemData={{ 'data-test-item': id }} className="opacity-60">
+        <RowFace row={row} />
+      </QuietItem>
     )
   }
   return (
@@ -121,7 +100,6 @@ export function TestRowItem({ row, open, divider, onToggle, ctx }: { row: TestRo
       buttonId={rowButtonId(id)}
       cardId={cardId(id)}
       open={open}
-      divider={divider}
       onToggle={onToggle}
       itemData={{ 'data-test-item': id }}
       rowData={{ 'data-test-row': '' }}

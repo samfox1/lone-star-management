@@ -34,12 +34,26 @@ export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
 }
 
-/** A profile link as a person reads it: "https://www.discogs.com/artist/1" → "discogs.com/artist/1".
- *  Only an https link's scheme and "www." go; the rest (a trailing slash, a #part) stays. The
- *  crawl cards' `shortUrl` (crawl-model.ts) is a different reading: it parses the address, keeps
- *  "www." and drops the home page's slash. */
-export function shortLink(url: string): string {
-  return url.replace(/^https:\/\/(www\.)?/, '')
+/**
+ * A web address as a person reads it, the ONE shortener (profiles, the crawl cards and the AI
+ * test's evidence each had their own until 2026-10-02, prototypes/batch2_compare_20261002.html):
+ *
+ *   "https://www.skeenmusic.com/"        → "www.skeenmusic.com"   (the home page's lone / goes)
+ *   "https://www.instagram.com/skeen/"   → "www.instagram.com/skeen/"   (a page's own slash stays)
+ *   "https://x.com/a?b=1#c"              → "x.com/a?b=1"   (a #part goes, a query stays)
+ *   "http://skeenmusic.com/"             → "http://skeenmusic.com"   (http:// stays: worth seeing)
+ *
+ * "www." STAYS: the crawl's Address card says "skeenmusic.com → www.skeenmusic.com", and without
+ * it that line would print the same address twice. Written as it came otherwise (no parsing, so a
+ * host is never punycoded and a path never percent-encoded). Not an http(s) address: returned as
+ * it came. Never capped; a caller that needs a cap clips the result.
+ */
+export function shortLink(url: string | null | undefined): string {
+  if (!url) return ''
+  const m = /^(https?):\/\/([^/?#]+)([^#]*)/i.exec(url.trim())
+  if (!m) return url
+  const [, scheme, host, rest] = m
+  return `${scheme.toLowerCase() === 'http' ? 'http://' : ''}${host}${rest === '/' ? '' : rest}`
 }
 
 /** What every tool says when a save fails and the server gave no reason. */

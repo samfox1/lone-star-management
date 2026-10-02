@@ -20,7 +20,7 @@ import { Icon } from '@/components/ui/icons'
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
 import { deleteEnquiryAction, setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
-import { MONO_META } from '../_ui/styles'
+import { CAPS_LABEL, CAPS_META, MONO_META } from '../_ui/styles'
 
 function received(iso: string): string {
   const d = new Date(iso)
@@ -137,7 +137,7 @@ export function EnquiryTable({
           only "no enquiries" says nothing about what lands here or how you will find it
           once it does. */}
       <div className="flex flex-wrap items-center gap-2 pb-2">
-        <span className="font-space text-[11px] uppercase tracking-[0.08em] text-ink-muted">
+        <span className={cx(CAPS_META, 'text-ink-muted')}>
           {/* Three text nodes, not plural(): one string shifts the letter-spaced line a
               sub-pixel (screenshot diff, 2026-10-01). */}
           {rows.length} {rows.length === 1 ? 'enquiry' : 'enquiries'}
@@ -237,9 +237,7 @@ export function EnquiryTable({
 function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
   return (
     <th
-      className={`px-4 pb-2 pt-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint ${
-        align === 'right' ? 'text-right' : ''
-      }`}
+      className={cx(CAPS_LABEL, 'px-4 pb-2 pt-2 font-bold text-ink-faint', align === 'right' && 'text-right')}
     >
       {children}
     </th>
@@ -277,7 +275,7 @@ function FragmentRow({
         }`}
       >
         {showArtist && (
-          <td className="px-4 py-2.5 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+          <td className={cx(CAPS_META, 'px-4 py-2.5 text-ink-muted')}>
             {row.artistName}
           </td>
         )}
@@ -288,7 +286,7 @@ function FragmentRow({
             <span className="sr-only">{isRead ? 'read' : 'unread'}</span>
           </span>
         </td>
-        <td className="px-4 py-2.5 font-space text-[11px] uppercase tracking-[0.06em] text-ink-faint">
+        <td className={cx(CAPS_META, 'px-4 py-2.5 text-ink-faint')}>
           {row.purposeLabel}
         </td>
         <td className="max-w-0 px-4 py-2.5">

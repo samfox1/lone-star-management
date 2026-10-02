@@ -26,6 +26,7 @@ export function AddRow({
   prefill,
   placeholder,
   maxLength = 40,
+  label = 'Name',
 }: {
   /** "logo" → "Add logo". */
   noun: string
@@ -37,6 +38,8 @@ export function AddRow({
   placeholder?: string
   /** 40, the database's limit on every brand title. */
   maxLength?: number
+  /** The field's accessible name: "Name", or "New question" on the SEO Answers tab. */
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -100,7 +103,7 @@ export function AddRow({
     <div data-ledger-add="" className="flex items-center gap-2 pt-2.5">
       <input
         ref={input}
-        aria-label="Name"
+        aria-label={label}
         value={name}
         maxLength={maxLength}
         placeholder={placeholder}
@@ -116,7 +119,8 @@ export function AddRow({
             cancel()
           }
         }}
-        className="w-[220px] max-w-full rounded-lg border border-hairline bg-paper px-2.5 py-[7px] text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
+        // 320px everywhere (Batch 2, Sam 2026-10-02): a 40-character brand name fits whole.
+        className="w-[320px] max-w-full rounded-lg border border-hairline bg-paper px-2.5 py-[7px] text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
       />
       <RowIcon icon="check" label="Add" variant="boxed" size="sm" tone="accent" onClick={confirm} />
       <RowIcon icon="close" label="Cancel" variant="boxed" size="sm" tone="danger" onClick={cancel} />

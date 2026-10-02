@@ -59,12 +59,43 @@ describe('clockTime, plural, shortLink, SAVE_FAILED', () => {
     expect(plural(3, 'page says', 'pages say')).toBe('3 pages say')
   })
 
-  it('shortLink drops an https scheme and "www." only, keeping the rest as written', () => {
-    expect(shortLink('https://www.discogs.com/artist/1-Skeen')).toBe('discogs.com/artist/1-Skeen')
-    expect(shortLink('https://open.spotify.com/artist/26Kx')).toBe('open.spotify.com/artist/26Kx')
-    expect(shortLink('https://www.wikidata.org/')).toBe('wikidata.org/')
-    expect(shortLink('https://x.com/a#b')).toBe('x.com/a#b')
-    expect(shortLink('http://www.example.com/')).toBe('http://www.example.com/')
+  /**
+   * ONE shortener for the three places that printed a web address three ways (profiles, the
+   * crawl cards, the AI test's evidence; prototypes/batch2_compare_20261002.html item 5, Sam
+   * said yes 2026-10-02). The first seven rows are that comparison's table, its "Proposed"
+   * column verbatim. `www.` stays because the crawl's Address card prints "skeenmusic.com →
+   * www.skeenmusic.com": dropping it would print the same address twice.
+   */
+  it.each([
+    ['https://www.skeenmusic.com/', 'www.skeenmusic.com'],
+    ['https://skeenmusic.com', 'skeenmusic.com'],
+    ['https://www.skeenmusic.com/about', 'www.skeenmusic.com/about'],
+    ['https://www.instagram.com/skeeeeeeen/', 'www.instagram.com/skeeeeeeen/'],
+    ['https://open.spotify.com/artist/26KxuQ1gIw8VP8YX2IkMWR', 'open.spotify.com/artist/26KxuQ1gIw8VP8YX2IkMWR'],
+    ['http://skeenmusic.com/', 'http://skeenmusic.com'],
+    ['https://www.discogs.com/artist/1234-Skeen#images', 'www.discogs.com/artist/1234-Skeen'],
+    // Beyond the table: a query is part of the address; only the home page's LONE slash goes.
+    ['https://www.skeenmusic.com/robots.txt?x=1', 'www.skeenmusic.com/robots.txt?x=1'],
+    ['https://skeenmusic.com/?x=1', 'skeenmusic.com/?x=1'],
+    ['https://skeenmusic.com/#top', 'skeenmusic.com'],
+    ['HTTPS://skeenmusic.com/', 'skeenmusic.com'],
+    ['HTTP://skeenmusic.com/a', 'http://skeenmusic.com/a'],
+    ['  https://skeenmusic.com/  ', 'skeenmusic.com'],
+    // An address inside something else is not a web address.
+    ['/go?to=https://skeenmusic.com/', '/go?to=https://skeenmusic.com/'],
+    // Not a web address: as it came.
+    ['mailto:booking@skeenmusic.com', 'mailto:booking@skeenmusic.com'],
+    ['/images/a.jpg', '/images/a.jpg'],
+    ['(no address)', '(no address)'],
+  ])('shortLink(%s) is %s', (url, short) => {
+    expect(shortLink(url)).toBe(short)
+  })
+
+  // The crawl cards pass a missing address (null) straight in; it must print nothing, not "null".
+  it('shortLink of nothing is empty', () => {
+    expect(shortLink(null)).toBe('')
+    expect(shortLink(undefined)).toBe('')
+    expect(shortLink('')).toBe('')
   })
 
   it('SAVE_FAILED is the sentence every tool showed', () => {

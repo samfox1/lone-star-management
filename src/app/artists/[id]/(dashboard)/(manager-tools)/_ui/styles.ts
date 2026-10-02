@@ -6,9 +6,8 @@ import { FOCUS_RING } from './focus-ring'
  * `_ui/`"). Each constant is the exact class list its hand-written copies had, so swapping one
  * in changes no pixel. Before writing one of these by hand, use it: a copy drifts.
  *
- * A look that only LOOKS shared is not here: the AI test's card (12px radius, 20px padding)
- * and the Profiles card (14px, 24px) are different boxes, each kept by its own component
- * (tools/seo/_ui/disclosure.tsx, tools/seo/profiles/_ui/profile-row.tsx).
+ * The AI test's and the Profiles tab's rows and cards are ONE look (Batch 2, Sam 2026-10-02),
+ * drawn by one component: tools/seo/_ui/disclosure.tsx.
  */
 
 /** The keyboard ring (focus-ring.ts, which says why it needs its own `outline-solid`), set
@@ -18,12 +17,33 @@ export const FOCUS_RING_OFFSET = cx(FOCUS_RING, 'focus-visible:outline-offset-2'
 /** Small faint Space Mono: a count ("4 of 5"), "Saved as …", a row's small print. */
 export const MONO_META = 'font-space text-[11px] text-ink-faint'
 
+/**
+ * THE MONO CAPS LADDER (Batch 2, Sam 2026-10-02, prototypes/batch2_compare_20261002.html §2):
+ * three sizes, two letter-spacings. A LABEL names a thing (.10em); a VALUE in caps IS the thing
+ * (.06em). These are size, case and spacing only: colour, weight and leading are the caller's
+ * (cx joins classes, it doesn't resolve a clash, so a colour here would fight the caller's).
+ *
+ *            label · .10em                               value · .06em
+ *   10px     CAPS_LABEL: a card row, a group, a table    CAPS_VALUE: a tag (OUTSIDE TAPIR),
+ *            head, a tile's caption                      a font's category
+ *   11px     CAPS_SECTION: the ledger's section word,    CAPS_META: a kind (BOOKING), a count,
+ *            a block or form label                       a modal's meta
+ *   26px     CAPS_TITLE: the AI test's title             —
+ *
+ * No 9px, no 10.5px, no third spacing: those were drift.
+ */
+export const CAPS_LABEL = 'font-space text-[10px] uppercase tracking-[0.1em]'
+export const CAPS_VALUE = 'font-space text-[10px] uppercase tracking-[0.06em]'
+export const CAPS_SECTION = 'font-space text-[11px] uppercase tracking-[0.1em]'
+export const CAPS_META = 'font-space text-[11px] uppercase tracking-[0.06em]'
+export const CAPS_TITLE = 'font-space text-[26px] uppercase tracking-[0.1em]'
+
 /** The mono caps word over a block: "AI VISIBILITY TEST", a group's name. */
-export const EYEBROW = 'font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint'
+export const EYEBROW = cx(CAPS_LABEL, 'text-ink-faint')
 
 /** A bold mono caps label over a form block (the press kit, the site page). */
-export const BLOCK_LABEL = 'font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-faint'
+export const BLOCK_LABEL = cx(CAPS_SECTION, 'font-bold text-ink-faint')
 
-/** A refusal in red Space Mono, beside the thing it refuses. FieldError (tools/seo/_ui/parts)
- *  is the same words in a block with its own snug leading. */
+/** A refusal in red Space Mono, beside the thing it refuses. FieldError (field-error.tsx) is
+ *  the same words in a block with its own snug leading. */
 export const ERROR_TEXT = 'font-space text-[11px] text-accent-red'

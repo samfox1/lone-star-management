@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
+import { CAPS_LABEL } from './(manager-tools)/_ui/styles'
 
 /**
  * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11):
@@ -72,11 +73,11 @@ export function DateSquare({ date, past = false }: { date: string | null; past?:
   return (
     <div data-date-mark="" className="flex h-full w-full flex-col items-center justify-center">
       {past ? (
-        <div className="font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">Past</div>
+        <div className={cx(CAPS_LABEL, 'font-bold text-ink-faint')}>Past</div>
       ) : valid ? (
         <>
           <div className="font-space text-[26px] font-bold leading-none tracking-[-0.03em]">{d}</div>
-          <div className="mt-1 font-space text-[9px] uppercase tracking-[0.14em] text-ink-faint">{MONTHS[m - 1]}</div>
+          <div className={cx(CAPS_LABEL, 'mt-1 text-ink-faint')}>{MONTHS[m - 1]}</div>
         </>
       ) : (
         <div className="font-space text-lg text-ink-faint">—</div>
@@ -100,7 +101,7 @@ export function MetaDot() {
  * wears the same label.
  */
 export function KvLabel({ children, top = false }: { children: ReactNode; top?: boolean }) {
-  return <span className={cx('w-[100px] flex-none font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint', top && 'pt-2')}>{children}</span>
+  return <span className={cx(CAPS_LABEL, 'w-[100px] flex-none text-ink-faint', top && 'pt-2')}>{children}</span>
 }
 
 /** The row shell: a mono label on the left, whatever the row holds on the right. */
@@ -269,7 +270,7 @@ export function KvCells({ label, cells }: { label: string; cells: EditableProps[
       <div className="grid min-w-0 flex-1 grid-cols-[1.4fr_0.7fr_1fr] gap-4">
         {cells.map((c) => (
           <div key={c.label} className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-space text-[9px] uppercase tracking-[0.12em] text-ink-faint">{c.label}</span>
+            <span className={cx(CAPS_LABEL, 'text-ink-faint')}>{c.label}</span>
             <Editable {...c} size="cell" />
           </div>
         ))}

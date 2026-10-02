@@ -4,7 +4,7 @@ import { useId, useState } from 'react'
 import { contrastRatio, isReadable } from '@/lib/color'
 import { cx } from '@/lib/cx'
 import { BrandModal } from '../_ui/brand-modal'
-import { FOCUS_RING_OFFSET } from '../../_ui/styles'
+import { CAPS_SECTION, FOCUS_RING_OFFSET } from '../../_ui/styles'
 import { HoverLabel } from '../../_ui/row-icon'
 
 /** A colour the playground can offer: every palette row that has one. */
@@ -90,7 +90,7 @@ export function ColorPlayground({ palette, startKey, onClose }: { palette: PlayC
       <div className="flex flex-col gap-3.5">
         {PARTS.map(({ part, label }) => (
           <div key={part}>
-            <span id={`${uid}-${part}`} className="mb-1.5 block font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+            <span id={`${uid}-${part}`} className={cx(CAPS_SECTION, 'mb-1.5 block text-ink-faint')}>
               {label}
             </span>
             <div role="radiogroup" aria-labelledby={`${uid}-${part}`} className="flex flex-wrap gap-2">

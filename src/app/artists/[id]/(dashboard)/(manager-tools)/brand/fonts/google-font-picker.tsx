@@ -10,6 +10,7 @@ import {
   type GoogleFontRow,
 } from '@/lib/google-fonts'
 import { FOCUS_RING } from '../../_ui/focus-ring'
+import { CAPS_VALUE } from '../../_ui/styles'
 import { BrandModal } from '../_ui/brand-modal'
 import { FontSample } from './font-sample'
 
@@ -109,7 +110,7 @@ export function GoogleFontPicker({
                 <FontSample family={family} googleFamily={family} cap={13} fallback={18} className={cx('min-w-0 truncate leading-tight', on && 'font-bold')}>
                   {family}
                 </FontSample>
-                <span className="flex-none font-space text-[10px] uppercase tracking-[0.08em] text-ink-faint">
+                <span className={cx(CAPS_VALUE, 'flex-none text-ink-faint')}>
                   {CATEGORY_LABEL[category]}
                 </span>
               </button>

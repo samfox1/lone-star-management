@@ -103,6 +103,9 @@ export const SEO_FIELDS: SiteContentField[] = [
 /** The FAQ answer keys, in prompt order — derived from SEO_FIELDS. */
 export const FAQ_KEYS = SEO_FIELDS.filter((f) => f.key.startsWith('faq_answer_')).map((f) => f.key)
 export const FAQ_EXTRA = [1, 2, 3, 4, 5].map((n) => ({ q: `faq_extra_${n}_q`, a: `faq_extra_${n}_a` }))
+/** How long one of the manager's own questions may be: the save refuses longer
+ *  (site-editor/save.ts SEO_LIMITS), and the Answers tab's add field stops there. */
+export const FAQ_QUESTION_MAX = 200
 
 /**
  * Site-wide cursor settings (Sam, 2026-08-11). Ordinary `site_content` keys — they

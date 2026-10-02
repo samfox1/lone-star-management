@@ -19,9 +19,10 @@
  */
 import { MAX_TITLE, defaultSeoTitle } from '@samfox1/site-bridge/seo'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
+import { shortLink } from '@/lib/manager-tools/format'
 import { countryCode, countryName } from './apple-storefront'
 import {
-  clip, collapse, fold, hasType, homeOf, isBareName, isObj, metaOf, namesArtist, num, pagesOf, plural, shortUrl, strings, textOf, wordsOf,
+  clip, collapse, fold, hasType, homeOf, isBareName, isObj, metaOf, namesArtist, num, pagesOf, plural, strings, textOf, wordsOf,
   type LdNode, type PageState,
 } from './html'
 import { distinctiveTitle, matchFold, matchSquash, namesPhrase, ownArtistNode, sentencesOf, wordCount } from './match'
@@ -479,7 +480,7 @@ const mb = make('mb', (e) => {
     return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Tapir as a visual artist.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
   }
   const m = e.musicbrainz
-  const asked = m.asked?.length ? [{ label: 'asked about', value: m.asked.map((u) => shortUrl(u, 50)).join(' · ') }] : []
+  const asked = m.asked?.length ? [{ label: 'asked about', value: m.asked.map((u) => clip(shortLink(u), 50)).join(' · ') }] : []
   if (!m.looked) {
     return { status: 'unknown', value: 'couldn’t ask', sentence: `we couldn’t ask MusicBrainz this time${m.error ? ` (${m.error})` : ''}.`, evidence: [...asked, ...(m.error ? [{ label: 'why', value: m.error }] : [])], limits }
   }
@@ -487,7 +488,7 @@ const mb = make('mb', (e) => {
   const found = [
     ...(m.artistUrl ? [{ label: 'MusicBrainz page', value: m.artistUrl }] : []),
     ...(m.artistName ? [{ label: 'name there', value: m.artistName }] : []),
-    ...(m.matchedOn ? [fromConnections ? { label: 'in Tapir: found by', value: 'your MusicBrainz link in Connections' } : { label: 'found by', value: shortUrl(m.matchedOn, 60) }] : []),
+    ...(m.matchedOn ? [fromConnections ? { label: 'in Tapir: found by', value: 'your MusicBrainz link in Connections' } : { label: 'found by', value: clip(shortLink(m.matchedOn), 60) }] : []),
     ...asked,
   ]
   const name = e.known.artistName.trim()

@@ -462,12 +462,6 @@ export function linkKey(url: string): string | null {
   return `${siteName(u.hostname)}${trimTrailingSlashes(u.pathname)}${u.search}`
 }
 
-/** A link as a person reads it: no scheme, no `www.`, no trailing slash, capped. */
-export function shortUrl(url: string, max = 60): string {
-  const s = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s
-}
-
 /** Cut to `max` characters with an ellipsis. */
 export function clip(s: string, max: number): string {
   const chars = Array.from(s)

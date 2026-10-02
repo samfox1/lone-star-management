@@ -35,7 +35,7 @@ describe('the outside rows', () => {
     expect(screen.getByRole('button', { name: /Discogs/ }).textContent).toContain('site missing')
     expect(screen.getByRole('link', { name: 'Data provided by Discogs' }).getAttribute('href')).toBe('https://www.discogs.com/')
     fireEvent.click(screen.getByRole('button', { name: /Discogs/ }))
-    expect(screen.getByRole('link', { name: 'discogs.com/artist/1230117' }).getAttribute('href')).toBe('https://www.discogs.com/artist/1230117')
+    expect(screen.getByRole('link', { name: 'www.discogs.com/artist/1230117' }).getAttribute('href')).toBe('https://www.discogs.com/artist/1230117')
     expect(screen.getByText('Add your site under Sites on Discogs.')).toBeTruthy()
   })
 
@@ -58,7 +58,7 @@ describe('the outside rows', () => {
     render(<WikidataRow check={{ kind: 'found', item: 'Q1299', url: 'https://www.wikidata.org/wiki/Q1299', hasSite: true, hasMbid: false }} />)
     fireEvent.click(screen.getByRole('button', { name: /Wikidata/ }))
     expect(screen.getByRole('button', { name: /Wikidata/ }).textContent).toContain('MusicBrainz ID missing')
-    expect(screen.getByRole('link', { name: 'wikidata.org/wiki/Q1299' }).getAttribute('href')).toBe('https://www.wikidata.org/wiki/Q1299')
+    expect(screen.getByRole('link', { name: 'www.wikidata.org/wiki/Q1299' }).getAttribute('href')).toBe('https://www.wikidata.org/wiki/Q1299')
     expect(screen.getByText('Listed')).toBeTruthy()
     expect(screen.getByText('Missing')).toBeTruthy()
   })

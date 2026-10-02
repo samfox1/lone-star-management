@@ -16,7 +16,7 @@
  * being edited. Deciding custom-ness by "no manifest found" would therefore never fire.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { acceptsValue, CURSOR_KEYS, cursorValueError, FAQ_EXTRA, FAQ_KEYS, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
+import { acceptsValue, CURSOR_KEYS, cursorValueError, FAQ_EXTRA, FAQ_KEYS, FAQ_QUESTION_MAX, fieldsFor, SEO_FIELDS, TEMPLATE_FIELDS } from '@/lib/site-content-schema'
 import { fieldByKey, manifestFor } from '@/lib/site-editor/manifest'
 import { mediaUrl } from '@/lib/storage-url'
 import { isOwnedStoragePath } from '@/lib/upload'
@@ -140,7 +140,7 @@ export const SEO_LIMITS: Record<string, number> = {
   seo_description: 300,
   about_heading: 60,
   ...Object.fromEntries(FAQ_KEYS.map((k) => [k, 1200])),
-  ...Object.fromEntries(FAQ_EXTRA.flatMap((e) => [[e.q, 200], [e.a, 1200]])),
+  ...Object.fromEntries(FAQ_EXTRA.flatMap((e) => [[e.q, FAQ_QUESTION_MAX], [e.a, 1200]])),
   // The place facts (lib/seo-facts.ts), in characters. The alias list and the year are
   // shape rules, not one length, so they are not here.
   [FACT_CONTENT_KEYS.region]: MAX_PLACE_PART_LENGTH,
