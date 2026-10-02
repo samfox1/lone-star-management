@@ -11,9 +11,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const AUDIO_BUCKET = 'audio'
+const AUDIO_BUCKET = 'audio'
 /** TTL ≥ any realistic track length, so seeking never outlives the URL (§9). */
-export const AUDIO_URL_TTL_SECONDS = 60 * 60 // 1 hour
+const AUDIO_URL_TTL_SECONDS = 60 * 60 // 1 hour
 
 export async function signAudioUrl(
   admin: SupabaseClient,

@@ -6,7 +6,11 @@
  * A name is a CLAIM. If a test's code cannot support its name, change the name here to what it
  * can support (and say what changed in the review notes) rather than keep a claim we can't check.
  */
-import type { SeoTestDef, SeoTestGroup } from './types'
+import type { SeoTestDef, SeoTestGroup, SeoTestId } from './types'
+
+/** The tests whose answer does not come from reading the artist's site: `mb` asks MusicBrainz
+ *  about the artist. Every other test reads the site's pages, robots.txt, sitemap or files. */
+export const SITE_FREE_TESTS: ReadonlySet<SeoTestId> = new Set<SeoTestId>(['mb'])
 
 export const SEO_TEST_GROUPS: readonly { id: SeoTestGroup; label: string }[] = [
   { id: 'found', label: 'Can be found' },

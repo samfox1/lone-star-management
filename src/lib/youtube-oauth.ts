@@ -31,7 +31,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { CONNECT_METHODS, parseHandle, type HandleMethod } from '@/lib/connect-methods'
 import type { ConnectInput } from '@/lib/connections'
-import { YOUTUBE_START_PATH } from '@/lib/manager-tools/connections/services/youtube'
 
 /** The ONE scope: read the signed-in account's own channel. No upload, no manage, no email. */
 export const YOUTUBE_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly'
@@ -39,7 +38,6 @@ export const YOUTUBE_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly'
 export const STATE_COOKIE = 'ls_youtube_oauth'
 /** How long a trip to Google may take: picking an account plus pressing Allow. */
 export const STATE_TTL_MS = 10 * 60 * 1000
-export const START_PATH = YOUTUBE_START_PATH
 export const CALLBACK_PATH = '/api/youtube/callback'
 
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -94,7 +92,7 @@ function stateSignature(body: string, secret: string): string {
 }
 
 /** PKCE S256: base64url(sha256(verifier)). */
-export function pkceChallenge(verifier: string): string {
+function pkceChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url')
 }
 

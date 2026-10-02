@@ -42,13 +42,13 @@ import {
 export type BrandPurpose = 'logo_primary' | 'logo_secondary' | 'favicon' | 'home_icon'
 export const BRAND_ASSET_PURPOSES: readonly BrandPurpose[] = ['logo_primary', 'logo_secondary', 'favicon', 'home_icon']
 
-/** EVERY media purpose the Brand page owns, and the two media slices (Brand's, the
- *  site's): in `brand-media.ts`, which `content.ts` can import without a cycle. */
-export { BRAND_MEDIA_PURPOSES, BRAND_MEDIA_SLICE, SITE_MEDIA_SLICE, isBrandMediaPurpose, type BrandMediaPurpose } from '@/lib/brand-media'
+/** EVERY media purpose the Brand page owns. It lives in `brand-media.ts` (beside the two media
+ *  slices, Brand's and the site's), which `content.ts` can import without a cycle. */
+export { BRAND_MEDIA_PURPOSES } from '@/lib/brand-media'
 
 /** The logo rows: the two built-ins and the added ones. */
 export const LOGO_PURPOSES = ['logo_primary', 'logo_secondary', 'logo'] as const
-export type LogoPurpose = (typeof LOGO_PURPOSES)[number]
+type LogoPurpose = (typeof LOGO_PURPOSES)[number]
 
 /** What an icon may be framed from: any logo, or an image uploaded just for it. Never a
  *  derived PNG (`favicon`, `home_icon`) — framing a framed icon compounds the crop. */

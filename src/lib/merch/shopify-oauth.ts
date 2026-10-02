@@ -45,12 +45,11 @@ export const SHOPIFY_SCOPES = ['unauthenticated_read_product_listings'] as const
 
 /** The Admin API version for the two calls the callback makes. A retired version keeps
  *  working (Shopify serves the oldest supported one), so this only has to exist. */
-export const ADMIN_API_VERSION = '2026-07'
+const ADMIN_API_VERSION = '2026-07'
 
 export const STATE_COOKIE = 'ls_shopify_oauth'
 /** How long a trip to Shopify may take: signing in to the store plus approving. */
 export const STATE_TTL_MS = 10 * 60 * 1000
-export const INSTALL_PATH = '/api/shopify/install'
 export const CALLBACK_PATH = '/api/shopify/callback'
 export const WEBHOOK_PATH = '/api/shopify/webhooks'
 
@@ -205,7 +204,7 @@ export function missingScopes(granted: readonly string[]): string[] {
 
 /** A step of the connect that Shopify refused. The message never holds a credential (at
  *  most a Shopify userError's own sentence), and only its `step` travels back to the page. */
-export class ShopifyOAuthError extends Error {
+class ShopifyOAuthError extends Error {
   constructor(
     readonly step: 'exchange' | 'token',
     message: string,
@@ -327,7 +326,7 @@ export function verifyWebhookHmac(body: Uint8Array, header: string | null, secre
 /** Every way the trip can end badly, as a CODE. Only codes travel in the URL: free text in a
  *  query string is something anyone can put on our page. */
 export const OAUTH_FAILURES = ['config', 'shop', 'state', 'hmac', 'denied', 'auth', 'exchange', 'scope', 'token', 'connect', 'sync'] as const
-export type OAuthFailure = (typeof OAUTH_FAILURES)[number]
+type OAuthFailure = (typeof OAUTH_FAILURES)[number]
 /** A failure, or a probe failure after the token was saved (`probe-bad-token`, …). */
 export type ReturnReason = OAuthFailure | `probe-${ProbeFailure}`
 

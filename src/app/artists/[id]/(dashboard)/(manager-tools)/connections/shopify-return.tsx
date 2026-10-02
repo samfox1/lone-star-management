@@ -15,7 +15,7 @@ import type { ShopifyReturn } from '@/lib/merch/shopify-oauth'
  * fire before the dashboard's Toaster is listening. The `<param>`/`reason` params come out of
  * the address bar once shown, so a reload does not say it again.
  */
-export function ReturnNotice({ kind, message, param }: ShopifyReturn & { param: 'shopify' | 'youtube' | 'eventbrite' }) {
+function ReturnNotice({ kind, message, param }: ShopifyReturn & { param: 'shopify' | 'youtube' | 'eventbrite' }) {
   const [open, setOpen] = useState(true)
 
   useEffect(() => {

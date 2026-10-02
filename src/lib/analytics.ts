@@ -33,7 +33,7 @@ export async function entityCounts(
 }
 
 /** Sum the given event types recorded for one entity id (0 if none). */
-export function countFor(counts: EntityCounts, id: string, ...types: string[]): number {
+function countFor(counts: EntityCounts, id: string, ...types: string[]): number {
   const rec = counts.get(id)
   if (!rec) return 0
   return types.reduce((n, t) => n + (rec[t] ?? 0), 0)
@@ -45,7 +45,7 @@ export function countFor(counts: EntityCounts, id: string, ...types: string[]): 
  * re-deciding "merch = buy_click" in four places. `release` sums plays + DSP clicks
  * across its own id AND its tracks' (the caller passes those ids).
  */
-export const ON_SITE_METRIC = {
+const ON_SITE_METRIC = {
   release: { label: 'listens', events: ['play', 'link_click'] },
   merch: { label: 'buy clicks', events: ['buy_click'] },
   tour_date: { label: 'ticket clicks', events: ['ticket_click'] },
@@ -204,7 +204,7 @@ export const METRICS = [
 /** The metrics that can be on the chart: views always, visitors and bots as
  *  toggles. Plays and the click metrics are counted (they feed the content
  *  lists) but Sam did not want them on the chart. */
-export const CHART_METRICS: readonly MetricKey[] = METRICS.filter((m) => m.chart).map((m) => m.key)
+const CHART_METRICS: readonly MetricKey[] = METRICS.filter((m) => m.chart).map((m) => m.key)
 export const OVERLAYS: readonly MetricKey[] = CHART_METRICS.filter((k) => k !== 'views')
 
 export type MetricKey = (typeof METRICS)[number]['key']
@@ -500,7 +500,7 @@ export const DEVICE_KINDS = [
   { key: 'tablet', label: 'Tablet' },
   { key: 'desktop', label: 'Computer' },
 ] as const
-export type DeviceKind = (typeof DEVICE_KINDS)[number]['key']
+type DeviceKind = (typeof DEVICE_KINDS)[number]['key']
 export type DeviceShares = Record<DeviceKind, number> & { other: number; total: number }
 
 export function summarizeDevices(rows: DeviceRow[]): DeviceShares {
@@ -598,7 +598,7 @@ export type TargetRow = { entity_type: string; entity_id: string; type: string; 
  * chose, not where the song happens to live.
  */
 export const SERVICES = ['spotify', 'soundcloud', 'apple'] as const
-export type Service = (typeof SERVICES)[number]
+type Service = (typeof SERVICES)[number]
 
 /**
  * What the hover shows for one row — a UNION, because a song and a product have

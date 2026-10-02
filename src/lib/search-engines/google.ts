@@ -50,7 +50,7 @@ export function googleCredsFromEnv(value: string | undefined): GoogleCreds | nul
 
 /** Google's `token` for META: the whole `<meta … content="X">` tag, or X alone (the docs don't
  *  say which). Kept only if X is in the shape the bridge will render. */
-export function metaContent(token: unknown): string | null {
+function metaContent(token: unknown): string | null {
   if (typeof token !== 'string') return null
   const inTag = token.match(/\bcontent\s*=\s*"([^"]*)"/i)?.[1] ?? token.match(/\bcontent\s*=\s*'([^']*)'/i)?.[1]
   const value = (inTag ?? token).trim()

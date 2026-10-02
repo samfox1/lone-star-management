@@ -105,9 +105,6 @@ export const DRAFT_PRESENCE: Record<DraftPresenceEntity, true> = {
  *  and merch are DRAFT_PRESENCE types. Presence and publishing are different questions —
  *  this answers "which page owns the Publish button", not "when does a tick go live". */
 export type PagePublishable = 'video' | 'tour_date' | 'merch' | 'link'
-/** @deprecated The old name for PagePublishable, kept so actions.ts keeps compiling
- *  while it is renamed there. Delete once nothing imports it. */
-export type LiveTogglePublishable = PagePublishable
 
 /** Every entity that is snapshotted into `revisions` and reconciled on publish.
  *  Media + site_content are published here but have no generic CRUD form (each
@@ -939,7 +936,7 @@ export const EDITOR_RESTORE: readonly RestoreRule[] = [
 export const EDITOR_PROFILE_COLUMNS = ['name', 'bio', 'hero_image_url'] as const
 
 /** One write a restore will make. */
-export type RestoreOp =
+type RestoreOp =
   | { kind: 'restore'; table: string; id: string; patch: RestoreRow }
   | { kind: 'off'; table: string; id: string; patch: RestoreRow }
   | { kind: 'delete'; table: string; id: string }
@@ -1350,7 +1347,7 @@ export type SectionDiff = { added: number; edited: number; deleted: number; dirt
 /** Media is split between TWO Publish buttons (2026-09-28), so its diff carries both
  *  halves beside the whole: `site` is what the Site / SEO Publish ships (SITE_MEDIA_SLICE),
  *  `brand` what the Brand bar ships. The whole is what publishAll ships. */
-export type MediaDiff = SectionDiff & { site: SectionDiff; brand: SectionDiff }
+type MediaDiff = SectionDiff & { site: SectionDiff; brand: SectionDiff }
 /** Per-section pending changes for an artist (profile + every publishable type). */
 export type UnpublishedDiff = { profile: SectionDiff } & Record<PublishableEntity, SectionDiff> & { media: MediaDiff }
 

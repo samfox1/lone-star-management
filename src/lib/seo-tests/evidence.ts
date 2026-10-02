@@ -34,7 +34,7 @@ import { isPublicSiteUrl } from '@/lib/custom-site'
 import { pickTransport } from '@/lib/net-guard'
 import { BROWSER_UA, FETCHING_BOTS } from './bots'
 import { guardedFetch, type GuardedResponse } from './guarded-fetch'
-import { parseAttrs, parsePage } from './html'
+import { parseAttrs, parsePage, siteName } from './html'
 import { ROBOTS_MAX_BYTES, parseRobots } from './robots-txt'
 import type { SeoEvidence, SeoPageFetch } from './types'
 
@@ -77,11 +77,6 @@ const KEEP_HEADERS = new Set([
 const KEY_PAGE = /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(about|bio|biography|music|releases?|discography|shows?|tour|tours|events?|dates|live|press|epk)(?:\/|$)/i
 /** Links that are files, not pages. */
 const FILE_LINK = /\.(?:jpe?g|png|gif|webp|avif|svg|ico|pdf|mp3|mp4|m4a|wav|flac|zip|css|js|mjs|json|xml|txt|webm|mov|woff2?)$/i
-
-/** "www.Example.com." → "example.com": the name that makes www and the bare domain one site. */
-function siteName(host: string): string {
-  return host.toLowerCase().replace(/\.$/, '').replace(/^www\./, '')
-}
 
 /**
  * Is `url` on the same site as `origin`? Same name once a leading "www." is dropped from both,
@@ -128,7 +123,7 @@ function decoderFor(label: string | null): TextDecoder {
 
 /** The charset a document names: the Content-Type header, a byte order mark, else a
  *  `<meta charset>` in its first 2 KB (read as Latin-1, which never fails). Else UTF-8. */
-export function decodeBody(bytes: Uint8Array, contentType: string | undefined): string {
+function decodeBody(bytes: Uint8Array, contentType: string | undefined): string {
   const fromHeader = /charset\s*=\s*"?([\w.:-]+)/i.exec(contentType ?? '')?.[1] ?? null
   if (fromHeader) return decoderFor(fromHeader).decode(bytes)
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return decoderFor('utf-8').decode(bytes)

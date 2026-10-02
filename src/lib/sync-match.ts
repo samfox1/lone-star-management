@@ -19,7 +19,7 @@ export type MatchRow = { id: string; title: string; duration_ms: number | null }
 export type MatchItem = { title: string; duration_ms: number | null; album_name?: string | null }
 
 /** Songs within ±3s of each other (same normalized title) are treated as the same. */
-export const DURATION_TOLERANCE_MS = 3000
+const DURATION_TOLERANCE_MS = 3000
 
 /**
  * Parenthetical qualifiers that name a DIFFERENT recording of the same composition.

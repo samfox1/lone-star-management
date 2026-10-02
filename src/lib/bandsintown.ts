@@ -112,5 +112,3 @@ export function createBandsintownClient(opts: Options = {}) {
 
   return { getArtistEvents }
 }
-
-export type BandsintownClient = ReturnType<typeof createBandsintownClient>

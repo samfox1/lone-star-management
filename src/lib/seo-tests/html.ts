@@ -197,7 +197,7 @@ function tokenize(html: string): Tok[] {
 
 /* ── a page ─────────────────────────────────────────────────────────────────────────── */
 
-export type LdBlock = { raw: string; parsed: unknown; error: string | null }
+type LdBlock = { raw: string; parsed: unknown; error: string | null }
 
 export type Page = {
   /** The first `<title>` outside an svg, decoded and collapsed; null when there is none. */
@@ -409,10 +409,6 @@ export function artistNodeOf(page: Page, artistName: string): LdNode | null {
 /** For comparing words: NFKC, lower-case, whitespace collapsed. */
 export const fold = (s: string): string => collapse(s.normalize('NFKC').toLowerCase())
 
-/** For finding text inside text: NFKC, lower-case, no whitespace at all (a tag between two
- *  words may or may not have left a space). */
-export const squash = (s: string): string => s.normalize('NFKC').toLowerCase().replace(/\s+/g, '')
-
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Does `text` name `name` as a whole word ("Skeen" in "Skeen · Chicago", not in "Skeens")? */
@@ -443,6 +439,11 @@ export function isBareName(text: string, name: string): boolean {
 
 const TRACKING = /^(utm_.*|si|igsh|igshid|fbclid|ref|feature)$/i
 
+/** "www.Example.com." → "example.com": the name that makes www and the bare domain one site. */
+export function siteName(host: string): string {
+  return host.toLowerCase().replace(/^www\./, '').replace(/\.$/, '')
+}
+
 /**
  * One profile, however it is spelled: host without `www.`, path without a trailing slash,
  * no share-tracking query, scheme ignored. The same rule as the bridge's `profileKey`, so
@@ -458,7 +459,7 @@ export function linkKey(url: string): string | null {
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
   for (const k of [...u.searchParams.keys()]) if (TRACKING.test(k)) u.searchParams.delete(k)
   u.searchParams.sort()
-  return `${u.hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '')}${trimTrailingSlashes(u.pathname)}${u.search}`
+  return `${siteName(u.hostname)}${trimTrailingSlashes(u.pathname)}${u.search}`
 }
 
 /** A link as a person reads it: no scheme, no `www.`, no trailing slash, capped. */

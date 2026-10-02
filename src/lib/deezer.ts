@@ -167,5 +167,3 @@ export function createDeezerClient(opts: Options = {}) {
 
   return { getArtistTracks }
 }
-
-export type DeezerClient = ReturnType<typeof createDeezerClient>

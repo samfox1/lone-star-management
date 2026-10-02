@@ -19,7 +19,7 @@ import { FONTS_BUCKET, FONT_FOLDER } from '@/lib/fonts'
  *  BEFORE its row, so a just-uploaded object briefly looks unreferenced — the age gate
  *  stops a concurrent publish's GC from deleting it (and the replaced-file race) before
  *  its row lands. Well above any realistic upload+write time. */
-export const GC_MIN_AGE_MS = 15 * 60 * 1000
+const GC_MIN_AGE_MS = 15 * 60 * 1000
 
 /** Objects that are BOTH unreferenced AND old enough to not be mid-upload → collectable. */
 export function collectablePaths(

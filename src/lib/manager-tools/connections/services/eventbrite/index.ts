@@ -31,7 +31,7 @@ export const eventbrite: Service = {
 /** "Connect with Eventbrite" (`src/lib/eventbrite-oauth.ts`): where the button goes. Here,
  *  not in the OAuth file, because the Connect window is client code and that file is
  *  server-only (node:crypto). */
-export const EVENTBRITE_START_PATH = '/api/eventbrite/start'
+const EVENTBRITE_START_PATH = '/api/eventbrite/start'
 
 /** The button's address: the artist, and the organizer id out of a pasted organizer link
  *  when there is one (digits only — anything else is left off). */

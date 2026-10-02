@@ -62,8 +62,8 @@ export function isSearchHost(host: string): boolean {
 export type RingSource = { source: string; label: string; visitors: number; hosts: { host: string; visitors: number }[] }
 /** One ring: a source with a mark, or one of the two folds. */
 export type Ring = { key: string; label: string; visitors: number; share: number }
-export const SEARCH_RING = 'search'
-export const OTHER_RING = 'other'
+const SEARCH_RING = 'search'
+const OTHER_RING = 'other'
 
 /**
  * Every source as rings, biggest first, shares of everyone. Two folds before

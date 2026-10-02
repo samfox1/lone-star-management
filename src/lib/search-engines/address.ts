@@ -15,6 +15,8 @@
  */
 import { pingableOrigin } from '@/lib/indexnow'
 import { guardedFetch, type GuardedOptions } from '@/lib/seo-tests/guarded-fetch'
+// Same site: the same host give or take a leading "www." (both sides are registration forms).
+import { sameSite } from '@/lib/seo-tests/evidence'
 
 /** A host that is only digits and dots: an IPv4 address (the URL parser has normalised it). */
 const IPV4 = /^[\d.]+$/
@@ -41,12 +43,6 @@ export function registrationForm(raw: string): string | null {
   if (u.port || IPV4.test(host) || host.includes(':')) return null
   const form = `https://${host}/`
   return form.length <= 300 && SITE_URL_SHAPE.test(form) ? form : null
-}
-
-/** Same site: the same host, or one is the other with a leading "www.". */
-function sameSite(a: string, b: string): boolean {
-  const bare = (h: string) => h.replace(/^www\./, '')
-  return bare(new URL(a).hostname) === bare(new URL(b).hostname)
 }
 
 export type SiteAddress =

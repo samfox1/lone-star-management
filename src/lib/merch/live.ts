@@ -39,7 +39,7 @@ export function isPublicSlug(slug: string): boolean {
   return slug.length <= MAX_SLUG_LENGTH && PUBLIC_SLUG_RE.test(slug)
 }
 
-export type LiveVariant = ShopifyVariant
+type LiveVariant = ShopifyVariant
 
 export type LiveProduct = {
   /** The join key back to a published row. Chosen over `handle` because a handle

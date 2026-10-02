@@ -24,16 +24,10 @@ import { mediaUrl } from '@/lib/storage-url'
  * two can never drift: the package is the single source.
  */
 export type {
-  SiteTrack,
   SiteTourDate,
-  SiteMerch,
   SiteLink,
   SiteVideo,
-  MediaPurpose,
   SiteContent,
-  SiteStyles,
-  MediaKind,
-  SiteBrand,
   SiteBrandColor,
 } from '@samfox1/site-bridge/payload'
 // Imported AGAIN for local use: `export type ... from` re-exports without binding names
@@ -49,8 +43,6 @@ import type {
   SiteMerch,
   SiteLink,
   SiteVideo,
-  SiteContent,
-  SiteStyles,
   MediaKind,
 } from '@samfox1/site-bridge/payload'
 

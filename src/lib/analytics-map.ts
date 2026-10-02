@@ -27,13 +27,13 @@ import { projectFlat } from './map-projection'
 import { boxOf, fitBox, type Bounds, type Box, type View } from './map-view'
 
 /** The deepest a country frame goes. */
-export const COUNTRY_K_MAX = 6
+const COUNTRY_K_MAX = 6
 /** Room around a country: a little, so the country IS the frame. */
 const COUNTRY_PAD = 0.12
 const BOUNDS: Bounds = { width: MAP_W, height: MAP_H, aspect: MAP_W / MAP_H }
 const FRAMES = frames as unknown as Record<string, { box: Box; centroid: [number, number] }>
 
-export type MapPoint = { key: string; country: string; visitors: number; views: number; x: number; y: number; lon: number; lat: number }
+type MapPoint = { key: string; country: string; visitors: number; views: number; x: number; y: number; lon: number; lat: number }
 /** A major city with an audience, placed on the flat map (`x`, `y`); the globe projects `lon` / `lat` itself. */
 export type MajorCityDot = MajorCity & { x: number; y: number }
 /** A located country: the list's totals, its major-city count, and — when it can have one — its frame and centre. */

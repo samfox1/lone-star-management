@@ -24,9 +24,9 @@ import { describeRule, robotsVerdict, type RobotsVerdict } from './robots-txt'
 import type { SeoBot, SeoCrawl, SeoEvidence, SeoPageFetch } from './types'
 
 /** How much of robots.txt is quoted. */
-export const CRAWL_ROBOTS_CHARS = 2_000
+const CRAWL_ROBOTS_CHARS = 2_000
 /** How many of the sitemap's pages are listed (the count of all of them is `total`). */
-export const CRAWL_SITEMAP_PAGES = 50
+const CRAWL_SITEMAP_PAGES = 50
 /** Caps on text that came from the site, so one runaway value can't swell the stored run. */
 const PATH_MAX = 300
 const DATE_MAX = 40

@@ -41,12 +41,10 @@
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { EVENTBRITE_ID, createEventbriteClient, type EventbriteClient, type EventbriteOrganizer } from '@/lib/eventbrite'
-import { EVENTBRITE_START_PATH } from '@/lib/manager-tools/connections/services/eventbrite'
 
 export const STATE_COOKIE = 'ls_eventbrite_oauth'
 /** How long a trip to Eventbrite may take: signing in plus pressing Allow. */
 export const STATE_TTL_MS = 10 * 60 * 1000
-export const START_PATH = EVENTBRITE_START_PATH
 export const CALLBACK_PATH = '/api/eventbrite/callback'
 
 const AUTHORIZE_URL = 'https://www.eventbrite.com/oauth/authorize'
@@ -104,7 +102,7 @@ function stateSignature(body: string, secret: string): string {
 }
 
 /** PKCE S256: base64url(sha256(verifier)). */
-export function pkceChallenge(verifier: string): string {
+function pkceChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url')
 }
 

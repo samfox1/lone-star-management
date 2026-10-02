@@ -20,11 +20,11 @@ import { cx } from '@/lib/cx'
  * itself. The song modal was the first to read this way and Sam asked for it everywhere.
  */
 
-export type SaveResult = { error?: string } | void | undefined
+type SaveResult = { error?: string } | void | undefined
 
 /** A bare header icon's size and line: bigger than a row icon, its stroke thinned so the line
  *  reads the same weight as the site's 20px icons (1.6 on a 24 grid ≈ 1.25 at 36px). */
-export const HEADER_ICON = 36
+const HEADER_ICON = 36
 /** A filled logo (a platform's mark) reads smaller than a line icon of the same box. */
 export const HEADER_LOGO = 40
 

@@ -11,7 +11,7 @@ import type { SiteContent } from '@/lib/site'
 import { CURSOR_CONTENT_KEYS, CURSOR_TRAIL_STYLES } from '@samfox1/site-bridge/cursor'
 import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 
-export type FieldType = 'text' | 'email'
+type FieldType = 'text' | 'email'
 
 export type SiteContentField = {
   key: string

@@ -21,7 +21,7 @@
 import { isPublicSiteUrl } from '@/lib/custom-site'
 import { isBlockedAddressError, pickTransport, type Resolver } from '@/lib/net-guard'
 
-export type GuardedError = 'not-public' | 'not-allowed' | 'network' | 'timeout' | 'too-many-redirects' | 'bad-redirect'
+type GuardedError = 'not-public' | 'not-allowed' | 'network' | 'timeout' | 'too-many-redirects' | 'bad-redirect'
 
 export type GuardedResponse = {
   /** null = no answer; see `error`. */

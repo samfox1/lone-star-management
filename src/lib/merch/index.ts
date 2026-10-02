@@ -9,6 +9,6 @@
  * The connect/pull/disconnect server actions and the connect panel live with the
  * dashboard's Merch section, in `app/artists/[id]/(dashboard)/merch/`.
  */
-export { createShopifyClient, PAGE_SIZES } from './shopify'
-export type { ShopifyClient, ShopifyMerch, ShopifyVariant } from './shopify'
+export { createShopifyClient } from './shopify'
+export type { ShopifyMerch } from './shopify'
 export { syncShopifyMerch } from './sync'

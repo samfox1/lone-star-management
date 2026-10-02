@@ -13,7 +13,6 @@ export {
   ITEM_ATTR,
   STYLE_ATTR,
   LINK_ATTR,
-  HIGHLIGHT_ATTR,
   HIGHLIGHT_CSS,
   MARKED,
 } from '@samfox1/site-bridge'

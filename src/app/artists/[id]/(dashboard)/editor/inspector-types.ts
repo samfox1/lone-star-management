@@ -148,7 +148,6 @@ export type EditorMerch = {
    */
   fromShopify: boolean
 }
-export type EditorSong = { id: string; title: string; cover_url: string | null; released: boolean; onSite: boolean }
 /** One PROJECT in the Music panel — an album / EP / single, the unit the site renders.
  *  Songs are grouped into it by their parent `release_id` (see lib/music.ts). A project
  *  is not an entity the manager edits; it is a view over its songs. Site visibility is

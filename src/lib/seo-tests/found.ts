@@ -35,7 +35,7 @@ import { SEO_BOTS, botsForTest, robotsTokensOf } from './bots'
 import { sameSite } from './evidence'
 import { collapse, decodeEntities, parseAttrs, parsePage, wordsOf, type Page } from './html'
 import { anotherGroupAllows, describeRule, robotsVerdict, type RobotsVerdict } from './robots-txt'
-import type { SeoBot, SeoEvidence, SeoKnown, SeoPageFetch, SeoTest, SeoTestId, SeoTestResult } from './types'
+import type { SeoBot, SeoEvidence, SeoKnown, SeoPageFetch, SeoTest, SeoTestResult } from './types'
 
 type FoundId = 'google' | 'bing' | 'chatgpt' | 'claude' | 'perplexity' | 'others' | 'allowed' | 'list' | 'words' | 'bingwm'
 type BotTestId = SeoBot['test']
@@ -517,7 +517,7 @@ const KNOWN_RULES = /^(all|noindex|index|nofollow|follow|none|nosnippet|indexife
  * lines "googlebot: nofollow" + "noindex" cannot be told apart from one line: a known limit).
  * Values separated by spaces instead of commas ("noindex nofollow") are split too.
  */
-export function xRobotsRules(value: string): { scope: string; rule: string }[] {
+function xRobotsRules(value: string): { scope: string; rule: string }[] {
   const out: { scope: string; rule: string }[] = []
   let scope = '*'
   for (const piece of value.split(',')) {
@@ -1115,7 +1115,7 @@ const allowed: Inner = (e) => {
 
 /** W3C Datetime (the format sitemaps.org names): YYYY, YYYY-MM, YYYY-MM-DD, or a full time
  *  with a zone. The day must exist in its month ("2026-02-31" does not). */
-export function isW3cDate(s: string): boolean {
+function isW3cDate(s: string): boolean {
   const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?)?)?$/.exec(s)
   if (!m) return false
   const [, y, mo, d, hh, mi, ss] = m
@@ -1376,6 +1376,5 @@ export const FOUND_TESTS: Record<FoundId, SeoTest> = {
   bingwm: total('bingwm', bingwm),
 }
 
-export type { SeoTestId }
 /** Exposed for the found tests' sentence-case rule: these may start a sentence capitalised. */
 export const FOUND_NAMES: readonly string[] = [...new Set([...Object.values(WHO), ...SEO_BOTS.map((b) => b.who), 'Google', 'Bing', 'ChatGPT', 'Claude', 'Perplexity', 'Gemini', 'Apple', 'Common Crawl'])]

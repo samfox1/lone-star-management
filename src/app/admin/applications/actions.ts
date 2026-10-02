@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 export const APPLICATION_STATUSES = ['new', 'contacted', 'approved', 'declined'] as const
-export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
 /**
  * Move an application through its review status. RLS (`applications_admin_all`) is

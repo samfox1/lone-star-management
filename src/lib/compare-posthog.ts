@@ -306,8 +306,8 @@ export function rankCorrelation(ours: Map<string, number>, ph: Map<string, numbe
 
 /* ── The comparison ─────────────────────────────────────────────────────────────── */
 
-export type DayStatus = 'ok' | 'outlier' | 'low-n'
-export type Criterion = { name: 'consistency' | 'judged' | 'views' | 'clicks' | 'entities' | 'sources'; pass: boolean; detail: string }
+type DayStatus = 'ok' | 'outlier' | 'low-n'
+type Criterion = { name: 'consistency' | 'judged' | 'views' | 'clicks' | 'entities' | 'sources'; pass: boolean; detail: string }
 type Split = { phTotal: number; oursTotal: number; phOnly: number; oursOnly: number; phOnlyRate: number; oursOnlyRate: number }
 
 export type Report = {

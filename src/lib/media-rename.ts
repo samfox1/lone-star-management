@@ -15,8 +15,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { isOwnedStoragePath } from '@/lib/upload'
 import { recommendSlug } from '@samfox1/site-bridge/alt'
 
-export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
-export const SLUG_MAX = 80
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const SLUG_MAX = 80
 
 export type RenameResult = { error?: string; storage_path?: string }
 

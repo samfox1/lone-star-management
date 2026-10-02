@@ -9,7 +9,7 @@
  *   alt      every content `<img>` on the pages read has a real description; with no photo
  *            on the pages or in Tapir it does not apply (`na`)
  */
-import { clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, shortUrl, type PageState } from './html'
+import { clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, shortUrl, siteName, type PageState } from './html'
 import { describes } from './match'
 import { SHARE_MAX_BYTES } from './share-image'
 import type { SeoEvidence, SeoTest, SeoTestId, SeoTestResult } from './types'
@@ -121,7 +121,6 @@ const share = make('share', (e) => {
 
 /* ── preview ────────────────────────────────────────────────────────────────────────── */
 
-const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, '').replace(/\.$/, '')
 /** X's card kinds (developer.x.com): anything else is ignored by X. */
 const X_CARDS = new Set(['summary', 'summary_large_image', 'app', 'player'])
 
@@ -167,7 +166,7 @@ const preview = make('preview', (e) => {
     }
     const site = new URL(`${e.origin}/`)
     if (!u || !/^https?:$/.test(u.protocol)) problems.push({ short: 'bad address', say: 'an address that isn’t a web address' })
-    else if (bareHost(u.hostname) !== bareHost(site.hostname)) problems.push({ short: 'other site', say: `an address on another site (${bareHost(u.hostname)})` })
+    else if (siteName(u.hostname) !== siteName(site.hostname)) problems.push({ short: 'other site', say: `an address on another site (${siteName(u.hostname)})` })
     else if (/[^/]/.test(u.pathname)) problems.push({ short: 'other page', say: `the address of another page (${u.pathname})` })
   }
   if (!card) problems.push({ short: 'X shows it small', say: 'nothing telling X to show the big picture', soft: true })

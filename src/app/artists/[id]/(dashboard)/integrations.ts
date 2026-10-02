@@ -36,7 +36,6 @@ import {
 export type {
   ArtistIdField,
   IntegrationArtist,
-  IntegrationSection,
 } from '@/lib/integrations-registry'
 export { connectedCount, isConnected } from '@/lib/integrations-registry'
 

@@ -29,7 +29,7 @@ export const youtube: Service = {
 /** "Connect with YouTube" (Google sign-in, `src/lib/youtube-oauth.ts`): where the button
  *  goes. Here, not in the OAuth file, because the Connect window is client code and that
  *  file is server-only (node:crypto). */
-export const YOUTUBE_START_PATH = '/api/youtube/start'
+const YOUTUBE_START_PATH = '/api/youtube/start'
 
 /** The button's address: the artist, and `sync=0` only when the manager switched Sync off. */
 export function youtubeStartPath(artistId: string, sync: boolean): string {

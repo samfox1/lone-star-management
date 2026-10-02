@@ -29,7 +29,7 @@ export function LedgerSection({ label, children }: { label: string; children?: R
 }
 
 /** The note an added row carries — NoteField's props, minus what the row decides. */
-export type LedgerNote = Pick<ComponentProps<typeof NoteField>, 'value' | 'onSave' | 'primaryRef' | 'autoFocus'>
+type LedgerNote = Pick<ComponentProps<typeof NoteField>, 'value' | 'onSave' | 'primaryRef' | 'autoFocus'>
 
 type LedgerRowBase = {
   /** The row's title. Fixed text, unless `onRename` makes it a RowTitle. */

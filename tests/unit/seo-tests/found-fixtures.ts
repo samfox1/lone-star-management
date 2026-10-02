@@ -23,7 +23,7 @@ import { FOUND_TESTS } from '@/lib/seo-tests/found'
 import type { SeoEvidence, SeoKnown, SeoPageFetch, SeoTestResult } from '@/lib/seo-tests/types'
 
 export const O = 'https://www.example.com'
-export const AT = '2026-09-28T12:00:00.000Z'
+const AT = '2026-09-28T12:00:00.000Z'
 export const BIO = "Skeen is a Chicago DJ and producer. He's played ZHU at Navy Pier and remixed Flume for the OutWest EP."
 
 export const doc = (title: string, body: string, head = '') =>

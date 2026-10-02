@@ -75,7 +75,7 @@ export async function resubmitSitemap(artistId: string, deps: ResubmitDeps = {})
 
 /** The log line for an outcome worth a look, or null. A site Tapir never registered is the usual
  *  case and says nothing. Reason codes and a status only: no message text from anywhere. */
-export function resubmitLogLine(artistId: string, out: ResubmitOutcome): string | null {
+function resubmitLogLine(artistId: string, out: ResubmitOutcome): string | null {
   if (out.sent || out.reason === 'not-registered') return null
   const why = out.reason === 'rejected' ? `${out.code}${out.status ? ` ${out.status}` : ''}` : out.reason
   return `[search-console] sitemap not resent (artist ${artistId}): ${why}`

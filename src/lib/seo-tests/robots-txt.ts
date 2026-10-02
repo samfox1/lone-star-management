@@ -23,7 +23,7 @@
  */
 
 export type RobotsRule = { allow: boolean; pattern: string }
-export type RobotsGroup = { agents: string[]; rules: RobotsRule[] }
+type RobotsGroup = { agents: string[]; rules: RobotsRule[] }
 export type ParsedRobots = {
   groups: RobotsGroup[]
   /** Every `Sitemap:` value, in file order (not tied to any group). */

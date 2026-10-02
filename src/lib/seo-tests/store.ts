@@ -22,7 +22,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoCrawl, type SeoRunReach, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
 
 /** Mirrors the migration, for tests and copy. The database is the authority. */
-export const SEO_RUN_KEEP = 30
 export const SEO_MANUAL_COOLDOWN_S = 60
 
 /** Every status the contract has, `na` included (types.ts derives the list from the union). */
@@ -114,7 +113,7 @@ const REACH_STATES: readonly SeoRunReach['state'][] = ['answered', 'server-error
 
 /** `reach` in exactly its known shape, or null: an unknown state, a non-number status or a
  *  non-text error is never stored or shown (the migration checks the same shape). */
-export function reachOf(v: unknown): SeoRunReach | null {
+function reachOf(v: unknown): SeoRunReach | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null
   const x = v as Record<string, unknown>
   if (!REACH_STATES.includes(x.state as SeoRunReach['state'])) return null

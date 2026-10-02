@@ -206,5 +206,3 @@ export function createSpotifyClient(opts: Options = {}) {
 
   return { getAccessToken, getArtistAlbums, getAlbumTracks, getDiscography, getDiscographyTracks }
 }
-
-export type SpotifyClient = ReturnType<typeof createSpotifyClient>

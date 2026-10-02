@@ -138,5 +138,3 @@ export function createTicketmasterClient(opts: Options = {}) {
 
   return { getArtistEvents }
 }
-
-export type TicketmasterClient = ReturnType<typeof createTicketmasterClient>

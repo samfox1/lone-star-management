@@ -68,7 +68,7 @@ export async function loadEngine(): Promise<SeoEngine> {
 
 /** The whole gather (pages, share picture, MusicBrainz) must answer inside this. Each fetch has
  *  its own 10 s timeout (guarded-fetch); this bounds the sum. */
-export const SEO_RUN_BUDGET_MS = 90_000
+const SEO_RUN_BUDGET_MS = 90_000
 
 export type RunDeps = {
   engine?: SeoEngine
@@ -105,7 +105,7 @@ export type SeoRunOutcome =
 
 /* ── results the run writes itself ──────────────────────────────────────────────────── */
 
-export function unknownResult(id: SeoTestId, value: string, sentence: string, limits?: string): SeoTestResult {
+function unknownResult(id: SeoTestId, value: string, sentence: string, limits?: string): SeoTestResult {
   return { id, status: 'unknown', value, sentence, evidence: [], ...(limits ? { limits } : {}) }
 }
 
@@ -212,7 +212,7 @@ const OTHER_HOST_TIMEOUT_MS = 5_000
  * Dropping "www." is always clear. Adding it is only for a two-label name ("skeen.com"): without
  * a public-suffix list "skeen.co.uk" can't be told from "shop.skeen.com", so it is left alone.
  */
-export function otherSpelling(origin: string): string | null {
+function otherSpelling(origin: string): string | null {
   let u: URL
   try {
     u = new URL(origin)
@@ -377,7 +377,7 @@ async function askPages<R, E>(paths: string[], ask: (path: string) => Promise<{ 
  * lives on www) would answer "Page with redirect" for every one ("0 of 5 on Google"), which says
  * nothing about whether the site is listed. Its rows are "no answer" instead.
  */
-export async function askListing(registered: SeoRegistration[], openedPaths: string[], answeredOrigin: string, makeClients: (opts: { signal: AbortSignal }) => Promise<ListingClients>, stop: AbortSignal): Promise<SeoCrawl['listing']> {
+async function askListing(registered: SeoRegistration[], openedPaths: string[], answeredOrigin: string, makeClients: (opts: { signal: AbortSignal }) => Promise<ListingClients>, stop: AbortSignal): Promise<SeoCrawl['listing']> {
   const google = registered.find((r) => r.provider === 'google') ?? null
   const bing = registered.find((r) => r.provider === 'bing') ?? null
   if (!google && !bing) return { google: null, bing: null }

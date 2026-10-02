@@ -66,7 +66,7 @@ export type RegisterDeps = {
   signal?: AbortSignal
 }
 
-export type StepResult = { step: string; ok: boolean; reason?: string; detail?: string }
+type StepResult = { step: string; ok: boolean; reason?: string; detail?: string }
 export type RegisterOutcome = { ok: boolean; siteUrl: string | null; steps: StepResult[]; verified: Provider[]; connected: boolean }
 
 /** `name → content` of every <meta> in the page's <head> (where Google and Bing look), attribute

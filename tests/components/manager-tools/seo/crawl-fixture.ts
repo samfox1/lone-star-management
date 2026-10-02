@@ -30,7 +30,7 @@ export { ORIGIN }
 export const PAGES = ['/', '/about', '/faqsheet'] as const
 
 /** The site's other spelling: the bare domain for a www site. */
-export const OTHER_HOST = ORIGIN.replace('://www.', '://')
+const OTHER_HOST = ORIGIN.replace('://www.', '://')
 
 const own = (path: string) => `${ORIGIN}${path === '/' ? '' : path}`
 

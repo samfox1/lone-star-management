@@ -99,7 +99,7 @@ export function distinctiveTitle(title: string): boolean {
 }
 
 /** Scripts written without spaces between words (a word is found as a run of characters). */
-export const denseScript = (s: string): boolean => DENSE.test(s)
+const denseScript = (s: string): boolean => DENSE.test(s)
 
 /** Does `text` name `phrase` as whole words, in any case and typography? In a script written
  *  without spaces, as a run of characters. */

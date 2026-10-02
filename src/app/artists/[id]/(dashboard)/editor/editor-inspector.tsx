@@ -92,7 +92,6 @@ import type {
   SiteVideoRole,
   EditorVideo,
   EditorMerch,
-  EditorSong,
   EditorProject,
   EditorTour,
   ItemEdit,
@@ -106,7 +105,6 @@ export type {
   SiteVideoRole,
   EditorVideo,
   EditorMerch,
-  EditorSong,
   EditorProject,
   EditorTour,
 }

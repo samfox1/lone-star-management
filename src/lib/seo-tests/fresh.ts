@@ -171,7 +171,7 @@ export type WaitOptions = {
   signal?: AbortSignal
 }
 
-export const FRESH_MAX_WAIT_MS = 90_000
+const FRESH_MAX_WAIT_MS = 90_000
 const INTERVAL_MS = 10_000
 const FALLBACK_WAIT_MS = 70_000
 const SETTLE_MS = 3_000

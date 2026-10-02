@@ -72,7 +72,7 @@ export type ShopifyVariant = {
  *    the note is the sentence shown beside the tick box. No note, no pre-order — one
  *    field instead of a boolean that can disagree with its own text.
  */
-export const METAFIELDS = {
+const METAFIELDS = {
   namespace: 'custom',
   shippingEstimate: 'shipping_estimate',
   preorderNote: 'preorder_note',
@@ -447,5 +447,3 @@ export function createShopifyClient(opts: Options = {}) {
 
   return { getProducts, getFirstPage }
 }
-
-export type ShopifyClient = ReturnType<typeof createShopifyClient>

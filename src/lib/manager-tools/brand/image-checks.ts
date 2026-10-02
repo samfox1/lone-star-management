@@ -45,12 +45,12 @@ export const HUGE_LOGO_BYTES = 8 * 1024 * 1024
  * tight because this gates whether the UI OFFERS the one-click background cut-out at
  * all — a false positive here would silently botch a real photo or gradient border.
  */
-export const FLAT_BORDER_TOLERANCE = 10
+const FLAT_BORDER_TOLERANCE = 10
 
 /** A border pixel below this alpha is already see-through — that's "the logo already
  *  has transparency", not "a flat colour to cut out" — so flat-background detection
  *  requires the border to be this opaque. */
-export const MIN_OPAQUE_ALPHA = 250
+const MIN_OPAQUE_ALPHA = 250
 
 /**
  * Flood-fill colour-distance radius used by `removeFlatBackground`, deliberately wider
@@ -61,7 +61,7 @@ export const MIN_OPAQUE_ALPHA = 250
  * those blended pixels; `SOFT_EDGE_INNER_FRACTION` below is what stops it from also
  * eating a pale logo edge outright.
  */
-export const DEFAULT_CUTOUT_TOLERANCE = 40
+const DEFAULT_CUTOUT_TOLERANCE = 40
 
 /**
  * Below this fraction of the tolerance, a flood-filled pixel is "clearly background"

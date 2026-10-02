@@ -3,7 +3,7 @@
  * the tab tells "not switched on yet" from "couldn't read" from "never tested".
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model.ts,
- *           test/load.ts (loadTestTab, isMissingTable)
+ *           test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
  * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), all 24 SEO
  *           tests in their four groups
  * Tier:     STRICT (AGENTS.md "Test depth"): the counts ("19 of 24", "5 need you"), the headline
@@ -63,7 +63,8 @@ import {
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/model'
 import { SEO_EDIT_TARGETS, SEO_SECTIONS, seoTabSeg } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/sections'
 import { TOOLS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_shell/tools-registry'
-import { isMissingTable, loadTestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
+import { loadTestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
+import { isMissingTable } from '@/lib/seo-tests/store'
 import { SCENARIO_NAMES, engineResults, fixtureResults } from '@tests/components/manager-tools/seo/seo-run-fixture'
 
 describe('counts', () => {
@@ -170,6 +171,12 @@ describe('the headline: one helper for every place a run is summed up', () => {
     const reworded = (s: 'siteDown' | 'healthy') => engineResults(s).map((r) => ({ ...r, value: 'x', sentence: 'y', evidence: [] }))
     expect(isUnreachable(reworded('siteDown'))).toBe(true)
     expect(isUnreachable(reworded('healthy'))).toBe(false)
+  })
+  // MusicBrainz is asked about the artist, not the site (SITE_FREE_TESTS): its pass is no sign the site answered.
+  it('a MusicBrainz pass alone does not make a down site "answered"', () => {
+    const down = engineResults('siteDown').map((r) => (r.id === 'mb' ? { ...r, status: 'pass' as const } : r))
+    expect(down.some((r) => r.id === 'mb')).toBe(true)
+    expect(isUnreachable(down)).toBe(true)
   })
   // The score: "N of M tests pass", never "All M", with need-you and couldn't-check beside it.
   it('CRITICAL: the score is "N of M tests pass" — never "All M" — with need-you and couldn\u2019t-check beside it', () => {

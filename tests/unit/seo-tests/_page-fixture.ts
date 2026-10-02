@@ -25,7 +25,7 @@ import { expect } from 'vitest'
 import type { SeoEvidence, SeoKnown, SeoPageFetch, SeoTestResult } from '@/lib/seo-tests/types'
 
 export const ORIGIN = 'https://www.example-artist.com'
-export const TODAY = '2026-09-28'
+const TODAY = '2026-09-28'
 
 /** A healthy bio: over 100 words, naming the genre (house), the city (Chicago) and highlights
  *  from Music and Tour (OutWest, Smartbar), in distinct sentences, with an apostrophe and an
@@ -102,7 +102,7 @@ export type HomeOpts = {
   music?: string
 }
 
-export const MUSIC_SECTION = '<section><h2>Music</h2><ul><li>You Were There</li><li>Heatwaves &amp; Horizons</li><li>OutWest</li></ul></section>'
+const MUSIC_SECTION = '<section><h2>Music</h2><ul><li>You Were There</li><li>Heatwaves &amp; Horizons</li><li>OutWest</li></ul></section>'
 
 export const OG_IMAGE = 'https://cdn.example-artist.com/og/social-card.png'
 

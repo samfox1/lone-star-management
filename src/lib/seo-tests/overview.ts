@@ -18,6 +18,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEARCH_SOURCES, isSearchHost } from '@/lib/analytics-sources'
 import { analyticsWindow } from '@/lib/analytics'
+import { SITE_FREE_TESTS } from './defs'
 import { currentRun, latestRun, recentRuns, type SeoRunSummary, type StoredSeoRun } from './store'
 import type { SeoRunReach, SeoRunTrigger, SeoTestId, SeoTestResult, SeoTestStatus } from './types'
 
@@ -35,12 +36,8 @@ export const SEO_TEST_PRIORITY: Record<SeoTestId, number> = {
   mb: 22, bingwm: 23,
 }
 
-/** The tests whose answer does not come from reading the artist's site: `mb` asks MusicBrainz.
- *  Every other test reads the site's pages, robots.txt, sitemap or files. */
-export const SITE_FREE_TESTS: ReadonlySet<SeoTestId> = new Set<SeoTestId>(['mb'])
-
 /** The site answered, or the run does not say (an older run, no site): its results stand. */
-export const siteAnswered = (reach: SeoRunReach | null | undefined): boolean => !reach || reach.state === 'answered'
+const siteAnswered = (reach: SeoRunReach | null | undefined): boolean => !reach || reach.state === 'answered'
 
 /** Fails first, then couldn't-checks, each in priority order. Passes and tests that do not
  *  apply (`na`) are left out: neither is something to fix. When the site did NOT answer

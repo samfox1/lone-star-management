@@ -23,8 +23,8 @@ import { slotByDate, type DatedRow } from './insert-position'
 /** The columns a pull writes, and so the only ones it remembers. A manager-only column
  *  (support acts, the past flag, on-site, order) is never in here. */
 export const PULLED_COLUMNS = ['date', 'venue', 'city', 'state', 'country', 'ticket_url', 'latitude', 'longitude'] as const
-export type PulledColumn = (typeof PULLED_COLUMNS)[number]
-export type PulledValues = Record<PulledColumn, string | number | null>
+type PulledColumn = (typeof PULLED_COLUMNS)[number]
+type PulledValues = Record<PulledColumn, string | number | null>
 
 /** One show as the source sends it: its stable id and the columns it owns. */
 export type IncomingShow = { externalId: string; values: PulledValues }

@@ -248,7 +248,7 @@ export function PageScan({ host }: { host: string }) {
 }
 
 /** Who a run visits as, in the order the tests read them (bots.ts, then MusicBrainz). */
-export const VISITORS = ['Google', 'Bing', 'ChatGPT', 'Claude', 'Perplexity', 'Apple', 'MusicBrainz'] as const
+const VISITORS = ['Google', 'Bing', 'ChatGPT', 'Claude', 'Perplexity', 'Apple', 'MusicBrainz'] as const
 
 /** How long each visitor stays lit before the glow moves on. */
 const STEP_MS = 1400

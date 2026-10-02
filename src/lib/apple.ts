@@ -77,7 +77,7 @@ function upsizeArtwork(url: string | undefined, px = 600): string | null {
  * decoration, not the title: Spotify and Deezer call the same record plain "<title>".
  * An unsuffixed collection is an album. Only a suffix at the very END counts.
  */
-export function appleCollection(name: string): { title: string; kind: PlatformReleaseKind } {
+function appleCollection(name: string): { title: string; kind: PlatformReleaseKind } {
   const m = /^(.*\S)\s+-\s+(Single|EP)$/.exec(name)
   if (!m) return { title: name, kind: 'album' }
   return { title: m[1], kind: m[2] === 'EP' ? 'ep' : 'single' }
@@ -167,5 +167,3 @@ export function createAppleMusicClient(opts: Options = {}) {
 
   return { getArtistTracks }
 }
-
-export type AppleMusicClient = ReturnType<typeof createAppleMusicClient>

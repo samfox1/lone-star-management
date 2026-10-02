@@ -151,7 +151,7 @@ export async function setPressDocument(
 
 /* ── The download gate ──────────────────────────────────────────────────────────── */
 
-export type EpkRequirementKey = 'bio' | 'photo' | 'contact' | 'release'
+type EpkRequirementKey = 'bio' | 'photo' | 'contact' | 'release'
 
 export type EpkRequirement = {
   key: EpkRequirementKey

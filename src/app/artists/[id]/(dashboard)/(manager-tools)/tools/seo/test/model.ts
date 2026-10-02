@@ -16,7 +16,7 @@
  * Derived from `results`, never from the row's stored `passed` / `total`: the stored total counts
  * `na` results, and the page must not.
  */
-import { SEO_TEST_DEFS, SEO_TEST_GROUPS } from '@/lib/seo-tests/defs'
+import { SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
 import { SEO_MANUAL_COOLDOWN_S, type StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
 import { SEO_EDIT_TARGETS } from '../sections'
@@ -53,9 +53,6 @@ export const EMPTY_FILTER: Record<Exclude<TestFilter, 'all'>, string> = {
 
 /* ── the headline: ONE helper for every place a run is summed up ────────────────────── */
 
-/** Tests that do not need the artist's site at all (MusicBrainz is asked about the artist). */
-export const SITE_FREE_TESTS: readonly SeoTestId[] = ['mb']
-
 /** Tests that read ONLY the home page's own html (its title, summary, fact card). */
 const HOME_PAGE_TESTS: readonly SeoTestId[] = ['title', 'desc', 'card']
 
@@ -72,7 +69,7 @@ export function isUnreachable(results: readonly SeoTestResult[]): boolean {
   if (!results.length) return false
   const by = new Map(results.map((r) => [r.id, r.status]))
   const homeUnread = HOME_PAGE_TESTS.every((id) => by.get(id) === 'unknown')
-  const siteAnswered = results.some((r) => r.status === 'pass' && !SITE_FREE_TESTS.includes(r.id))
+  const siteAnswered = results.some((r) => r.status === 'pass' && !SITE_FREE_TESTS.has(r.id))
   return homeUnread && !siteAnswered
 }
 
@@ -190,7 +187,7 @@ export function isStale(run: Pick<StoredSeoRun, 'siteFresh' | 'trigger'>): boole
 
 /** "Your site may not have updated yet" is news only for a while: after an hour, "test again in
  *  a minute" would have been done or not needed (review: it stayed on days-old runs). */
-export const STALE_FOR_MS = 60 * 60_000
+const STALE_FOR_MS = 60 * 60_000
 
 export function showStale(run: Pick<StoredSeoRun, 'siteFresh' | 'trigger' | 'ranAt'>, nowMs: number): boolean {
   const at = Date.parse(run.ranAt)
@@ -198,7 +195,7 @@ export function showStale(run: Pick<StoredSeoRun, 'siteFresh' | 'trigger' | 'ran
 }
 
 /** A run older than this is said to be old (review: no age limit, no "this is old" line). */
-export const OLD_AFTER_DAYS = 30
+const OLD_AFTER_DAYS = 30
 
 /** "6 weeks ago" for a run older than OLD_AFTER_DAYS, else null. */
 export function oldRunText(ranAt: string, nowMs: number): string | null {
@@ -341,7 +338,7 @@ export function dotText(iso: string, status: SeoTestStatus, now: Date, locale?: 
   return `${day}, ${clock(at, locale)} · ${STATUS_WORD[status]}`
 }
 
-export const STATUS_WORD: Record<SeoTestStatus, string> = {
+const STATUS_WORD: Record<SeoTestStatus, string> = {
   pass: 'passed',
   fail: 'needed you',
   unknown: 'couldn’t check',

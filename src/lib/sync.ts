@@ -33,10 +33,9 @@ import type { ReleaseType } from '@/lib/releases'
 import { groupReleases, matchTrackCandidate, normalizeTitle, type CatalogRelease, type CatalogReleaseRef } from '@/lib/sync-match'
 
 // The merge DECISIONS live in sync-match (pure, mutation-tested); this module writes.
-export { normalizeTitle, matchTrackCandidate } from '@/lib/sync-match'
-export type { CatalogRelease } from '@/lib/sync-match'
+export { normalizeTitle } from '@/lib/sync-match'
 
-export type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
+type SyncError = { externalId: string; op: 'insert' | 'update'; message: string }
 
 /**
  * Something the manager has to KNOW about a pull, named by the song it happened to

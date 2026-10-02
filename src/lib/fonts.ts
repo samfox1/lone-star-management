@@ -49,7 +49,7 @@ export const FONT_FOLDER = 'fonts'
  *  three are here because a foundry licence often hands over only a TTF or OTF, and
  *  telling a manager to go convert it is how a feature goes unused. */
 export const FONT_FORMATS = ['woff2', 'woff', 'ttf', 'otf'] as const
-export type FontFormat = (typeof FONT_FORMATS)[number]
+type FontFormat = (typeof FONT_FORMATS)[number]
 
 /**
  * The PLATFORM-WIDE slot vocabulary (Sam's call, 2026-08-05). Every site lone-star feeds
@@ -123,7 +123,7 @@ export type ArtistFont = {
 }
 
 /** Where a face comes from (20260925120000). Every row before Google Fonts is an upload. */
-export type FontSource = 'upload' | 'google'
+type FontSource = 'upload' | 'google'
 const sourceOf = (raw: unknown): FontSource => (raw === 'google' ? 'google' : 'upload')
 
 /** slot → family. Only ASSIGNED slots are present: an absent key means "this site has no

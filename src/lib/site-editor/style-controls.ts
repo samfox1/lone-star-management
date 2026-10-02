@@ -162,7 +162,7 @@ const textSuffix = (t: string) => (t.startsWith('text-') ? t.slice(5) : '')
  * a leading number-and-unit or a clamp. Getting that wrong would hand the size control a
  * colour to delete.
  */
-export const isTextSize = (t: string) =>
+const isTextSize = (t: string) =>
   SIZES.includes(textSuffix(t)) ||
   // Any CSS length unit a site could size text with, not a favourites list: sites now
   // ADVERTISE their own scale, so a unit missing here means picking the next size fails

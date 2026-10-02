@@ -59,8 +59,3 @@ export const US_STATES: UsState[] = [
   { code: 'WI', name: 'Wisconsin' },
   { code: 'WY', name: 'Wyoming' },
 ]
-
-const NAMES: Record<string, string> = Object.fromEntries(US_STATES.map((s) => [s.code, s.name]))
-
-/** A code's state name, or the code itself if unknown (so display never blanks). */
-export const stateName = (code: string): string => NAMES[code] ?? code

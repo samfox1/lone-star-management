@@ -25,7 +25,7 @@ import { coord } from './geo'
 import { US_STATES } from './us-states'
 import type { IncomingShow } from './tour-pull'
 
-export const EVENTBRITE_API = 'https://www.eventbriteapi.com/v3'
+const EVENTBRITE_API = 'https://www.eventbriteapi.com/v3'
 /** Eventbrite's ids (organization, organizer, event) are digits. */
 export const EVENTBRITE_ID = /^[0-9]{1,20}$/
 const TIMEOUT_MS = 10_000

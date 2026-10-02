@@ -21,7 +21,7 @@ import http from 'node:http'
 import type net from 'node:net'
 import zlib from 'node:zlib'
 
-export type LastRequest = { method?: string; host?: string; body: string; headers: http.IncomingHttpHeaders }
+type LastRequest = { method?: string; host?: string; body: string; headers: http.IncomingHttpHeaders }
 
 export type LoopbackServer = {
   port: number

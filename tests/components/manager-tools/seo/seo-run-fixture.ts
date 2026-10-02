@@ -125,7 +125,7 @@ export function fixtureResults(over: Partial<Record<SeoTestId, Partial<SeoTestRe
   return engineResults(s).map((r) => ({ ...r, ...over[r.id] }))
 }
 
-export const RAN_AT = '2026-09-28T21:14:00.000Z'
+const RAN_AT = '2026-09-28T21:14:00.000Z'
 
 /** A PUBLISH run (id `run-1`) around `results`, the needsWork scenario by default. */
 export function fixtureRun(over: Partial<StoredSeoRun> = {}, results?: SeoTestResult[]): StoredSeoRun {

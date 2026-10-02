@@ -155,7 +155,7 @@ export function headerBottom(input: { headerTop: number; textBottom: number; has
   return Math.min(input.textBottom, input.headerTop - PHOTO_SIZE)
 }
 
-export type EpkAttachment = { label: string; bytes: Uint8Array }
+type EpkAttachment = { label: string; bytes: Uint8Array }
 
 type BuildInput = {
   site: SiteData

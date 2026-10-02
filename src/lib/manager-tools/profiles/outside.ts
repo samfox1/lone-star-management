@@ -161,7 +161,7 @@ export function searchHits(json: unknown): string[] | null {
   return json.query.search.flatMap((h) => (isObj(h) && typeof h.title === 'string' && QID.test(h.title) ? [h.title] : []))
 }
 
-export const wikidataItemUrl = (item: string) => `https://www.wikidata.org/wiki/${item}`
+const wikidataItemUrl = (item: string) => `https://www.wikidata.org/wiki/${item}`
 
 /** One property's statements on an item (Wikibase REST API). Null for an id that isn't one. */
 export function wikidataStatementsUrl(item: string, property: 'P856' | 'P434'): string | null {

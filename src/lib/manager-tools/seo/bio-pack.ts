@@ -27,12 +27,12 @@ import { RELEASE_TYPE_LABEL, RELEASE_TYPES, type ReleaseType } from '@/lib/relea
 export const BIO_PACK_TO = ['apple.coverage.support@xperi.com', 'content.music@tivo.com'] as const
 
 /** Under this, the bio check fires: Xperi writes from the facts given, so more helps. */
-export const BIO_PACK_MIN_WORDS = 150
+const BIO_PACK_MIN_WORDS = 150
 
 /** Releases listed, newest first. */
 export const BIO_PACK_MAX_RELEASES = 10
 
-export type BioPackLink = { label?: string | null; url?: string | null; role?: string | null }
+type BioPackLink = { label?: string | null; url?: string | null; role?: string | null }
 
 /** A release as `get_public_releases` returns it (only the fields read here). `released` is the
  *  MANUAL flag only: a Spotify release reads false there and is still Released (`releaseIsReleased`
@@ -47,7 +47,7 @@ export type BioPackRelease = {
   links?: unknown
 }
 
-export type BioPackPhoto = { url: string; type?: string | null; width?: number | null; height?: number | null }
+type BioPackPhoto = { url: string; type?: string | null; width?: number | null; height?: number | null }
 
 export type BioPackInput = {
   artist: { name: string; bio?: string | null; genre?: string | null; location?: string | null; spotify_artist_id?: string | null; schema_type?: string | null }
@@ -64,7 +64,7 @@ export type BioPackInput = {
   manager_name?: string | null
 }
 
-export type BioPackCheck = { id: 'bio' | 'amazon' | 'apple' | 'photo' | 'cc'; text: string }
+type BioPackCheck = { id: 'bio' | 'amazon' | 'apple' | 'photo' | 'cc'; text: string }
 
 export type BioPack = { to: string[]; subject: string; body: string; checks: BioPackCheck[] }
 
