@@ -22,7 +22,8 @@ type CommitFieldProps = Omit<ComponentProps<typeof LineField>, 'value' | 'onChan
  *
  *   blur or Enter  saves the trimmed text, only when it changed
  *   Escape         puts the saved text back and saves nothing
- *   a refusal      an error toast in the server's words, and the old text returns
+ *   a refusal      an error toast in the server's words; what was typed STAYS in the field so
+ *                  it can be corrected (Escape puts the saved text back)
  *
  * A success says nothing: the text in the field is the confirmation.
  *
@@ -53,6 +54,8 @@ export function CommitField({ value, onCommit, inputRef, ...field }: CommitField
     }
     if (res && 'error' in res && res.error) {
       setCurrent(prev)
+      // Keep the refused text to fix, unless something newer was typed while it was out.
+      setDraft((d) => d ?? next)
       toast(res.error, 'error')
     }
   }

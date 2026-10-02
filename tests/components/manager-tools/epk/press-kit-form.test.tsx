@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PressKitForm } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/press-kit-form'
 import { savePressKitAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/epk/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/epk/actions', () => ({
   savePressKitAction: vi.fn(async () => ({})),
@@ -40,6 +41,7 @@ function sent(): FormData {
 beforeEach(() => {
   vi.useFakeTimers()
   mockedSave.mockClear()
+  vi.mocked(toast).mockClear()
 })
 afterEach(() => {
   cleanup()
@@ -91,5 +93,28 @@ describe('PressKitForm saves itself', () => {
     expect(fd.getAll('quote')).toEqual(['A blistering live act.', 'Unmissable.', 'A warmer room.'])
     expect(fd.getAll('source')).toEqual(['NME', 'Pitchfork', 'Mixmag'])
     expect(fd.getAll('quote_url')).toEqual(['https://nme.com/x', '', ''])
+  })
+
+  it('CRITICAL: a pitch edit and a quote edit inside one pause send ONE save holding both', async () => {
+    // One key for the whole form (the race guard): two keys would send two whole copies, and
+    // the older one (new pitch, old quotes) could land last and undo the quote.
+    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'One-line pitch' }), { target: { value: 'Austin four-piece.' } })
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'The quote' })[1], { target: { value: 'Essential.' } })
+    await settle()
+
+    expect(mockedSave).toHaveBeenCalledTimes(1)
+    const fd = sent()
+    expect(fd.get('press_pitch')).toBe('Austin four-piece.')
+    expect(fd.getAll('quote')).toEqual(['A blistering live act.', 'Essential.'])
+  })
+
+  it('CRITICAL: a refused save says why, in an error toast', async () => {
+    mockedSave.mockResolvedValueOnce({ error: 'Not found.' })
+    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'One-line pitch' }), { target: { value: 'Austin four-piece.' } })
+    await settle()
+
+    expect(toast).toHaveBeenCalledWith('Not found.', 'error')
   })
 })

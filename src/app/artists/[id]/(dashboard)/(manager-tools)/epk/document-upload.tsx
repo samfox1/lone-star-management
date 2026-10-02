@@ -45,6 +45,8 @@ export function DocumentUpload({
     const res = await savePressDocumentAction(artistId, kind, null)
     // Surfaced, not swallowed: a Remove blocked by RLS must not look like it worked.
     if (res.error) toast(res.error, 'error')
+    // The row just loses its trash, which is easy to miss: say it quietly, as media removes do.
+    else toast(`${label} removed`)
   }
 
   return (

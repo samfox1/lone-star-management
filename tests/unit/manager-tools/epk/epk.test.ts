@@ -47,6 +47,16 @@ describe('parsePressQuotes (read path — must never throw)', () => {
     expect(parsePressQuotes([{ quote: 'Great.' }])).toEqual([{ quote: 'Great.', source: '', url: null }])
   })
 
+  it('a link typed without https:// is a web address, not a path on our site: it gets https://', () => {
+    // Kept bare, `<a href="nme.com/review">` resolves under the EPK page (/skeen/nme.com/review)
+    // and the press quote links nowhere. The form shows what was typed, so this must not drop it.
+    expect(cleanPressQuotes([
+      { quote: 'Great.', source: 'NME', url: ' nme.com/review ' },
+      { quote: 'Loud.', source: 'Mixmag', url: 'www.mixmag.net' },
+      { quote: 'Kept.', source: 'P4K', url: 'http://p4k.com/a' },
+    ]).map((q) => q.url)).toEqual(['https://nme.com/review', 'https://www.mixmag.net', 'http://p4k.com/a'])
+  })
+
   it('nulls a dangerous url but keeps the quote', () => {
     expect(parsePressQuotes([{ quote: 'Great.', source: 'NME', url: 'javascript:alert(1)' }])).toEqual([
       { quote: 'Great.', source: 'NME', url: null },

@@ -101,6 +101,33 @@ describe('AddRow', () => {
     expect(input.selectionEnd).toBe('Color 4'.length)
   })
 
+  it('an onAdd that throws does not jam the field: the next ✓ still adds', () => {
+    const onAdd = vi.fn().mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    render(<AddRow noun="logo" onAdd={onAdd} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add logo' }))
+    const input = screen.getByRole('textbox', { name: 'Name' })
+    fireEvent.change(input, { target: { value: 'Mono mark' } })
+    // React reports a handler's throw to the window rather than rethrowing it: catch it there.
+    const thrown: unknown[] = []
+    const onError = (e: ErrorEvent) => {
+      e.preventDefault()
+      thrown.push(e.error)
+    }
+    window.addEventListener('error', onError)
+    try {
+      fireEvent.keyDown(input, { key: 'Enter' })
+    } finally {
+      window.removeEventListener('error', onError)
+    }
+    expect(thrown).toEqual([expect.objectContaining({ message: 'boom' })])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(onAdd).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+  })
+
   it('the name is capped at the database limit', () => {
     const { input } = openForm()
     expect(input.maxLength).toBe(40)

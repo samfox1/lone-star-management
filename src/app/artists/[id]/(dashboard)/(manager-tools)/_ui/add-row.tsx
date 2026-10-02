@@ -79,8 +79,14 @@ export function AddRow({
     const next = name.trim()
     if (!next || done.current) return
     done.current = true
-    if (onAdd(next) === false) {
-      done.current = false
+    let added = false
+    try {
+      added = onAdd(next) !== false
+    } finally {
+      // A refusal OR a throw releases the latch, or the field would ignore every later ✓.
+      if (!added) done.current = false
+    }
+    if (!added) {
       input.current?.focus()
       return
     }

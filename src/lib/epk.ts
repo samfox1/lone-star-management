@@ -41,9 +41,15 @@ export const PITCH_MAX = 200
  *  an unbounded write into a snapshotted column. */
 export const QUOTES_MAX = 8
 
-/** `safeHref` with the EPK's storage rule: unsafe or empty becomes null, never ''. */
+/** `safeHref` with the EPK's storage rule: unsafe or empty becomes null, never ''. A link with no
+ *  scheme ("nme.com/review") is a web address the manager typed bare, not a path on our site:
+ *  kept bare it renders as a broken relative link (/skeen/nme.com/review), so it gets https://.
+ *  Adding https:// can only make a link safer. Runs on read too, so older rows are mended. */
 function quoteUrl(raw: unknown): string | null {
-  return typeof raw === 'string' ? (safeHref(raw) ?? null) : null
+  const safe = typeof raw === 'string' ? safeHref(raw) : undefined
+  if (!safe) return null
+  if (/^[a-z][a-z0-9+.-]*:/i.test(safe) || safe.startsWith('/') || safe.startsWith('#')) return safe
+  return `https://${safe}`
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')

@@ -6,7 +6,8 @@
  *   - Site and Address are text, not controls: no input, no pencil;
  *   - Booking email is a field in place: saves through its door on blur or Enter, and only
  *     when CHANGED;
- *   - a refused save puts the old value back and says why;
+ *   - a refused save says why and KEEPS what was typed, so it can be corrected (Escape then
+ *     puts the saved value back);
  *   - Escape puts the old value back without saving.
  *
  * The name moved to Profile on 2026-10-02 (tests/components/manager-tools/profile/).
@@ -96,12 +97,16 @@ describe('Booking email', () => {
     expect(saveBookingEmailAction).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: a refused save puts the old value back and says why', async () => {
+  it('CRITICAL: a refused save says why and keeps the typed text to fix; Escape restores the saved one', async () => {
     vi.mocked(saveBookingEmailAction).mockResolvedValueOnce({ error: 'That isn’t an email address.' })
     mount()
     edit('not-an-email')
     await waitFor(() => expect(toast).toHaveBeenCalledWith('That isn’t an email address.', 'error'))
+    // Not thrown away: the manager corrects it rather than retyping it.
+    expect(field().value).toBe('not-an-email')
+    fireEvent.keyDown(field(), { key: 'Escape' })
     expect(field().value).toBe('ross@example.com')
+    expect(saveBookingEmailAction).toHaveBeenCalledTimes(1)
   })
 
   it('clearing it saves a blank and the state line says so', async () => {
