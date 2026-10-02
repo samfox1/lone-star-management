@@ -158,6 +158,16 @@ storage-gc.ts, site*, seo*, settings.ts, epk.ts, enquiries/) stays in `src/lib/`
 new piece in `_ui/` only when a second tool really uses it; until then it belongs to its
 tool.
 
+**Route folders hold screens; logic lives in `src/lib/` (Sam, 2026-10-01).** A route folder
+(`(manager-tools)/<tool>/…`) holds only what renders or wires a page: React components,
+`page.tsx`/`layout.tsx`, loaders that read for that page, and server actions. A PURE module
+(no React, no request: words, models, formatting, parsing, rules) goes in
+`src/lib/manager-tools/<tool>/` even when only that tool uses it, so "where is the logic?"
+always has one answer and the mutation slice can find it. Shared look lives in `_ui/`
+(`styles.ts` role constants, shared rows/cards); shared formats in
+`src/lib/manager-tools/format.ts`. Before writing a label, card, row, date or plural by
+hand, use the shared one.
+
 Plan docs written before this date (`DASHBOARD_PLAN.md`, `SEO_GEO_PLAN.md`,
 `SITE_PAGES_PLAN.md`, `REVIEW_2026-09-03.md`) name tests by their old flat path. They
 are records of what was true then and were left alone; `git log --follow` finds any of
