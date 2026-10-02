@@ -9,7 +9,7 @@ import { FieldError } from '../../../_ui/field-error'
 import { useNow } from '../_ui/clock'
 import { ConnectionMark } from '../../../connections/connection-mark'
 import { markProfileItemAction } from './actions'
-import { CardAction, CardActions, CardField, DisclosureGroup, RowMark, type RowMarkKind } from '../_ui/disclosure'
+import { CardAction, CardActions, CardField, DisclosureGroup, RowMark, SentenceAction, type RowMarkKind } from '../_ui/disclosure'
 import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
 
 /**
@@ -104,6 +104,8 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
         {row.url ? (
           <CardField label="Profile">
             <OutLink href={row.url}>{shortLink(row.url)}</OutLink>
+            {/* Edit sits right after the link it edits (Sam, 2026-10-02), not on its own line. */}
+            <SentenceAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
           </CardField>
         ) : null}
         {row.state === 'stale' && row.changed.length ? (
@@ -117,7 +119,7 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
           </CardField>
         ) : null}
         <CardActions>
-          <CardAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
+          {row.url ? null : <CardAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />}
           <CardAction icon="check" label="Mark as updated" onClick={() => void tick()} disabled={busy} className="ml-auto" />
           {error ? <FieldError>{error}</FieldError> : null}
         </CardActions>
