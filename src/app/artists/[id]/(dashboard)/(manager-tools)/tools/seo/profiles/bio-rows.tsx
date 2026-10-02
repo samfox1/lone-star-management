@@ -103,9 +103,15 @@ function BioRowItem({ artistId, row: seeded }: { artistId: string; row: BioRow }
       <ProfileCard id={id}>
         {row.url ? (
           <CardField label="Profile">
-            <OutLink href={row.url}>{shortLink(row.url)}</OutLink>
-            {/* Edit sits right after the link it edits (Sam, 2026-10-02), not on its own line. */}
-            <SentenceAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
+            {/* Edit sits right after the link it edits, and shows only while the pointer is on that
+                line (Sam, 2026-10-02). Keyboard focus shows it too; a touch screen, with no hover,
+                always shows it. */}
+            <span className="group/edit">
+              <OutLink href={row.url}>{shortLink(row.url)}</OutLink>
+              <span className="opacity-0 transition-opacity group-hover/edit:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                <SentenceAction icon="edit" label={`Edit on ${row.label}`} href={row.edit} link="external" />
+              </span>
+            </span>
           </CardField>
         ) : null}
         {row.state === 'stale' && row.changed.length ? (
