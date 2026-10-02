@@ -29,7 +29,7 @@ export const STANDARD_AREAS: Area[] = [
   {
     title: 'SEO / GEO checks: the engine',
     about: 'The checks the SEO/GEO page runs against an artist’s live site, and the page readers they stand on.',
-    include: ['tests/unit/seo-tests/'],
+    include: ['tests/unit/seo-tests/', 'tests/helpers/seo/'],
   },
   {
     title: 'SEO / GEO page',
@@ -42,9 +42,19 @@ export const STANDARD_AREAS: Area[] = [
     include: ['tests/integration/seo-tests/'],
   },
   {
+    title: 'SEO / GEO page (database)',
+    about: 'What the SEO/GEO page keeps in the hosted database: the Profiles tab’s marks and the bios it reads. These talk to the live project.',
+    include: ['tests/integration/manager-tools/seo/'],
+  },
+  {
     title: 'Safe fetching',
     about: 'Every time the server fetches an address someone else chose: where it may go, how much it reads, how long it waits.',
     include: ['tests/unit/safe-fetching/'],
+  },
+  {
+    title: 'Search engines (Google and Bing)',
+    about: 'Registering an artist’s site with Google and Bing, and resending its sitemap to Google after a publish.',
+    include: ['tests/unit/search-engines/'],
   },
   {
     title: 'Stored logins',

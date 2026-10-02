@@ -15,7 +15,7 @@ import { parseAllowedOrigins, pickAllowedOrigin } from '../_shared/cors.ts'
 
 /** Mirrors the CHECK constraint on enquiries.message. */
 export const MESSAGE_MAX = 5000
-export const NAME_MAX = 200
+const NAME_MAX = 200
 export const EMAIL_MAX = 320
 
 /**
@@ -39,12 +39,12 @@ export const SLUG_STORE_MAX = 80
 export type Purpose = string
 
 /** Mirrors ek_slug_fmt on enquiry_kinds and the purpose CHECK on enquiries. */
-export const PURPOSE_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+const PURPOSE_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
 
 /** The kind every artist has and the one anything unrecognisable becomes. */
-export const PURPOSE_FALLBACK = 'other'
+const PURPOSE_FALLBACK = 'other'
 
-export type ContactBody = {
+type ContactBody = {
   slug: string
   purpose: Purpose
   name: string
@@ -52,7 +52,7 @@ export type ContactBody = {
   message: string
 }
 
-export type ValidationError = 'missing_field' | 'invalid_email' | 'message_too_long'
+type ValidationError = 'missing_field' | 'invalid_email' | 'message_too_long'
 
 export type ValidationResult =
   /** A real submission, trimmed and coerced. */
@@ -186,12 +186,12 @@ export const DEMO_URL_MAX = 2048
 
 /** At most three per enquiry. A demo is a demo, not a discography, and every ticket is a
  *  write capability handed to an unauthenticated stranger. */
-export const ATTACHMENTS_MAX = 3
+const ATTACHMENTS_MAX = 3
 
 /** What the private bucket accepts. Kept in step with the bucket's own
  *  allowed_mime_types — the bucket is the real guard; this stops a ticket ever being
  *  minted for a file the bucket would refuse. */
-export const AUDIO_MIME_TYPES = [
+const AUDIO_MIME_TYPES = [
   'audio/mpeg',
   'audio/mp4',
   'audio/x-m4a',
@@ -202,10 +202,10 @@ export const AUDIO_MIME_TYPES = [
   'audio/flac',
 ] as const
 
-export type AttachmentRequest = { filename: string; mime_type: string; bytes: number }
+type AttachmentRequest = { filename: string; mime_type: string; bytes: number }
 
-export type SkipReason = 'invalid_demo_url' | 'unsupported_audio_type' | 'too_many_attachments'
-export type SkippedItem = { item: string; reason: SkipReason }
+type SkipReason = 'invalid_demo_url' | 'unsupported_audio_type' | 'too_many_attachments'
+type SkippedItem = { item: string; reason: SkipReason }
 
 export type DemoUrlResult = { value: string | null; skipped: SkippedItem[] }
 
@@ -362,13 +362,13 @@ export function sanitiseFilename(name: string): string {
 
 /** Files only. The ENQUIRY is kept forever: the message is small and it is the manager's
  *  record of who got in touch. Only the audio expires. */
-export const RETENTION_DAYS = 90
+const RETENTION_DAYS = 90
 
 /** Roughly one request in a hundred does the sweep. There is no pg_cron here, so the
  *  cleanup rides on traffic — the same opportunistic approach the contact_attempts prune
  *  uses (20260722130000). A contact form gets enough requests for this to keep up, and
  *  paying a little on 1% of them is cheaper than a scheduled worker for a table this size. */
-export const SWEEP_PROBABILITY = 0.01
+const SWEEP_PROBABILITY = 0.01
 
 /** Anything created before this is expired. */
 export function retentionCutoffIso(nowMs: number, days: number = RETENTION_DAYS): string {

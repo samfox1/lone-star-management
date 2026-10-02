@@ -18,13 +18,13 @@ import { pickAllowedOrigin } from '../_shared/cors.ts'
 /* ── Allowlists (pinned; a test diffs them) ─────────────────────────────────────── */
 
 export const EVENT_TYPES = ['view', 'play', 'link_click', 'ticket_click', 'buy_click', 'video_click'] as const
-export type EventType = (typeof EVENT_TYPES)[number]
+type EventType = (typeof EVENT_TYPES)[number]
 export const ENTITY_KINDS = ['release', 'track', 'merch', 'video', 'tour_date', 'link'] as const
-export type EntityKind = (typeof ENTITY_KINDS)[number]
+type EntityKind = (typeof ENTITY_KINDS)[number]
 
 /* ── Request body ───────────────────────────────────────────────────────────────── */
 
-export type EventBody = {
+type EventBody = {
   slug: string
   type: EventType
   /** The page the event happened on, as the browser sees it (location.href). */
@@ -232,7 +232,7 @@ export const IN_APP_SOURCES: Record<string, Source> = { instagram: 'instagram', 
 
 /* ── User agent ─────────────────────────────────────────────────────────────────── */
 
-export type Device = 'mobile' | 'tablet' | 'desktop'
+type Device = 'mobile' | 'tablet' | 'desktop'
 export type UaInfo = { device: Device; browser: string }
 
 /**

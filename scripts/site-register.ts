@@ -26,7 +26,7 @@ import { bingClient } from '../src/lib/search-engines/bing'
 import { googleClient, googleCredsFromEnv } from '../src/lib/search-engines/google'
 import { registerSite } from '../src/lib/search-engines/register'
 import { supabaseStore } from '../src/lib/search-engines/register-store'
-import { guardedFetch } from '../src/lib/seo-tests/guarded-fetch'
+import { guardedFetch } from '../src/lib/guarded-fetch'
 
 config({ path: '.env.local' })
 
