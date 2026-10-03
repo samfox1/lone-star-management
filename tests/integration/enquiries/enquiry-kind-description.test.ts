@@ -36,7 +36,7 @@ import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } fr
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
 /** 20261002220000_enquiry_kind_description.sql. */
-const KIND_DESCRIPTION_PUSHED = false
+const KIND_DESCRIPTION_PUSHED = true
 
 /** What the dashboard showed before the column existed, and so what the backfill and the seed
  *  trigger must write: "nothing visibly changes after the push". */
