@@ -96,10 +96,16 @@ export const LABEL_MAX = 60
 /** Mirrors the cap trigger on enquiry_recipients (`enforce_enquiry_recipient_cap`). */
 export const RECIPIENT_CAP = 10
 
+/** Mirrors `ek_description_clean` on enquiry_kinds (20261002220000): at most this many
+ *  characters (code points, as `char_length` counts them). */
+export const DESCRIPTION_MAX = 120
+
 export type EnquiryKindRow = {
   id: string
   slug: string
   label: string
+  /** What the kind is FOR, the grey line under its name. Null: no line. */
+  description: string | null
   sortOrder: number
   recipients: { id: string; email: string; label: string | null }[]
 }
@@ -109,6 +115,9 @@ export type RawKindRow = {
   id: string
   slug: string
   label: string
+  /** ABSENT (not null) when read without the column: before 20261002220000 is pushed, the
+   *  page re-reads without it (settings/email/page.tsx). */
+  description?: string | null
   sort_order: number
   enquiry_recipients: { id: string; email: string; label: string | null; created_at: string }[] | null
 }
@@ -123,6 +132,9 @@ export function toKindRows(raw: RawKindRow[] | null | undefined): EnquiryKindRow
     id: k.id,
     slug: k.slug,
     label: k.label,
+    // Absent only before the push: then the fixed line the page has always shown. DELETE the
+    // fallback at push time (20261002220000's checklist); null is "no line" and stays null.
+    description: k.description === undefined ? kindGuide(k.slug) : k.description,
     sortOrder: k.sort_order,
     recipients: [...(k.enquiry_recipients ?? [])]
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
@@ -180,10 +192,11 @@ export function recipientProblem(existing: readonly string[], candidate: string)
  * What each kind is FOR, as the grey line under its name on Settings › Email (Sam, 2026-10-02:
  * "It should say for x, y and z … not just booking, thats useless description").
  *
- * Only the three kinds every artist is seeded with have one. No site's contact form describes
- * its kinds (Skeen's offers the bare words Booking / Demo / Other), and `enquiry_kinds` has no
- * description column, so a kind the artist invented shows NO line: nothing is better than
- * filler. Keyed by SLUG, which never changes, so a renamed Booking keeps its line.
+ * BEFORE THE PUSH ONLY. Since 20261002220000 the line is `enquiry_kinds.description`, which the
+ * manager edits; that migration backfills these exact strings (and seeds them for new artists),
+ * so this map is what the page shows only while the column does not exist yet. DELETE it, and
+ * toKindRows' fallback, at push time. Keyed by SLUG, as the backfill is, so a renamed Booking
+ * keeps its line.
  */
 const KIND_GUIDES: Readonly<Record<string, string>> = {
   booking: 'For shows, festivals and private events',
@@ -194,4 +207,57 @@ const KIND_GUIDES: Readonly<Record<string, string>> = {
 /** The guide line for a kind, or null when there is nothing worth saying. */
 export function kindGuide(slug: string): string | null {
   return Object.hasOwn(KIND_GUIDES, slug) ? KIND_GUIDES[slug] : null
+}
+
+// ---------------------------------------------------------------------------
+// Editing a kind's name and description (20261002220000)
+// ---------------------------------------------------------------------------
+/**
+ * Every Unicode mandatory line break: CR, LF, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR.
+ * The same set `ek_description_clean` refuses. `ek_label_clean` refuses only CR and LF; refusing
+ * the rest in a name too costs nothing and keeps one rule for both fields.
+ */
+const LINE_BREAK = /[\r\n\v\f\u0085\u2028\u2029]/
+
+/** What a manager changed: only the fields present are written. */
+export type KindDetails = { label?: string; description?: string | null }
+
+/**
+ * A manager's edit of a kind as the columns to write, or why it cannot be saved.
+ *
+ * Runs in the browser (to say so before a round trip) AND in the save (saveEnquiryKind), because
+ * the action is callable with anything. The database refuses all of it too; this is where the
+ * manager is told in a sentence.
+ *
+ *   label        trimmed; empty is refused; stored as its first LABEL_MAX characters, as the
+ *                rename always has
+ *   description  trimmed (JS trims every Unicode space, more than the CHECK's `\s`, so what this
+ *                returns always passes it); empty or null is NULL, "no line"; a line break or more
+ *                than DESCRIPTION_MAX characters is refused, never cut: a cut sentence reads as
+ *                a mistake
+ */
+export function kindDetailsUpdate(
+  input: KindDetails,
+): { ok: true; update: { label?: string; description?: string | null } } | { ok: false; error: string } {
+  const update: { label?: string; description?: string | null } = {}
+
+  if (input.label !== undefined) {
+    const label = input.label.trim()
+    if (!label) return { ok: false, error: 'Give the kind a name.' }
+    if (LINE_BREAK.test(label)) return { ok: false, error: 'Keep the name to one line.' }
+    update.label = label.slice(0, LABEL_MAX)
+  }
+
+  if (input.description !== undefined) {
+    const description = (input.description ?? '').trim()
+    if (LINE_BREAK.test(description)) return { ok: false, error: 'Keep the description to one line.' }
+    // Code points, as `char_length` counts them: an emoji is one character there, two here.
+    if ([...description].length > DESCRIPTION_MAX) {
+      return { ok: false, error: `Keep the description to ${DESCRIPTION_MAX} characters.` }
+    }
+    update.description = description || null
+  }
+
+  if (!Object.keys(update).length) return { ok: false, error: 'Nothing to save.' }
+  return { ok: true, update }
 }

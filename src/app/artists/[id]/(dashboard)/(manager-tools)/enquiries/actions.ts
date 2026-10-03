@@ -13,7 +13,8 @@
 import { revalidatePath } from 'next/cache'
 import { ATTACHMENT_BUCKET, toPlayable, type AttachmentRow, type PlayableAttachment } from '@/lib/enquiries/attachments'
 import { createClient } from '@/lib/supabase/server'
-import { LABEL_MAX, slugFromLabel, uniqueSlug, type EnquiryKindRow } from '@/lib/enquiries/kinds'
+import { LABEL_MAX, slugFromLabel, uniqueSlug, type EnquiryKindRow, type KindDetails } from '@/lib/enquiries/kinds'
+import { KIND_GONE, saveEnquiryKind } from '@/lib/enquiries/kind-save'
 import { requireOwnedArtist } from '../../_owns'
 
 /**
@@ -183,38 +184,34 @@ export async function addEnquiryKindAction(
 
   revalidatePath(`/artists/${artistId}`, 'layout')
   const row = data as { id: string; slug: string; label: string; sort_order: number }
-  return { kind: { ...row, sortOrder: row.sort_order, recipients: [] } }
+  // A new kind has no description: the column defaults to null, and it is not selected back so
+  // this keeps working before 20261002220000 is pushed.
+  return { kind: { ...row, description: null, sortOrder: row.sort_order, recipients: [] } }
 }
 
-/** What a rename or delete says when it matched no row. */
-const KIND_GONE = 'That kind is no longer there — refresh the page.'
-
-/** Rename a kind. The LABEL only — a trigger refuses any change to the slug. */
-export async function renameEnquiryKindAction(
+/**
+ * Save a kind's NAME and/or DESCRIPTION: only the fields the manager changed (Sam, 2026-10-02:
+ * "I should be able to add and edit the description"). Never the slug: a trigger refuses any
+ * change to it.
+ *
+ * The write itself is saveEnquiryKind (src/lib/enquiries/kind-save.ts), which checks the input
+ * (kindDetailsUpdate) and tells a zero-row match apart from a save. Before 20261002220000 is
+ * pushed a name still saves; a description cannot, and says so.
+ */
+export async function saveEnquiryKindAction(
   artistId: string,
   kindId: string,
-  label: string,
-): Promise<{ error?: string }> {
+  details: KindDetails,
+): Promise<{ error?: string; saved?: KindDetails }> {
   const supabase = await createClient()
   const owned = await requireOwnedArtist(supabase, artistId)
   if (!owned.ok) return { error: owned.error }
 
-  const clean = label.trim()
-  if (!clean) return { error: 'Give the kind a name.' }
-
-  // `.select` so a zero-row match is visible: RLS or a stale id gives `error: null` and no
-  // rows, which is not a rename (AGENTS.md rule 3; review 2026-09-23).
-  const { data, error } = await supabase
-    .from('enquiry_kinds')
-    .update({ label: clean.slice(0, LABEL_MAX) })
-    .eq('id', kindId)
-    .eq('artist_id', artistId)
-    .select('id')
-  if (error) return { error: error.message }
-  if (!data?.length) return { error: KIND_GONE }
+  const res = await saveEnquiryKind(supabase, artistId, kindId, details)
+  if (res.error) return { error: res.error }
 
   revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
+  return { saved: res.saved }
 }
 
 /**

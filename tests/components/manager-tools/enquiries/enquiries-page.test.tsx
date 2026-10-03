@@ -28,7 +28,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () =
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
   signEnquiryAttachmentsAction: vi.fn(async () => []),
   addEnquiryKindAction: vi.fn(),
-  renameEnquiryKindAction: vi.fn(),
+  saveEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(),
   setEnquiryRecipientsAction: vi.fn(),
   deleteEnquiryAction: vi.fn(async () => ({ ok: true })),

@@ -9,6 +9,7 @@
  *   - every save sends the WHOLE list (a partial one silently drops whoever it left out);
  *   - a refused address is never sent and stays where it was typed;
  *   - a row's + adds to THAT kind, and nothing is written before ✓;
+ *   - clicking a kind's name edits its name and description together, and sends only what changed;
  *   - no kind is created from this page (Sam: "remove the ability to add new email types").
  *
  * That a kind then reaches ONLY its own list is pinned against the database in
@@ -19,7 +20,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/kind-rows'
 import {
   deleteEnquiryKindAction,
-  renameEnquiryKindAction,
+  saveEnquiryKindAction,
   setEnquiryRecipientsAction,
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
 import type { EnquiryKindRow } from '@/lib/enquiries/kinds'
@@ -31,24 +32,27 @@ vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
   addEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(async () => ({})),
-  renameEnquiryKindAction: vi.fn(async () => ({})),
+  saveEnquiryKindAction: vi.fn(),
   setEnquiryRecipientsAction: vi.fn(),
 }))
 
 const setList = vi.mocked(setEnquiryRecipientsAction)
 const deleteKind = vi.mocked(deleteEnquiryKindAction)
-const renameKind = vi.mocked(renameEnquiryKindAction)
+const saveKind = vi.mocked(saveEnquiryKindAction)
 
 const kind = (over: Partial<EnquiryKindRow> = {}): EnquiryKindRow => ({
   id: 'k-booking',
   slug: 'booking',
   label: 'Booking',
+  description: 'For shows, festivals and private events',
   sortOrder: 0,
   recipients: [],
   ...over,
 })
-const demo = (recipients: EnquiryKindRow['recipients'] = []) => kind({ id: 'k-demo', slug: 'demo', label: 'Demo', sortOrder: 1, recipients })
-const contact = () => kind({ id: 'k-other', slug: 'other', label: 'Contact', sortOrder: 2 })
+const demo = (recipients: EnquiryKindRow['recipients'] = []) =>
+  kind({ id: 'k-demo', slug: 'demo', label: 'Demo', description: 'For music and demo submissions', sortOrder: 1, recipients })
+const contact = () => kind({ id: 'k-other', slug: 'other', label: 'Contact', description: 'For everything else', sortOrder: 2 })
+const press = () => kind({ id: 'k-press', slug: 'press', label: 'Press', description: null, sortOrder: 3 })
 
 function renderRows(kinds: EnquiryKindRow[]) {
   return render(<KindRows artistId="a1" kinds={kinds} />)
@@ -64,6 +68,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   // Echo the list back with server ids, the way the RPC returns rows as stored.
   setList.mockImplementation(async (_a, _k, list) => ({ rows: list.map((r, i) => ({ id: `srv-${i}`, ...r })) }))
+  // Echo back what was sent, the way the save returns what it stored.
+  saveKind.mockImplementation(async (_a, _k, details) => ({ saved: details }))
 })
 afterEach(cleanup)
 
@@ -82,8 +88,8 @@ describe('the rows', () => {
     expect(within(row('other')).queryByText(/@/)).toBeNull()
   })
 
-  it('says what each built-in kind is FOR, never its slug; an invented kind says nothing', () => {
-    renderRows([kind(), demo(), contact(), kind({ id: 'k-press', slug: 'press', label: 'Press', sortOrder: 3 })])
+  it('shows each kind’s description under its name, never its slug; none when it has none', () => {
+    renderRows([kind(), demo(), contact(), press()])
 
     expect(within(row('booking')).getByText('For shows, festivals and private events')).toBeTruthy()
     expect(within(row('other')).getByText('For everything else')).toBeTruthy()
@@ -204,19 +210,33 @@ describe('click an address', () => {
 })
 
 describe('a kind’s name', () => {
-  it('click it to rename: Enter sends the new name', async () => {
-    renderRows([demo()])
+  it('click it to edit the name and description: Enter saves both, and the new line shows', async () => {
+    renderRows([demo(), press()])
     open('demo', 'Demo')
-    const field = within(row('demo')).getByRole('textbox', { name: 'Kind name' })
-    fireEvent.change(field, { target: { value: 'Demos' } })
+    const name = within(row('demo')).getByRole('textbox', { name: 'Kind name' })
+    const line = within(row('demo')).getByRole('textbox', { name: 'Description' })
+    expect(line).toHaveValue('For music and demo submissions')
+    fireEvent.change(name, { target: { value: 'Demos' } })
+    fireEvent.change(line, { target: { value: 'For tapes and links' } })
     await act(async () => {
-      fireEvent.keyDown(field, { key: 'Enter' })
+      fireEvent.keyDown(line, { key: 'Enter' })
     })
-    expect(renameKind).toHaveBeenCalledWith('a1', 'k-demo', 'Demos')
+
+    expect(saveKind).toHaveBeenCalledWith('a1', 'k-demo', { label: 'Demos', description: 'For tapes and links' })
+    expect(within(row('demo')).getByRole('button', { name: 'Demos' })).toBeTruthy()
+    expect(within(row('demo')).getByText('For tapes and links')).toBeTruthy()
+
+    // A kind with no line gets one the same way, and only what changed is sent.
+    open('press', 'Press')
+    fireEvent.change(within(row('press')).getByRole('textbox', { name: 'Description' }), { target: { value: 'For radio' } })
+    await act(async () => {
+      fireEvent.click(within(row('press')).getByRole('button', { name: 'Save' }))
+    })
+    expect(saveKind).toHaveBeenLastCalledWith('a1', 'k-press', { description: 'For radio' })
   })
 
   it('a kind can be deleted (after asking), except Contact, the fallback', async () => {
-    renderRows([kind(), contact(), kind({ id: 'k-press', slug: 'press', label: 'Press', sortOrder: 3 })])
+    renderRows([kind(), contact(), press()])
     // Each checked while ITS field is open (opening the next closes it: a click away).
     open('other', 'Contact')
     expect(within(row('other')).getByRole('textbox', { name: 'Kind name' })).toBeTruthy()

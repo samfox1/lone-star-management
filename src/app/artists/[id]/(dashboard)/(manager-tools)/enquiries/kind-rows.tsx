@@ -10,10 +10,18 @@ import { LEDGER_ROW_GRID, LedgerSection } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
 import {
   deleteEnquiryKindAction,
-  renameEnquiryKindAction,
+  saveEnquiryKindAction,
   setEnquiryRecipientsAction,
 } from './actions'
-import { LABEL_MAX, PURPOSE_FALLBACK, kindGuide, recipientProblem, type EnquiryKindRow } from '@/lib/enquiries/kinds'
+import {
+  DESCRIPTION_MAX,
+  LABEL_MAX,
+  PURPOSE_FALLBACK,
+  kindDetailsUpdate,
+  recipientProblem,
+  type EnquiryKindRow,
+  type KindDetails,
+} from '@/lib/enquiries/kinds'
 
 /**
  * Who receives each kind of enquiry: Settings › Email, the ONE place addresses are managed
@@ -28,18 +36,20 @@ import { LABEL_MAX, PURPOSE_FALLBACK, kindGuide, recipientProblem, type EnquiryK
  *   "when I click on a submitted email, then I can edit it or delete it … I want minimal stuff"
  *   "i should be able to edit/delete every email there"; "It should say for x, y and z"
  *   "I dont like the border around the container when adding an email"
+ *   "if I add a new type of email name, I should be able to add and edit the description for it"
  *
- * So, at rest: one ledger row per kind, its NAME on the left with what it is FOR under it (only
- * where there is something worth saying, kindGuide), its OWN addresses as plain text on the
+ * So, at rest: one ledger row per kind, its NAME on the left with what it is FOR under it (its
+ * description, 20261002220000; no line when it has none), its OWN addresses as plain text on the
  * right ending in a + that adds one more to THAT kind. No words on the +, no boxes: it opens an
  * underline field where the address will sit (Sam: "a line lined up with where the email name
  * and email address are"). Every address shown is one this kind is sent to, and every one
  * can be clicked to edit or delete: nothing is read-only, nothing is greyed out. The site's
  * public booking contact (its link or text) is NOT a recipient and is not shown here.
  *
- * Click an address (or a kind's name) and it becomes its field, with ✓ and a trash; Enter or ✓
- * saves, Escape or a click away puts it back. Every kind but `other` can be deleted from its
- * name's trash (`other` is the fallback every unknown purpose lands on; the database refuses).
+ * Click an address and it becomes its field, with ✓ and a trash; Enter or ✓ saves, Escape or a
+ * click away puts it back. Click a kind's NAME and the name and its description both become
+ * fields (KindHead), the same way. Every kind but `other` can be deleted from its name's trash
+ * (`other` is the fallback every unknown purpose lands on; the database refuses).
  *
  * Every save sends the WHOLE list and shows what the server answered.
  */
@@ -84,7 +94,7 @@ export function KindRows({ artistId, kinds: initial }: { artistId: string; kinds
           artistId={artistId}
           kind={k}
           onSave={(next) => save(k, next)}
-          onRenamed={(label) => patch(k.id, { label })}
+          onSaved={(saved) => patch(k.id, saved)}
           onDeleted={() => setKinds((ks) => ks.filter((x) => x.id !== k.id))}
         />
       ))}
@@ -97,7 +107,8 @@ type Addr = { email: string; label: string | null }
 const STILL_SAVING = 'Still saving — try that again in a moment.'
 
 /** The grey line under a kind's name: what it is for (LedgerRow's `guide` look). */
-const GUIDE = 'mt-0.5 max-w-[40ch] text-[13px] text-ink-muted'
+const GUIDE_TEXT = 'text-[13px] leading-5 text-ink-muted'
+const GUIDE = cx('mt-0.5 max-w-[40ch]', GUIDE_TEXT)
 
 /** A field that is only a line (Sam: no boxes), in the type of the text it stands in for. */
 const UNDERLINE = 'border-b border-hairline bg-transparent p-0 outline-none placeholder:text-ink-faint focus:border-ink'
@@ -115,21 +126,21 @@ function KindRow({
   artistId,
   kind,
   onSave,
-  onRenamed,
+  onSaved,
   onDeleted,
 }: {
   artistId: string
   kind: EnquiryKindRow
   /** The whole new list. Resolves `{ error }` (unsaid: the caller does not toast). */
   onSave: (next: Addr[]) => Promise<{ error?: string }>
-  onRenamed: (label: string) => void
+  /** The name and/or description as stored. */
+  onSaved: (saved: KindDetails) => void
   onDeleted: () => void
 }) {
   const { ask, dialog } = useConfirm()
   /** One delete of the kind at a time (rule 5). */
   const deletingRef = useRef(false)
   const addresses = kind.recipients
-  const guide = kindGuide(kind.slug)
 
   /** The row's +: one more address on THIS kind's list. */
   function add(email: string) {
@@ -153,11 +164,10 @@ function KindRow({
     if (res.error) toast(res.error, 'error')
   }
 
-  async function rename(v: string) {
-    if (!v) return { error: 'Give the kind a name.' }
-    const res = await renameEnquiryKindAction(artistId, kind.id, v)
-    // The server stores the first LABEL_MAX characters.
-    if (!res.error) onRenamed(v.slice(0, LABEL_MAX))
+  async function saveDetails(details: KindDetails) {
+    const res = await saveEnquiryKindAction(artistId, kind.id, details)
+    // What the server stored (trimmed, cut to LABEL_MAX, an empty description as null).
+    if (!res.error && res.saved) onSaved(res.saved)
     return res
   }
 
@@ -183,18 +193,7 @@ function KindRow({
 
   return (
     <div data-ledger-row="" data-kind={kind.slug} className={LEDGER_ROW_GRID}>
-      <div className="min-w-0">
-        <ClickEdit
-          value={kind.label}
-          label="Kind name"
-          text={NAME_TEXT}
-          maxLength={LABEL_MAX}
-          onSave={rename}
-          onDelete={kind.slug !== PURPOSE_FALLBACK ? () => void del() : undefined}
-          deleteLabel={`Delete ${kind.label}`}
-        />
-        {guide ? <div className={GUIDE}>{guide}</div> : null}
-      </div>
+      <KindHead kind={kind} onSave={saveDetails} onDelete={kind.slug !== PURPOSE_FALLBACK ? () => void del() : undefined} />
       <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-4 gap-y-1 min-[900px]:justify-end">
         {addresses.map((r, i) => (
           // Keyed by POSITION: a refused edit puts the list back, and the field must survive
@@ -228,6 +227,156 @@ function KindRow({
 }
 
 /**
+ * A KIND'S NAME AND WHAT IT IS FOR, edited together (Sam, 2026-10-02: "I should be able to add and
+ * edit the description"). At rest, the name (a button, so a keyboard reaches it) and under it the
+ * grey line, none when the kind has no description. Click the name and both become underline
+ * fields in their own type (no boxes), ✓ and, when the kind can go, a trash beside the name:
+ *
+ *   Enter (in either) or ✓   saves only what changed; a refusal says why in a toast and KEEPS
+ *                            both fields as typed
+ *   Escape                   puts both back
+ *   a click away             puts both back (focus leaving the fields and their glyphs)
+ *
+ * An empty description is "no line" (saved as null). kindDetailsUpdate checks the edit here, to
+ * say so before a round trip; the save checks it again.
+ */
+function KindHead({
+  kind,
+  onSave,
+  onDelete,
+}: {
+  kind: EnquiryKindRow
+  onSave: (details: KindDetails) => Promise<{ error?: string }>
+  onDelete?: () => void
+}) {
+  const [draft, setDraft] = useState<{ label: string; description: string } | null>(null)
+  const nameField = useRef<HTMLInputElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  /** One save at a time: Enter and ✓ in one tick save once (rule 5). */
+  const savingRef = useRef(false)
+  /** Hand focus back to the name after Enter or Escape (a keyboard user's place). */
+  const refocus = useRef(false)
+  const editing = draft !== null
+
+  useEffect(() => {
+    if (editing) nameField.current?.focus()
+    else if (refocus.current) {
+      refocus.current = false
+      button.current?.focus()
+    }
+  }, [editing])
+
+  function close(keyboard: boolean) {
+    refocus.current = keyboard
+    setDraft(null)
+  }
+
+  async function save() {
+    if (draft === null || savingRef.current) return
+    const details: KindDetails = {}
+    if (draft.label.trim() !== kind.label) details.label = draft.label
+    const description = draft.description.trim()
+    if (description !== (kind.description ?? '')) details.description = description || null
+    if (!Object.keys(details).length) return close(true)
+
+    const checked = kindDetailsUpdate(details)
+    if (!checked.ok) {
+      toast(checked.error, 'error')
+      return
+    }
+    savingRef.current = true
+    try {
+      const res = await onSave(details)
+      if (res.error) {
+        toast(res.error, 'error')
+        return
+      }
+      close(true)
+    } catch {
+      toast('Couldn’t save that kind.', 'error')
+    } finally {
+      savingRef.current = false
+    }
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void save()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      close(true)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="min-w-0">
+        <button
+          ref={button}
+          type="button"
+          onClick={() => setDraft({ label: kind.label, description: kind.description ?? '' })}
+          className={cx('max-w-full cursor-text truncate rounded text-left', NAME_TEXT, FOCUS_RING)}
+        >
+          {kind.label}
+        </button>
+        {kind.description ? <div className={GUIDE}>{kind.description}</div> : null}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="flex min-w-0 flex-col"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(false)
+      }}
+    >
+      <span className="inline-flex max-w-full items-center gap-1.5">
+        <input
+          ref={nameField}
+          aria-label="Kind name"
+          value={draft.label}
+          maxLength={LABEL_MAX}
+          spellCheck={false}
+          onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+          onKeyDown={onKeyDown}
+          // As wide as the text (field-sizing where supported), never wider than the row.
+          className={cx(UNDERLINE, NAME_TEXT, 'min-w-[8ch] max-w-full [field-sizing:content]')}
+        />
+        {/* mousedown would blur the field first, and a blur is "put it back". */}
+        <span className="inline-flex items-center gap-1.5" onMouseDown={(e) => e.preventDefault()}>
+          <RowIcon icon="check" label="Save" variant="bare" tone="accent" glyphSize={14} onClick={() => void save()} />
+          {onDelete ? (
+            <RowIcon
+              icon="trash"
+              label={`Delete ${kind.label}`}
+              variant="bare"
+              tone="danger"
+              glyphSize={14}
+              onClick={() => {
+                close(false)
+                onDelete()
+              }}
+            />
+          ) : null}
+        </span>
+      </span>
+      <input
+        aria-label="Description"
+        value={draft.description}
+        maxLength={DESCRIPTION_MAX}
+        onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+        onKeyDown={onKeyDown}
+        // A line to write on even when empty: the description it stands in for may not exist yet.
+        className={cx(UNDERLINE, GUIDE_TEXT, 'mt-1 w-full max-w-[40ch] focus:text-ink')}
+      />
+    </div>
+  )
+}
+
+/**
  * TEXT YOU CLICK TO EDIT (Sam, 2026-10-02: "The delete icon appears after I click on it, same
  * with the edit. I want minimal stuff on the screen"). At rest, the text alone, as a button (so
  * a keyboard reaches it: focus, Enter). Clicked, it is an underline field in the same type, with
@@ -252,7 +401,7 @@ function ClickEdit({
   deleteLabel,
 }: {
   value: string
-  /** The field's accessible name: "Email", "Kind name". */
+  /** The field's accessible name: "Email". */
   label: string
   /** The text's look, at rest and while edited. */
   text: string

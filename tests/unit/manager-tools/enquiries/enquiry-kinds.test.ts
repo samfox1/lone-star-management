@@ -13,7 +13,7 @@
  * Every case below is a real thing a manager might type into "Add kind".
  */
 import { describe, expect, it } from 'vitest'
-import { RECIPIENT_CAP, SLUG_MAX, kindLabeller, labelFromSlug, recipientProblem, slugFromLabel, toKindRows, uniqueSlug, kindGuide } from '@/lib/enquiries/kinds'
+import { DESCRIPTION_MAX, LABEL_MAX, RECIPIENT_CAP, SLUG_MAX, kindDetailsUpdate, kindLabeller, labelFromSlug, recipientProblem, slugFromLabel, toKindRows, uniqueSlug, kindGuide } from '@/lib/enquiries/kinds'
 
 /** The CHECK on enquiry_kinds.slug, copied here so these tests fail if they disagree. */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -206,6 +206,18 @@ describe('toKindRows — the embedded select as the dashboard reads it', () => {
     expect(k.sortOrder).toBe(3)
     expect(k.recipients[0]).toEqual({ id: 'r-early', email: 'early@x.com', label: 'First' })
   })
+
+  it('reads the description from the column, and a NULL one stays null (no line)', () => {
+    // A manager who clears Booking's line must not get the fixed one back.
+    expect(toKindRows([raw({ description: 'For gigs' })])[0].description).toBe('For gigs')
+    expect(toKindRows([raw({ description: null })])[0].description).toBeNull()
+  })
+
+  it('falls back to the fixed line when the column is not there yet (before 20261002220000)', () => {
+    // DELETE with kindGuide at push time.
+    expect(toKindRows([raw()])[0].description).toBe('For shows, festivals and private events')
+    expect(toKindRows([raw({ slug: 'press' })])[0].description).toBeNull()
+  })
 })
 
 describe('recipientProblem — said BEFORE the save, in a sentence', () => {
@@ -251,5 +263,77 @@ describe('kindGuide — the line under a kind on Settings › Email', () => {
     // A slug is the artist's text: one named like an Object.prototype key must not find
     // something on the prototype chain.
     expect(kindGuide('constructor')).toBeNull()
+  })
+})
+
+describe('kindDetailsUpdate — a kind\'s name and description as the columns to write', () => {
+  /**
+   * `ek_description_clean` (20261002220000), copied here as the SPECIFICATION: whatever this
+   * function lets through must satisfy it, or the save is a raw 23514 instead of a sentence.
+   * JS `\s` is a superset of Postgres's, so passing this passes the CHECK.
+   */
+  const passesCheck = (d: string | null) =>
+    d === null || ([...d].length >= 1 && [...d].length <= 120 && !/[\r\n\v\f\u0085\u2028\u2029]/.test(d) && !/^\s|\s$/.test(d))
+  /** Every mandatory line break the CHECK refuses. */
+  const BREAKS = ['\r', '\n', '\v', '\f', '\u0085', '\u2028', '\u2029']
+
+  const update = (input: Parameters<typeof kindDetailsUpdate>[0]) => {
+    const r = kindDetailsUpdate(input)
+    if (!r.ok) throw new Error(`refused: ${r.error}`)
+    return r.update
+  }
+  const refusal = (input: Parameters<typeof kindDetailsUpdate>[0]) => {
+    const r = kindDetailsUpdate(input)
+    return r.ok ? null : r.error
+  }
+
+  it('trims both and writes ONLY the fields given', () => {
+    expect(update({ label: '  Press ', description: '  For radio and interviews  ' })).toEqual({ label: 'Press', description: 'For radio and interviews' })
+    // A name-only save must not touch the description (it saves before the column exists).
+    expect(update({ label: 'Press' })).toEqual({ label: 'Press' })
+    expect(update({ description: 'For radio' })).toEqual({ description: 'For radio' })
+  })
+
+  it('stores an empty or blank description as null: "no line" has one spelling', () => {
+    for (const d of ['', '   ', '\t', null]) expect(update({ description: d }), JSON.stringify(d)).toEqual({ description: null })
+  })
+
+  it('refuses a line break anywhere in the description, every kind of break', () => {
+    for (const br of BREAKS) {
+      expect(refusal({ description: `For shows${br}and festivals` }), JSON.stringify(br)).toMatch(/one line/)
+    }
+  })
+
+  it('refuses a line break in the name too', () => {
+    for (const br of BREAKS) expect(refusal({ label: `Book${br}ing` }), JSON.stringify(br)).toMatch(/one line/)
+  })
+
+  it('takes exactly DESCRIPTION_MAX characters, counted as Postgres counts them, and refuses one more', () => {
+    expect(DESCRIPTION_MAX).toBe(120)
+    expect(update({ description: 'x'.repeat(120) })).toEqual({ description: 'x'.repeat(120) })
+    expect(refusal({ description: 'x'.repeat(121) })).toMatch(/120 characters/)
+    // 120 emoji are 240 UTF-16 units but 120 characters to char_length: accepted, not cut.
+    const emoji = '🎤'.repeat(120)
+    expect(update({ description: emoji })).toEqual({ description: emoji })
+    expect(refusal({ description: emoji + '🎤' })).toMatch(/120 characters/)
+    // The limit is counted AFTER the trim: padding is not content.
+    expect(update({ description: `  ${'x'.repeat(120)}  ` })).toEqual({ description: 'x'.repeat(120) })
+  })
+
+  it('refuses an empty name, and cuts a long one to LABEL_MAX as the rename always has', () => {
+    expect(refusal({ label: '   ', description: 'For x' })).toMatch(/name/)
+    expect(update({ label: 'y'.repeat(LABEL_MAX + 5) })).toEqual({ label: 'y'.repeat(LABEL_MAX) })
+  })
+
+  it('refuses an edit with nothing in it', () => {
+    expect(refusal({})).toBeTruthy()
+  })
+
+  it('never returns a description the database CHECK would refuse', () => {
+    const tricky = [' For x', 'For x ', '\u00a0For x\u00a0', '\uFEFFFor x', '\u2028For x', 'For x\n', '\tFor\tx', ' '.repeat(130) + 'x', 'x'.repeat(119) + ' y']
+    for (const d of tricky) {
+      const r = kindDetailsUpdate({ description: d })
+      if (r.ok) expect(passesCheck(r.update.description ?? null), JSON.stringify(d)).toBe(true)
+    }
   })
 })
