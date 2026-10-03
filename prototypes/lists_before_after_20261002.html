@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lists Before After</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* Lists, before and after (Sam, 2026-10-02): every list moves to the Settings › Email grammar
+   (enquiries/kind-rows.tsx: ClickEdit + PlusField). At rest an item is plain text; a click opens
+   it as an underline field with ✓ and its trash (Enter or ✓ saves, Escape cancels); a bare + at
+   the end opens an underline field where the new item will sit, with ✓ and ×. No pills, chips,
+   boxes or words on buttons.
+   BEFORE = screenshots of localhost:3000 (Skeen, 2026-10-02, gstack browse, 1440×900, 1x).
+   AFTER = the same live page with the proposed list drawn into it in the browser (inline styles
+   copied from kind-rows.tsx: the same type, underline, glyph sizes), then shot. Nothing was saved.
+   Frame and tokens: prototypes/batch3_20261002.html. */
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--red:#e5484d}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff}
+*{box-sizing:border-box}
+html{overflow-x:clip;scroll-padding-top:64px}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
+.ic{flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── prototype chrome (not the product), batch 3's bar ── */
+.proto{position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--hair)}
+.proto .t{font:10px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.vs{display:flex;flex:none;gap:2px;padding:3px;border:1px solid var(--hair);border-radius:10px;background:var(--paper);overflow-x:auto;max-width:100%;scrollbar-width:none}
+.vs button,.vs a{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.vs button:hover,.vs a:hover{color:var(--ink)}
+.vs button.on{background:var(--ink);color:var(--paper)}
+.proto .sp{flex:1}
+
+.page{max-width:1600px;margin:0 auto;padding:28px 16px 96px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;padding-bottom:18px;border-bottom:1px solid var(--hair)}
+.top h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.top .k{font:11px "Space Mono",monospace;color:var(--faint)}
+
+/* the rule, drawn once */
+.rule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 24px;margin:18px 0 6px}
+.rule div{font-size:13px;color:var(--muted)}
+.rule b{display:block;margin-bottom:4px;font:400 10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rule .demo{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;min-height:28px;color:var(--ink);font:13px/24px "Space Mono",monospace}
+.rule .ul{border-bottom:1px solid var(--ink)}
+.rule .ph{border-bottom:1px solid var(--ink);color:var(--faint);min-width:16ch}
+@media (max-width:760px){.rule{grid-template-columns:1fr}}
+
+section.item{padding:40px 0 6px;border-bottom:1px solid var(--hair)}
+section.item:last-of-type{border-bottom:0}
+.grp{margin:48px 0 0;font:11px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.grp i{font-style:normal;color:var(--faint);letter-spacing:.06em;text-transform:none;margin-left:10px}
+.ih{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:6px}
+.ih .n{font:11px "Space Mono",monospace;color:var(--faint);letter-spacing:.1em}
+.ih h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.005em}
+.ih .mini{margin-left:auto}
+.what{margin:0 0 16px;max-width:110ch;color:var(--muted);font-size:14px}
+.rec{margin:16px 0 28px;font:12px/1.6 "Space Mono",monospace;color:var(--muted)}
+.rec b{color:var(--ink);font-weight:700}
+
+.mini{display:flex;gap:4px}
+.mini button{padding:2px 8px;border-radius:6px;font:10px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.mini button:hover{color:var(--ink)}
+.mini button.on{color:var(--ink);background:var(--hover)}
+.mini button[disabled]{opacity:.35;cursor:default}
+.mini button[disabled]:hover{color:var(--faint)}
+
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+body[data-view=before] .pair,body[data-view=after] .pair{grid-template-columns:minmax(0,1fr)}
+body[data-view=before] figure.a,body[data-view=after] figure.b{display:none}
+@media (max-width:900px){.pair{grid-template-columns:minmax(0,1fr)}}
+figure{margin:0;min-width:0}
+.cap{display:flex;align-items:baseline;gap:8px;margin:0 0 8px;font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.cap b{font-weight:400;color:var(--ink)}
+.cap i{font-style:normal;letter-spacing:.06em;text-transform:none}
+.shot{display:block;max-width:100%;height:auto;border:1px solid var(--hair);border-radius:10px;background:#fff}
+.stack{display:grid;gap:14px}
+</style>
+</head>
+<body data-view="both" data-state="rest">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</defs></svg>
+
+<div class="proto">
+  <span class="t">Lists · mock</span>
+  <nav class="vs" aria-label="Jump to">
+    <a href="#ref">Email</a><a href="#i1">Profile</a><a href="#i2a">Lineup</a><a href="#i2b">Featuring</a><a href="#i3a">Quotes</a><a href="#i3b">Answers</a><a href="#i4a">Socials</a><a href="#i4b">Contact</a><a href="#i4c">Buttons</a><a href="#i4d">Tour dates</a><a href="#k1">Keep</a>
+  </nav>
+  <span class="sp"></span>
+  <div class="vs" id="viewSw" aria-label="View">
+    <button data-view="both" class="on">Side by side</button>
+    <button data-view="before">Before</button>
+    <button data-view="after">After</button>
+  </div>
+  <div class="vs" id="stateSw" aria-label="State">
+    <button data-state="rest" class="on">At rest</button>
+    <button data-state="clicked">Clicked</button>
+    <button data-state="adding">Adding</button>
+  </div>
+</div>
+
+<div class="page">
+
+<header class="top">
+  <h1>Lists, before and after</h1>
+  <span class="k">2026-10-02 · Skeen · localhost:3000 · after = drawn into the live page</span>
+</header>
+
+<!-- ───────── THE REFERENCE: Settings › Email, live ───────── -->
+<section class="item" id="ref">
+  <div class="ih"><span class="n">00</span><h2>The look · Settings › Email, live</h2></div>
+  <div class="rule">
+    <div><b>At rest</b><span class="demo">ross.guignon@everesttm.com <span>skeen@skeenmusic.com</span> <svg class="ic" width="16" height="16"><use href="#i-plus"/></svg></span>Plain text. A bare + ends the row.</div>
+    <div><b>Clicked</b><span class="demo"><span class="ul">skeen@skeenmusic.com</span><span><svg class="ic" width="14" height="14"><use href="#i-check"/></svg> <svg class="ic" width="14" height="14"><use href="#i-trash"/></svg></span></span>An underline, ✓ and trash. Enter saves, Escape cancels.</div>
+    <div><b>Adding</b><span class="demo"><span class="ph">name@example.com</span><span><svg class="ic" width="16" height="16"><use href="#i-check"/></svg> <svg class="ic" width="16" height="16"><use href="#i-close"/></svg></span></span>The + becomes a line where the item will sit.</div>
+  </div>
+  <div class="stack" style="margin-top:18px">
+    <figure><span class="cap"><b>At rest</b></span><img class="shot" src="lists_20261002/ref-rest.png" alt="Settings Email at rest: addresses as plain text, a plus at the end of each row"></figure>
+    <figure><span class="cap"><b>Clicked</b> <i>skeen@skeenmusic.com on Booking</i></span><img class="shot" src="lists_20261002/ref-clicked.png" alt="One address open as an underline field with a check and a trash"></figure>
+    <figure><span class="cap"><b>Adding</b> <i>the + on Demo</i></span><img class="shot" src="lists_20261002/ref-adding.png" alt="The plus open as an underline field with a check and a cross"></figure>
+  </div>
+  <p class="rec">The + is ink at rest and blue on hover, as the live page draws it today.</p>
+</section>
+
+<p class="grp">Convert<i>before | after, Skeen's real data</i></p>
+
+<section class="item" id="i1" data-k="1-profile" data-before="rest" data-after="rest clicked adding">
+  <div class="ih"><span class="n">01</span><h2>Profile › Genre, Other names</h2></div>
+  <p class="what">The chips and the dashed + go. Each genre is plain text in the value column, in the Name row's type. Click one to edit or delete it; the + ends the row.</p>
+  <p class="rec">recommend: <b>convert</b> · it then reads like the Name and Type rows above it. One watch: “Tech House” is told apart from “House” only by the 16px gap.</p>
+</section>
+
+<section class="item" id="i2a" data-k="2a-lineup" data-before="rest clicked" data-after="rest clicked adding">
+  <div class="ih"><span class="n">02</span><h2>Tour › a date's Lineup</h2></div>
+  <p class="what">The chip and the dialog over the card go. Click Jigitz: its name and website open in place as two lines, with ✓ and trash. The + opens the same two lines.</p>
+  <p class="rec">recommend: <b>convert</b> · a dialog on top of a modal was the heaviest part of this row. The website is still one click away.</p>
+</section>
+
+<section class="item" id="i2b" data-k="2b-featuring" data-before="rest" data-after="rest clicked adding">
+  <div class="ih"><span class="n">03</span><h2>Music › a release's Featuring</h2></div>
+  <p class="what">Same as Lineup with one field: names as text, click one to rename or delete it, the + adds a name.</p>
+  <p class="rec">recommend: <b>convert, with Lineup</b> · both use the same chip-and-dialog pattern today (featured-chips.tsx, support-acts.tsx).</p>
+</section>
+
+<section class="item" id="i3a" data-k="3a-quotes" data-before="rest" data-after="rest adding">
+  <div class="ih"><span class="n">04</span><h2>Press kit › Quotes</h2></div>
+  <p class="what">“Add quote” becomes a bare +. Adding opens Who, What and Link as lines with ✓ and ×. A saved quote reads as text and opens on click, with its trash.</p>
+  <p class="rec">recommend: <b>convert</b> · Skeen has no quotes yet, so there is no Clicked shot. A saved quote would open the way an Answer does.</p>
+</section>
+
+<section class="item" id="i3b" data-k="3b-answers" data-before="rest clicked" data-after="rest clicked adding">
+  <div class="ih"><span class="n">05</span><h2>SEO › Answers</h2></div>
+  <p class="what">Already plain text at rest. The hover pencil goes: click the answer itself. ✓ sits beside the field, not in the end column. “Add question” becomes a bare +.</p>
+  <p class="rec">recommend: <b>convert</b> · the smallest change in this set. The “comes from” rows stay links.</p>
+</section>
+
+<section class="item" id="i4a" data-k="4a-socials" data-before="rest clicked" data-after="rest clicked adding">
+  <div class="ih"><span class="n">06</span><h2>Site editor › Socials</h2></div>
+  <p class="what">Rows are already text, with × on hover today. Click X: its handle opens as a line with ✓ and trash (trash = off the site, the connection stays). “Add button” becomes a bare +. It still opens the picker.</p>
+  <p class="rec">recommend: <b>convert, lightly</b> · the handle edits the same link Connections does. Adding stays the picker, because socials come from Connections. Skeen has none left to add.</p>
+</section>
+
+<section class="item" id="i4b" data-k="4b-contact" data-before="rest clicked" data-after="rest clicked adding">
+  <div class="ih"><span class="n">07</span><h2>Site editor › Contact</h2></div>
+  <p class="what">The tinted boxes, the ON SITE pill and the REMOVE word go. Click a contact: its label and address open as lines with ✓ and trash. A + ends the list.</p>
+  <p class="rec">recommend: <b>convert</b> · open question: the on/off-site toggle has no place left. The list is on-site only, so trash may be enough. The + is new: today Contact can only bring back one taken off the site.</p>
+</section>
+
+<section class="item" id="i4c" data-k="4c-buttons" data-before="rest clicked" data-after="rest clicked">
+  <div class="ih"><span class="n">08</span><h2>Site editor › Buttons</h2></div>
+  <p class="what">Click the address: it opens as a line with ✓. No trash and no +: the site declares these buttons, and an empty address means no link.</p>
+  <p class="rec">recommend: <b>convert</b> · not a list you add to, but it should open the same way as its neighbours.</p>
+</section>
+
+<section class="item" id="i4d" data-k="4d-tour" data-before="rest clicked adding" data-after="rest clicked adding">
+  <div class="ih"><span class="n">09</span><h2>Site editor › Tour dates</h2></div>
+  <p class="what">Cards, ON SITE pills and the standing trash go, so venue names stop cutting off. Click a date: the venue opens with ✓ and trash (= off the site). “Add date” becomes a bare + at the end, still going to the Tour page.</p>
+  <p class="rec">recommend: <b>convert the look now</b> · decide whether the venue should be editable here (today it is not). Deleting a date stays on the Tour page.</p>
+</section>
+
+<p class="grp" id="k1">Keep<i>the audit's two</i></p>
+
+<section class="item" id="i5a" data-k="6a-brand" data-before="rest clicked" data-after="rest clicked">
+  <div class="ih"><span class="n">10</span><h2>Brand › logo, colour and font rows</h2></div>
+  <p class="what">Only one change: the trash hides until its row is hovered. Clicked = the Cream row hovered.</p>
+  <p class="rec">recommend: <b>don't convert</b> · each row holds a picture, a swatch or a font, not a line of text, so there is nothing to type into.</p>
+</section>
+
+<section class="item" id="i5b">
+  <div class="ih"><span class="n">11</span><h2>Assets › Photos grid</h2></div>
+  <p class="what">As is.</p>
+  <figure><span class="cap"><b>Today = after</b></span><img class="shot" src="lists_20261002/6b-photos.png" alt="The photos grid, nine photos"></figure>
+  <p class="rec">recommend: <b>don't convert</b> · photos are dropped and picked, not typed, and each one's actions already show only on hover.</p>
+</section>
+
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s)
+const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+const STATES = ['rest', 'clicked', 'adding']
+const LABEL = { rest: 'At rest', clicked: 'Clicked', adding: 'Adding' }
+const DIR = 'lists_20261002/'
+
+/* One figure pair per item, from data-k + the states each side has. */
+$$('section.item[data-k]').forEach((sec) => {
+  const k = sec.dataset.k
+  const has = { b: sec.dataset.before.split(' '), a: sec.dataset.after.split(' ') }
+  const mini = document.createElement('div')
+  mini.className = 'mini'
+  mini.innerHTML = STATES.map((s) => `<button data-s="${s}" ${has.a.includes(s) || has.b.includes(s) ? '' : 'disabled'}>${LABEL[s]}</button>`).join('')
+  $('.ih', sec).append(mini)
+  const pair = document.createElement('div')
+  pair.className = 'pair'
+  pair.innerHTML = `<figure class="b"><span class="cap"><b>Before</b><span data-cap></span></span><img class="shot" alt=""></figure>
+    <figure class="a"><span class="cap"><b>After</b><span data-cap></span></span><img class="shot" alt=""></figure>`
+  $('.what', sec).after(pair)
+  sec._show = (s) => {
+    for (const side of ['b', 'a']) {
+      const ok = has[side].includes(s)
+      const use = ok ? s : 'rest'
+      const fig = $('figure.' + side, sec)
+      const name = side === 'b' ? (use === 'rest' ? `${k}-before` : `${k}-before-${use}`) : `${k}-${use}`
+      $('img', fig).src = DIR + name + '.png'
+      $('img', fig).alt = `${side === 'b' ? 'Today' : 'Proposed'}: ${sec.querySelector('h2').textContent}, ${LABEL[use].toLowerCase()}`
+      $('[data-cap]', fig).innerHTML = ` · ${LABEL[use].toLowerCase()}${ok ? '' : ` <i>· no ${s === 'clicked' ? 'click' : 'add'} state ${side === 'b' ? 'shot' : 'here'}</i>`}`
+    }
+    $$('.mini button', sec).forEach((b) => b.classList.toggle('on', b.dataset.s === s))
+  }
+  mini.addEventListener('click', (e) => { const b = e.target.closest('button[data-s]'); if (b && !b.disabled) sec._show(b.dataset.s) })
+  sec._show('rest')
+})
+
+function setState(s) {
+  document.body.dataset.state = s
+  $$('#stateSw button').forEach((b) => b.classList.toggle('on', b.dataset.state === s))
+  $$('section.item[data-k]').forEach((sec) => sec._show(s))
+}
+$$('#stateSw button').forEach((b) => b.addEventListener('click', () => setState(b.dataset.state)))
+$$('#viewSw button').forEach((b) => b.addEventListener('click', () => {
+  document.body.dataset.view = b.dataset.view
+  $$('#viewSw button').forEach((x) => x.classList.toggle('on', x === b))
+}))
+</script>
+</body>
+</html>
