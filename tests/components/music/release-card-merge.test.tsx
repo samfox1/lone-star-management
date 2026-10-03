@@ -100,7 +100,7 @@ describe('ReleaseCard tracklist merge', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
 
     // The modal names the row's song as the one that disappears…
-    expect(screen.getByText('Merge song')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Merge song' })).toBeInTheDocument()
     expect(screen.getByText('Beta', { selector: 'span' })).toBeInTheDocument()
     // …and the keeper selector offers its twin and nothing else (the placeholder aside).
     const select = screen.getByLabelText(/Keep this song/i)

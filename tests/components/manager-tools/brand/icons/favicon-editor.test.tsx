@@ -120,11 +120,12 @@ describe('IconEditor — drawing', () => {
 })
 
 describe('IconEditor — the modal (Sam, 2026-09-23)', () => {
-  it('the header is the name and "edit" — no thumbnail', async () => {
+  it('has no header — the Tab icon row already said what it is — and keeps its name', async () => {
+    // Sam, 2026-10-02: "Remove it if its not needed".
     await renderEditor()
-    const header = screen.getByRole('dialog', { name: 'Tab icon' }).querySelector('header')!
-    expect(header.textContent).toBe('Tab iconedit')
-    expect(header.querySelector('img, canvas')).toBeNull()
+    const dialog = screen.getByRole('dialog', { name: 'Tab icon' })
+    expect(dialog.querySelector('header')).toBeNull()
+    expect(within(dialog).queryByRole('heading')).toBeNull()
   })
 
   it('Reset sits in the footer, immediately LEFT of Save — not in the controls column', async () => {

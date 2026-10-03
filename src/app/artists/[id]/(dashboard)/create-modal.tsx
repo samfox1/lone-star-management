@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, KLabel, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { UploadError } from './file-drop-field'
@@ -151,8 +151,9 @@ export function CreateModal({
   auto,
   upload,
 }: {
-  /** Mono eyebrow label above the title, e.g. "Tour date" / "Video" / "Product". */
+  /** The thing's noun, for the toast ("Product added"). */
   kind: string
+  /** The dialog's accessible name ("Add product"). Not shown: the Add button said it. */
   title: string
   fields: AddField[]
   preview: (values: Record<string, string>) => ReactNode
@@ -255,12 +256,15 @@ export function CreateModal({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={title}
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
           <div className={modalCardClass}>
-            <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
-              {step !== 'choose' && hasChoice && (
+            {/* No title (Sam, 2026-10-02): the Add button already said what this is. Only
+                the way back stays, once a step past the first is open. */}
+            {step !== 'choose' && hasChoice && (
+              <div className="flex items-center">
                 <button
                   type="button"
                   onClick={() => {
@@ -273,16 +277,12 @@ export function CreateModal({
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>
-              )}
-              <div className="min-w-0">
-                <KLabel>{kind}</KLabel>
-                <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">{title}</h2>
               </div>
-            </div>
+            )}
 
             {/* Step 1 — pick a way in: Auto / Manual / Upload (whichever are wired) */}
             {step === 'choose' && hasChoice && (
-              <div className={cx('mt-4 grid gap-2.5', auto && upload ? 'grid-cols-3' : 'grid-cols-2')}>
+              <div className={cx('grid gap-2.5', auto && upload ? 'grid-cols-3' : 'grid-cols-2')}>
                 {auto && (
                   <button
                     type="button"

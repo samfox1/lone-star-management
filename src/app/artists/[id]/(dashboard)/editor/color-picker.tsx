@@ -43,23 +43,16 @@ const KEY_STEP = 0.02
  * enough room to aim in. Edits apply live through the same `onChange` as everything else,
  * so there is nothing to confirm — closing is the only action, by Escape, the backdrop, or
  * Save.
+ *
+ * No header (Sam, 2026-10-02: "Remove it if its not needed"): it opens from the colour's own
+ * swatch, under its own label, so a chip · name · hex line over the square said it twice.
  */
 function ColorModal({
   aria,
-  label,
-  value,
-  current,
-  linkedName,
   onClose,
   children,
 }: {
   aria: string
-  label: string
-  value: string
-  /** The colour as it stands, for the header chip. */
-  current: string
-  /** The Brand page colour the value is linked to, by name (a brand colour token). */
-  linkedName?: string
   onClose: () => void
   children: React.ReactNode
 }) {
@@ -81,17 +74,6 @@ function ColorModal({
           plain join, so a narrower `w-` alongside its `w-[560px]` loses on Tailwind's own
           rule order, not on the order written here. */}
       <div className="flex max-h-[88vh] w-[320px] max-w-full flex-col gap-3 overflow-auto rounded-2xl bg-paper p-5 shadow-2xl">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="h-6 w-6 flex-none rounded-md border border-hairline"
-            style={value ? { backgroundColor: current } : NO_COLOR_SWATCH}
-          />
-          <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.01em]">{label}</h2>
-          <span className="flex-none font-space text-[11px] text-ink-muted">
-            {linkedName ? `${linkedName} · ${value}` : value || 'None'}
-          </span>
-        </div>
         {children}
         <button
           type="button"
@@ -703,10 +685,6 @@ export function ColorPalette({
       {open && (
         <ColorModal
           aria={aria}
-          label={label}
-          value={value}
-          current={current}
-          linkedName={linked?.name}
           onClose={closeModal}
         >
           {mixer('h-44', 'mt-3')}

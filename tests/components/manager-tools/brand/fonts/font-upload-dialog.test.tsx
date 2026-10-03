@@ -60,7 +60,7 @@ const onClose = vi.fn()
 /** Render the dialog. `busy(true)` starts the file going up, `busy(false)` ends it — the
  *  hook's flag flipped and the same dialog re-rendered, its state kept. */
 const open = (props: Partial<Parameters<typeof FontUploadDialog>[0]> = {}) => {
-  const el = () => <FontUploadDialog artistId="a1" slot="primary" title="Primary" onClose={onClose} {...props} />
+  const el = () => <FontUploadDialog artistId="a1" slot="primary" onClose={onClose} {...props} />
   const view = render(el())
   const busy = (b: boolean) => {
     upload.busy = b
@@ -118,10 +118,11 @@ describe('FontUploadDialog — before the file', () => {
     expect(fileInput().accept).not.toContain('*')
   })
 
-  it('names the row the upload fills', () => {
-    // The upload IS the choice: the font lands in the row the dialog was opened from.
-    open({ slot: 'custom_1', title: 'Gig posters' })
-    expect(within(dialog()).getByText('Gig posters')).toBeInTheDocument()
+  it('has no title, and keeps its name for screen readers', () => {
+    // Sam, 2026-10-02: no modal header where the row that opened it already said what it is.
+    open({ slot: 'custom_1' })
+    expect(within(dialog()).queryByRole('heading')).toBeNull()
+    expect(dialog()).toBeInTheDocument()
   })
 
   it('names the licence responsibility', () => {
@@ -219,7 +220,7 @@ describe('FontUploadDialog — the weight', () => {
 
 describe('FontUploadDialog — the row it fills', () => {
   it('an added row’s title and note ride along with the upload', async () => {
-    open({ slot: 'custom_2', title: 'Gig posters', meta: { label: 'Gig posters', note: 'For merch' } })
+    open({ slot: 'custom_2', meta: { label: 'Gig posters', note: 'For merch' } })
     name('Archivo')
     await drop(ttf(400))
     expect(mAdd).toHaveBeenCalledWith('a1', expect.objectContaining({ weight: 400 }), 'custom_2', { label: 'Gig posters', note: 'For merch' })
@@ -294,7 +295,7 @@ describe('FontUploadDialog — the row it fills', () => {
 
     it('an unsaved added row waiting on its upload is saved with it: slot, title and note', async () => {
       const onPlaced = vi.fn()
-      const view = open({ slot: 'custom_2', title: 'Gig posters', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
+      const view = open({ slot: 'custom_2', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
       name('Archivo')
       view.busy(true)
       fireEvent.click(within(dialog()).getByRole('button', { name: 'Uploading…' }))
@@ -378,7 +379,7 @@ describe('FontUploadDialog — the row it fills', () => {
 
     it('an unsaved added row closed mid-upload is not saved by the late font (no slot, no title, no note)', async () => {
       const onPlaced = vi.fn()
-      const view = open({ slot: 'custom_2', title: 'Gig posters', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
+      const view = open({ slot: 'custom_2', meta: { label: 'Gig posters', note: 'For merch' }, onPlaced })
       name('Archivo')
       fireEvent.click(within(dialog()).getByRole('button', { name: 'Close' }))
       view.unmount()

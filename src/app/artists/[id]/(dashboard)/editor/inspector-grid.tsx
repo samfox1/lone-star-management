@@ -3,10 +3,9 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
-import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
+import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
-import { EYEBROW } from './inspector-shared'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
 
 /**
@@ -340,7 +339,8 @@ export function LibraryPicker<T>({
   onPick,
   onCancel,
 }: {
-  /** What the manager is filling, e.g. "Landscape · desktop" — shown as the heading. */
+  /** What the manager is filling, e.g. "Landscape · desktop" — the dialog's accessible
+   *  name. Not shown (Sam, 2026-10-02): the slot that opened the picker already said it. */
   title: string
   candidates: T[]
   keyOf: (v: T) => string
@@ -367,18 +367,15 @@ export function LibraryPicker<T>({
       onClick={(e) => e.target === e.currentTarget && onCancel()}
     >
       <div className={cx(modalCardClass, 'no-scrollbar w-[720px] gap-4')}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className={EYEBROW}>Pick from your library</div>
-            <h2 className="mt-1 text-lg font-bold leading-tight tracking-[-0.01em]">{title}</h2>
-          </div>
+        {/* A picker opens straight to its choices (Sam, 2026-10-01/02): just the ×. */}
+        <div className="-mr-3 -mt-3 flex justify-end">
           <button
             type="button"
             onClick={onCancel}
             aria-label="Close"
-            className="flex-none rounded-md px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:text-ink"
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
           >
-            Close
+            <Icon name="close" size={16} />
           </button>
         </div>
         {candidates.length === 0 ? (

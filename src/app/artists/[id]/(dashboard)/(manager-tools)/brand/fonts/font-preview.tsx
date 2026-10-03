@@ -49,7 +49,7 @@ export function FontPreview({ title, font, onClose }: { title: string; font: Bra
   // Until the manager picks, the start follows the weights as they load.
   const weight = picked !== null && weights.includes(picked) ? picked : previewStartWeight(weights)
   return (
-    <BrandModal label={title} meta="preview" onClose={onClose}>
+    <BrandModal label={title} onClose={onClose}>
       <figure className="m-0 flex flex-col items-center gap-2">
         {/* The name ABOVE the stage (Sam, 2026-09-28); the weights sit under it. */}
         <figcaption className="font-space text-[12px] text-ink-muted">{font.label}</figcaption>

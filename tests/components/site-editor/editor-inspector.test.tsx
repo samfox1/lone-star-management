@@ -1071,7 +1071,7 @@ describe('EditorInspector — Videos component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
     // The picker opens, but v2 is NOT taken off — it only leaves when a replacement
     // is actually chosen, so closing the picker would keep it in place.
-    expect(screen.getByText(/Pick from your library/)).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: /Pick from your library/ })).toBeTruthy()
     expect(setOnSiteMock).not.toHaveBeenCalled()
   })
 

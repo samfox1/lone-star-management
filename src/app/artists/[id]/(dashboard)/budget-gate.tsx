@@ -149,8 +149,8 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
   if (pending.mode === 'gate') {
     const copy = pending.kind === 'image' && isHeic(pending.original) ? HEIC_GATE_COPY : GATE_COPY[pending.kind]
     return (
-      <CardModal open onClose={() => onSettle(null)} footer={null}>
-        <h2 className="font-space text-sm font-semibold uppercase tracking-wide">{copy.title}</h2>
+      // The title stays here: nothing the manager clicked asked this question, the upload did.
+      <CardModal open onClose={() => onSettle(null)} footer={null} title={copy.title}>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
           {pending.original.name} is {bytesLabel(pending.original.size)}. {copy.body}
         </p>
@@ -164,8 +164,7 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
   }
 
   return (
-    <CardModal open onClose={() => onSettle(null)} footer={null}>
-      <h2 className="font-space text-sm font-semibold uppercase tracking-wide">Make this file site-sized?</h2>
+    <CardModal open onClose={() => onSettle(null)} footer={null} title="Make this file site-sized?">
       {proposal ? (
         <>
           <p className="mt-2 font-space text-[13px] text-ink-muted">

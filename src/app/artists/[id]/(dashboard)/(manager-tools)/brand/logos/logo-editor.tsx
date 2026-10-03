@@ -249,7 +249,6 @@ export function LogoEditor({
   return (
     <BrandModal
       label={title}
-      meta="edit"
       fit
       onClose={onClose}
       board={

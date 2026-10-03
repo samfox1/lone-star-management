@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
@@ -67,16 +67,14 @@ export function DriveImportButton({ title, children }: { title: string; children
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={title}
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
           <div className={modalCardClass}>
-            <div className="border-b border-hairline pb-3.5">
-              <KLabel>Google Drive</KLabel>
-              <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">{title}</h2>
-            </div>
-            {/* The browser mounts on open — that's when it lists the folder. */}
-            <div className="mt-4">
+            {/* No title (Sam, 2026-10-02): the Drive button already said what this is.
+                The browser mounts on open — that's when it lists the folder. */}
+            <div>
               <DriveModalBusyContext.Provider value={setModalBusy}>{children}</DriveModalBusyContext.Provider>
             </div>
           </div>

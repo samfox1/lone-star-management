@@ -89,6 +89,8 @@ export function MergeSongModal({
     <CardModal
       open={open}
       onClose={onClose}
+      // No title: "Merge duplicate…" opened it, and the sentence below says what happens.
+      label="Merge song"
       footer={
         <div className="flex items-center justify-end gap-3">
           <button
@@ -110,7 +112,6 @@ export function MergeSongModal({
       }
     >
       <div className="space-y-5 font-space">
-        <h3 className="text-lg font-bold tracking-[-0.01em]">Merge song</h3>
         <p className="text-sm leading-relaxed text-ink-muted">
           <span className="font-semibold text-ink">{song.title}</span> will be deleted, and its
           platform links and details moved onto the song you keep.

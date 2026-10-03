@@ -58,12 +58,13 @@ describe('TourRow — click to edit', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('a click on the row opens the editor, headed by the venue', () => {
+  it('a click on the row opens the editor, headed by the date and venue as one plain line', () => {
     renderRow()
     expect(screen.queryByRole('dialog')).toBeNull()
     // The place text is not a button of its own — the ROW is what opens the editor.
     fireEvent.click(screen.getByText('Austin, TX'))
-    expect(within(screen.getByRole('dialog')).getByRole('heading', { name: 'Mohawk' })).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog', { name: 'Mohawk' })
+    expect(within(dialog).getByRole('heading', { name: 'Dec 1, 2026 · Mohawk' })).toBeInTheDocument()
   })
 
   it('the ring and the ticket link are their own controls — neither opens the editor', () => {

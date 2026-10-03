@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { MediaUploader } from '../media-uploader'
@@ -42,16 +42,14 @@ export function PhotoAddButton({ artistId }: { artistId: string }) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label="Add photos"
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           {/* Narrow, matching the Music/Video add modals (just a drop field here). */}
           <div className={`${modalCardClass} font-space !w-[440px]`}>
-            <div className="border-b border-hairline pb-3.5">
-              <KLabel>Photo</KLabel>
-              <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Add photos</h2>
-            </div>
-            <div className="mt-4">
+            {/* No title (Sam, 2026-10-02): the Add button already said what this is. */}
+            <div>
               <MediaUploader artistId={artistId} purpose="gallery_image" folder="gallery" accept="image/*" label="Drop images or click to upload" />
             </div>
           </div>

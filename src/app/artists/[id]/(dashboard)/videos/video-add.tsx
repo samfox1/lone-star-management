@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, KLabel, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
@@ -167,12 +167,15 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label="Add video"
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
           <div className={cx(modalCardClass, 'font-space', cardWidth)}>
-            <div className="flex items-center gap-2.5 border-b border-hairline pb-3.5">
-              {step !== 'choose' && (
+            {/* No title (Sam, 2026-10-02): the Add button already said what this is. Only
+                the way back stays, once a step past the first is open. */}
+            {step !== 'choose' && (
+              <div className="flex items-center">
                 <button
                   type="button"
                   onClick={() => {
@@ -184,15 +187,11 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>
-              )}
-              <div className="min-w-0">
-                <KLabel>Video</KLabel>
-                <h2 className="text-lg font-bold leading-tight tracking-[-0.01em]">Add video</h2>
               </div>
-            </div>
+            )}
 
             {step === 'choose' && (
-              <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 {tile('manual', 'upload', 'Upload a file', 'MP4, MOV or WebM')}
                 {tile('streaming', 'bolt', 'Paste a link', 'YouTube URL')}
               </div>

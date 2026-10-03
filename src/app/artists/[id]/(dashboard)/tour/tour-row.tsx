@@ -12,7 +12,7 @@ import { listRowClass } from '@/components/ui/ui'
 import { toast } from '../toast'
 import { SupportActs } from './support-acts'
 import { supportActsOf } from '@/lib/content'
-import { DateSquare, KvCells, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
+import { KvCells, KvField, KvRow } from '../modal-kit'
 import { US_STATES } from '@/lib/us-states'
 import { countryCode } from '@/lib/tour'
 
@@ -54,6 +54,17 @@ function dateBlock(date: string | null): { day: string; month: string } {
   if (!y || !m || !d) return { day: '--', month: '' }
   const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
   return { day: String(d), month: MONTHS[m - 1] ?? '' }
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** The modal's title: which show is open, as ONE plain line — "Oct 15, 2026 · Smartbar"
+ *  (Sam, 2026-10-02: headers are a few plain words, no date block, no meta line). An
+ *  undated show is its venue alone. */
+function tourModalTitle(tour: Pick<TourDate, 'date' | 'venue'>): string {
+  const [y, m, d] = (tour.date ?? '').split('-').map(Number)
+  const when = y && m && d && MONTH_NAMES[m - 1] ? `${MONTH_NAMES[m - 1]} ${d}, ${y}` : ''
+  return [when, tour.venue || 'Untitled venue'].filter(Boolean).join(' · ')
 }
 
 /**
@@ -162,27 +173,17 @@ export function TourRow({
       <CardModal
         open={open}
         onClose={() => setOpen(false)}
+        title={tourModalTitle(tour)}
         label={tour.venue || 'Untitled venue'}
         analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'tour_date', tour.id, artistId)}
         deleteLabel="Delete"
         deleteNoun="Date"
       >
-        {/* The modal grammar (modal-kit): the venue IS the title, the date block stands
-            where cover art would, the place is the meta. Every row saves its own field;
-            there is no Save, no "old show" toggle (a past date is an old show), and no
-            click numbers (the Analytics button in the corner goes to that page). */}
-        <ModalHeader
-          mark={<DateSquare date={tour.date} past={tour.past} />}
-          title={tour.venue || 'Untitled venue'}
-          meta={
-            <>
-              {place ? <span>{place}</span> : null}
-              {place && badge ? <MetaDot /> : null}
-              {badge ? <span>from {badge}</span> : null}
-            </>
-          }
-        />
+        {/* The modal grammar (modal-kit): the date and venue are the title, one plain line.
+            Every row saves its own field; there is no Save, no "old show" toggle (a past
+            date is an old show), and no click numbers (the Analytics button in the corner
+            goes to that page). */}
         <div className="mt-5">
           <KvField label="Date" value={tour.date ?? ''} type="date" mono onSave={saveField('date')} onError={fail} />
           {/* 24h HH:MM, the venue's local time. A cleared input posts '' → null. */}

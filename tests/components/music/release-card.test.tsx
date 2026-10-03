@@ -89,11 +89,10 @@ function editRow(scope: HTMLElement, label: string, next: string) {
 }
 
 describe('the release modal', () => {
-  it('is headed by the release, with type · year · songs as meta, and has the rows', () => {
+  it('is headed by the release name alone (no meta line, Sam 2026-10-02), and has the rows', () => {
     const dialog = openRelease()
     expect(within(dialog).getByRole('heading', { name: 'Night EP' })).toBeInTheDocument()
-    // The meta line sits right under the heading: type · year · song count.
-    expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^EP.*2026.*2 songs$/)
+    expect(within(dialog).queryByText(/2 songs/)).toBeNull()
     for (const label of ['Title', 'Type', 'Date', 'Spotify', 'Apple Music', 'SoundCloud', 'Deezer', 'Songs']) {
       expect(rowOf(dialog, label)).toBeInTheDocument()
     }
@@ -215,12 +214,12 @@ describe('a song inside the release', () => {
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
     expect(within(songDialog).getByRole('heading', { name: 'Beta' })).toBeInTheDocument()
     // The full song grammar, not a links-only sheet — minus Type: a song on a record is
-    // typed by the record, and the meta says which one ("Track from EP Night EP").
+    // typed by the record, and its "Released on" row says which one.
     for (const label of ['Title', 'Date', 'Spotify', 'Featuring']) expect(rowOf(songDialog, label)).toBeInTheDocument()
     // The player is in the footer now, not a row (Sam, 2026-09-12).
     expect(within(within(songDialog).getByRole('button', { name: 'Save' }).parentElement!).getByRole('button', { name: 'Add audio' })).toBeInTheDocument()
     expect(within(songDialog).queryByText('Type', { selector: 'span' })).toBeNull()
-    expect(songDialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
+    expect(within(rowOf(songDialog, 'Released on')).getByText('Night EP')).toBeInTheDocument()
     expect(within(songDialog).queryByText(/listens/i)).toBeNull()
   })
 
@@ -236,11 +235,12 @@ describe('a song inside the release', () => {
     expect(setReleaseLinkAction).not.toHaveBeenCalled()
   })
 
-  it('CRITICAL: the record’s name in the meta brings the album modal back', () => {
+  it('CRITICAL: the button at the end of the Released on row brings the album modal back', () => {
+    // It lived in the header's meta line until modal headers went plain (2026-10-02).
     const dialog = openRelease()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Beta' }))
     const songDialog = screen.getByRole('dialog', { name: 'Beta' })
-    fireEvent.click(within(songDialog).getByRole('button', { name: 'Night EP' }))
+    fireEvent.click(within(rowOf(songDialog, 'Released on')).getByRole('button', { name: 'Open Night EP' }))
     expect(screen.queryByRole('dialog', { name: 'Beta' })).toBeNull()
     expect(screen.getByRole('dialog', { name: 'Night EP' })).toBeInTheDocument()
   })

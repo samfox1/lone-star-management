@@ -27,6 +27,7 @@ function Lightbox({ photo, onClose }: { photo: PhotoItem; onClose: () => void })
     <div
       role="dialog"
       aria-modal="true"
+      aria-label="Photo"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >

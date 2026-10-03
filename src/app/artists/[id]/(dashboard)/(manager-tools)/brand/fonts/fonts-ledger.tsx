@@ -73,7 +73,7 @@ type Row = {
   unsaved: boolean
 }
 
-type Upload = { slot: FontSlot; title: string; meta?: FontSlotMeta }
+type Upload = { slot: FontSlot; meta?: FontSlotMeta }
 
 /**
  * BRAND → FONTS (BRAND_PAGE_PLAN.md; prototype variant A). One ledger row per font slot:
@@ -228,7 +228,7 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
 
   function openUpload(row: Row) {
     setMenuFor(null)
-    setUploading({ slot: row.slot, title: row.title, ...(row.unsaved ? { meta: metaOf(row) } : {}) })
+    setUploading({ slot: row.slot, ...(row.unsaved ? { meta: metaOf(row) } : {}) })
   }
 
   async function removeFont(font: BrandFont) {
@@ -319,7 +319,6 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
         <FontUploadDialog
           artistId={artistId}
           slot={uploading.slot}
-          title={uploading.title}
           meta={uploading.meta}
           onClose={() => setUploading(null)}
           onPlaced={() => patchPending(uploading.slot, { saved: true })}
@@ -327,7 +326,6 @@ export function FontsLedger({ artistId, data }: { artistId: string; data: BrandF
       ) : null}
       {googleFor ? (
         <GoogleFontPicker
-          title={googleFor.title}
           current={googleFor.font?.source === 'google' ? googleFor.font.googleFamily : null}
           onPick={(family) => void pickGoogle(googleFor, family)}
           onClose={() => setGoogleFor(null)}

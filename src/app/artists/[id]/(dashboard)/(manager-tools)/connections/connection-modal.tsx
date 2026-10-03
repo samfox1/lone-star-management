@@ -9,9 +9,8 @@ import { SHOPIFY_KEY, idFromProfileUrl, methodOf, profileLink, type ConnectionRo
 import { handleFromUrl, parseHandle } from '@/lib/connect-methods'
 import { saveSourceIdAction, updateContentAction } from '../../actions'
 import { CardModal } from '../../card-modal'
-import { HEADER_LOGO, KvField, KvRow, ModalHeader } from '../../modal-kit'
+import { KvField, KvRow } from '../../modal-kit'
 import { toast } from '../../toast'
-import { ConnectionMark } from './connection-mark'
 import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
 import { EventbriteTrip, ShopifyLink } from './connect-modal'
 import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
@@ -22,8 +21,9 @@ const FIELD_CLASS =
 
 /**
  * ONE CONNECTION, opened by clicking its row (Sam, 2026-09-13: "remove the 2 dots… You
- * click on the row and then you can edit it"). The modal kit's grammar: the mark stands
- * where cover art would, the name is the title, the state is the meta. Every row saves
+ * click on the row and then you can edit it"). The modal kit's grammar: the name is a plain
+ * title (no logo beside it, no state under it: the row it opened from shows both, Sam
+ * 2026-10-02). Every row saves
  * its own field; the footer's Remove takes the link off the site AND stops pulling from
  * the source, after asking.
  */
@@ -160,14 +160,11 @@ export function ConnectionModal({
     }
   }
 
-  const meta =
-    row.state === 'synced' ? 'synced' : row.state === 'failed' ? 'couldn’t connect' : row.state === 'connect' ? 'not synced' : null
-
   return (
     <CardModal
       open={open}
       onClose={onClose}
-      label={row.label}
+      title={row.label}
       deleteAction={async () => {
         const res = await disconnectConnectionAction(artistId, row.key, row.linkId)
         if (!res?.error) onChange(null)
@@ -177,11 +174,6 @@ export function ConnectionModal({
       deleteNoun="Connection"
       confirmText={`Remove ${row.label}? Its link comes off the site and nothing more is pulled from it.`}
     >
-      <ModalHeader
-        mark={<ConnectionMark def={row.def} size={HEADER_LOGO} />}
-        title={row.label}
-        meta={meta ? <span className={cx(row.state === 'failed' && 'text-accent-red')}>{meta}</span> : undefined}
-      />
       <div className="mt-5">
         {row.linkId && (
           <KvField

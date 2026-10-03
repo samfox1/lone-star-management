@@ -54,6 +54,12 @@ export const modalCardClass = 'relative flex max-h-[88vh] w-[640px] max-w-full f
 /** Wide, two-column variant (e.g. the release editor): fits its content without a
  *  vertical scroll, so both columns read at a glance. */
 export const modalCardWideClass = 'relative flex w-[880px] max-w-[94vw] flex-col rounded-2xl bg-paper p-7 shadow-2xl'
+/** A modal's title, when it has one (Sam, 2026-10-02): a few plain words at body size.
+ *  Never an icon, a mark or a picture beside it, never a meta line under it, never big.
+ *  Most modals have NO title: the click that opened them already said what they are. A
+ *  title is kept only to say WHICH item is open (a song's name, a show's date and venue)
+ *  or to ask a question nothing else asked (the upload gate). */
+export const modalTitleClass = 'text-[15px] font-semibold leading-snug tracking-[-0.01em] text-ink'
 
 /* ── Avatar ──────────────────────────────────────────────────────────────── */
 export function Avatar({

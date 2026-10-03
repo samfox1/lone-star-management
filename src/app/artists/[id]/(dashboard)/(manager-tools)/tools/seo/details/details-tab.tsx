@@ -10,7 +10,6 @@ import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction, setMediaAltAction } from '../../../../actions'
 import { CardModal } from '../../../../card-modal'
-import { HeaderIcon, ModalHeader } from '../../../../modal-kit'
 import { LedgerRow, LedgerSection } from '../../../_ui/ledger'
 import { RowIcon } from '../../../_ui/row-icon'
 import { FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
@@ -263,9 +262,9 @@ function AltModal({ artistId, artistName, photos, onChange, onClose }: { artistI
   const preset = recommendAlt({ artist: artistName, caption: p.caption })
   return (
     // No footer: each photo's words save as they are typed, and ✕ closes (the modal kit's rule).
+    // No title either (Sam, 2026-10-02): the pencil that opened it already said what it is.
     <CardModal open onClose={onClose} label="Photo descriptions" footer={null}>
-      <ModalHeader mark={<HeaderIcon name="photo" />} title="Photo descriptions" meta="Google Images" />
-      <div className="mt-5 flex flex-col gap-3">
+      <div className="mt-2 flex flex-col gap-3">
         <div className="flex h-[340px] items-center justify-center overflow-hidden rounded-xl bg-surface">
           <img key={p.id} src={p.url} alt="" className="max-h-full max-w-full object-contain" />
         </div>

@@ -584,7 +584,7 @@ describe('FontsLedger — a late upload (review 2, 2026-09-24)', () => {
     // …open B on another row…
     const menuB = openMenu('Secondary')
     await act(async () => fireEvent.click(within(menuB).getByRole('menuitem', { name: 'Upload a font…' })))
-    expect(within(screen.getByRole('dialog')).getByText('Secondary')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Upload a font' })).toBeInTheDocument()
     // …and A lands.
     await act(async () => optsA.onSuccess?.())
     expect(screen.queryByRole('dialog'), 'A closed B').not.toBeNull()

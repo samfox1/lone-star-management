@@ -86,8 +86,7 @@ describe('PublishRiser', () => {
     expect(lastProps.onPublish).toBe(onPublish)
     expect(lastProps.noun).toBe('brand')
 
-    const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText('Publish to the site')).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: 'Publish to the site' })
     fireEvent.change(within(dialog).getByPlaceholderText('Your password'), { target: { value: 's3cret' } })
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' })))
     expect(onPublish).toHaveBeenCalledTimes(1)

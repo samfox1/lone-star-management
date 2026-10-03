@@ -94,7 +94,7 @@ describe('BrandModal', () => {
   const open = (props: Partial<Parameters<typeof BrandModal>[0]> = {}) => {
     const onClose = vi.fn()
     render(
-      <BrandModal label="Primary logo" meta="edit" onClose={onClose} board={<div>BOARD</div>} {...props}>
+      <BrandModal label="Primary logo" onClose={onClose} board={<div>BOARD</div>} {...props}>
         <button type="button">Upload new</button>
       </BrandModal>,
     )
@@ -116,10 +116,14 @@ describe('BrandModal', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('header: the thing\'s name and a meta line', () => {
+  it('header: the thing\'s name in plain words; `untitled` drops it and keeps the dialog\'s name', () => {
+    // Sam, 2026-10-02: a few words, no icons, no meta line — or none at all.
     const { dialog } = open()
     expect(within(dialog).getByRole('heading', { name: 'Primary logo' })).toBeTruthy()
-    expect(within(dialog).getByText('edit')).toBeTruthy()
+    expect(dialog.querySelector('header')!.children).toHaveLength(1)
+    cleanup()
+    const { dialog: bare } = open({ untitled: true })
+    expect(within(bare).queryByRole('heading')).toBeNull()
   })
 
   it('CRITICAL: a fixed shape — capped at the viewport minus 32px, ONLY the middle scrolls', () => {

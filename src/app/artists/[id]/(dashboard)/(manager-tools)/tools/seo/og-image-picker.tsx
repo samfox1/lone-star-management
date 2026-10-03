@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { OG_BACKGROUNDS, OG_CARD_HEIGHT, OG_CARD_WIDTH, drawOgCard, ogBackgroundHex } from '@/lib/manager-tools/seo/og-card'
 import { CardModal } from '../../../card-modal'
-import { HeaderIcon, KvLabel, MetaDot, ModalHeader, SelectMenu } from '../../../modal-kit'
+import { KvLabel, SelectMenu } from '../../../modal-kit'
 import { BrandSwatchProvider, ColorPalette, type NamedSwatch } from '../../../editor/color-picker'
 import { saveOgCardAction } from './actions'
 import { RowIcon } from '../../_ui/row-icon'
@@ -128,24 +128,11 @@ export function ShareImageModal({
     // make it bigger"): the picture on the left at the shape it's shared at, the two choices
     // beside it. Fits a 1280 × 800 laptop with room to spare.
     <CardModal open wide onClose={onClose} label="Preview picture" footer={footer}>
-      <ModalHeader
-        mark={<HeaderIcon name="photo" />}
-        title="Preview picture"
-        meta={
-          <>
-            {`${OG_CARD_WIDTH} × ${OG_CARD_HEIGHT}`}
-            <MetaDot />
-            iMessage
-            <MetaDot />X<MetaDot />
-            Instagram
-          </>
-        }
-      />
       {sources.length === 0 ? (
         // Leads with the absence: a reader with no image needs to know that first.
-        <p className="mt-5 text-[14px] text-ink-muted">No logo or main photo yet. Add one on the Brand page.</p>
+        <p className="mt-2 text-[14px] text-ink-muted">No logo or main photo yet. Add one on the Brand page.</p>
       ) : (
-        <div className="mt-5 grid grid-cols-1 items-start gap-6 min-[760px]:grid-cols-[minmax(0,1fr)_240px]">
+        <div className="mt-2 grid grid-cols-1 items-start gap-6 min-[760px]:grid-cols-[minmax(0,1fr)_240px]">
           {/* Shown at the shape it will be shared at: the background IS the point, so the
               preview must not borrow the page's. */}
           <canvas

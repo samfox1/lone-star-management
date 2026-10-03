@@ -155,8 +155,9 @@ export function TrackAudio({
       {/* The plus opens the drop zone in its OWN portaled modal, so the player never resizes.
           Gated on hasFile so it can never open for a track that already has audio. */}
       <AudioUploadModal open={uploadOpen && !hasFile} onClose={() => setUploadOpen(false)}>
-        <h3 className="text-lg font-bold tracking-[-0.01em]">Add audio</h3>
-        <div className="mt-4">
+        {/* No title (Sam, 2026-10-02): the + that opened it already said "Add audio". The
+            margin keeps the drop zone clear of the × in the corner. */}
+        <div className="mt-6">
           {/* No gate kind: track audio is not something the site's asset budgets
               describe. AUDIO_UPLOAD_RULES' 30 MB cap is still the guard. */}
           <UploadField

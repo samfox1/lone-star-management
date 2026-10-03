@@ -118,30 +118,28 @@ export function EditorPublish({ artistId }: { artistId: string }) {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={done ? 'Published' : 'Review & publish'}
           className={modalOverlayClass}
           onClick={(e) => e.target === e.currentTarget && close()}
         >
+          {/* No title (Sam, 2026-10-02): the Publish button already said what this is. */}
           <form onSubmit={submit} className={modalCardClass}>
-            <h2 className="text-lg font-bold tracking-[-0.01em]">
-              {done ? 'Published' : 'Review & publish'}
-            </h2>
-
             {!diff ? (
-              <p className="mt-1 font-space text-xs text-ink-muted">Checking for changes…</p>
+              <p className="font-space text-xs text-ink-muted">Checking for changes…</p>
             ) : done ? (
-              <p className="mt-2 flex items-center gap-2 text-sm text-ink-muted">
+              <p className="flex items-center gap-2 text-sm text-ink-muted">
                 <span className="text-accent">
                   <Icon name="check" size={18} />
                 </span>
                 Your changes are live.
               </p>
             ) : total === 0 ? (
-              <p className="mt-1 font-space text-xs text-ink-muted">
+              <p className="font-space text-xs text-ink-muted">
                 You&apos;re all caught up — nothing to publish.
               </p>
             ) : (
               <>
-                <p className="mt-1 font-space text-xs text-ink-muted">
+                <p className="font-space text-xs text-ink-muted">
                   {total} change{total === 1 ? '' : 's'} since your last publish.
                 </p>
 

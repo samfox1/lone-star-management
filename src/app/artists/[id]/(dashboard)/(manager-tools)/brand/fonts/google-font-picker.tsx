@@ -33,13 +33,10 @@ const GOOGLE_LIST_MAX = 60
  * ledger's "not a change".
  */
 export function GoogleFontPicker({
-  title,
   current,
   onPick,
   onClose,
 }: {
-  /** The row it was opened for — the dialog's title. */
-  title: string
   /** The Google family the row holds now, if any. */
   current: string | null
   onPick: (family: string) => void
@@ -77,7 +74,7 @@ export function GoogleFontPicker({
   }
 
   return (
-    <BrandModal label="Google Fonts" meta={title} onClose={onClose}>
+    <BrandModal label="Google Fonts" untitled onClose={onClose}>
       {href ? <link rel="stylesheet" href={href} /> : null}
       <input
         ref={field}

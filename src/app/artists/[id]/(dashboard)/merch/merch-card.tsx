@@ -5,7 +5,7 @@ import { safeHref } from '@/lib/url'
 import { GridCard } from '../grid-card'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
-import { HeaderIcon, KvField, MetaDot, ModalHeader } from '../modal-kit'
+import { KvField } from '../modal-kit'
 import { deleteContentAction, updateContentAction } from '../actions'
 import { toast } from '../toast'
 
@@ -41,7 +41,7 @@ const STOCK_OPTIONS = [
 
 /**
  * A merch item as a cover-grid tile; opens its modal — built on modal-kit (prototype G,
- * Sam, 2026-09-11): image · title · price / source / stock meta, then rows that save
+ * Sam, 2026-09-11): the product's name as a plain title (2026-10-02), then rows that save
  * their own field (Title, Price, Link, Image, Stock), Delete / Done in the footer.
  *
  * READ-ONLY WHERE SHOPIFY OWNS IT — the rule the editor's merch panel got on 2026-09-09
@@ -79,13 +79,13 @@ export function MerchCard({
     return updateContentAction('merch', item.id, artistId, fd)
   }
 
-  const image = (size: 'tile' | 'square') =>
+  const image = () =>
     item.image_url ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={item.image_url} alt="" className="h-full w-full object-cover" />
     ) : (
       <div className="flex h-full w-full items-center justify-center rounded-xl bg-surface text-ink-faint">
-        <Icon name="merch" size={size === 'tile' ? 30 : 22} />
+        <Icon name="merch" size={30} />
       </div>
     )
 
@@ -98,11 +98,11 @@ export function MerchCard({
       onToggleSelect={onToggleSelect}
       onSite={item.published_on_site ?? item.on_site}
       selectLabel={item.title}
-      label={item.title}
+      title={item.title}
       analyticsHref={`/artists/${artistId}`}
       tile={
         <>
-          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface text-ink-faint">{image('tile')}</div>
+          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface text-ink-faint">{image()}</div>
           <div className="mt-2.5 truncate text-sm font-semibold group-hover:text-accent">{item.title}</div>
           <div className="mt-0.5 flex items-center gap-2">
             {price && <span className="font-space text-[13px] font-bold tracking-[-0.01em]">{price}</span>}
@@ -112,20 +112,6 @@ export function MerchCard({
         </>
       }
     >
-      <ModalHeader
-        art={item.image_url ? image('square') : null}
-        mark={<HeaderIcon name="merch" />}
-        title={item.title}
-        meta={
-          <>
-            {price ? <b className="text-[14px] text-ink">{price}</b> : null}
-            {price && badge ? <MetaDot /> : null}
-            {badge ? <span className="capitalize">{badge}</span> : null}
-            {price || badge ? <MetaDot /> : null}
-            <span>{inStock ? 'In stock' : 'Sold out'}</span>
-          </>
-        }
-      />
       <div className="mt-5">
         <KvField label="Title" value={item.title} readOnly={fromShopify} onSave={saveField('title')} onError={fail} />
         <KvField label="Price" value={item.price === null ? '' : String(item.price)} mono readOnly={fromShopify} onSave={saveField('price')} onError={fail} />

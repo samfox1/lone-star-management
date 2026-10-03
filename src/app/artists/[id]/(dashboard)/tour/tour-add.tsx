@@ -7,7 +7,7 @@ import type { SupportAct } from '@/lib/content'
 import { US_STATES } from '@/lib/us-states'
 import { CardModal } from '../card-modal'
 import { AddTrigger } from '../create-modal'
-import { DateSquare, KvRow, ModalHeader, SelectMenu } from '../modal-kit'
+import { KvRow, SelectMenu } from '../modal-kit'
 import { addContentAction, setSupportActsAction } from '../actions'
 import { toast } from '../toast'
 import { SupportActs } from './support-acts'
@@ -21,8 +21,8 @@ const rowInput = 'min-w-0 flex-1 bg-transparent text-[15px] outline-none placeho
 
 /**
  * The Tour "Add" button and its card (prototype G, Sam, 2026-09-11). The Add card IS
- * the edit card with its rows as inputs and one solid button: the header fills in as
- * you type. Manual only — per-date automation is the Bandsintown / Ticketmaster sync.
+ * the edit card with its rows as inputs and one solid button. No title: the Add button
+ * already said what this is (Sam, 2026-10-02). Manual only — per-date automation is the Bandsintown / Ticketmaster sync.
  *
  * No "old show" toggle: a date in the past is an old show by itself. Acts (with their
  * websites) can be added before the row exists; the names ride the create as `support`
@@ -73,8 +73,6 @@ export function TourAddButton({ artistId }: { artistId: string }) {
     }
   }
 
-  const place = [v.city, v.state || v.country].filter(Boolean).join(', ')
-
   return (
     <>
       <AddTrigger onClick={() => setOpen(true)} />
@@ -91,12 +89,7 @@ export function TourAddButton({ artistId }: { artistId: string }) {
           </div>
         }
       >
-        <ModalHeader
-          mark={<DateSquare date={v.date || null} />}
-          title={<span className={v.venue ? undefined : 'text-hairline'}>{v.venue || 'New date'}</span>}
-          meta={<span>{place || 'draft'}</span>}
-        />
-        <div className="mt-5">
+        <div className="mt-2">
           <KvRow label="Date">
             <input aria-label="Date" type="date" value={v.date} onChange={set('date')} className={`${rowInput} font-space text-[13px]`} />
           </KvRow>

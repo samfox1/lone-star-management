@@ -61,7 +61,6 @@ const DEFAULT_WEIGHT = '400'
 export function FontUploadDialog({
   artistId,
   slot,
-  title,
   meta,
   onClose,
   onPlaced,
@@ -69,8 +68,6 @@ export function FontUploadDialog({
   artistId: string
   /** The row it was opened from: the upload fills this slot. */
   slot: FontSlot
-  /** That row's title, under the dialog's. */
-  title: string
   /** An unsaved added row's title + note, saved with its font. */
   meta?: FontSlotMeta
   onClose: () => void
@@ -169,7 +166,7 @@ export function FontUploadDialog({
   }
 
   return (
-    <BrandModal label="Upload a font" meta={title} onClose={close} onSave={save} saveBusy={uploading && !asking ? 'Uploading…' : undefined}>
+    <BrandModal label="Upload a font" untitled onClose={close} onSave={save} saveBusy={uploading && !asking ? 'Uploading…' : undefined}>
       <label className="flex flex-col gap-1">
         <span className={EYEBROW}>Name</span>
         <input

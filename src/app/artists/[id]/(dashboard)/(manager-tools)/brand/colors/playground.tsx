@@ -55,8 +55,6 @@ export function ColorPlayground({ palette, startKey, onClose }: { palette: PlayC
   return (
     <BrandModal
       label={start.name}
-      meta="preview"
-      square={<div className="h-full w-full" style={{ backgroundColor: start.hex }} />}
       onClose={onClose}
       board={
         <div

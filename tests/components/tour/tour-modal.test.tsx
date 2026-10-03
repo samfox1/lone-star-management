@@ -55,10 +55,12 @@ afterEach(() => {
 })
 
 describe('tour date modal', () => {
-  it('is headed by the venue, with the place as meta — no "Edit date"', () => {
+  it('is headed by the date and venue as one plain line — no meta line, no "Edit date"', () => {
+    // Sam, 2026-10-02: a few plain words, no date block, no meta line.
     const dialog = openModal()
-    expect(within(dialog).getByRole('heading', { name: 'Scoot Inn' })).toBeInTheDocument()
-    expect(within(dialog).getByText(/Austin, TX/)).toBeInTheDocument()
+    expect(dialog).toHaveAccessibleName('Scoot Inn')
+    expect(within(dialog).getByRole('heading', { name: 'Dec 1, 2026 · Scoot Inn' })).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Austin, TX/)).toBeNull()
     expect(within(dialog).queryByText('Edit date')).toBeNull()
   })
 

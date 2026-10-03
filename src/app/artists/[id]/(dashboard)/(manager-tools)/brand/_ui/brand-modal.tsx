@@ -2,9 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { PortalModal } from '@/components/ui/portal-modal'
-import { buttonClass } from '@/components/ui/ui'
+import { buttonClass, modalTitleClass } from '@/components/ui/ui'
 import { cx } from '@/lib/cx'
-import { CAPS_META } from '../../_ui/styles'
 
 /** The card: a FIXED shape. At most the viewport minus 32px tall, never taller, so a
  *  long control column can never push Save off the screen. Only the middle scrolls. */
@@ -24,11 +23,16 @@ const SAVE = buttonClass('confirm', 'min-w-[88px] justify-center')
  * The footer button says SAVE, never Done (the site-wide rule). Controls inside save
  * themselves as they go, so Save closes unless `onSave` says otherwise — the name is
  * what the manager means by pressing it.
+ *
+ * THE TITLE (Sam, 2026-10-02: "Remove it if its not needed, or make it simple, a few words,
+ * no icons"): the thing's name in plain words — which logo, which colour, which font row —
+ * with no thumbnail beside it and no meta word after it. A picker or one-off window (Google
+ * Fonts, Upload a font, the tab icon) passes `untitled`: the row that opened it already
+ * said what it is. `label` stays the dialog's accessible name either way.
  */
 export function BrandModal({
   label,
-  meta,
-  square,
+  untitled = false,
   onClose,
   onSave,
   saveBusy,
@@ -39,12 +43,10 @@ export function BrandModal({
   controlsAlign = 'center',
   children,
 }: {
-  /** The thing's name: the dialog's accessible name and its title. */
+  /** The thing's name: the dialog's accessible name and (unless `untitled`) its title. */
   label: string
-  /** One mono word under the title ("edit", "preview"). */
-  meta?: string
-  /** A 36px thumbnail before the title. */
-  square?: ReactNode
+  /** No visible title: the opener already said what this is. The × keeps its corner. */
+  untitled?: boolean
   onClose: () => void
   /** What Save does. Default: close. */
   onSave?: () => void
@@ -74,12 +76,13 @@ export function BrandModal({
   )
   return (
     <PortalModal ariaLabel={label} onClose={onClose} cardClass={`${CARD} ${fit ? 'w-auto' : 'w-[760px]'}`}>
-      <header className="flex flex-none items-center gap-3 border-b border-hairline py-4 pl-5 pr-14">
-        {square ? <div className="h-9 w-9 flex-none overflow-hidden rounded-[10px] bg-surface">{square}</div> : null}
-        <h2 className="min-w-0 truncate text-[15px] font-bold">{label}</h2>
-        {meta ? <span className={cx(CAPS_META, 'flex-none text-ink-faint')}>{meta}</span> : null}
-      </header>
-      <div data-modal-body="" className="min-h-0 flex-1 overflow-auto p-5">
+      {untitled ? null : (
+        <header className="flex flex-none items-center border-b border-hairline py-4 pl-5 pr-14">
+          <h2 className={cx(modalTitleClass, 'min-w-0 truncate')}>{label}</h2>
+        </header>
+      )}
+      {/* Untitled, the body starts below the × (PortalModal's, 16px in from the corner). */}
+      <div data-modal-body="" className={cx('min-h-0 flex-1 overflow-auto p-5', untitled && 'pt-12')}>
         {board && fit ? (
           <div className="flex flex-col items-center gap-5">
             {board}

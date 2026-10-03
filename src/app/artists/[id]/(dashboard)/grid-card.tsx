@@ -28,6 +28,7 @@ export function GridCard({
   onToggleSelect,
   onSite,
   selectLabel,
+  title,
   label,
   analyticsHref,
 }: {
@@ -43,7 +44,9 @@ export function GridCard({
   onSite?: boolean
   /** Accessible name for the checkbox, e.g. the item title. */
   selectLabel?: string
-  /** The modal's accessible name (the item's title). */
+  /** The modal's plain title — the item's name (see CardModal). */
+  title?: string
+  /** The modal's accessible name, when it differs from the title. */
   label?: string
   /** The modal's Analytics button target (see CardModal). */
   analyticsHref?: string
@@ -77,6 +80,7 @@ export function GridCard({
         deleteAction={deleteAction}
         deleteLabel={deleteLabel}
         deleteNoun={deleteNoun}
+        title={title}
         label={label}
         analyticsHref={analyticsHref}
       >

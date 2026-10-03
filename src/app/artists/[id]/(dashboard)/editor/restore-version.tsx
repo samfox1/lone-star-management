@@ -152,9 +152,9 @@ function RestoreDialog({
         className="w-full max-w-sm rounded-xl border border-hairline bg-paper p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Restore version</h2>
+        {/* No title (Sam, 2026-10-02): "Restore version…" in the menu already said it. */}
         {nothingPublished ? (
-          <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">
+          <p className="text-[13px] leading-relaxed text-ink-muted">
             There is nothing published yet, so there is no earlier version to go back to.
           </p>
         ) : (
@@ -163,7 +163,7 @@ function RestoreDialog({
                 go back; songs, shows, products, photos, videos and links are never deleted,
                 only put back on or off the site. "Anything changed since then will be
                 lost" stopped being true when Revert/Restore learned that. */}
-            <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">Nothing in your library is deleted. The site goes back.</p>
+            <p className="text-[13px] leading-relaxed text-ink-muted">Nothing in your library is deleted. The site goes back.</p>
             <div role="radiogroup" aria-label="Version" className="mt-3 max-h-52 space-y-1 overflow-y-auto">
               {(moments ?? []).map((m, i) => (
                 <button

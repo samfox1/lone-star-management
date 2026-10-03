@@ -14,10 +14,10 @@ import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
 import { TextLimitHint } from '../../editor/inspector-shared'
 import { saveEditorFieldAction, saveSeoFieldAction } from '../../actions'
 import { CardModal } from '../../card-modal'
-import { HeaderIcon, KvRow, MetaDot, ModalHeader } from '../../modal-kit'
+import { KvRow } from '../../modal-kit'
 import { LedgerRow } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
-import { FOCUS_RING_OFFSET } from '../_ui/styles'
+import { FOCUS_RING_OFFSET, MONO_META } from '../_ui/styles'
 import { AreaField, EndSlot, LineField } from '../_ui/fields'
 import { FieldError } from '../_ui/field-error'
 import { clearHash, useOpenOnHash } from '../_ui/hash'
@@ -126,18 +126,7 @@ function BioModal({
   const placements: AboutPlacement[] = ABOUT_PLACEMENTS.filter((x) => x === 'hidden' || x === about.placement)
   return (
     <CardModal open onClose={onClose} label="Bio">
-      <ModalHeader
-        mark={<HeaderIcon name="text" />}
-        title="Bio"
-        meta={
-          <>
-            {`${words} of ${minWords} words`}
-            <MetaDot />
-            {`${n.toLocaleString('en-US')} characters`}
-          </>
-        }
-      />
-      <div className="mt-5">
+      <div className="mt-2">
         <AreaField
           label="Bio"
           value={bio}
@@ -149,6 +138,11 @@ function BioModal({
           }}
           className="max-h-[50vh] min-h-[180px] w-full overflow-auto"
         />
+        {/* The counts, while the bio is being written (Sam, 2026-09-29). They sat in the
+            header's meta line until modal headers went (2026-10-02): a hint under the box. */}
+        <div data-bio-counts="" className={cx('mt-2', MONO_META)}>
+          {`${words} of ${minWords} words · ${n.toLocaleString('en-US')} characters`}
+        </div>
         <TextLimitHint value={bio} max={TEXT_LIMITS.bio} />
         {bioSave.status === 'error' ? <FieldError>Couldn’t save the bio.</FieldError> : null}
       </div>

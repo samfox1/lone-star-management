@@ -481,7 +481,7 @@ export function IconEditor({
   return (
     <BrandModal
       label={label}
-      meta="edit"
+      untitled
       onClose={onClose}
       // Save closes; anything waiting is flushed as it closes. It also saves the icon AS IT
       // STANDS when that is not saved yet — an icon with no PNG, opened and judged fine.

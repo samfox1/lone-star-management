@@ -281,6 +281,9 @@ export function RosterView({
       {/* request modal */}
       {open && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request an artist"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-7"
           onClick={(e) => e.target === e.currentTarget && !busy && setOpen(false)}
         >
@@ -288,8 +291,8 @@ export function RosterView({
             onSubmit={submit}
             className="max-h-[88vh] w-[460px] max-w-full overflow-auto rounded-2xl bg-paper p-6 shadow-2xl"
           >
-            <h3 className="text-lg font-bold tracking-[-0.01em]">Request an artist</h3>
-            <p className="mb-4 mt-2 font-space text-xs leading-relaxed text-ink-muted">
+            {/* No title (Sam, 2026-10-02): the Request artist button already said it. */}
+            <p className="mb-4 font-space text-xs leading-relaxed text-ink-muted">
               Tell us about the artist. We&rsquo;ll build their site and add them to your roster.
             </p>
             <div className="space-y-3.5">

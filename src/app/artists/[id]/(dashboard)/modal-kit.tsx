@@ -1,96 +1,32 @@
 'use client'
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Icon, type IconName } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icons'
 import { EDIT_GLYPH } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { CAPS_LABEL, EDIT_TARGET, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
 
 /**
- * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11):
+ * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11; its header
+ * rewritten 2026-10-02):
  *
- *   header   a bare MARK (an icon, a logo, a date) or the thing's own picture (cover art,
- *            a poster) · the thing's NAME as the title · one mono meta line under it.
- *            No box around a mark (Sam, 2026-09-29: "I dont like things bordered in if they
- *            dont have to be" — "have it bigger standing alone").
+ *   title    usually NONE: the click that opened the modal already said what it is (Sam,
+ *            2026-10-02: "I dont like these type of headers in modals. Remove it if its not
+ *            needed, or make it simple, a few words, no icons"). Kept only to say WHICH item
+ *            is open — a song's name, a show's date and venue — as a few plain words on
+ *            CardModal's top bar (`title`, styled by `modalTitleClass`). Never an icon, a
+ *            mark, a logo or a picture beside it; never a meta line or subtitle under it;
+ *            never big type. The dialog keeps its accessible name either way (`label`).
  *   rows     `LABEL  value` — a value reads as text until clicked, then it is an input;
  *            blur / Enter saves THAT field alone, Escape puts the old value back;
  *            an empty value reads as "—", never a blank line
- *   footer   Delete left, Done right (CardModal owns it)
+ *   footer   Delete left, Save right (CardModal owns it)
  *
- * No section headings, no hairlines beside labels, no Save button: each row saves
+ * No section headings, no hairlines beside labels, no Save-to-write button: each row saves
  * itself. The song modal was the first to read this way and Sam asked for it everywhere.
  */
 
 type SaveResult = { error?: string } | void | undefined
-
-/** A bare header icon's size and line: bigger than a row icon, its stroke thinned so the line
- *  reads the same weight as the site's 20px icons (1.6 on a 24 grid ≈ 1.25 at 36px). */
-const HEADER_ICON = 36
-/** A filled logo (a platform's mark) reads smaller than a line icon of the same box. */
-export const HEADER_LOGO = 40
-
-/** An icon from the site's set, as a header mark: bare, at header size. */
-export function HeaderIcon({ name }: { name: IconName }) {
-  return <Icon name={name} size={HEADER_ICON} strokeWidth={1.25} />
-}
-
-/**
- * THE MODAL HEADER: mark · title · meta (Sam, 2026-09-29, replacing the boxed "square").
- *
- *   `art`   the thing's own PICTURE (a song's cover, a video's poster, a product photo): it IS
- *           the content, so it shows as itself, 56px, rounded, no frame. Wins over `mark`, so a
- *           caller passes both and the picture shows when there is one.
- *   `mark`  an ICON, a LOGO or a DATE, standing alone: no border, no background, no box. It
- *           sits in a fixed 48px slot so every title starts at the same place.
- */
-export function ModalHeader({ mark, art, title, meta }: { mark?: ReactNode; art?: ReactNode; title: ReactNode; meta?: ReactNode }) {
-  return (
-    <div className="flex items-center gap-4 pr-16">
-      {art ? (
-        <div data-header-art="" className="h-14 w-14 flex-none overflow-hidden rounded-xl">
-          {art}
-        </div>
-      ) : mark ? (
-        <div data-header-mark="" className="flex h-12 w-12 flex-none items-center justify-center text-ink">
-          {mark}
-        </div>
-      ) : null}
-      <div className="min-w-0 flex-1">
-        <h3 className="truncate text-[22px] font-bold leading-tight tracking-[-0.015em]">{title}</h3>
-        {meta ? <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-space text-xs text-ink-muted">{meta}</div> : null}
-      </div>
-    </div>
-  )
-}
-
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-
-/** The date that stands where cover art would: day over month, or "—" undated, BARE (no box,
- *  2026-09-29). A past show reads PAST instead — an old show is an old show by its date alone. */
-export function DateSquare({ date, past = false }: { date: string | null; past?: boolean }) {
-  const [y, m, d] = (date ?? '').split('-').map(Number)
-  const valid = Boolean(y && m && d)
-  return (
-    <div data-date-mark="" className="flex h-full w-full flex-col items-center justify-center">
-      {past ? (
-        <div className={cx(CAPS_LABEL, 'font-bold text-ink-faint')}>Past</div>
-      ) : valid ? (
-        <>
-          <div className="font-space text-[26px] font-bold leading-none tracking-[-0.03em]">{d}</div>
-          <div className={cx(CAPS_LABEL, 'mt-1 text-ink-faint')}>{MONTHS[m - 1]}</div>
-        </>
-      ) : (
-        <div className="font-space text-lg text-ink-faint">—</div>
-      )}
-    </div>
-  )
-}
-
-/** A mid-dot between meta items. */
-export function MetaDot() {
-  return <i aria-hidden className="inline-block h-[3px] w-[3px] rounded-full bg-ink-faint" />
-}
 
 /**
  * The mono uppercase label cell every dashboard row starts with — 100px, the width

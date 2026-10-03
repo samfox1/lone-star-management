@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { ICON_HOVER } from '@/components/ui/icon-hover'
-import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass } from '@/components/ui/ui'
+import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass, modalTitleClass } from '@/components/ui/ui'
 import { useConfirm } from './confirm-dialog'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from './toast'
@@ -19,9 +19,16 @@ type DeleteAction = () => Promise<{ error?: string } | void>
 /**
  * The one modal shell for the dashboard's cover-grid cards (tracks, releases,
  * merch, videos, tour). Owns the overlay, click-outside / Escape dismissal, the
- * dialog a11y roles, and the shared Delete / Done footer — so each card only
- * supplies its unique body. Delete is optional and confirms with a toast
- * ("{deleteNoun} deleted", or the error).
+ * dialog a11y roles, the top bar (an optional plain title · the corner icons · ×), and
+ * the shared Delete / Save footer — so each card only supplies its unique body. Delete
+ * is optional and confirms with a toast ("{deleteNoun} deleted", or the error).
+ *
+ * THE TITLE (Sam, 2026-10-02: "I dont like these type of headers in modals. Remove it if
+ * its not needed, or make it simple, a few words, no icons"): most modals pass none — the
+ * click that opened them already said what they are — and still pass `label`, so the
+ * dialog keeps its accessible name. A title is kept only to say WHICH item is open (a
+ * song's name, a show's date and venue). It is plain words in `modalTitleClass`: no icon,
+ * mark or picture beside it, no meta line under it.
  */
 export function CardModal({
   open,
@@ -34,6 +41,7 @@ export function CardModal({
   footer,
   footerLeft,
   footerFill,
+  title,
   label,
   analyticsHref,
   corner,
@@ -58,7 +66,11 @@ export function CardModal({
    *  player, which wants the width (Sam, 2026-09-12) and belongs with the actions rather
    *  than boxed into a row's value column. */
   footerFill?: ReactNode
-  /** Accessible name for the dialog (the thing's name, or "Add date"). */
+  /** The plain title on the top bar — which item is open. Omit it when the opener already
+   *  said what this is (most modals). Never an icon, a picture or a meta line. */
+  title?: ReactNode
+  /** Accessible name for the dialog (the thing's name, or "Add date"). Defaults to the
+   *  title when that is a string; a modal with no title must pass one. */
   label?: string
   /** Where the analytics button goes. The modal shows no numbers of its own (Sam,
    *  2026-09-11: "I don't need the click info on these modals") — one button takes the
@@ -114,31 +126,37 @@ export function CardModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={label}
+      aria-label={label ?? (typeof title === 'string' ? title : undefined)}
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className={wide ? modalCardWideClass : modalCardClass}>
-        <div className="absolute right-4 top-4 flex items-center gap-0.5">
-          {analyticsHref ? (
-            <Link
-              href={analyticsHref}
-              aria-label="Analytics"
-              title="Analytics"
+        {/* The top bar is IN FLOW (it used to float over the body), so a modal with no title
+            can start its content right under the × without the two colliding. The negative
+            margins keep the icons where they always sat, 16px in from the corner. */}
+        <div className="-mr-3 -mt-3 flex min-h-8 items-center gap-3">
+          {title ? <h2 className={`${modalTitleClass} min-w-0 flex-1 truncate`}>{title}</h2> : <div className="flex-1" />}
+          <div className="flex flex-none items-center gap-0.5">
+            {analyticsHref ? (
+              <Link
+                href={analyticsHref}
+                aria-label="Analytics"
+                title="Analytics"
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+              >
+                <Icon name="analytics" size={16} />
+              </Link>
+            ) : null}
+            {corner}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
               className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
             >
-              <Icon name="analytics" size={16} />
-            </Link>
-          ) : null}
-          {corner}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
-          >
-            <Icon name="close" size={16} />
-          </button>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
         </div>
         {children}
         {footer === null ? null : footer !== undefined ? (

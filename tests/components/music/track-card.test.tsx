@@ -257,7 +257,7 @@ describe('the Unreleased pill', () => {
 
 /* ── a song that lives on a record (Sam, 2026-09-11) ─────────────────────────────── */
 describe('a song on a record', () => {
-  it('CRITICAL: is typed by the record — no Type row, and the meta says "Track from EP …"', () => {
+  it('CRITICAL: is typed by the record — no Type row, and the Released on row names the record', () => {
     render(
       <TrackCard
         track={track({ release_id: 'r1', release_type: 'ep' })}
@@ -268,10 +268,13 @@ describe('a song on a record', () => {
     fireEvent.click(screen.getByRole('button', { name: /Demo/ }))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).queryByRole('combobox', { name: 'Type' })).toBeNull()
-    expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^Track from EP Night EP/)
+    // Plain title, no meta line under it (Sam, 2026-10-02).
+    expect(within(dialog).getByRole('heading', { name: 'Demo' })).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Track from/)).toBeNull()
+    expect(within(dialog).getByText('Night EP')).toBeInTheDocument()
   })
 
-  it('a song on a one-song release keeps its plain type in the meta, still without a Type row', () => {
+  it('a song on a one-song release has no Type row either', () => {
     render(
       <TrackCard
         track={track({ release_id: 'r1', release_type: 'single' })}
@@ -282,7 +285,6 @@ describe('a song on a record', () => {
     fireEvent.click(screen.getByRole('button', { name: /Demo/ }))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).queryByRole('combobox', { name: 'Type' })).toBeNull()
-    expect(dialog.querySelector('h3 + div')?.textContent).toMatch(/^Single/)
   })
 })
 

@@ -6,7 +6,7 @@ import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
-import { HeaderIcon, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
+import { KvField, KvRow } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { mergeTwins } from '@/lib/song-merge'
 import { STREAMING_PLATFORMS } from '../music/platforms'
@@ -58,7 +58,7 @@ function feat(song: ReleaseSong): string | null {
  * A release as a grid tile: cover with a select checkbox + live badge + type badge, then
  * title and meta. Selection drives the password-gated publish; the checkbox is owned by
  * the parent browser. Clicking the tile opens the release modal — built on modal-kit
- * (prototype G, Sam, 2026-09-11): cover · title · type / year / songs, then rows that save
+ * (prototype G, Sam, 2026-09-11): its plain title (2026-10-02), then rows that save
  * their own field (Title, Type, Date, one per streaming platform, Songs or Audio), with
  * Share · Delete · Done in the footer. A tracklist song opens its own modal in the same
  * grammar. No Save, no "Edit release" sheet, no listens (the Analytics button has those).
@@ -189,16 +189,6 @@ export function ReleaseCard({
     ) : null
   }
 
-  const cover = (size: number) =>
-    release.cover_url ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={coverThumbUrl(release.cover_url, size) ?? undefined} alt="" className="h-full w-full object-cover" />
-    ) : (
-      <div className="flex h-full w-full items-center justify-center rounded-xl bg-surface">
-        <span className="h-5 w-5 rounded-full bg-ink" />
-      </div>
-    )
-
   return (
     // A plain fixed-width tile — the tracklist lives in a modal, so the card never grows
     // and the grid never reflows or pushes a far-left album's songs off-screen.
@@ -247,7 +237,7 @@ export function ReleaseCard({
         // Escape / click-outside closes ONE layer: while a song or merge modal is open it
         // guards this one, so the top layer dismisses first.
         onClose={() => !mergeSong && setEditing(false)}
-        label={title}
+        title={title}
         analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'release', release.id, artistId)}
         deleteLabel="Delete"
@@ -272,30 +262,6 @@ export function ReleaseCard({
           </button>
         }
       >
-        <ModalHeader
-          art={release.cover_url ? cover(112) : null}
-          mark={<HeaderIcon name="releases" />}
-          title={title}
-          meta={
-            <>
-              <span>{RELEASE_TYPE_LABEL[type]}</span>
-              {year ? (
-                <>
-                  <MetaDot />
-                  <span>{year}</span>
-                </>
-              ) : null}
-              {expandable && songCount ? (
-                <>
-                  <MetaDot />
-                  <span>
-                    {songCount} song{songCount === 1 ? '' : 's'}
-                  </span>
-                </>
-              ) : null}
-            </>
-          }
-        />
         {/* Two columns (Sam, 2026-09-11): the release on the left, its listen links on the
             right — each link row labelled by the platform's logo, black when a link is set,
             grey when empty. */}

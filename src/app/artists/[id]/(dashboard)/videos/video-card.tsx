@@ -8,7 +8,7 @@ import { metricLabel } from '@/lib/analytics'
 import { safeHref } from '@/lib/url'
 import { publicVideoSrc } from '@/lib/video-render'
 import { CardModal } from '../card-modal'
-import { HeaderIcon, KvField, MetaDot, ModalHeader } from '../modal-kit'
+import { KvField } from '../modal-kit'
 import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, renameVideoAction } from '../actions'
@@ -63,8 +63,8 @@ function videoOpenUrl(video: VideoItem): string {
 
 /**
  * A video as a thumbnail tile (16:9, or 9:16 for a Short). Clicking it opens its modal —
- * built on modal-kit (prototype G, Sam, 2026-09-11): poster · title · provider / views
- * meta, the player, then rows — Title (renames on the spot), Link (read-only, opens the
+ * built on modal-kit (prototype G, Sam, 2026-09-11): the video's name as a plain title
+ * (2026-10-02), the player, then rows — Title (renames on the spot), Link (read-only, opens the
  * public page). Share and Analytics in the corner, Delete / Done in the footer. No ⋯
  * menu, no Rename sheet, no Save, no click numbers. The checkbox (top-left) is a LIVE
  * on-site toggle owned by the parent browser (ADR 0009).
@@ -161,7 +161,7 @@ export function VideoCard({
       <CardModal
         open={open}
         onClose={() => setOpen(false)}
-        label={title}
+        title={title}
         analyticsHref={`/artists/${artistId}`}
         deleteAction={deleteContentAction.bind(null, 'video', video.id, artistId)}
         deleteLabel="Delete"
@@ -178,29 +178,7 @@ export function VideoCard({
           </button>
         }
       >
-        <ModalHeader
-          art={video.poster ? poster(20) : null}
-          mark={<HeaderIcon name="videos" />}
-          title={title}
-          meta={
-            <>
-              {badge ? <span>{badge}</span> : null}
-              {badge && video.youtube_views != null ? <MetaDot /> : null}
-              {video.youtube_views != null ? (
-                <span>
-                  <b className="text-ink">{compact(video.youtube_views)}</b> views
-                </span>
-              ) : null}
-              {video.is_short ? (
-                <>
-                  <MetaDot />
-                  <span>Short</span>
-                </>
-              ) : null}
-            </>
-          }
-        />
-        {/* The player, full width under the header; a Short keeps its portrait frame. */}
+        {/* The player, full width under the title; a Short keeps its portrait frame. */}
         <div className={cx('mt-5 overflow-hidden rounded-2xl bg-ink', video.is_short ? 'mx-auto w-full max-w-[220px] aspect-[9/16]' : 'aspect-video')}>
           {uploadedSrc ? (
             <video src={uploadedSrc} controls playsInline className="h-full w-full" />

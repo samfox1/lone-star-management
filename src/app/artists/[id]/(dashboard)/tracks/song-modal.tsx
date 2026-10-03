@@ -7,9 +7,8 @@ import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
-import { coverThumbUrl } from '@/lib/cover-url'
 import { CardModal } from '../card-modal'
-import { HeaderIcon, KvField, KvRow, MetaDot, ModalHeader } from '../modal-kit'
+import { KvField, KvRow } from '../modal-kit'
 import { MergeSongModal, type MergeTarget } from '../music/merge-song-modal'
 import { SONG_PLATFORMS } from '../music/platforms'
 import { mergeTwins } from '@/lib/song-merge'
@@ -19,8 +18,7 @@ import { TrackAudio } from '../track-audio'
 import { toast } from '../toast'
 import { deleteContentAction, setTrackReleasedAction, setTrackReleaseAction, setTrackTypeAction, updateContentAction } from '../actions'
 
-/** A release the track can be assigned to (id + title, for the selector). `release_type`
- *  lets a song's modal say "Track from EP OutWest" when its home is a multi-song record. */
+/** A release the track can be assigned to (id + title, for the selector). */
 export type ReleaseOption = { id: string; title: string; release_type?: ReleaseType; slug?: string }
 
 export type Track = TrackPlatformIds & {
@@ -51,7 +49,7 @@ const TYPE_OPTIONS = RELEASE_TYPES.map((t) => ({ value: t, label: RELEASE_TYPE_L
 /**
  * THE song modal — one for every place a song opens (Sam, 2026-09-11: "clicking from a
  * song of an album should bring me to the same song modal seen for singles"). Built on
- * modal-kit: cover · title · kind / year meta. Two columns: Title, Type, Release,
+ * modal-kit: the song's name as a plain title (2026-10-02). Two columns: Title, Type, Release,
  * Also on, Date, one per listen platform, Audio — each saves its own field when it
  * changes. Footer: the Unreleased pill (only where the flag can decide anything), Merge
  * into… (when there is a target), Delete, Done. No Save, no nested Edit sheet, no click
@@ -75,9 +73,9 @@ export function SongModal({
   artistSlug?: string
   releases: ReleaseOption[]
   /** The record this song was opened FROM (the release card opening one of its songs) —
-   *  its home, or a bigger record it also appears on. Names the record in the meta. */
+   *  its home, or a bigger record it also appears on. */
   home?: ReleaseOption
-  /** Go back to that record's modal — the record's name in the meta becomes a button. */
+  /** Go back to that record's modal — a release glyph at the end of the "Released on" row. */
   onOpenRelease?: () => void
   open: boolean
   onClose: () => void
@@ -147,29 +145,27 @@ export function SongModal({
     return res
   }
 
-  const releaseOptions = releases.map((r) => ({ value: r.id, label: r.title }))
+  // The record it was opened from counts even when the caller passed no list: its row is
+  // where the way back to that record sits.
+  const releaseList = releases.length > 0 ? releases : home ? [home] : []
+  const releaseOptions = releaseList.map((r) => ({ value: r.id, label: r.title }))
   // "Merge duplicate…" only when there IS a likely duplicate (lib/song-merge mergeTwins,
   // the one rule a release's tracklist uses too). Sam could not tell what the button was
   // for on a song with no twin — now it appears only when there is one to fold in.
   const twins = mergeTwins({ id: track.id, title: track.title, release_id: releaseId || null }, mergeTargets)
   const date = track.release_date?.slice(0, 10) ?? ''
 
-  // A song on a record is TYPED by the record (Sam, 2026-09-11: "instead of it saying EP
-  // or Album for the individual track … it should say Track from EP/Album {title}"), so
-  // the Type row is the release's to edit, not the song's, and the meta names the record.
+  // A song on a record is TYPED by the record (Sam, 2026-09-11), so the Type row is the
+  // release's to edit, not the song's; the "Released on" row names the record.
   // THE record: its home release — the one it was opened from when the caller knows it
   // (a release card), else looked up among the artist's releases.
-  const isRecord = (r?: ReleaseOption) => r?.release_type === 'ep' || r?.release_type === 'album'
   const homeRelease = releaseId ? (home?.id === releaseId ? home : releases.find((r) => r.id === releaseId)) : undefined
-  const record = homeRelease
-  const onRecord = isRecord(record)
-  const kind = onRecord && record ? `Track from ${RELEASE_TYPE_LABEL[record.release_type!]} ` : RELEASE_TYPE_LABEL[type]
 
   // What Share hands out (Sam, 2026-09-11: every song has a Share): the home release's
   // public page when there is one, else the song's own listen link. Nothing to share →
   // no button, rather than a button that copies nothing.
   const shareUrl = (() => {
-    const page = record ?? homeRelease
+    const page = homeRelease
     if (page?.slug && artistSlug) {
       const origin = typeof window === 'undefined' ? '' : window.location.origin
       return `${origin}/${artistSlug}/r/${page.slug}`
@@ -204,7 +200,7 @@ export function SongModal({
         open={open}
         onClose={() => !mergeOpen && onClose()}
         wide
-        label={track.title}
+        title={track.title}
         analyticsHref={`/artists/${artistId}`}
         corner={
           shareUrl ? (
@@ -263,41 +259,6 @@ export function SongModal({
           </>
         }
       >
-        <ModalHeader
-          art={
-            track.cover_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverThumbUrl(track.cover_url, 112) ?? undefined} alt="" className="h-full w-full object-cover" />
-            ) : null
-          }
-          mark={<HeaderIcon name="tracks" />}
-          title={track.title}
-          meta={
-            // Kind · year, like a release's meta — no platform names (Sam, 2026-09-11):
-            // the logos on the right already say where the song is.
-            <>
-              <span>
-                {kind}
-                {/* The record's name is a way BACK to its modal (Sam, 2026-09-11). */}
-                {onRecord && record ? (
-                  onOpenRelease ? (
-                    <button type="button" onClick={onOpenRelease} className="text-ink underline-offset-2 hover:underline">
-                      {record.title}
-                    </button>
-                  ) : (
-                    <span className="text-ink">{record.title}</span>
-                  )
-                ) : null}
-              </span>
-              {date ? (
-                <>
-                  <MetaDot />
-                  <span>{date.slice(0, 4)}</span>
-                </>
-              ) : null}
-            </>
-          }
-        />
         {/* Two columns, like the release modal (Sam, 2026-09-11: "it should look like this"):
             the song on the left, its listen links on the right under the platforms' logos —
             black when a link is set, grey when empty. */}
@@ -308,7 +269,30 @@ export function SongModal({
                 here the day it lands (a hand-kept list is how 'live' shipped unpickable). Not
                 offered on a song that lives on a record: the record's type is the song's. */}
             {!releaseId && <KvField label="Type" value={type} options={TYPE_OPTIONS} required onSave={saveType} onError={fail} />}
-            {releases.length > 0 && <KvField label="Released on" value={releaseId} options={releaseOptions} onSave={saveRelease} onError={fail} />}
+            {releaseList.length > 0 && (
+              <KvField
+                label="Released on"
+                value={releaseId}
+                options={releaseOptions}
+                onSave={saveRelease}
+                onError={fail}
+                // The way BACK to the record this song was opened from (it closed behind
+                // this one). It lived in the header's meta line until headers went plain.
+                trailing={
+                  onOpenRelease && homeRelease && home?.id === homeRelease.id ? (
+                    <button
+                      type="button"
+                      onClick={onOpenRelease}
+                      aria-label={`Open ${homeRelease.title}`}
+                      title={`Open ${homeRelease.title}`}
+                      className="flex-none text-ink-faint transition-colors hover:text-ink"
+                    >
+                      <Icon name="releases" size={14} />
+                    </button>
+                  ) : null
+                }
+              />
+            )}
             <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
             {/* Collaborators (Sam, 2026-09-11): chips, edited one at a time, printed as
                 "feat. …" on the site. */}

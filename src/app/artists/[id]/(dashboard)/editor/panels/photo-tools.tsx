@@ -8,7 +8,7 @@ import { componentSlotRole, type ComponentSlot, type ManifestComponent } from '@
 import { type SelectTarget, selectTargetKey } from '@samfox1/site-bridge/protocol'
 import { type Orientation } from '@/lib/site-editor/gallery'
 import { type EditorImageField, type GalleryPhoto, type ItemEdit } from '../inspector-types'
-import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, EYEBROW, NoSlots, OnSiteDot } from '../inspector-shared'
+import { GroupLabel, SlotGroupLabel, CONTROL_LABEL, NoSlots, OnSiteDot } from '../inspector-shared'
 import {
   PhotoThumb,
   EmptySlot,
@@ -197,31 +197,34 @@ function ImageUploadModal({
 }) {
   const title = `${hasCurrent ? 'Replace' : 'Add'} ${field.label}`
   return (
+    // No title (Sam, 2026-10-02): the slot that opened it already said what it is. The
+    // margin keeps the drop zone clear of the × in the corner.
     <PortalModal ariaLabel={title} onClose={onClose}>
-      <div className={cx(EYEBROW, 'mb-2 pr-6')}>{title}</div>
-      {field.target.store === 'media' ? (
-        // The profile photo lands in Images too, then that photo is picked (Sam, 2026-10-02):
-        // the same door as the Site & profile page, so a replaced photo can be picked again.
-        <ProfilePhotoUploader artistId={artistId} label="Drop an image or click to upload" budget={budget} onSet={onSaved} />
-      ) : (
-        <UploadField
-          accept="image/*"
-          label="Drop an image or click to upload"
-          kind="image"
-          budget={budget}
-          bucket="media"
-          artistId={artistId}
-          category="hero"
-          noun="image"
-          rules={IMAGE_UPLOAD_RULES}
-          writeRow={async (path) => {
-            const res = await setImageFieldAction(artistId, field.key, path, field.target)
-            if (!res.ok) return res.error ?? 'Save failed'
-            onSaved(path)
-            return null
-          }}
-        />
-      )}
+      <div className="mt-6">
+        {field.target.store === 'media' ? (
+          // The profile photo lands in Images too, then that photo is picked (Sam, 2026-10-02):
+          // the same door as the Site & profile page, so a replaced photo can be picked again.
+          <ProfilePhotoUploader artistId={artistId} label="Drop an image or click to upload" budget={budget} onSet={onSaved} />
+        ) : (
+          <UploadField
+            accept="image/*"
+            label="Drop an image or click to upload"
+            kind="image"
+            budget={budget}
+            bucket="media"
+            artistId={artistId}
+            category="hero"
+            noun="image"
+            rules={IMAGE_UPLOAD_RULES}
+            writeRow={async (path) => {
+              const res = await setImageFieldAction(artistId, field.key, path, field.target)
+              if (!res.ok) return res.error ?? 'Save failed'
+              onSaved(path)
+              return null
+            }}
+          />
+        )}
+      </div>
     </PortalModal>
   )
 }

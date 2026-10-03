@@ -146,12 +146,13 @@ export function PublishPasswordDialog({
     <div
       role="dialog"
       aria-modal="true"
+      aria-label="Publish to the site"
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
+      {/* No title (Sam, 2026-10-02): the Publish button already said what this is. */}
       <form onSubmit={submit} className={modalCardClass}>
-        <h2 className="text-lg font-bold tracking-[-0.01em]">Publish to the site</h2>
-        <p className="mt-1 font-space text-xs text-ink-muted">
+        <p className="font-space text-xs text-ink-muted">
           {pendingCount > 0
             ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} to your public ${noun}.`
             : `Push your latest edits to your public ${noun}.`}{' '}

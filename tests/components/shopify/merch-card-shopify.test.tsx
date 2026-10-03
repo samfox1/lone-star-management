@@ -106,7 +106,7 @@ describe('a SHOPIFY product — Shopify owns what Shopify sends', () => {
     // the card being broken, not as Shopify owning them.
     const dialog = openCard(shopify)
     expect(within(dialog).getAllByText('Tour Tee').length).toBeGreaterThan(0)
-    expect(within(dialog).getByText('$30')).toBeInTheDocument()
+    expect(within(dialog).getByText('30')).toBeInTheDocument() // the Price row
     expect(within(dialog).getByText('https://x.myshopify.com/products/tee')).toBeInTheDocument()
   })
 
