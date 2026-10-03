@@ -4,9 +4,6 @@
  * characters (or NULL), every artist starts with the three lines the dashboard always showed, and
  * only that artist's managers can change it.
  *
- * GATED: 20261002220000 is NOT pushed yet. Flip KIND_DESCRIPTION_PUSHED after `npm run db:push`
- * (step 4 of that migration's checklist) and run this file.
- *
  * Code:     supabase/migrations/20261002220000_enquiry_kind_description.sql (the column, the
  *           CHECK `ek_description_clean`, the backfill, the seed trigger); the write is
  *           saveEnquiryKind in src/lib/enquiries/kind-save.ts, behind saveEnquiryKindAction
@@ -35,9 +32,6 @@ import { saveEnquiryKind } from '@/lib/enquiries/kind-save'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-/** 20261002220000_enquiry_kind_description.sql. */
-const KIND_DESCRIPTION_PUSHED = true
-
 /** What the dashboard showed before the column existed, and so what the backfill and the seed
  *  trigger must write: "nothing visibly changes after the push". */
 const SEEDED_LINES: Record<string, string> = {
@@ -49,7 +43,7 @@ const SEEDED_LINES: Record<string, string> = {
 /** Every mandatory line break the CHECK refuses. */
 const BREAKS = ['\r', '\n', '\v', '\f', '\u0085', '\u2028', '\u2029']
 
-describe.skipIf(!KIND_DESCRIPTION_PUSHED)('enquiry_kinds.description', () => {
+describe('enquiry_kinds.description', () => {
   const svc = serviceClient()
   const anon = anonClient()
   let asA: SupabaseClient

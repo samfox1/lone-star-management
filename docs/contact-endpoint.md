@@ -130,26 +130,14 @@ delete from public.contact_attempts where created_at > now() - interval '1 hour'
 Resolved server-side, **never** from the request body — accepting it from the client
 would make this an open relay and get the sending domain blacklisted.
 
-`resolve_booking_recipient(artist_id)` walks three rungs, and **falls through any rung
-that doesn't look like an email address**:
+Since 2026-10-02 (`20261002210000`) each kind goes **only to its own recipient list**
+(`resolve_enquiry_recipients`; next section), first-added as primary. The old fallback chain
+(`artist_mail_settings.booking_email` → booking link → `site_content.booking_email`) routes
+nothing; `resolve_booking_recipient` was dropped. A kind with no addresses: the enquiry is
+stored `unroutable`, shows in the inbox, and nothing is sent. No global inbox either
+(`20260928141000`).
 
-| # | Source | Who sets it |
-|---|--------|-------------|
-| 1 | `artist_mail_settings.booking_email` | Lone Star admin — ops override |
-| 2 | `links` row with `role = 'booking'` | the manager, in the editor (custom sites) |
-| 3 | `site_content.booking_email` | the manager, in Site text (built-in templates) |
-
-There is **no rung 4** since 2026-09-28 (`20260928141000`): no global inbox. An enquiry is
-emailed only to addresses the artist's managers set — the booking address above, then the
-kind's recipient list (next section). With a list but no booking address, the list's first
-person is the primary (`recipient_source = 'recipient_list'`). With neither, the enquiry
-is stored with `status = 'unroutable'`, shows in the inbox, and nothing is sent.
-
-Rung 2 sits above rung 3 because custom sites (skeen) have no `TEMPLATE_FIELDS` entry and
-carry it as a link. Rung 2 falling through matters: `links.url` is a free-text URL field,
-so a manager who puts an `https://` booking *page* there gets rung 3, not a broken send.
-
-**These read working rows, not published revisions** — correcting a dead booking address
+**These read working rows, not published revisions** — correcting a dead address
 takes effect on enquiries immediately, without publishing every other in-progress edit
 alongside it. `enquiries.to_email` freezes what was resolved for each row, so "where did
 that one actually go?" stays answerable after the address changes.
@@ -189,7 +177,7 @@ Body:    { slug, purpose: "booking"|"demo"|"other", name, email, message, websit
 `website` is the honeypot: render it hidden, leave it empty for real users.
 
 Skeen should also declare `booking` as a link region in the manifest it posts on `ready`,
-so the manager can set the booking address from the editor — that is rung 2 above.
+so the manager can set the public booking contact from the editor (it routes no enquiries).
 `mapConfig`'s existing `role = 'booking'` resolution already matches.
 
 An unrecognized `purpose` is coerced to `"other"` rather than rejected, so skeen can ship
@@ -202,9 +190,7 @@ a new purpose value before this side knows about it.
 `purpose` is no longer one of three values. Each artist has their own **kinds**
 (`enquiry_kinds`: `booking`, `demo`, `other` seeded on every artist, plus any the manager
 adds), and each kind has a **recipient list** (`enquiry_recipients`, at most 10) that is
-ADDED to the booking address the three rungs above resolve (and stands alone, first person
-as primary, when there is none). One message goes out with all
-of them in `to`. A `purpose` that matches none of the artist's kinds is filed under `other`.
+everyone it goes to, first person as primary. One message goes out with all of them in `to`. A `purpose` that matches none of the artist's kinds is filed under `other`.
 
 Where the code lives:
 

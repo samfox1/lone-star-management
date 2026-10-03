@@ -49,10 +49,10 @@ decisions behind them (esp. ADR-0002).
 - **Enquiry** — a contact-form submission from an artist site. Stored in `enquiries`
   (the manager's inbox, owner-read) *before* being emailed, so a bounced or failed send
   still leaves a record the manager can act on.
-- **Recipient resolution** — the booking address, resolved SERVER-SIDE by
-  `resolve_booking_recipient`: ops override → `links.role='booking'` →
-  `site_content.booking_email` → configured default, each rung skipped if it isn't a
-  valid address. Never accepted from the request body — that would be an open relay on
+- **Recipient resolution** — resolved SERVER-SIDE by `resolve_enquiry_recipients`: each
+  kind goes ONLY to its own recipient list (Settings › Email), first-added as primary
+  (`20261002210000`). `booking_email`, the booking link and site text route nothing; a kind
+  with no list is stored `unroutable`. Never accepted from the request body — that would be an open relay on
   our verified sending domain. Reads WORKING rows, so correcting a dead address takes
   effect immediately without publishing unrelated edits; `enquiries.to_email` freezes
   what was resolved per row.

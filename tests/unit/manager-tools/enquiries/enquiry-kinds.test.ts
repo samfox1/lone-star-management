@@ -13,7 +13,7 @@
  * Every case below is a real thing a manager might type into "Add kind".
  */
 import { describe, expect, it } from 'vitest'
-import { DESCRIPTION_MAX, LABEL_MAX, RECIPIENT_CAP, SLUG_MAX, kindDetailsUpdate, kindLabeller, labelFromSlug, recipientProblem, slugFromLabel, toKindRows, uniqueSlug, kindGuide } from '@/lib/enquiries/kinds'
+import { DESCRIPTION_MAX, LABEL_MAX, RECIPIENT_CAP, SLUG_MAX, kindDetailsUpdate, kindLabeller, labelFromSlug, recipientProblem, slugFromLabel, toKindRows, uniqueSlug } from '@/lib/enquiries/kinds'
 
 /** The CHECK on enquiry_kinds.slug, copied here so these tests fail if they disagree. */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -173,7 +173,7 @@ describe('kindLabeller — labels come from the table, never a map', () => {
 
 describe('toKindRows — the embedded select as the dashboard reads it', () => {
   const raw = (over = {}) => ({
-    id: 'k1', slug: 'booking', label: 'Booking', sort_order: 0,
+    id: 'k1', slug: 'booking', label: 'Booking', description: null as string | null, sort_order: 0,
     enquiry_recipients: [
       { id: 'r-late', email: 'late@x.com', label: null, created_at: '2026-09-22T10:00:02Z' },
       { id: 'r-early', email: 'early@x.com', label: 'First', created_at: '2026-09-22T10:00:01Z' },
@@ -213,11 +213,6 @@ describe('toKindRows — the embedded select as the dashboard reads it', () => {
     expect(toKindRows([raw({ description: null })])[0].description).toBeNull()
   })
 
-  it('falls back to the fixed line when the column is not there yet (before 20261002220000)', () => {
-    // DELETE with kindGuide at push time.
-    expect(toKindRows([raw()])[0].description).toBe('For shows, festivals and private events')
-    expect(toKindRows([raw({ slug: 'press' })])[0].description).toBeNull()
-  })
 })
 
 describe('recipientProblem — said BEFORE the save, in a sentence', () => {
@@ -248,21 +243,6 @@ describe('recipientProblem — said BEFORE the save, in a sentence', () => {
     const ten = Array.from({ length: RECIPIENT_CAP }, (_, i) => `p${i}@x.com`)
     expect(recipientProblem(ten, 'eleventh@x.com')).toMatch(/at most 10/)
     expect(recipientProblem(ten.slice(1), 'tenth@x.com')).toBeNull()
-  })
-})
-
-describe('kindGuide — the line under a kind on Settings › Email', () => {
-  it('says what each seeded kind is FOR', () => {
-    expect(kindGuide('booking')).toBe('For shows, festivals and private events')
-    expect(kindGuide('demo')).toBe('For music and demo submissions')
-    expect(kindGuide('other')).toBe('For everything else')
-  })
-
-  it('says nothing for a kind the artist invented — no filler', () => {
-    expect(kindGuide('press')).toBeNull()
-    // A slug is the artist's text: one named like an Object.prototype key must not find
-    // something on the prototype chain.
-    expect(kindGuide('constructor')).toBeNull()
   })
 })
 

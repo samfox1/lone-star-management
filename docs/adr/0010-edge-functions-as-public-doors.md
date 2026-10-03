@@ -44,7 +44,8 @@ not whether to bend it but where the door goes instead.
   anon-reachable surface for this feature.
 - **The Postgres function behind it, `submit_enquiry`, is NOT granted to `anon`.** It is
   granted to `service_role` only, and the Edge Function calls it with the
-  platform-injected service key. So does `resolve_booking_recipient`,
+  platform-injected service key. So does `resolve_enquiry_recipients` (which replaced
+  `resolve_booking_recipient`, dropped in `20261002210000`),
   `log_contact_attempt`, and `mark_enquiry_sent`.
 - **`submit_enquiry` is `security invoker`, not `security definer`** — the deliberate
   inverse of every other door. Its caller already bypasses RLS, so DEFINER buys nothing,

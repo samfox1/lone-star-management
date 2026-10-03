@@ -29,15 +29,12 @@
  * `mail_settings` row whenever the project had none, and delete it afterwards. That row is
  * live config: while it existed every real enquiry was routed to it, and a crash left it
  * there. It was seen live on 2026-09-28 (`isolation-probe@example.com`). The anon probe now
- * reads the row only when the project has one, and the preview's witness is a booking
- * address on a THROWAWAY artist of A's, so nothing depends on the house row existing.
+ * reads the row only when the project has one, so nothing depends on the house row existing.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { expectDeniedByMissingPolicy, expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
-import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
-import { kindListsOnlyLive } from '@tests/helpers/routing'
 
 const svc = serviceClient()
 
@@ -412,57 +409,5 @@ describe('enquiries — a manager may mark read, and nothing else', () => {
     // it matched zero rows. The proof is that the value did not move.
     const { data } = await svc.from('enquiries').select('read_at').eq('id', enquiryA).single()
     expect(data?.read_at).toBeNull()
-  })
-})
-
-// 20261002210000 DROPS this function (Settings › Email no longer reads it: each kind's own list
-// is everyone it goes to). Its denials keep running for as long as it exists; delete this block
-// with the gate once that migration is pushed.
-const PREVIEW_DROPPED = await kindListsOnlyLive(svc)
-
-describe.skipIf(PREVIEW_DROPPED)('booking_recipient_preview — owner-only (until 20261002210000 drops it)', () => {
-  // THE WITNESS FOR THE TWO DENIALS BELOW. The owner test used to assert only
-  // `Array.isArray(data)`, which is true of `[]` — so a preview that resolved NOTHING for
-  // anybody would have passed all three tests, and "a non-owner gets []" would have been a
-  // statement about a function that returns [] to everyone. The witness is a booking
-  // address (rung 1) on a THROWAWAY artist A manages, so the owner MUST get exactly that
-  // address back. It used to lean on the house row existing, and create one when it didn't.
-  const PREVIEW_TO = 'preview-witness@example.test'
-  let previewArtist: ThrowawayArtist
-
-  beforeAll(async () => {
-    previewArtist = await createThrowawayArtist(svc, 'booking preview', asA)
-    const { error } = await svc
-      .from('artist_mail_settings')
-      .insert({ artist_id: previewArtist.id, booking_email: PREVIEW_TO })
-    if (error) throw new Error(`preview witness: ${error.message}`)
-  })
-  afterAll(async () => {
-    await deleteThrowawayArtist(svc, previewArtist)
-  })
-
-  it('a manager sees their own resolved recipient — an actual address', async () => {
-    const { data, error } = await asA.rpc('booking_recipient_preview', { p_artist_id: previewArtist.id })
-    expect(error).toBeNull()
-    const rows = (data ?? []) as Array<{ to_email: string | null; recipient_source: string | null }>
-    expect(rows, 'the preview resolved nothing, so the denials below prove nothing').toEqual([
-      { to_email: PREVIEW_TO, recipient_source: 'mail_settings' },
-    ])
-  })
-
-  it("a non-owner gets nothing back for someone else's artist", async () => {
-    const { data, error } = await asB.rpc('booking_recipient_preview', { p_artist_id: previewArtist.id })
-    expect(error).toBeNull() // silent, not an error — nothing to probe
-    expect(data ?? []).toEqual([])
-  })
-
-  it('anon cannot execute it at all', async () => {
-    // `revoke all … from public, anon` (20260722130000). Asserting only `data ?? [] === []`
-    // could not tell "the door refused me" from "the function no longer exists": a null
-    // data is what PostgREST returns for BOTH, so that assertion stayed green through a
-    // renamed parameter. 42501 naming the function is the only proof the grant is gone.
-    const { data, error } = await anonClient().rpc('booking_recipient_preview', { p_artist_id: previewArtist.id })
-    expectExecuteDenied(error, 'booking_recipient_preview')
-    expect(data ?? []).toEqual([])
   })
 })

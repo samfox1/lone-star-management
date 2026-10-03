@@ -115,9 +115,7 @@ export type RawKindRow = {
   id: string
   slug: string
   label: string
-  /** ABSENT (not null) when read without the column: before 20261002220000 is pushed, the
-   *  page re-reads without it (settings/email/page.tsx). */
-  description?: string | null
+  description: string | null
   sort_order: number
   enquiry_recipients: { id: string; email: string; label: string | null; created_at: string }[] | null
 }
@@ -132,9 +130,7 @@ export function toKindRows(raw: RawKindRow[] | null | undefined): EnquiryKindRow
     id: k.id,
     slug: k.slug,
     label: k.label,
-    // Absent only before the push: then the fixed line the page has always shown. DELETE the
-    // fallback at push time (20261002220000's checklist); null is "no line" and stays null.
-    description: k.description === undefined ? kindGuide(k.slug) : k.description,
+    description: k.description,
     sortOrder: k.sort_order,
     recipients: [...(k.enquiry_recipients ?? [])]
       .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
@@ -186,27 +182,6 @@ export function recipientProblem(existing: readonly string[], candidate: string)
   if (existing.some((e) => e.trim().toLowerCase() === email.toLowerCase())) return 'That address is already on the list.'
   if (existing.length >= RECIPIENT_CAP) return `A list holds at most ${RECIPIENT_CAP} people.`
   return null
-}
-
-/**
- * What each kind is FOR, as the grey line under its name on Settings › Email (Sam, 2026-10-02:
- * "It should say for x, y and z … not just booking, thats useless description").
- *
- * BEFORE THE PUSH ONLY. Since 20261002220000 the line is `enquiry_kinds.description`, which the
- * manager edits; that migration backfills these exact strings (and seeds them for new artists),
- * so this map is what the page shows only while the column does not exist yet. DELETE it, and
- * toKindRows' fallback, at push time. Keyed by SLUG, as the backfill is, so a renamed Booking
- * keeps its line.
- */
-const KIND_GUIDES: Readonly<Record<string, string>> = {
-  booking: 'For shows, festivals and private events',
-  demo: 'For music and demo submissions',
-  [PURPOSE_FALLBACK]: 'For everything else',
-}
-
-/** The guide line for a kind, or null when there is nothing worth saying. */
-export function kindGuide(slug: string): string | null {
-  return Object.hasOwn(KIND_GUIDES, slug) ? KIND_GUIDES[slug] : null
 }
 
 // ---------------------------------------------------------------------------

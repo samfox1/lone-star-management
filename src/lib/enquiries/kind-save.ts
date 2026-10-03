@@ -19,19 +19,8 @@ import { kindDetailsUpdate, type KindDetails } from './kinds'
 export const KIND_GONE = 'That kind is no longer there — refresh the page.'
 
 /**
- * The column is not there yet: 42703 from Postgres (a read naming it), PGRST204 from PostgREST
- * (a write naming it). True only before 20261002220000 is pushed. DELETE at push time.
- */
-export function missingColumn(error: { code?: string } | null | undefined): boolean {
-  return error?.code === '42703' || error?.code === 'PGRST204'
-}
-
-/**
  * Write the fields the manager changed, after `kindDetailsUpdate` has checked them. Returns what
  * was stored (trimmed, an empty description as null), for the row to show.
- *
- * Only `id` is selected back: selecting `description` would fail before the push even for a
- * name-only save, which works today and must keep working.
  */
 export async function saveEnquiryKind(
   supabase: SupabaseClient,
@@ -48,11 +37,7 @@ export async function saveEnquiryKind(
     .eq('id', kindId)
     .eq('artist_id', artistId)
     .select('id')
-  if (error) {
-    // Before the push a description cannot be stored anywhere; a name still can.
-    if (missingColumn(error)) return { error: 'Descriptions can’t be saved yet.' }
-    return { error: error.message }
-  }
+  if (error) return { error: error.message }
   if (!data?.length) return { error: KIND_GONE }
   return { saved: checked.update }
 }

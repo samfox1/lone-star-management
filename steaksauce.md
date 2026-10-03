@@ -55,7 +55,7 @@ generated_by: /steaksauce
 
 ### Functions / RPCs (30)
 Public doors (SECURITY DEFINER, anon-reachable): `get_public_site`, `get_release`, `get_public_releases`, `audio_path_for_play`, `record_event`, `subscribe`, `submit_application`, `public_custom_site` (**NEW** `20260714170000`).
-Contact door (service_role-only, called by the `contact` Edge Function — the ONE public entry that is not a SECURITY DEFINER anon grant, see ADR 0010): `submit_enquiry`, `log_contact_attempt`, `mark_enquiry_sent` (**NEW** `20260722130000`). Recipient ladder (sd): `resolve_booking_recipient` (internal), `booking_recipient_preview` (manager banner).
+Contact door (service_role-only, called by the `contact` Edge Function — the ONE public entry that is not a SECURITY DEFINER anon grant, see ADR 0010): `submit_enquiry`, `log_contact_attempt`, `mark_enquiry_sent` (**NEW** `20260722130000`). Recipients (sd): `resolve_enquiry_recipients` (internal): each kind's OWN `enquiry_recipients` list only. `resolve_booking_recipient` and `booking_recipient_preview` were DROPPED in `20261002210000`; the old booking_email → booking link → site text ladder routes nothing.
 Manager RPCs: `connect_shopify`, `disconnect_shopify`, `shopify_credentials`, `reorder_rows` (amended for `releases` + `tour_dates` — `20260723120000`/`20260725120000`), `set_release_link` (**NEW** `20260727190000`). (`switch_catalog_source` was DROPPED — `20260708161000`; verified absent from the live DB and from `src/` on 2026-07-14.)
 Analytics: `analytics_summary`, `analytics_daily`, `analytics_by_entity`, `analytics_entity_daily`.
 Internal / RLS / publish: `is_admin`, `is_manager_of`, `latest_revisions`, `published_revisions`, `set_updated_at` (trigger fn), `rls_auto_enable` (event-trigger fn, fired by event trigger `ensure_rls`).
@@ -130,7 +130,7 @@ Music classification (IMMUTABLE, internal — not client-callable; SQL mirror of
 | from_local_part    | text        | YES  | —       | CHECK: `^[a-z0-9._-]{1,64}$` |
 | resend_domain_id   | text        | YES  | —       | future per-artist Resend domain |
 | domain_verified_at | timestamptz | YES  | —       |       |
-| booking_email      | text        | YES  | —       | CHECK: email shape; rung 1 (ops override) of the recipient ladder |
+| booking_email      | text        | YES  | —       | CHECK: email shape; NOT used for routing since `20261002210000` (was rung 1 of the dropped ladder) |
 | created_at         | timestamptz | NO   | now()   |       |
 | updated_at         | timestamptz | NO   | now()   |       |
 
@@ -598,7 +598,7 @@ Grouped; all in `public`. `sd` = SECURITY DEFINER. All 8 anon doors below are ex
 - `submit_enquiry(p_slug, p_purpose, p_name, p_email, p_message, p_ip_hash) → TABLE(status, enquiry_id, to_email, from_name, from_email, artist_name, recipient_source)` — validates, rate-limits (5/h + 20/day per IP, 30/h per artist — restored `20260804270000`), resolves the recipient ladder, STORES the enquiry (even unroutable, `20260804230000`), logs the attempt. Never raises — a raise would roll back its own ledger insert. Rewritten four times on 2026-08-04; each rewrite replaces the whole body, which is why every rule needs a door test (`tests/enquiry-door.test.ts`). ← contact Edge Function only.
 - `log_contact_attempt(p_slug, p_purpose, p_ip_hash, p_outcome) → void` — ledger writes for paths that never reach `submit_enquiry` (honeypot, 400s, attachment tickets, send failures). ← contact Edge Function (5 call sites).
 - `mark_enquiry_sent(p_id, p_ok, p_provider_id?, p_error?) → void` — flips queued→sent/failed after the Resend call. ← contact Edge Function.
-- `resolve_booking_recipient(p_artist_id) → TABLE(to_email, recipient_source)` (sd) — the 4-rung ladder: `artist_mail_settings.booking_email` → `links.role='booking'` mailto → `site_content.booking_email` → `mail_settings.default_to_email`. No code caller; invoked inside `submit_enquiry` and `booking_recipient_preview`.
+- ~~`resolve_booking_recipient`~~ — DROPPED `20261002210000` (with `booking_recipient_preview`). Routing is now `resolve_enquiry_recipients(p_artist_id, p_purpose)`: the kind's own `enquiry_recipients` list, first-added as primary; none → `unroutable`.
 - `booking_recipient_preview(p_artist_id) → TABLE(to_email, recipient_source)` (sd) — same ladder for the dashboard banner. ← `enquiries/page.tsx`.
 
 **Manager RPCs (sd, volatile):**

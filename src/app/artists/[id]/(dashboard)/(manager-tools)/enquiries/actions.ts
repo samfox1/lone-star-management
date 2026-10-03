@@ -184,8 +184,7 @@ export async function addEnquiryKindAction(
 
   revalidatePath(`/artists/${artistId}`, 'layout')
   const row = data as { id: string; slug: string; label: string; sort_order: number }
-  // A new kind has no description: the column defaults to null, and it is not selected back so
-  // this keeps working before 20261002220000 is pushed.
+  // A new kind has no description: the column defaults to null.
   return { kind: { ...row, description: null, sortOrder: row.sort_order, recipients: [] } }
 }
 
@@ -195,8 +194,7 @@ export async function addEnquiryKindAction(
  * change to it.
  *
  * The write itself is saveEnquiryKind (src/lib/enquiries/kind-save.ts), which checks the input
- * (kindDetailsUpdate) and tells a zero-row match apart from a save. Before 20261002220000 is
- * pushed a name still saves; a description cannot, and says so.
+ * (kindDetailsUpdate) and tells a zero-row match apart from a save.
  */
 export async function saveEnquiryKindAction(
   artistId: string,

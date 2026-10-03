@@ -5,7 +5,7 @@
  * same discipline enquiries-page.test.tsx exists for: a server page with no render test is
  * a page whose data-order bugs only the browser finds.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import EmailSettingsPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/page'
 
@@ -24,6 +24,7 @@ const kinds = [
     id: 'k1',
     slug: 'booking',
     label: 'Booking',
+    description: 'Booking line',
     sort_order: 0,
     enquiry_recipients: [{ id: 'r0', email: 'agent@example.com', label: null, created_at: '2026-09-22T08:00:00Z' }],
   },
@@ -31,53 +32,30 @@ const kinds = [
     id: 'k2',
     slug: 'demo',
     label: 'Demo',
+    description: 'Demo line',
     sort_order: 1,
     enquiry_recipients: [{ id: 'r1', email: 'ar@example.com', label: 'A&R', created_at: '2026-09-22T09:00:00Z' }],
   },
-  { id: 'k3', slug: 'other', label: 'Contact', sort_order: 2, enquiry_recipients: [] },
+  { id: 'k3', slug: 'other', label: 'Contact', description: null, sort_order: 2, enquiry_recipients: [] },
 ]
 
-/** Is `enquiry_kinds.description` there? False plays the hosted project before 20261002220000:
- *  a select naming it is a 42703, as PostgREST answers. */
-let columnLive = true
-/** What the page selected from enquiry_kinds, in order. */
-let selects: string[] = []
-
-function queryStub(answer: (columns: string) => { data: unknown[] | null; error?: { code: string } }) {
-  let columns = ''
+function queryStub(answer: () => { data: unknown[] | null }) {
   const stub: Record<string | symbol, unknown> = new Proxy(
     {},
     {
       get: (_t, prop) =>
         prop === 'then'
-          ? (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
-              Promise.resolve(answer(columns)).then(res, rej)
-          : prop === 'select'
-            ? (c: string) => ((columns = c), selects.push(c), stub)
-            : () => stub,
+          ? (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(answer()).then(res, rej)
+          : () => stub,
     },
   )
   return stub
 }
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    from: (table: string) =>
-      queryStub((columns) => {
-        if (table !== 'enquiry_kinds') return { data: [] }
-        if (/\bdescription\b/.test(columns)) {
-          return columnLive
-            ? { data: kinds.map((k) => ({ ...k, description: k.slug === 'other' ? null : `${k.label} line` })) }
-            : { data: null, error: { code: '42703' } }
-        }
-        return { data: kinds }
-      }),
+    from: (table: string) => queryStub(() => ({ data: table === 'enquiry_kinds' ? kinds : [] })),
   }),
 }))
-
-beforeEach(() => {
-  columnLive = true
-  selects = []
-})
 
 afterEach(cleanup)
 
@@ -107,14 +85,6 @@ describe('/artists/[id]/settings/email', () => {
     await renderPage()
     expect(document.querySelector('[data-kind="booking"]')!.textContent).toContain('Booking line')
     expect(document.querySelector('[data-kind="other"]')!.textContent).not.toContain('For everything else')
-  })
-
-  it('before the column exists, still shows every kind with the fixed lines (DELETE at push time)', async () => {
-    columnLive = false
-    await renderPage()
-    expect(selects).toHaveLength(2)
-    expect([...document.querySelectorAll('[data-kind]')].map((r) => r.getAttribute('data-kind'))).toEqual(['booking', 'demo', 'other'])
-    expect(document.querySelector('[data-kind="other"]')!.textContent).toContain('For everything else')
   })
 
   it('offers a + on every kind', async () => {

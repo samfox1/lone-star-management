@@ -124,9 +124,9 @@ describe('saveEditorField — a typed field refuses junk before the write', () =
   ) as unknown as SupabaseClient
 
   it('CRITICAL: the visual editor cannot store junk in an email-typed field', async () => {
-    // booking_email is where /contact resolves the recipient (resolve_booking_recipient),
-    // and it takes effect on live enquiries WITHOUT a publish. A stored non-address is a
-    // silently dead inbox — enquiries accepted and delivered nowhere.
+    // booking_email is the public booking contact the EPK falls back to (lib/epk.ts), read
+    // WITHOUT a publish. It routes no enquiries since 20261002210000 (each kind goes to its
+    // own list), but a stored non-address is still a dead contact on the press kit.
     expect(await saveEditorField(noDb, 'artist-1', 'cinematic', 'booking_email', 'not an email')).toEqual({
       ok: false,
       error: 'That value looks invalid.',

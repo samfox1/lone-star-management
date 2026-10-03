@@ -52,9 +52,7 @@
  *
  * EACH KIND GOES ONLY TO ITS OWN LIST (Sam, 2026-10-02; 20261002210000): booking_email, the
  * booking link and site text no longer route anything. So the floor every test starts from is
- * an address on each seeded kind's OWN list, which routes the same under the old rule and the
- * new one; the two tests that pin "the old rungs route nothing" are skipped by name until that
- * migration is live (@tests/helpers/routing).
+ * an address on each seeded kind's OWN list.
  *
  * NEEDS 20260928141000 (the `use_house_mail` column, rung 4 removed). Before it is pushed,
  * beforeAll fails on the unknown column: loudly, and without touching any live config.
@@ -62,7 +60,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { serviceClient } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
-import { kindListsOnlyLive } from '@tests/helpers/routing'
 
 const svc = serviceClient()
 
@@ -137,9 +134,9 @@ async function submit(over: Partial<Record<string, string>> = {}): Promise<DoorR
 
 /**
  * The floor every test starts from: FLOOR_TO on each seeded kind's OWN list (booking, demo,
- * other), so a plain submission of any of them has somewhere to go. A list is the one thing
- * that routes under both the old rule and 20261002210000's. Tests about "no recipient at all",
- * or about a list of their own, remove it first (dropFloor).
+ * other), so a plain submission of any of them has somewhere to go: since 20261002210000 a
+ * list is the only thing that routes. Tests about "no recipient at all", or about a list of
+ * their own, remove it first (dropFloor).
  */
 const FLOOR_TO = 'floor-desk@example.com'
 
@@ -259,13 +256,12 @@ describe('submit_enquiry — no global inbox', () => {
 
 })
 
-/** Gate for the new rule (see the header). Top-level: vitest decides `runIf` while collecting. */
-const LIST_ONLY = await kindListsOnlyLive(svc)
-
-describe.runIf(LIST_ONLY)('submit_enquiry — the old fallback routes NOTHING (20261002210000)', () => {
+describe('submit_enquiry — the old fallback routes NOTHING (20261002210000)', () => {
   /** The three things that used to put one address in front of every kind. */
   async function giveOldRungs() {
-    await svc.from('artist_mail_settings').update({ booking_email: OPS_TO }).eq('artist_id', artistA)
+    // An upsert, not an update: an update matching no row passes silently and plants nothing.
+    const mail = await svc.from('artist_mail_settings').upsert({ artist_id: artistA, ...OWN_MAIL, booking_email: OPS_TO })
+    if (mail.error) throw new Error(`booking_email: ${mail.error.message}`)
     await setSiteText(CONTENT_TO)
     const { error } = await svc.from('links').insert({ artist_id: artistA, role: 'booking', label: 'Bookings', url: `mailto:${LINK_TO}` })
     if (error) throw new Error(`booking link: ${error.message}`)

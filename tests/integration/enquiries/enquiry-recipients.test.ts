@@ -8,9 +8,7 @@
  *   1. A kind goes ONLY to its own list (Sam, 2026-10-02: "I dont want the main address to
  *      recieve everything, I should have to add each one individually"; 20261002210000). The
  *      artist's booking_email, the site's booking link and its site text route NOTHING: they
- *      were a fallback chain in front of every list until that migration. Until it is pushed
- *      the old chain is live, and the tests that pin rule 1 against it are skipped by name
- *      (@tests/helpers/routing).
+ *      were a fallback chain in front of every list until that migration.
  *   2. Lists do not leak ACROSS kinds. A demo landing on the booking list is not an error
  *      anyone sees; it is just the wrong people reading someone's demo.
  *
@@ -34,7 +32,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
-import { kindListsOnlyLive } from '@tests/helpers/routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const svc = serviceClient()
@@ -319,10 +316,7 @@ describe('enquiry_kinds — every artist starts with the three the sites send', 
   })
 })
 
-/** Gate for rule 1 (see the header). Top-level: vitest decides `runIf` while collecting. */
-const LIST_ONLY = await kindListsOnlyLive(svc)
-
-describe.runIf(LIST_ONLY)('resolve_enquiry_recipients — the old fallback routes NOTHING (20261002210000)', () => {
+describe('resolve_enquiry_recipients — the old fallback routes NOTHING (20261002210000)', () => {
   it('CRITICAL: booking_email, the booking link and site text reach nobody — a kind with no list resolves NOBODY', async () => {
     // Before 20261002210000 every kind resolved OPS_TO here (rung 1), for Booking, Demo and
     // Contact alike: one address receiving everything, which is what Sam asked to end.
@@ -354,8 +348,6 @@ describe.runIf(LIST_ONLY)('resolve_enquiry_recipients — the old fallback route
 })
 
 describe('resolve_enquiry_recipients — a kind reaches its own list, and only its own', () => {
-  // None of these plants a booking address, link or site text, so they hold under the old
-  // rule AND the new one, and run either way.
   it('CRITICAL: the list, in the order each was added; the first-added is the primary', async () => {
     // The ORDINAL is the contract: submit_enquiry aggregates `to_emails` with `order by
     // ordinal` and takes the one `is_primary` row as `to_email`.
