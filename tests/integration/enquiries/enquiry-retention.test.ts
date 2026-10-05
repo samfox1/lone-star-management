@@ -37,7 +37,7 @@ import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } fr
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
 import { SEED, anonClient, serviceClient, signInAs } from '@tests/helpers/supabase'
 
-const RETENTION_PUSHED = false
+const RETENTION_PUSHED = true
 
 const BUCKET = 'enquiry-attachments'
 const HOUR = 60 * 60 * 1000
