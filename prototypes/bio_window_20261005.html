@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bio Window</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* The Profile bio window, reorganised (Sam, 2026-10-05: "i dont like the structure of this bio
+   modal"). TODAY is copied from the live window (localhost:3000, bio-row.tsx BioModal +
+   card-modal.tsx + modal-kit KvRow, screenshot 2026-10-05). A and B are proposals.
+   Frame + tokens: prototypes/profile_tool_20261001.html / globals.css @theme. */
+:root{--paper:#fff;--surface:#fafafa;--hover:#f6f7f8;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--red:#e5484d;--pending:#d99a2b;--avatar:#ececef;--avatar-ink:#3f3f46;--scrim:rgba(0,0,0,.45)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8;--scrim:rgba(0,0,0,.6)}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--hover:#1e1e1e;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--avatar:#2a2a2e;--avatar-ink:#d4d4d8;--scrim:rgba(0,0,0,.6)}
+*{box-sizing:border-box}
+html{overflow-x:clip}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+input,textarea{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.ic{flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:stroke-width .15s}
+.mono{font-family:"Space Mono",ui-monospace,monospace}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── prototype chrome (not the product) ── */
+.proto{position:sticky;top:0;z-index:70;min-height:44px;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--hair)}
+.proto .t{font:10px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.proto .vs{display:flex;flex:none;gap:2px;padding:3px;border:1px solid var(--hair);border-radius:10px;background:var(--paper)}
+.proto .vs button{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.proto .vs button:hover{color:var(--ink)}
+.proto .vs button.on{background:var(--ink);color:var(--paper)}
+.proto .note{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+/* ── the comparison board ── */
+.board{padding:28px 32px 48px}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:start}
+.bh{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+.bh .k{font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.bh b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.bwhy{margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--muted);max-width:52ch}
+.bwhy b{font-weight:500;color:var(--ink)}
+.scrim{display:flex;justify-content:center;padding:24px;border-radius:12px;background:linear-gradient(var(--scrim),var(--scrim)),var(--surface)}
+.scale{width:640px;flex:none}
+.rec{margin:36px 0 0;padding-top:20px;border-top:1px solid var(--hair);display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.rec .k{font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rec p{margin:0;font-size:15px;line-height:1.5;max-width:80ch}
+@media (max-width:1180px){.cols{grid-template-columns:1fr}.scale{width:100%;max-width:640px}}
+@media (max-width:640px){.board{padding:20px 16px 40px}.scrim{padding:16px 0;border-radius:0;margin:0 -16px}}
+
+/* ── THE WINDOW (card-modal.tsx): 640 wide, p-7, r-16; the top bar is in flow ── */
+.card{position:relative;display:flex;flex-direction:column;width:640px;max-width:100%;max-height:88vh;overflow:auto;border-radius:16px;background:var(--paper);padding:28px;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+.scale .card{width:100%;max-height:none}
+.topbar{display:flex;justify-content:flex-end;min-height:32px;margin:-12px -12px 0 0}
+/* every icon button hovers with colour + a thicker stroke, never a grey box (2026-10-02) */
+.x{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:50%;color:var(--muted);transition:color .15s}
+.x:hover{color:var(--ink)}
+.x:hover .ic{stroke-width:2.2}
+
+/* TODAY: AreaField 15/1.5 · the count line · two KvRows · a bordered SAVE that only closes */
+.t-area{display:block;margin-top:8px;width:100%;min-height:180px;max-height:50vh;overflow:auto;resize:none;field-sizing:content;border:0;border-bottom:1px solid transparent;background:transparent;padding:0;outline:none;font-size:15px;line-height:1.5;color:var(--ink)}
+.t-area:focus{border-bottom-color:var(--ink)}
+.t-count{margin-top:8px;font:11px "Space Mono",monospace;color:var(--faint)}
+.kvs{margin-top:16px}
+.kv{display:flex;align-items:center;gap:16px;min-height:44px;padding:12px 0;border-bottom:1px solid var(--hair-soft)}
+.kv:last-child{border-bottom:0}
+.kvl{width:100px;flex:none;font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.lf{min-width:0;border:0;border-bottom:1px solid transparent;background:transparent;padding:0;outline:none;font-size:15px;line-height:24px;color:var(--ink)}
+.lf::placeholder{color:var(--faint)}
+.lf:focus{border-bottom-color:var(--ink)}
+.choice{display:flex;max-width:100%;white-space:nowrap;align-items:center;gap:10px;border-radius:6px;font-size:15px;color:var(--ink)}
+.choice .ic{color:var(--faint)}
+.mf{margin-top:28px;display:flex;justify-content:flex-end}
+.save{display:inline-flex;min-width:88px;align-items:center;justify-content:center;border:1px solid var(--hair);border-radius:8px;background:var(--paper);padding:8px 12px;font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);transition:color .15s,border-color .15s}
+.save:hover{border-color:var(--accent);color:var(--accent)}
+
+/* A + B: THE WRITING. A reading measure (~64ch at 16px), a blank line is the paragraph gap at
+   1.7 leading, a hairline under the text that turns ink while writing. Nothing boxed. */
+.card.w{padding:28px 40px 30px}
+.w .topbar{margin-right:-28px}
+.write{border-bottom:1px solid var(--hair);padding-bottom:16px;transition:border-color .15s;cursor:text}
+.write:focus-within{border-bottom-color:var(--ink)}
+.w-area{display:block;width:100%;max-width:64ch;min-height:220px;max-height:56vh;overflow:auto;resize:none;field-sizing:content;border:0;background:transparent;padding:0;outline:none;font-size:16px;line-height:1.7;color:var(--ink);caret-color:var(--ink)}
+.w-area::placeholder{color:var(--faint)}
+.w-foot{margin-top:10px;display:flex;align-items:baseline;justify-content:space-between;gap:16px;min-height:16px}
+.w-err{font:11px "Space Mono",monospace;color:var(--red)}
+.w-count{margin-left:auto;font:11px "Space Mono",monospace;color:var(--faint);transition:color .2s;white-space:nowrap}
+.w-count.met{color:var(--ink)}
+.w-count .over{color:var(--red)}
+
+/* B: the site's two options, demoted to a strip under a full-width hairline (the card's foot,
+   so it never reads as a second underline under the text). Mono caps labels at the shared
+   sizes: CAPS_LABEL 10px .10em. Values 14px, quieter than the writing. */
+.strip{margin:30px -40px -30px;padding:16px 40px 22px;border-top:1px solid var(--hair);display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px 16px;align-items:start}
+.strip .sl{padding-top:2px;font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.cells{display:flex;flex-wrap:wrap;gap:12px 40px}
+.cell{display:flex;min-width:0;flex-direction:column;gap:4px}
+.cell .cl{font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.cell .choice{gap:6px;font-size:14px;line-height:24px;color:var(--muted);transition:color .15s}
+.cell .choice:hover{color:var(--ink)}
+.ul{width:160px;border:0;border-bottom:1px solid var(--hair);background:transparent;padding:0;outline:none;font-size:14px;line-height:24px;color:var(--muted)}
+.ul::placeholder{color:var(--faint)}
+.ul:focus{border-bottom-color:var(--ink);color:var(--ink)}
+.menuwrap{position:relative}
+.menu{position:absolute;top:100%;left:0;z-index:20;margin-top:4px;min-width:200px;padding:4px 0;border:1px solid var(--hair);border-radius:12px;background:var(--paper);box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+.menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:6px 12px;text-align:left;font-size:14px;color:var(--muted)}
+.menu button:hover,.menu button:focus{background:var(--surface);color:var(--ink);outline:none}
+.menu button[aria-selected=true]{color:var(--ink)}
+/* in the strip the menu opens upward: the strip is the card's foot, and the card scrolls */
+.strip .menu{top:auto;bottom:100%;margin:0 0 4px}
+
+@media (max-width:600px){
+  .card{padding:20px}
+  .card.w{padding:20px 20px 22px}
+  .w .topbar{margin-right:-8px}
+  .w-area{font-size:16px;min-height:180px}
+  .strip{margin:26px -20px -22px;padding:14px 20px 20px;grid-template-columns:1fr}
+  .cells{gap:12px 28px}
+}
+
+/* ── the real Profile page behind the window (single views) ── */
+.hdr{position:sticky;top:44px;z-index:30;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px 20px;border-bottom:1px solid var(--hair);background:var(--paper)}
+.who{display:flex;align-items:center;gap:8px;min-width:0}
+.who .bk{display:inline-flex;width:26px;height:26px;flex:none;align-items:center;justify-content:center;color:var(--muted)}
+.who b{font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.av{display:inline-flex;flex:none;align-items:center;justify-content:center;border-radius:50%;background:var(--avatar);color:var(--avatar-ink);font-family:"Space Mono",monospace;font-weight:700}
+.anav{display:flex;justify-content:center;gap:2px}
+.anav a{display:inline-flex;align-items:center;padding:10px;color:var(--muted);transition:color .15s}
+.anav a:hover{color:var(--ink)}
+.anav a.on{color:var(--accent)}
+.tr{display:flex;justify-content:flex-end;align-items:center;gap:14px;color:var(--muted)}
+.rail{position:fixed;left:0;top:0;z-index:10;height:100vh;width:84px;border-right:1px solid var(--hair);background:var(--paper)}
+.rail .col{margin-top:50vh;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;padding:0 6px}
+.rail a{height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);transition:color .15s}
+.rail a:hover{color:var(--ink)}
+.rail a.on{color:var(--accent)}
+.rail a span{font:10px/12px "Space Mono",monospace;letter-spacing:.02em}
+main{padding:32px 28px 140px 112px}
+.wrap{max-width:1180px}
+.sec{display:grid;grid-template-columns:150px minmax(0,1fr);column-gap:32px;padding:8px 0 28px;border-bottom:1px solid var(--hair)}
+.sec:last-of-type{border-bottom:0}
+.sec h2{margin:0;padding-top:22px;font:400 11px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,1.4fr);align-items:center;gap:24px;padding:16px 0;border-bottom:1px solid var(--hair-soft)}
+.rows>.row:last-of-type{border-bottom:0}
+.row .t{font-size:15px;font-weight:500}
+.row .g{margin-top:2px;font-size:13px;color:var(--muted)}
+.ctl{display:flex;min-width:0;align-items:center;justify-content:flex-end;gap:14px;font-size:15px}
+.ctl .faint{color:var(--faint)}
+.bio1{max-width:46ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--muted)}
+.ri{display:inline-flex;padding:6px;color:var(--muted);opacity:0;transition:opacity .15s,color .15s}
+.row:hover .ri{opacity:1}
+.ri:hover{color:var(--ink)}
+.ri:hover .ic{stroke-width:2.2}
+.roundtile{display:grid;place-items:center;width:64px;height:64px;border:1px dashed var(--hair);border-radius:50%}
+.erow{cursor:pointer}
+.riser{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 32px;border-top:1px solid var(--hair);background:var(--paper);visibility:hidden;transform:translateY(110%);transition:transform .2s ease-out,visibility .2s}
+.riser.up{visibility:visible;transform:none;box-shadow:0 -8px 24px rgba(0,0,0,.05)}
+.riser p{margin:0;display:flex;align-items:center;gap:10px;font-size:15px}
+.riser p i{width:9px;height:9px;border-radius:50%;background:var(--red)}
+.riser .bt{display:flex;gap:8px}
+.riser .rv{border-radius:10px;padding:10px 18px;font-size:14px;font-weight:500;color:var(--muted)}
+.riser .rv:hover{color:var(--ink)}
+.riser .pb{border-radius:10px;background:var(--ink);padding:10px 22px;font-size:14px;font-weight:500;color:var(--paper)}
+.ov{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:24px;background:var(--scrim)}
+.ov.on{display:flex}
+@media (max-width:767px){
+  .anav,.rail{display:none}
+  .hdr{grid-template-columns:1fr auto}
+  main{padding:24px 16px 140px}
+  .sec{grid-template-columns:1fr}
+  .sec h2{padding-top:16px}
+  .row{grid-template-columns:1fr;gap:10px}
+  .ctl{justify-content:flex-start}
+  .ri{opacity:1}
+  .riser{padding:14px 16px}
+  .ov{padding:16px}
+}
+@media (max-width:600px){.proto .t{display:none}.proto{gap:10px;padding:0 12px}.proto .note{display:none}}
+@media (prefers-reduced-motion:reduce){.riser,.ic,.w-count{transition:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M2 8l9.73-4.87a.6.6 0 0 1 .54 0L22 8"/><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.4"/><path d="M5.5 19.5c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><path d="M10.59 10.59l6.36-3.54-3.54 6.36-6.36 3.54 3.54-6.36z"/><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12M3.29 7L12 12l8.71-5M7.5 4.27l9 5.15"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z"/></symbol>
+  <symbol id="i-analytics" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M14 6l4 4M4 20l1-4.5L16 4.5a1.5 1.5 0 0 1 3 3L8 19l-4.5 1z"/></symbol>
+  <symbol id="i-tour" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-merch" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-chevronLeft" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chevronsUpDown" viewBox="0 0 24 24"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+ </defs>
+</svg>
+
+<div class="proto">
+  <span class="t">Bio window · 2026-10-05</span>
+  <div class="vs" role="tablist" aria-label="View">
+    <button class="on" data-go="board">Side by side</button>
+    <button data-go="today">Today</button>
+    <button data-go="a">A</button>
+    <button data-go="b">B</button>
+  </div>
+  <span class="note" id="note"></span>
+</div>
+
+<!-- ═══ SIDE BY SIDE ═══ -->
+<section class="board" id="board">
+  <div class="cols">
+    <div class="bcol">
+      <div class="bh"><span class="k">Today</span><b>As it is</b></div>
+      <div class="scrim"><div class="scale" data-win="today"></div></div>
+      <p class="bwhy">Text, a count line, two site rows, and a Save that only closes: every field already saves itself.</p>
+    </div>
+    <div class="bcol">
+      <div class="bh"><span class="k">A</span><b>Just the writing</b></div>
+      <div class="scrim"><div class="scale" data-win="a"></div></div>
+      <p class="bwhy"><b>Where it shows</b> is already in Edit site › Site › About. <b>Heading</b> joins it as a new row there.</p>
+    </div>
+    <div class="bcol">
+      <div class="bh"><span class="k">B</span><b>Writing + site options</b></div>
+      <div class="scrim"><div class="scale" data-win="b"></div></div>
+      <p class="bwhy">The same writing. The site's two options sit in a quiet strip at the foot.</p>
+    </div>
+  </div>
+  <div class="rec">
+    <span class="k">Pick</span>
+    <p><b>A.</b> The window does one job, and Edit site already has a better “where it shows”: it knows which places the site offers, while Profile can only offer Site default or Hidden.</p>
+  </div>
+</section>
+
+<!-- ═══ ONE AT A TIME, over the real Profile page ═══ -->
+<div id="page" hidden>
+  <header class="hdr">
+    <a class="who" href="#"><span class="bk"><svg class="ic" width="18" height="18"><use href="#i-chevronLeft"/></svg></span><span class="av" style="width:24px;height:24px;font-size:8px">S</span><b>Skeen</b></a>
+    <nav class="anav" aria-label="Artist">
+      <a href="#"><svg class="ic" width="22" height="22"><use href="#i-analytics"/></svg></a>
+      <a href="#"><svg class="ic" width="22" height="22"><use href="#i-folder"/></svg></a>
+      <a href="#"><svg class="ic" width="22" height="22"><use href="#i-edit"/></svg></a>
+      <a href="#"><svg class="ic" width="22" height="22"><use href="#i-tour"/></svg></a>
+      <a href="#"><svg class="ic" width="22" height="22"><use href="#i-merch"/></svg></a>
+      <a href="#" class="on"><svg class="ic" width="22" height="22"><use href="#i-tools"/></svg></a>
+    </nav>
+    <div class="tr"><svg class="ic" width="18" height="18"><use href="#i-search"/></svg><svg class="ic" width="18" height="18"><use href="#i-settings"/></svg><span class="av" style="width:30px;height:30px;font-size:10px">S</span></div>
+  </header>
+  <nav class="rail" aria-label="Manager tools"><div class="col">
+    <a href="#"><svg class="ic" width="20" height="20"><use href="#i-home"/></svg><span>Overview</span></a>
+    <a href="#" class="on"><svg class="ic" width="20" height="20"><use href="#i-user"/></svg><span>Profile</span></a>
+    <a href="#"><svg class="ic" width="20" height="20"><use href="#i-sparkles"/></svg><span>Brand</span></a>
+    <a href="#"><svg class="ic" width="20" height="20"><use href="#i-compass"/></svg><span>SEO/GEO</span></a>
+    <a href="#"><svg class="ic" width="20" height="20"><use href="#i-package"/></svg><span>Press kit</span></a>
+    <a href="#"><svg class="ic" width="20" height="20"><use href="#i-settings"/></svg><span>Settings</span></a>
+  </div></nav>
+  <main><div class="wrap">
+    <section class="sec"><h2>Who</h2><div class="rows">
+      <div class="row"><div><div class="t">Profile photo</div><div class="g">Site, press kit and outside profiles.</div></div><div class="ctl"><span class="roundtile"><svg class="ic" width="18" height="18"><use href="#i-plus"/></svg></span></div></div>
+      <div class="row"><div><div class="t">Name</div></div><div class="ctl">Skeen</div></div>
+      <div class="row erow" id="bioRow"><div><div class="t">Bio</div><div class="g">Site, press kit, Google and AI answers.</div></div><div class="ctl"><span class="bio1" id="bio1"></span><button class="ri" aria-label="Edit the bio"><svg class="ic" width="18" height="18"><use href="#i-edit"/></svg></button></div></div>
+      <div class="row"><div><div class="t">Type</div></div><div class="ctl">Musician <svg class="ic" width="18" height="18" style="color:var(--faint)"><use href="#i-chevronsUpDown"/></svg></div></div>
+      <div class="row"><div><div class="t">Genre</div><div class="g">Search, AI answers and outside bios.</div></div><div class="ctl">House <span>Tech House</span><svg class="ic" width="16" height="16"><use href="#i-plus"/></svg></div></div>
+      <div class="row"><div><div class="t">Started</div><div class="g">The year you began.</div></div><div class="ctl"><span class="faint">Year</span></div></div>
+    </div></section>
+    <section class="sec"><h2>Where</h2><div class="rows">
+      <div class="row"><div><div class="t">Based in</div><div class="g">Region and country stop a mix-up.</div></div><div class="ctl">Chicago <span class="faint">—</span> <span class="faint">—</span></div></div>
+    </div></section>
+  </div></main>
+  <div class="riser" id="riser" aria-hidden="true">
+    <p><i></i><span>Bio changed · not on the site yet</span></p>
+    <div class="bt"><button class="rv">Revert changes</button><button class="pb">Publish</button></div>
+  </div>
+  <div class="ov" id="ov" role="dialog" aria-modal="true" aria-label="Bio"></div>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s)
+const $$ = (s, r = document) => [...r.querySelectorAll(s)]
+const icon = (id, size) => `<svg class="ic" width="${size}" height="${size}" aria-hidden="true"><use href="#i-${id}"/></svg>`
+
+/* Skeen's real bio (artists.bio, read from the live window 2026-10-05). */
+const BIO = "My name is Skeen\n\nI am a Chicago DJ, producer, and filmmaker.\n\nI'm documenting what it looks like to build a career in dance music from the ground up.\n\nI spend my days in the studio or somewhere with my USB, three cameras, and a ridiculous idea.\n\nHopefully I'll see you in your city soon!"
+const FLOOR = 100      // lib/seo-tests/who.ts BIO_MIN_WORDS
+const LIMIT = 10000    // lib/site-editor/text-limits.ts TEXT_LIMITS.bio
+const PLACEMENTS = [{ v: '', l: 'Site default' }, { v: 'hidden', l: 'Hidden from visitors' }] // what Profile can offer today
+const NOTES = {
+  board: 'Every field is live: type in any window.',
+  today: 'Today: Save only closes. The bio and both rows already autosave.',
+  a: 'A: only the bio. Where it shows → Edit site › Site › About (already there). Heading → a new row beside it.',
+  b: 'B: the same writing, the two site options in a strip at the foot.',
+}
+
+const state = { bio: BIO, placement: '', heading: '', dirty: false }
+const words = (s) => (s.trim() ? s.trim().split(/\s+/).length : 0)
+const fmt = (n) => n.toLocaleString('en-US')
+
+/* A + B: "55 / 100 words" in faint mono; once the floor is met just "104 words", in ink.
+   Characters only near the cap (TextLimitHint's 90%), never at rest. */
+function countLine(v) {
+  const w = words(v)
+  const n = v.trim().length
+  const near = n >= Math.floor(LIMIT * 0.9)
+  const base = w >= FLOOR ? `${w} words` : `${w} / ${FLOOR} words`
+  return { html: base + (near ? ` · <span class="${n > LIMIT ? 'over' : ''}">${fmt(n)} / ${fmt(LIMIT)}</span>` : ''), met: w >= FLOOR }
+}
+
+function writing(v) {
+  return `
+    <div class="write">
+      <textarea class="w-area" aria-label="Bio" spellcheck="false" placeholder="Who you are, your sound, your big shows and releases.">${esc(state.bio)}</textarea>
+    </div>
+    <div class="w-foot">
+      <span class="w-err" hidden>Couldn’t save the bio.</span>
+      <span class="w-count"></span>
+    </div>`
+}
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+const placementLabel = () => (PLACEMENTS.find((p) => p.v === state.placement) || PLACEMENTS[0]).l
+
+function windowHTML(v) {
+  const top = `<div class="topbar"><button class="x" data-close aria-label="Close">${icon('close', 16)}</button></div>`
+  if (v === 'today') {
+    return `<div class="card">${top}
+      <textarea class="t-area" aria-label="Bio" spellcheck="false" rows="8">${esc(state.bio)}</textarea>
+      <div class="t-count"></div>
+      <div class="kvs">
+        <div class="kv"><span class="kvl">Where it shows</span><div class="menuwrap"><button class="choice" data-menu aria-label="Where it shows"><span data-pl>${placementLabel()}</span>${icon('chevronsUpDown', 18)}</button></div></div>
+        <div class="kv"><span class="kvl">Heading</span><input class="lf" data-heading aria-label="Heading" placeholder="About" style="width:100%" value="${esc(state.heading)}"></div>
+      </div>
+      <div class="mf"><button class="save" data-close>Save</button></div>
+    </div>`
+  }
+  const strip = v === 'b' ? `
+      <div class="strip">
+        <span class="sl">On the site</span>
+        <div class="cells">
+          <div class="cell"><span class="cl">Where</span><div class="menuwrap"><button class="choice" data-menu aria-label="Where it shows"><span data-pl>${placementLabel()}</span>${icon('chevronsUpDown', 15)}</button></div></div>
+          <div class="cell"><span class="cl">Heading</span><input class="ul" data-heading aria-label="Heading" placeholder="About" value="${esc(state.heading)}"></div>
+        </div>
+      </div>` : ''
+  return `<div class="card w">${top}${writing(v)}${strip}</div>`
+}
+
+/* Wire one window: live counts, the placement menu, the heading, close. */
+function wire(root, v, onClose) {
+  const area = $('textarea', root)
+  const paint = () => {
+    const val = area.value
+    if (v === 'today') {
+      $('.t-count', root).textContent = `${words(val)} of ${FLOOR} words · ${fmt(val.trim().length)} characters`
+    } else {
+      const c = countLine(val)
+      const el = $('.w-count', root)
+      el.innerHTML = c.html
+      el.classList.toggle('met', c.met)
+    }
+  }
+  area.addEventListener('input', () => {
+    state.bio = area.value
+    state.dirty = true
+    paint()
+    $$('[data-win] textarea').forEach((t) => t !== area && (t.value = state.bio, t.dispatchEvent(new Event('sync'))))
+  })
+  area.addEventListener('sync', paint)
+  $('.write', root)?.addEventListener('mousedown', (e) => { if (e.target !== area) { e.preventDefault(); area.focus() } })
+  paint()
+
+  const h = $('[data-heading]', root)
+  h?.addEventListener('input', () => { state.heading = h.value; state.dirty = true })
+
+  const mb = $('[data-menu]', root)
+  mb?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const wrap = mb.parentElement
+    const open = $('.menu', wrap)
+    if (open) return open.remove()
+    const m = document.createElement('div')
+    m.className = 'menu'
+    m.setAttribute('role', 'listbox')
+    m.innerHTML = PLACEMENTS.map((p) => `<button role="option" data-v="${p.v}" aria-selected="${p.v === state.placement}">${p.l}${p.v === state.placement ? icon('check', 13) : ''}</button>`).join('')
+    wrap.appendChild(m)
+    m.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button')
+      if (!b) return
+      state.placement = b.dataset.v
+      state.dirty = true
+      $$('[data-pl]').forEach((s) => (s.textContent = placementLabel()))
+      m.remove()
+    })
+  })
+  $$('[data-close]', root).forEach((b) => b.addEventListener('click', () => onClose && onClose()))
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.menuwrap')) $$('.menu').forEach((m) => m.remove()) })
+
+/* ── the board: the three windows at their real 640px, scaled to fit their column ── */
+function mountBoard() {
+  $$('#board [data-win]').forEach((slot) => {
+    slot.innerHTML = windowHTML(slot.dataset.win)
+    wire(slot, slot.dataset.win, null)
+  })
+  fit()
+}
+function fit() {
+  const stacked = innerWidth <= 1180
+  $$('#board .scale').forEach((s) => {
+    if (stacked) { s.style.zoom = ''; return }
+    const host = s.parentElement
+    const room = host.clientWidth - 48
+    s.style.zoom = Math.min(1, room / 640).toFixed(3)
+  })
+}
+addEventListener('resize', fit)
+
+/* ── one at a time, over the page ── */
+let current = 'a'
+function openWin() {
+  const ov = $('#ov')
+  ov.innerHTML = windowHTML(current)
+  ov.classList.add('on')
+  wire(ov, current, closeWin)
+  // A + B open with the caret at the end of the text: the writing is the window.
+  if (current !== 'today') {
+    const t = $('textarea', ov)
+    t.focus({ preventScroll: true })
+    t.setSelectionRange(t.value.length, t.value.length)
+  }
+}
+function closeWin() {
+  $('#ov').classList.remove('on')
+  $('#bio1').textContent = state.bio.trim().split(/\n+/)[0] || 'No bio yet'
+  $('#riser').classList.toggle('up', state.dirty)
+}
+$('#ov').addEventListener('mousedown', (e) => e.target === e.currentTarget && closeWin())
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return
+  if ($$('.menu').length) return $$('.menu').forEach((m) => m.remove())
+  if ($('#ov').classList.contains('on')) closeWin()
+})
+$('#bioRow').addEventListener('click', openWin)
+
+function go(view) {
+  $$('.proto [data-go]').forEach((b) => b.classList.toggle('on', b.dataset.go === view))
+  $('#note').textContent = NOTES[view]
+  const board = view === 'board'
+  $('#board').hidden = !board
+  $('#page').hidden = board
+  if (board) { $('#ov').classList.remove('on'); mountBoard(); return }
+  current = view
+  $('#bio1').textContent = state.bio.trim().split(/\n+/)[0]
+  openWin()
+}
+$$('.proto [data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)))
+go(new URLSearchParams(location.search).get('v') || 'board')
+</script>
+</body>
+</html>
