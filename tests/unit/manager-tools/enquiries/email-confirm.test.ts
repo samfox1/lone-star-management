@@ -156,7 +156,12 @@ describe('the loader’s status call (STRICT: a failed read must never look conf
   // works as it did.
   it('a missing function switches confirmation off', () => {
     expect(confirmStateFrom({ data: null, error: { code: 'PGRST202' } })).toEqual({ live: false })
-    expect(confirmStateFrom({ data: null, error: { code: '42883' } })).toEqual({ live: false })
+  })
+
+  // Postgres's own "no such function" is NOT the switch: after the push it would mean a rename
+  // or a broken call, and failing open there shows waiting addresses as confirmed.
+  it('42883 is not the switch: addresses show waiting', () => {
+    expect(confirmStateFrom({ data: null, error: { code: '42883' } })).toEqual({ live: true, confirmed: [] })
   })
 
   // Any OTHER failure is not "everything confirmed": every address shows waiting.

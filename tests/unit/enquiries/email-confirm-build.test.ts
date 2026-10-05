@@ -22,6 +22,7 @@ import {
   kindsToWords,
   parseConfirmRequest,
   replyStatus,
+  SUBJECT_NAME_MAX,
 } from '../../../supabase/functions/email-confirm/build'
 
 const TOKEN = 'Zm9vYmFyYmF6cXV4LXF1dXgtY29yZ2UtZ3JhdWx0LWdhcnBseQ'
@@ -71,6 +72,13 @@ describe('buildConfirmSubject', () => {
 
   it('with no artist name it still reads as a sentence', () => {
     expect(buildConfirmSubject('  ')).toBe('Confirm your enquiries address')
+  })
+
+  it('a long artist name is cut short, so a manager cannot write the subject line', () => {
+    const s = buildConfirmSubject(`${'A'.repeat(SUBJECT_NAME_MAX)}B and claim your prize now`)
+    expect(s).toBe(`Confirm ${'A'.repeat(SUBJECT_NAME_MAX - 1)}…'s enquiries`)
+    // Exactly the limit is kept whole.
+    expect(buildConfirmSubject('A'.repeat(SUBJECT_NAME_MAX))).toBe(`Confirm ${'A'.repeat(SUBJECT_NAME_MAX)}'s enquiries`)
   })
 })
 

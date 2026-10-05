@@ -65,8 +65,17 @@ export function kindsToWords(kinds: (string | null)[]): string {
  * CR/LF is how a Bcc: gets smuggled in.
  */
 export function buildConfirmSubject(artistName: string): string {
-  const name = stripHeader(artistName)
+  // Cut short: the name is a manager's free text, and a subject line is the one place a
+  // stranger reads it before deciding what this email is (a review, 2026-10-05).
+  const name = cutName(stripHeader(artistName))
   return name ? `Confirm ${name}'s enquiries` : 'Confirm your enquiries address'
+}
+
+/** The longest artist name a subject carries; longer ends in "…". */
+export const SUBJECT_NAME_MAX = 60
+
+function cutName(name: string): string {
+  return name.length > SUBJECT_NAME_MAX ? `${name.slice(0, SUBJECT_NAME_MAX - 1).trimEnd()}…` : name
 }
 
 /** "482913" → "482 913", easier to read off a phone. Anything else is shown as it came. */

@@ -140,8 +140,10 @@ export function countdown(seconds: number): string {
  */
 export type ConfirmState = { live: false } | { live: true; confirmed: string[] }
 
-/** The function is not there yet: PostgREST's "not in the schema cache", or Postgres's own. */
-const MISSING_FUNCTION: ReadonlySet<string | undefined> = new Set(['PGRST202', '42883'])
+/** The function is not there yet: PostgREST's "not in the schema cache". ONLY that code: this
+ *  branch fails OPEN (addresses look confirmed), so it must not catch a later rename or a
+ *  stale cache after the push, which a broader set (42883) would. */
+const MISSING_FUNCTION = 'PGRST202'
 
 /**
  * `email_confirmation_status(p_artist_id)` as a ConfirmState.
@@ -152,7 +154,7 @@ const MISSING_FUNCTION: ReadonlySet<string | undefined> = new Set(['PGRST202', '
  * believe enquiries reach someone the database may be refusing.
  */
 export function confirmStateFrom(res: { data: unknown; error: { code?: string } | null }): ConfirmState {
-  if (res.error) return MISSING_FUNCTION.has(res.error.code) ? { live: false } : { live: true, confirmed: [] }
+  if (res.error) return res.error.code === MISSING_FUNCTION ? { live: false } : { live: true, confirmed: [] }
   const rows = Array.isArray(res.data) ? (res.data as { email?: unknown; confirmed?: unknown }[]) : []
   return {
     live: true,
