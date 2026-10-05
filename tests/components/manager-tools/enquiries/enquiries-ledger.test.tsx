@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
-// The Enquiries list, on the Subscribers layout: rows, search, filters, open, read state, delete.
+// The Enquiries list, on the Subscribers layout: rows, search, type/sort menus, the modal, delete.
 /**
  * The enquiries list (Sam, 2026-10-05: restyled onto the Subscribers page's layout, replacing
- * the table).
+ * the table; the same day: no kind on the rows, a Type menu and a Sort menu, and an enquiry
+ * opens in a modal that also says when it will be deleted).
  *
  * It is a record store, not a mail client: nobody answers a booking from here, and right now —
  * with sending not switched on — this IS the delivery mechanism. So the behaviours that matter
  * are about never hiding anything: every row shows who, what kind and when; search and the
- * filters narrow without losing anything; opening shows the whole message; delete asks first.
+ * menus narrow and reorder without losing anything; opening shows the whole message; delete
+ * asks first.
  * LIGHT for the layout (AGENTS.md "Test depth"); strict only where a URL is rendered.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
@@ -63,14 +65,27 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+/** The row's open button (its text and day), by the sender's name. */
+const rowButton = (name: string) => within(rowOf(name)).getByRole('button', { name: new RegExp(name) })
+/** The row (`li`) a sender's name sits in. */
+const rowOf = (name: string) => within(screen.getByRole('list', { name: 'Enquiries' })).getByText(name).closest('li')!
 const openRow = async (name: string) => {
   await act(async () => {
-    fireEvent.click(screen.getByText(name))
+    fireEvent.click(rowButton(name))
   })
 }
-/** The row (`li`) a sender's name sits in. */
-const rowOf = (name: string) => screen.getByText(name).closest('li')!
-const detail = () => document.querySelector('[data-enquiry-detail]')
+const modal = () => screen.getByRole('dialog', { name: /^Enquiry from / })
+const queryModal = () => screen.queryByRole('dialog', { name: /^Enquiry from / })
+/** Pick `option` in the toolbar menu named `menu` (Type, Sort). */
+const choose = async (menu: string, option: string) => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('combobox', { name: menu }))
+  })
+  await act(async () => {
+    fireEvent.click(screen.getByRole('option', { name: new RegExp(`^${option}`) }))
+  })
+}
+const names = () => within(screen.getByRole('list', { name: 'Enquiries' })).getAllByRole('listitem').map((li) => li.querySelector('span span span')!.textContent)
 
 describe('EnquiriesLedger — the empty case', () => {
   it('no enquiries at all: one quiet line, and nothing to search or filter (as Subscribers)', () => {
@@ -93,20 +108,21 @@ describe('EnquiriesLedger — the empty case', () => {
 })
 
 describe('EnquiriesLedger — rows', () => {
-  it('each row shows who, their address, the kind, a snippet and the day, without opening anything', () => {
-    render(<EnquiriesLedger rows={[row()]} />)
+  it('each row shows who, their address, a snippet and the day — and NOT the kind (Sam: "We can sort for those")', () => {
+    render(<EnquiriesLedger rows={[row({ status: 'unroutable' })]} kinds={SEEDED} />)
     const r = within(rowOf('Jamie Rowe'))
     expect(r.getByText('jamie@example.com')).toBeInTheDocument()
-    // The kind inside the ROW: the same label is also a filter word.
-    expect(r.getByText('Booking')).toBeInTheDocument()
     expect(r.getByText(/Can you play/)).toBeInTheDocument()
     expect(r.getByText('Aug 4, 2026')).toBeInTheDocument()
+    expect(r.queryByText('Booking')).toBeNull()
+    // The delivery and deletion notes live in the modal now, not on the row.
+    expect(r.queryByText(/deleted|not emailed/i)).toBeNull()
   })
 
-  it('CRITICAL: nothing is expanded on arrival — you came to look something up', () => {
+  it('CRITICAL: nothing is opened on arrival — you came to look something up', () => {
     render(<EnquiriesLedger rows={[row()]} />)
     expect(setRead).not.toHaveBeenCalled()
-    expect(detail()).toBeNull()
+    expect(queryModal()).toBeNull()
   })
 
   it('unread rows say so; read rows do not', () => {
@@ -117,40 +133,12 @@ describe('EnquiriesLedger — rows', () => {
     expect(screen.getByRole('button', { name: 'Unread 1' })).toBeInTheDocument()
   })
 
-  it('opens a row in place, marks it read, and shows the FULL message', async () => {
-    // A long message on purpose: the row shows a truncated snippet, so finding the whole
-    // text proves the detail row is rendering the message rather than the preview again.
-    const long =
-      'Can you play the Aug 14 show at Mohawk? We can cover travel and provide backline, and we would want a 45 minute set.'
-    render(<EnquiriesLedger rows={[row({ id: 'x', message: long })]} />)
-    await openRow('Jamie Rowe')
-    expect(setRead).toHaveBeenCalledWith('a1', 'x', true)
-    expect(screen.getByText(long)).toBeInTheDocument()
-  })
-
-  it('closes again on a second click', async () => {
-    render(<EnquiriesLedger rows={[row()]} />)
-    await openRow('Jamie Rowe')
-    expect(detail()).not.toBeNull()
-    await openRow('Jamie Rowe')
-    expect(detail()).toBeNull()
-  })
-
   it('Reply is a mailto: to the sender, address encoded, with a subject', () => {
     render(<EnquiriesLedger rows={[row({ email: 'a+b?cc=x@example.com' })]} />)
-    expect(screen.getByRole('link', { name: 'Reply' })).toHaveAttribute(
+    expect(within(rowOf('Jamie Rowe')).getByRole('link', { name: 'Reply' })).toHaveAttribute(
       'href',
       'mailto:a%2Bb%3Fcc%3Dx@example.com?subject=Re%3A%20your%20enquiry',
     )
-  })
-
-  it('offers Mark unread once read, so glancing does not destroy the signal', async () => {
-    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
-    await openRow('Jamie Rowe')
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
-    })
-    expect(setRead).toHaveBeenCalledWith('a1', 'x', false)
   })
 
   it('names the artist on each row only when asked', () => {
@@ -159,7 +147,90 @@ describe('EnquiriesLedger — rows', () => {
     rerender(<EnquiriesLedger rows={[row()]} showArtist />)
     expect(within(rowOf('Jamie Rowe')).getByText('Lone Pine')).toBeInTheDocument()
   })
+})
 
+describe('EnquiriesLedger — the open enquiry is a modal (Sam, 2026-10-05)', () => {
+  const long =
+    'Can you play the Aug 14 show at Mohawk? We can cover travel and provide backline, and we would want a 45 minute set.'
+
+  it('opens in a modal: the facts first (who, kind, when, when it is deleted), then the FULL message; marks it read', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'))
+    // A long message on purpose: the row shows a cut snippet, so finding the whole text
+    // proves the modal renders the message rather than the preview again.
+    render(<EnquiriesLedger rows={[row({ id: 'x', message: long, created_at: '2026-09-25T12:00:00Z' })]} />)
+    await openRow('Jamie Rowe')
+    const m = within(modal())
+    // Sam: "Maybe the from, type, received should be at the top."
+    const facts = within(modal().querySelector('[data-enquiry-facts]') as HTMLElement)
+    expect(facts.getByText('Jamie Rowe')).toBeInTheDocument()
+    expect(facts.getByText('jamie@example.com')).toBeInTheDocument()
+    expect(facts.getByText('Booking')).toBeInTheDocument()
+    expect(m.getByText('deleted in 20 days')).toBeInTheDocument()
+    const message = m.getByText(long)
+    expect(modal().querySelector('[data-enquiry-facts]')!.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // And when it will be deleted sits at the bottom, after the message (Sam: "bottom left").
+    expect(message.compareDocumentPosition(m.getByText('deleted in 20 days')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(setRead).toHaveBeenCalledWith('a1', 'x', true)
+    vi.useRealTimers()
+  })
+
+  it('opening a READ enquiry writes nothing', async () => {
+    render(<EnquiriesLedger rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} />)
+    await openRow('Jamie Rowe')
+    expect(modal()).toBeInTheDocument()
+    expect(setRead).not.toHaveBeenCalled()
+  })
+
+  it('Escape closes it and hands focus back to the row', async () => {
+    render(<EnquiriesLedger rows={[row()]} />)
+    await openRow('Jamie Rowe')
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' })
+    })
+    expect(queryModal()).toBeNull()
+    expect(rowButton('Jamie Rowe')).toHaveFocus()
+  })
+
+  it('offers Mark unread once read, so glancing does not destroy the signal', async () => {
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
+    await openRow('Jamie Rowe')
+    await act(async () => {
+      fireEvent.click(within(modal()).getByRole('button', { name: 'Mark unread' }))
+    })
+    expect(setRead).toHaveBeenCalledWith('a1', 'x', false)
+    expect(within(rowOf('Jamie Rowe')).getByText('unread')).toBeInTheDocument()
+  })
+
+  it('CRITICAL: says when a message was never emailed, and why — two different fixes', async () => {
+    // Without this the list reads as a record of messages DELIVERED. With mail not yet
+    // configured for every kind, a manager assuming otherwise is the failure.
+    render(<EnquiriesLedger rows={[row({ id: 'u', name: 'Unrouted One', status: 'unroutable' }), row({ id: 'f', name: 'Failed One', status: 'failed' })]} />)
+    await openRow('Unrouted One')
+    expect(within(modal()).getByText(/Not emailed: nobody was set to receive it/)).toBeInTheDocument()
+    expect(within(modal()).getByText(/· deleted in \d+ days/)).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 'Escape' })
+    })
+    await openRow('Failed One')
+    expect(within(modal()).getByText(/failed to send/)).toBeInTheDocument()
+  })
+
+  it('says nothing about delivery for an emailed message', async () => {
+    render(<EnquiriesLedger rows={[row({ status: 'sent' })]} />)
+    await openRow('Jamie Rowe')
+    expect(within(modal()).queryByText(/Not emailed|failed to send/)).toBeNull()
+  })
+
+  it('emailed ones are kept 30 days, the rest 90 (retention.ts), each from its OWN status', async () => {
+    // LIGHT (AGENTS.md "Test depth"): the rule itself is pinned in enquiry-retention.test.ts.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'))
+    render(<EnquiriesLedger rows={[row({ id: 'u', name: 'Unrouted One', status: 'unroutable', created_at: '2026-09-25T12:00:00Z' })]} />)
+    await openRow('Unrouted One')
+    expect(within(modal()).getByText(/· deleted in 80 days$/)).toBeInTheDocument()
+    vi.useRealTimers()
+  })
 })
 
 describe('EnquiriesLedger — search', () => {
@@ -184,65 +255,83 @@ describe('EnquiriesLedger — search', () => {
   })
 })
 
-describe("EnquiriesLedger — filters are the ARTIST'S kinds", () => {
-  // The bar used to be All · Unread · Demos, with "Demos" hard-coded. Kinds are the
-  // artist's to invent since 2026-09-21, so the bar offers theirs.
+describe('EnquiriesLedger — the Type menu is the ARTIST’S kinds', () => {
+  // Kinds are the artist's to invent since 2026-09-21; since 2026-10-05 they are a menu
+  // (Sam: "Lets add a dropdown for the type of inquiry"), not words and not on the rows.
   const kinds = [
     { slug: 'booking', label: 'Booking' },
     { slug: 'press', label: 'Press' },
   ]
+  const rows = [
+    row({ id: 'b', name: 'Booker', purpose: 'booking' }),
+    row({ id: 'p', name: 'Journalist', purpose: 'press', purposeLabel: 'Press', read_at: '2026-08-04T11:00:00Z' }),
+  ]
 
-  it('offers All, Unread, then each of the artist’s kinds — and no hard-coded Demos', () => {
-    render(<EnquiriesLedger rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} kinds={kinds} />)
-    const labels = within(screen.getByRole('group', { name: 'Filter' }))
-      .getAllByRole('button')
-      .map((b) => b.textContent)
-    expect(labels).toEqual(['All', 'Unread', 'Booking', 'Press'])
+  it('offers All types, then each of the artist’s kinds in their order — and no hard-coded Demos', async () => {
+    render(<EnquiriesLedger rows={rows} kinds={kinds} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('combobox', { name: 'Type' }))
+    })
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['All types', 'Booking', 'Press'])
   })
 
   it('filters to an artist-invented kind, regardless of read state', async () => {
-    const rows = [
-      row({ id: 'b', name: 'Booker', purpose: 'booking' }),
-      row({ id: 'p', name: 'Journalist', purpose: 'press', purposeLabel: 'Press', read_at: '2026-08-04T11:00:00Z' }),
-    ]
     render(<EnquiriesLedger rows={rows} kinds={kinds} />)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Press' }))
-    })
+    await choose('Type', 'Press')
     expect(screen.getByText('Journalist')).toBeInTheDocument()
     expect(screen.queryByText('Booker')).toBeNull()
   })
 
-  it('says the kind is empty, not that the inbox is', async () => {
-    render(<EnquiriesLedger rows={[row({ purpose: 'booking' })]} kinds={kinds} />)
+  it('combines with Unread, and names the type when nothing matches', async () => {
+    render(<EnquiriesLedger rows={rows} kinds={kinds} />)
+    await choose('Type', 'Press')
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Press' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Unread/ }))
     })
-    expect(screen.getByText('Nothing in Press yet.')).toBeInTheDocument()
-    expect(screen.queryByText(/No enquiries yet/)).toBeNull()
+    expect(screen.getByText('Nothing unread in Press.')).toBeInTheDocument()
   })
 
-  it('with no kind list (the roster inbox), offers the kinds the rows carry', () => {
+  it('with no kind list (the roster inbox), offers the kinds the rows carry', async () => {
     render(<EnquiriesLedger rows={[row({ purpose: 'demo', purposeLabel: 'Demo' })]} showArtist />)
-    expect(screen.getByRole('button', { name: 'Demo' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Demos' })).toBeNull()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('combobox', { name: 'Type' }))
+    })
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['All types', 'Demo'])
+  })
+})
+
+describe('EnquiriesLedger — the Sort menu', () => {
+  it('Newest by default; Oldest and Name A–Z reorder the rows', async () => {
+    render(
+      <EnquiriesLedger
+        rows={[
+          row({ id: 'm', name: 'Abe', created_at: '2026-09-02T10:00:00Z' }),
+          row({ id: 'n', name: 'Zed', created_at: '2026-09-03T10:00:00Z' }),
+          row({ id: 'o', name: 'Mid', created_at: '2026-09-01T10:00:00Z' }),
+        ]}
+      />,
+    )
+    expect(names()).toEqual(['Zed', 'Abe', 'Mid'])
+    await choose('Sort', 'Oldest')
+    expect(names()).toEqual(['Mid', 'Abe', 'Zed'])
+    await choose('Sort', 'Name A–Z')
+    expect(names()).toEqual(['Abe', 'Mid', 'Zed'])
   })
 })
 
 describe('EnquiriesLedger — deleting an enquiry', () => {
   // Sam, 2026-09-28: "a manager can delete an inquiry" (spam). Irreversible, so it asks
-  // first, in the app's own confirm dialog.
-  // From the row's own glyph, as on Subscribers: no need to open it first.
-  const openAndAskToDelete = async () => {
+  // first, in the app's own confirm dialog. From the row's own glyph, as on Subscribers.
+  const askToDelete = async () => {
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(rowOf('Jamie Rowe')).getByRole('button', { name: 'Delete' }))
     })
-    return screen.getByRole('dialog')
+    return screen.getByRole('dialog', { name: /Delete the enquiry/ })
   }
 
-  it('deletes after the manager confirms, and the row leaves the table', async () => {
-    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
-    const dialog = await openAndAskToDelete()
+  it('deletes after the manager confirms, and the row leaves the list', async () => {
+    render(<EnquiriesLedger rows={[row({ id: 'x' }), row({ id: 'y', name: 'Other' })]} />)
+    const dialog = await askToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
@@ -252,7 +341,7 @@ describe('EnquiriesLedger — deleting an enquiry', () => {
 
   it('CRITICAL: Cancel deletes nothing', async () => {
     render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
-    const dialog = await openAndAskToDelete()
+    const dialog = await askToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     })
@@ -263,17 +352,31 @@ describe('EnquiriesLedger — deleting an enquiry', () => {
   it('keeps the row when the server refuses', async () => {
     del.mockResolvedValue({ ok: false, error: 'That enquiry is no longer there — refresh the page.' })
     render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
-    const dialog = await openAndAskToDelete()
+    const dialog = await askToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
     })
     expect(del).toHaveBeenCalledWith('a1', 'x')
     expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
   })
+
+  it('from the modal too: confirmed, the modal closes and the row goes', async () => {
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
+    await openRow('Jamie Rowe')
+    await act(async () => {
+      fireEvent.click(within(modal()).getByRole('button', { name: 'Delete' }))
+    })
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog', { name: /Delete the enquiry/ })).getByRole('button', { name: 'Confirm' }))
+    })
+    expect(del).toHaveBeenCalledWith('a1', 'x')
+    expect(queryModal()).toBeNull()
+    expect(screen.queryByText('Jamie Rowe')).toBeNull()
+  })
 })
 
 describe('EnquiriesLedger — attachments', () => {
-  it('CRITICAL: signs only when a row is opened', async () => {
+  it('CRITICAL: signs only when one is opened', async () => {
     render(<EnquiriesLedger rows={[row({ attachmentCount: 2 })]} />)
     expect(sign).not.toHaveBeenCalled()
     await openRow('Jamie Rowe')
@@ -298,52 +401,8 @@ describe('EnquiriesLedger — attachments', () => {
   it('renders an https demo link with noopener', async () => {
     render(<EnquiriesLedger rows={[row({ demo_url: 'https://soundcloud.com/x' })]} />)
     await openRow('Jamie Rowe')
-    const link = screen.getByRole('link', { name: 'https://soundcloud.com/x' })
+    const link = within(modal()).getByRole('link', { name: 'https://soundcloud.com/x' })
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-  })
-})
-
-describe('EnquiriesLedger — delivery state', () => {
-  it('CRITICAL: says when a message was never emailed', async () => {
-    // Without this the table reads as a record of messages DELIVERED. With mail not yet
-    // configured, none of them are, and a manager assuming otherwise is the failure.
-    render(<EnquiriesLedger rows={[row({ status: 'unroutable' })]} />)
-    await openRow('Jamie Rowe')
-    expect(screen.getByText(/Not emailed/)).toBeInTheDocument()
-  })
-
-  it('distinguishes a failed send from an unconfigured one — different fixes', async () => {
-    render(<EnquiriesLedger rows={[row({ status: 'failed' })]} />)
-    await openRow('Jamie Rowe')
-    expect(screen.getByText(/failed to send/)).toBeInTheDocument()
-  })
-
-  it('says nothing for a delivered message', async () => {
-    render(<EnquiriesLedger rows={[row({ status: 'sent' })]} />)
-    await openRow('Jamie Rowe')
-    expect(screen.queryByText(/Not emailed/)).toBeNull()
-  })
-})
-
-describe('EnquiriesLedger — how long each one is kept', () => {
-  // LIGHT (AGENTS.md "Test depth"): the rule itself is pinned in enquiry-retention.test.ts;
-  // this only checks each row shows it, from its OWN status.
-  afterEach(() => vi.useRealTimers())
-
-  it('each row says when it is deleted: emailed 30 days, not emailed 90', () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'))
-    render(
-      <EnquiriesLedger
-        rows={[
-          row({ id: 's', name: 'Emailed One', status: 'sent', created_at: '2026-09-25T12:00:00Z' }),
-          row({ id: 'u', name: 'Unrouted One', status: 'unroutable', created_at: '2026-09-25T12:00:00Z' }),
-        ]}
-      />,
-    )
-    expect(within(rowOf('Emailed One')).getByText('deleted in 20 days')).toBeInTheDocument()
-    // Not emailed, said quietly on the row itself, beside the longer keep it earns.
-    expect(within(rowOf('Unrouted One')).getByText('not emailed · deleted in 80 days')).toBeInTheDocument()
   })
 })
 
@@ -353,7 +412,7 @@ describe('EnquiriesLedger — the artist selector', () => {
     row({ id: 'b', name: 'From Gulf', artistId: 'a2', artistName: 'Gulf Static' }),
   ]
 
-  it('CRITICAL: narrows the table to one artist', async () => {
+  it('CRITICAL: narrows the list to one artist', async () => {
     render(<EnquiriesLedger rows={two} showArtist />)
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a2' } })
@@ -379,7 +438,7 @@ describe('EnquiriesLedger — the artist selector', () => {
     expect(screen.queryByLabelText('Filter by artist')).toBeNull()
   })
 
-  it('CRITICAL: names the artist, not the filter, when the artist is the reason', async () => {
+  it('CRITICAL: names the artist, not the type, when the artist is the reason', async () => {
     render(
       <EnquiriesLedger
         rows={[...two, row({ id: 'c', purpose: 'demo', purposeLabel: 'Demo', artistId: 'a3', artistName: 'Third' })]}
@@ -388,20 +447,19 @@ describe('EnquiriesLedger — the artist selector', () => {
     )
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a1' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Demo' }))
     })
+    await choose('Type', 'Demo')
     expect(screen.getByText('Nothing here for Lone Pine.')).toBeInTheDocument()
   })
 })
 
-describe('the row reads the kind\'s label from the row data', () => {
-  it('shows an artist-invented kind by its label, not its slug', () => {
-    // The table used to hold a three-entry map and fall back to the raw slug. Labels are
-    // resolved server-side from enquiry_kinds now, so a custom kind and a renamed one both
-    // read as the manager named them.
+describe('the modal reads the kind’s label from the row data', () => {
+  it('shows an artist-invented kind by its label, not its slug', async () => {
+    // Labels are resolved server-side from enquiry_kinds, so a custom kind and a renamed one
+    // both read as the manager named them.
     render(<EnquiriesLedger rows={[row({ purpose: 'sync-licensing', purposeLabel: 'Sync licensing' })]} />)
-
-    expect(within(rowOf('Jamie Rowe')).getByText('Sync licensing')).toBeTruthy()
+    await openRow('Jamie Rowe')
+    expect(within(modal()).getByText('Sync licensing')).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 })

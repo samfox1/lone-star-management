@@ -128,3 +128,43 @@ export function searchRows<T extends InboxRow>(rows: T[], query: string): T[] {
   if (!needle) return rows
   return rows.filter((r) => [r.name, r.email, r.message, r.purposeLabel].some((f) => (f ?? '').toLowerCase().includes(needle)))
 }
+
+export type EnquirySort = 'new' | 'old' | 'unread' | 'unsent' | 'name'
+
+/** The sort menu, in order (Sam, 2026-10-05: "the ability to sort by recent or other
+ *  filters"). The component renders exactly this; Newest is the default. */
+export const ENQUIRY_SORTS: readonly { key: EnquirySort; label: string }[] = [
+  { key: 'new', label: 'Newest' },
+  { key: 'old', label: 'Oldest' },
+  { key: 'unread', label: 'Unread first' },
+  { key: 'unsent', label: 'Not emailed first' },
+  { key: 'name', label: 'Name A–Z' },
+]
+
+/** Never emailed: nobody was set to receive it ('unroutable'), or the send failed. The
+ *  dashboard is the only copy of these, so they are the ones worth surfacing. */
+export function notEmailed(status: string): boolean {
+  return status === 'unroutable' || status === 'failed'
+}
+
+/** By the INSTANT: PostgREST writes a varying number of fractional digits, and an offset
+ *  other than +00:00 would make a string compare lie. Newest first. */
+const newestFirst = (a: InboxRow, b: InboxRow) => Date.parse(b.created_at) - Date.parse(a.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+/** The rows that match `first` go first; each group newest first. */
+const firstThen = (first: (r: InboxRow) => boolean) => (a: InboxRow, b: InboxRow) => Number(first(b)) - Number(first(a)) || newestFirst(a, b)
+
+const ORDER: Record<EnquirySort, (a: InboxRow, b: InboxRow) => number> = {
+  new: newestFirst,
+  old: (a, b) => newestFirst(b, a),
+  unread: firstThen((r) => !r.read_at),
+  unsent: firstThen((r) => notEmailed(r.status)),
+  // Only ever sorted in the browser, after a click (the server renders Newest), so the
+  // locale compare cannot make the two disagree.
+  name: (a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) || newestFirst(a, b),
+}
+
+/** A sorted COPY; the array given is left as it was. "Unread first" reads `read_at`, so the
+ *  caller passes rows whose read state is the one on screen. */
+export function sortRows<T extends InboxRow>(rows: readonly T[], sort: EnquirySort): T[] {
+  return [...rows].sort(ORDER[sort])
+}

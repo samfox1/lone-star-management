@@ -25,6 +25,12 @@ import { HoverLabel } from './row-icon'
  *  header does not stick (the roster) passes its own. */
 export const STICKY_TOP = ['top-[calc(59px+env(safe-area-inset-top,0px))]', 'md:top-[calc(71px+env(safe-area-inset-top,0px))]']
 
+/** THE LIST COLUMN (Sam, 2026-10-05: "decrease the width of inquiries and subscribers
+ *  containers too a bit"): the two list pages read in a 960px column centred in the tools'
+ *  one frame, as the AI test (660) and SEO › Profiles (800) read in theirs. Narrower screens
+ *  are untouched: below 960px it is simply the full width. */
+export const LIST_COLUMN = 'mx-auto w-full max-w-[960px]'
+
 /** A list row's glyphs are faint until their row is hovered — with a MOUSE. A touch screen
  *  has no hover, so there they are always fully visible. */
 export const TOUCH_VISIBLE = 'pointer-coarse:opacity-100'

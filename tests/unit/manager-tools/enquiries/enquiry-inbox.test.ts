@@ -7,7 +7,7 @@
  * scannable archive with no row open by default.
  */
 import { describe, expect, it } from 'vitest'
-import { artistsIn, filterByArtist, filterRows, kindFilter, kindOptions, searchRows, snippet, type InboxRow } from '@/lib/enquiries/inbox'
+import { ENQUIRY_SORTS, artistsIn, filterByArtist, filterRows, kindFilter, kindOptions, searchRows, snippet, sortRows, type InboxRow } from '@/lib/enquiries/inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -213,5 +213,44 @@ describe('searchRows — the toolbar search (Sam, 2026-10-05: Enquiries on the S
 
   it('a query nothing contains keeps nothing', () => {
     expect(ids('zzz')).toEqual([])
+  })
+})
+
+describe('sortRows — the toolbar sort (Sam, 2026-10-05: "sort by recent or other filters")', () => {
+  const rows = [
+    row({ id: 'mid', name: 'bea', created_at: '2026-09-02T10:00:00Z', read_at: '2026-09-03T00:00:00Z', status: 'sent' }),
+    row({ id: 'new', name: 'Cal', created_at: '2026-09-03T10:00:00.5+00:00', read_at: '2026-09-04T00:00:00Z', status: 'unroutable' }),
+    row({ id: 'old', name: 'Ann', created_at: '2026-09-01T10:00:00Z', read_at: null, status: 'failed' }),
+    // 10:30Z: newer than `mid`, though its TEXT sorts before it (a string compare would lie).
+    row({ id: 'midU', name: 'Dee', created_at: '2026-09-02T04:30:00-06:00', read_at: null, status: 'sent' }),
+  ]
+  const ids = (sort: Parameters<typeof sortRows>[1]) => sortRows(rows, sort).map((r) => r.id)
+
+  it('offers exactly these, Newest first', () => {
+    expect(ENQUIRY_SORTS.map((s) => s.key)).toEqual(['new', 'old', 'unread', 'unsent', 'name'])
+    expect(ENQUIRY_SORTS[0].label).toBe('Newest')
+  })
+
+  it('Newest and Oldest go by the instant, whatever the offset or fraction digits', () => {
+    expect(ids('new')).toEqual(['new', 'midU', 'mid', 'old'])
+    expect(ids('old')).toEqual(['old', 'mid', 'midU', 'new'])
+  })
+
+  it('Unread first: the unread pile, then the rest, each newest first', () => {
+    expect(ids('unread')).toEqual(['midU', 'old', 'new', 'mid'])
+  })
+
+  it('Not emailed first: unroutable and failed, then the rest, each newest first', () => {
+    expect(ids('unsent')).toEqual(['new', 'old', 'midU', 'mid'])
+  })
+
+  it('Name A–Z ignores case', () => {
+    expect(ids('name')).toEqual(['old', 'mid', 'new', 'midU'])
+  })
+
+  it('returns a sorted COPY and leaves the given order alone', () => {
+    const before = rows.map((r) => r.id)
+    sortRows(rows, 'old')
+    expect(rows.map((r) => r.id)).toEqual(before)
   })
 })

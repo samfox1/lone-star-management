@@ -19,7 +19,7 @@ import { toast } from '../../toast'
 import { removeSubscriberAction } from './actions'
 import { copyText, useFlash } from '../_ui/copy'
 import { Highlight } from '../_ui/highlight'
-import { ListToolbar, QUIET, SearchLine, TOUCH_VISIBLE, WordChoice } from '../_ui/list-toolbar'
+import { LIST_COLUMN, ListToolbar, QUIET, SearchLine, TOUCH_VISIBLE, WordChoice } from '../_ui/list-toolbar'
 import { RowIcon } from '../_ui/row-icon'
 
 /**
@@ -75,9 +75,9 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
   )
 
   return (
-    // No width or bottom room of its own (it was a centred 1000px column): the tools shell's one
-    // frame sets both for every tool (TOOL_FRAME, _shell/tools-rail.tsx, Batch 3 2026-10-02).
-    <div>
+    // The tools shell's one frame sets the outer width and bottom room (TOOL_FRAME,
+    // _shell/tools-rail.tsx); inside it the list reads in LIST_COLUMN, shared with Enquiries.
+    <div className={LIST_COLUMN}>
       <div data-subscribers-frame="">
         <div className="min-w-0">
           {rows.length === 0 ? (

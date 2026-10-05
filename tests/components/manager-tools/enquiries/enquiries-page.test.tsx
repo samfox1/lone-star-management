@@ -15,7 +15,7 @@
  * calls without this mock having to know.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import EnquiriesPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/page'
 
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
@@ -93,19 +93,23 @@ describe('/artists/[id]/enquiries', () => {
     expect(screen.getByText('Jamie Rowe')).toBeTruthy()
   })
 
-  it("labels the inbox row with the kind's LABEL from the table, not the slug", async () => {
+  it("labels an enquiry with the kind's LABEL from the table, not the slug", async () => {
     await renderPage()
-    // Inside the ROW: the label is also a filter word.
-    expect(within(screen.getByText('Jamie Rowe').closest('li')!).getByText('Sync licensing')).toBeTruthy()
+    // The kind is not on the row (Sam, 2026-10-05); the open enquiry names it.
+    await act(async () => {
+      fireEvent.click(within(screen.getByText('Jamie Rowe').closest('li')!).getAllByRole('button')[0])
+    })
+    expect(within(screen.getByRole('dialog', { name: 'Enquiry from Jamie Rowe' })).getByText('Sync licensing')).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 
-  it("offers the artist's kinds as filters, from the kinds table, in the artist's order", async () => {
-    // Booking has no enquiries yet and is still offered: the filters say what CAN land here.
+  it("offers the artist's kinds in the Type menu, from the kinds table, in the artist's order", async () => {
+    // Booking has no enquiries yet and is still offered: the menu says what CAN land here.
     await renderPage()
-    expect(screen.getByRole('button', { name: 'Booking' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Sync licensing' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Demos' })).toBeNull()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('combobox', { name: 'Type' }))
+    })
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['All types', 'Booking', 'Sync licensing'])
   })
 
   it('is the inbox and nothing else — no kind rows, no Add kind', async () => {
