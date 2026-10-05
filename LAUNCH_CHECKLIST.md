@@ -46,6 +46,11 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
       runner (Vercel Cron route with the service client, or pg_cron + pg_net calling a function)
       that drains the same queue, so files go on a quiet week too
       (`20261005120000_enquiry_retention.sql`).
+- [ ] Enquiry status `sent` means Resend ACCEPTED the email, not that it was delivered. There is
+      no bounce handling yet, so an enquiry sent to a mistyped recipient still counts as emailed
+      and is deleted at 30 days, though nobody ever got it. Follow-up: a Resend bounce webhook
+      that marks the enquiry `failed`, which moves it to the 90-day class and shows it in the inbox
+      (`20261005120000_enquiry_retention.sql`, `src/lib/enquiries/retention.ts`).
 
 ## 5. Search and AI visibility (per artist site)
 

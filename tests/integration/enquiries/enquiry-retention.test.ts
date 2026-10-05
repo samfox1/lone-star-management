@@ -21,7 +21,8 @@
  *           • attachment rows go with the enquiry; the audio OBJECT stays in the bucket and its
  *             path is queued (SQL cannot delete files safely), and a second run is a no-op
  *           • anon and a manager cannot run the prune, read the rule, read the schedule, or
- *             read the queue
+ *             read or write the queue (insert, repoint, remove: each one a file deleted or kept
+ *             wrongly)
  *           • the nightly job exists, is active, and runs prune_enquiries() at 04:20 UTC
  * Not here: draining the queue (supabase/functions/contact/index.ts, drainFilePurges): Deno
  *           plumbing, like the attachment sweep beside it. The rule in TS:
@@ -201,6 +202,36 @@ describe.skipIf(!RETENTION_PUSHED)('enquiry retention', () => {
 
     expectRlsDenied((await anon.from('enquiry_file_purges').select('id')).error, 'anon reading the queue')
     expectRlsDenied((await asA.from('enquiry_file_purges').select('id')).error, 'a manager reading the queue')
+  })
+
+  it('CRITICAL: nobody but the service role can WRITE the queue — a path in it is a file that gets deleted', async () => {
+    // The queue is a delete list: the contact function removes every path in it from the bucket.
+    // Inserting would let a stranger pick which audio is deleted; updating would redirect a
+    // queued delete onto a live file; deleting would strand a file forever. So: a planted
+    // witness row, a fresh path the writes aim at, and every outcome read back through the
+    // service client, never from the return value (RLS-filtered writes return no error).
+    const witness = `${a.id}/${randomUUID()}/${randomUUID()}-queued.mp3`
+    const target = `${a.id}/${randomUUID()}/${randomUUID()}-live.mp3`
+    paths.push(witness, target)
+    const { data: planted, error } = await svc
+      .from('enquiry_file_purges')
+      .insert({ storage_path: witness })
+      .select('id')
+      .single()
+    if (error || !planted) throw new Error(`plant queue row: ${error?.message ?? 'no row'}`)
+    const id = (planted as { id: number }).id
+    expect(await queued(witness), 'the witness was not planted — the update/delete denials would be vacuous').toBe(true)
+    expect(await queued(target)).toBe(false)
+
+    for (const [who, client] of [['anon', anon], ['a manager', asA]] as const) {
+      const queue = () => client.from('enquiry_file_purges')
+      expectRlsDenied((await queue().insert({ storage_path: target })).error, `${who} queueing a file`)
+      expectRlsDenied((await queue().update({ storage_path: target }).eq('id', id)).error, `${who} repointing a queued file`)
+      expectRlsDenied((await queue().delete().eq('id', id)).error, `${who} removing a queued file`)
+    }
+
+    expect(await queued(target), 'a path reached the delete list from outside the service role').toBe(false)
+    expect(await queued(witness), 'the planted row was deleted or repointed from outside the service role').toBe(true)
   })
 
   it('the nightly job exists, is active, and runs exactly the prune at 04:20 UTC', async () => {

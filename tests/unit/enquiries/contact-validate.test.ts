@@ -18,6 +18,7 @@ import {
   composeText,
   SLUG_STORE_MAX,
   decideDoor,
+  deliveryRecord,
   formatFrom,
   hasContent,
   hashIp,
@@ -903,5 +904,33 @@ describe('buildSubject / composeText — the last two unwatched lines', () => {
     }).split('\n')
     const i = out.findIndex((l) => l.startsWith('Files are deleted'))
     expect(out[i + 1]).toBe('')
+  })
+})
+
+describe('deliveryRecord — what the row says about the email, which decides how long it is kept', () => {
+  // Since 20261005120000 'sent' is the 30-day class ("the manager has it in their mail") and
+  // everything else is kept 90. So this is a retention decision, not a label.
+  it('a DRY RUN records nothing: no email went out, so the row stays queued (the 90-day class)', () => {
+    // It used to be marked sent with provider 'dry-run'. With retention that is a message nobody
+    // was mailed, deleted at 30 days, and the inbox was its only copy.
+    expect(deliveryRecord({ dryRun: true, providerId: null, sendError: null })).toBeNull()
+  })
+
+  it('a real send that Resend accepted is recorded as sent, with its id', () => {
+    expect(deliveryRecord({ dryRun: false, providerId: 're_123', sendError: null })).toEqual({
+      p_ok: true,
+      p_provider_id: 're_123',
+      p_error: null,
+    })
+  })
+
+  it('a failure is recorded as failed, dry run or not: nobody to address it to is a setup problem to show', () => {
+    for (const dryRun of [false, true]) {
+      expect(deliveryRecord({ dryRun, providerId: null, sendError: 'no usable recipient' })).toEqual({
+        p_ok: false,
+        p_provider_id: null,
+        p_error: 'no usable recipient',
+      })
+    }
   })
 })

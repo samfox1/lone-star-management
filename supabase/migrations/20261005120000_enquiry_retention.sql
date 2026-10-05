@@ -9,6 +9,9 @@
 --   status 'sent'   → deleted 30 days after it arrived (the manager has it in their mail)
 --   anything else   → deleted after 90 (failed, unroutable, still queued, any later status:
 --                     the dashboard is the only copy, so it gets the longer time)
+-- 'sent' means Resend ACCEPTED the email, not that it was delivered: there is no bounce
+-- handling yet (LAUNCH_CHECKLIST.md). A dry run is never marked 'sent'; it stays 'queued'
+-- (deliveryRecord in supabase/functions/contact/validate.ts).
 -- Anchored on created_at for both. The attachments go with the enquiry. The inbox shows each
 -- enquiry's "deleted in N days" from the SAME rule: src/lib/enquiries/retention.ts. Change one,
 -- change both.
@@ -117,6 +120,10 @@ comment on table public.enquiry_file_purges is
 -- (BYPASSRLS) and the definer function ever touches it.
 alter table public.enquiry_file_purges enable row level security;
 revoke all on table public.enquiry_file_purges from public, anon, authenticated;
+-- Its id sequence too: Supabase's default privileges grant usage on every new sequence to anon
+-- and authenticated by role, the same trap as functions (AGENTS.md "Grants"). Useless to them
+-- without the table, but nobody but the service role has a reason to hold it.
+revoke all on sequence public.enquiry_file_purges_id_seq from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3. The job

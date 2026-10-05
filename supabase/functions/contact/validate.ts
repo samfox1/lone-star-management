@@ -499,6 +499,35 @@ export function pickRecipients(
   return out
 }
 
+/** The arguments `mark_enquiry_sent` takes, less the enquiry id. */
+export type DeliveryRecord = { p_ok: boolean; p_provider_id: string | null; p_error: string | null }
+
+/**
+ * What `mark_enquiry_sent` should record after one send attempt, or null to record nothing.
+ *
+ * This is a RETENTION decision, not a label: since 20261005120000 an enquiry marked 'sent' is
+ * deleted 30 days after it arrives (the manager has it in their mail), and every other status
+ * is kept 90 (the dashboard is the only copy).
+ *
+ * A DRY RUN RECORDS NOTHING, so the row stays 'queued'. It used to be marked 'sent' with
+ * provider 'dry-run', which was harmless while 'sent' was only a label. With retention it
+ * meant a message nobody was mailed, deleted at 30 days, its only copy gone. Left 'queued' it
+ * gets the 90 days every other un-emailed enquiry gets, so a dry run left on by mistake costs
+ * the missing emails and nothing else.
+ *
+ * A FAILURE IS RECORDED EVEN IN A DRY RUN: an enquiry nobody could be addressed to is a setup
+ * problem, and 'failed' is how the manager sees it.
+ */
+export function deliveryRecord(a: {
+  dryRun: boolean
+  providerId: string | null
+  sendError: string | null
+}): DeliveryRecord | null {
+  if (a.sendError !== null) return { p_ok: false, p_provider_id: a.providerId, p_error: a.sendError }
+  if (a.dryRun) return null
+  return { p_ok: true, p_provider_id: a.providerId, p_error: null }
+}
+
 /**
  * The email body. Moved here from index.ts (review, 2026-09-22): it is a pure function
  * deciding what a stranger reads, and index.ts is for plumbing nobody can test.

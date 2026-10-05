@@ -37,6 +37,7 @@ import {
   composeExtras,
   composeText,
   decideDoor,
+  deliveryRecord,
   formatFrom,
   hashIp,
   parseAllowedOrigins,
@@ -58,7 +59,8 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
 const IP_SALT = Deno.env.get('CONTACT_IP_SALT') ?? ''
 const ALLOWED = parseAllowedOrigins(Deno.env.get('CONTACT_ALLOWED_ORIGINS'))
-/** Skips the Resend call and marks the enquiry sent. Used for deploy smoke tests. */
+/** Skips the Resend call and leaves the enquiry 'queued' (deliveryRecord: a dry run must not
+ *  be marked 'sent', which retention deletes at 30 days). Used for deploy smoke tests. */
 const DRY_RUN = Deno.env.get('CONTACT_DRY_RUN') === 'true'
 /** Where the manager reads their enquiries. Optional: without it the email says "open
  *  Lone Star" instead of linking, which is worse but never broken. A wrong link in an
@@ -216,8 +218,9 @@ async function sweepExpiredAttachments(): Promise<void> {
  * never forgotten. A path whose upload never completed deletes as a no-op.
  *
  * Runs after EVERY stored enquiry, not one in a hundred: the queue is empty almost always, so
- * it costs one small read, and a contact form's traffic is the only clock this has. Entirely
- * best-effort, like the sweep: a failure here must never affect the enquiry being handled.
+ * it costs one small read, and a contact form's traffic is the only clock this has. It runs
+ * AFTER the response (afterResponse), so the fan never waits on it. Entirely best-effort, like
+ * the sweep: a failure here must never affect the enquiry being handled.
  */
 async function drainFilePurges(): Promise<void> {
   try {
@@ -243,6 +246,31 @@ async function drainFilePurges(): Promise<void> {
     await rest(`enquiry_file_purges?id=in.(${rows.map((r) => Number(r.id)).join(',')})`, { method: 'DELETE' })
   } catch (e) {
     console.error('contact: file purge failed', e)
+  }
+}
+
+/**
+ * Run housekeeping AFTER the response has gone, so the visitor never waits on it.
+ *
+ * `EdgeRuntime.waitUntil` keeps the worker alive until the promise settles; without it a
+ * promise left running when the handler returns can be cut off when the worker shuts down.
+ * Read off globalThis rather than named bare: a bare `EdgeRuntime` where the global is
+ * missing (an older runtime, a local serve without it) is a ReferenceError, which the
+ * handler's catch-all would turn into a 500 for an enquiry that was already stored. Here it
+ * degrades to a promise that runs unguarded, which is what the sweep amounts to anyway.
+ *
+ * NEVER THROWS AND NEVER REJECTS: the task is wrapped, and the wrapper catches its own
+ * rejection, so nothing here can reach the visitor's response or surface as an unhandled
+ * rejection.
+ */
+function afterResponse(task: () => Promise<void>): void {
+  try {
+    const done = task().catch((e) => console.error('contact: background task failed', e))
+    const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => unknown } })
+      .EdgeRuntime
+    runtime?.waitUntil?.(done)
+  } catch (e) {
+    console.error('contact: background task not started', e)
   }
 }
 
@@ -506,7 +534,7 @@ Deno.serve(async (req: Request) => {
         purpose: body.purpose,
         ipHash,
       })
-      await drainFilePurges()
+      afterResponse(drainFilePurges)
       return json(
         200,
         { ok: true, uploads: issued.tickets, skipped: [...skipped, ...issued.skipped] },
@@ -530,7 +558,7 @@ Deno.serve(async (req: Request) => {
     if (recipients.length === 0) {
       sendError = 'no usable recipient resolved from submit_enquiry'
     } else if (DRY_RUN) {
-      providerId = 'dry-run'
+      // Nothing is sent, and deliveryRecord records nothing: the row stays 'queued'.
     } else {
       try {
         const res = await fetch('https://api.resend.com/emails', {
@@ -579,12 +607,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    await rpc('mark_enquiry_sent', {
-      p_id: row.enquiry_id,
-      p_ok: sendError === null,
-      p_provider_id: providerId,
-      p_error: sendError,
-    })
+    // What the row says decides how long it is kept ('sent' is the 30-day class), so the
+    // decision is deliveryRecord's, which is pure and tested.
+    const record = deliveryRecord({ dryRun: DRY_RUN, providerId, sendError })
+    if (record) await rpc('mark_enquiry_sent', { p_id: row.enquiry_id, ...record })
 
     if (sendError) {
       console.error('contact: send failed, enquiry kept', { slug: body.slug, enquiry: row.enquiry_id, error: sendError })
@@ -621,10 +647,14 @@ Deno.serve(async (req: Request) => {
     const uploads = issued.tickets
     skipped = [...skipped, ...issued.skipped]
 
-    // Opportunistic retention sweep, AFTER the response work is done, so a slow delete
-    // never delays the visitor's confirmation. Best-effort by design.
-    if (shouldSweep(Math.random())) await sweepExpiredAttachments()
-    await drainFilePurges()
+    // Housekeeping runs AFTER the response is sent (afterResponse), so a slow or failing
+    // delete never delays or fails the visitor's confirmation: the opportunistic 90-day file
+    // sweep (~1 request in 100), then the retention queue. One after the other, as before.
+    const sweep = shouldSweep(Math.random())
+    afterResponse(async () => {
+      if (sweep) await sweepExpiredAttachments()
+      await drainFilePurges()
+    })
 
     return json(200, { ok: true, uploads, skipped }, origin)
   } catch (e) {

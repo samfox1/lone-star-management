@@ -109,8 +109,9 @@ curl -sS -X POST "$URL/functions/v1/contact" ... -d '{...,"website":"http://spam
 ```
 
 Then check the dashboard at `/artists/<id>/enquiries` — every accepted submission should
-be listed, marked `Emailed to …` (dry-run marks them sent with
-`provider_message_id='dry-run'`).
+be listed. A dry run leaves them `queued`, never `sent`: nothing was emailed, and since
+retention (2026-10-05) `sent` means "deleted at 30 days" (`deliveryRecord` in
+`supabase/functions/contact/validate.ts`).
 
 **Before flipping `CONTACT_DRY_RUN=false`**, point one send at Resend's sink address
 `delivered@resend.dev` for a real API round trip with no real inbox involved. Then flip
