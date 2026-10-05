@@ -42,7 +42,7 @@ const tidy = (q: Quote): Quote => ({
  *
  * QUOTES ARE A CLICK-TO-EDIT LIST (Sam, 2026-10-05, prototypes/lists_before_after_20261002.html;
  * the grammar of _ui/edit-list.tsx, with three fields where it has one). At rest a quote is its
- * text: who said it, what they said, the link. A click opens the three as lines, with ✓ and
+ * text: what they said, who said it, the link. A click opens the three as lines, with ✓ and
  * its trash; Enter or ✓ saves, Escape or a click away puts it back. The bare + opens three
  * empty lines where the new quote will sit, with ✓ and ×. A quote needs words: ✓ on an empty
  * one goes to its "What they said" line, and a quote emptied of them leaves the list.
@@ -169,8 +169,10 @@ function QuoteRow({ quote, onSave, onRemove }: { quote: Quote; onSave: (q: Quote
       className={cx(LEDGER_ROW_GRID, 'w-full cursor-text text-left', FOCUS_RING)}
     >
       <span className="flex min-w-0 flex-col">
-        {quote.source ? <span className="truncate text-[15px] font-medium leading-6 text-ink">{quote.source}</span> : null}
-        <span className="mt-0.5 max-w-[40ch] text-[14px] leading-[1.5] text-ink-muted">{quote.quote}</span>
+        {/* What they said first, who said it under it (Sam, 2026-10-05: "Switch who said it and
+            what they said"). */}
+        <span className="max-w-[40ch] text-[15px] leading-[1.5] text-ink">{quote.quote}</span>
+        {quote.source ? <span className="mt-0.5 truncate text-[13px] font-medium leading-5 text-ink-muted">{quote.source}</span> : null}
       </span>
       <span className="min-w-0 truncate font-space text-[11px] leading-5 text-ink-faint min-[900px]:text-right">{quote.url}</span>
     </button>
@@ -178,7 +180,7 @@ function QuoteRow({ quote, onSave, onRemove }: { quote: Quote; onSave: (q: Quote
 }
 
 /**
- * A quote's three lines, open: who said it, what they said, the link. Enter (in any of them) or
+ * A quote's three lines, open: what they said, who said it, the link. Enter (in any of them) or
  * ✓ saves, tidied, unless there are no words yet: then focus goes to "What they said". Escape
  * or × (a new one) cancels. An open saved quote also puts itself back when focus leaves it.
  */
@@ -200,7 +202,7 @@ function QuoteFields({
   const words = useRef<HTMLTextAreaElement>(null)
   /** One save per Enter-and-click in the same tick (AGENTS.md rule 5). */
   const doneRef = useRef(false)
-  useEffect(() => who.current?.focus(), [])
+  useEffect(() => words.current?.focus(), [])
 
   const save = () => {
     if (doneRef.current) return
@@ -235,16 +237,6 @@ function QuoteFields({
       className={LEDGER_ROW_GRID}
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <input
-          ref={who}
-          aria-label="Who said it"
-          value={draft.source}
-          placeholder="Who said it"
-          maxLength={SOURCE_MAX}
-          spellCheck={false}
-          onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value }))}
-          className={cx(UNDERLINE, 'w-full max-w-[320px] text-[15px] font-medium leading-6 text-ink')}
-        />
         <textarea
           ref={words}
           aria-label="The quote"
@@ -255,7 +247,17 @@ function QuoteFields({
           spellCheck={false}
           // It wraps to show a long quote whole, but it is one line: no line breaks (Enter saves).
           onChange={(e) => setDraft((d) => ({ ...d, quote: e.target.value.replace(/\s*[\r\n]+\s*/g, ' ') }))}
-          className={cx(UNDERLINE, 'w-full max-w-[40ch] resize-none text-[14px] leading-[1.5] text-ink-muted [field-sizing:content] focus:text-ink')}
+          className={cx(UNDERLINE, 'w-full max-w-[40ch] resize-none text-[15px] leading-[1.5] text-ink [field-sizing:content]')}
+        />
+        <input
+          ref={who}
+          aria-label="Who said it"
+          value={draft.source}
+          placeholder="Who said it"
+          maxLength={SOURCE_MAX}
+          spellCheck={false}
+          onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value }))}
+          className={cx(UNDERLINE, 'w-full max-w-[320px] text-[13px] font-medium leading-5 text-ink-muted focus:text-ink')}
         />
       </div>
       <div className="flex min-w-0 items-center justify-start gap-2.5 min-[900px]:justify-end">

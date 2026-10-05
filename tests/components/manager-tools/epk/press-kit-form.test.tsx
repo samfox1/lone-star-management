@@ -82,11 +82,12 @@ describe('PressKitForm saves itself', () => {
     expect(fd.getAll('quote_url')).toEqual([''])
   })
 
-  it('the + opens a quote at "Who said it"; ✓ adds it with its own source and link', async () => {
+  it('the + opens a quote at "What they said"; ✓ adds it with its own source and link', async () => {
     render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
     fireEvent.click(screen.getByRole('button', { name: 'Add quote' }))
     const who = screen.getByRole('textbox', { name: 'Who said it' })
-    expect(who).toHaveFocus()
+    // The quote comes first now (Sam, 2026-10-05), so the + lands on its words.
+    expect(screen.getByRole('textbox', { name: 'The quote' })).toHaveFocus()
 
     fireEvent.change(who, { target: { value: 'Mixmag' } })
     fireEvent.change(screen.getByRole('textbox', { name: 'The quote' }), { target: { value: 'A warmer room.' } })
