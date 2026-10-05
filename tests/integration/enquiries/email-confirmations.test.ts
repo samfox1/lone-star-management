@@ -27,8 +27,11 @@
  *           • routing: unconfirmed receives nothing, confirmed does; grace receives until it
  *             ends; one confirm covers every list; the primary is the first CONFIRMED address;
  *             confirming for one artist confirms nothing for another
- *           • the code: 5 wrong tries and it is dead, also when fired at once; 15 minutes; a new
- *             send replaces code and link; the 60 s, 5-per-address and 20-per-artist caps
+ *           • the code: 5 wrong tries and it is dead, also when fired at once; 10 wrong tries in a
+ *             day lock the address whatever is resent in between (the link still works); 15
+ *             minutes; a new send replaces code and link
+ *           • sends: not within 60 s; per address 5 an hour and 10 a day; per artist 20 an hour;
+ *             the whole platform 200 an hour, also when sends arrive at once
  *           • the link: it confirms once; used, unknown and expired all answer 'invalid'
  *           • only SHA-256 hashes are stored
  * Not here: the legacy-grace SEED, which runs once, at push time, on real artists' rows
@@ -71,6 +74,7 @@ type Row = {
   token_hash: string | null
   token_expires_at: string | null
   sent_at: string[]
+  wrong_at: string[]
 }
 type Status = { email: string; confirmed: boolean; waiting: boolean }
 
@@ -436,6 +440,57 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       expect(await routed(a.id, 'booking')).not.toContain(email)
     })
 
+    // Ten wrong tries in a day lock the address: resending a fresh code does not buy more guesses.
+    it('CRITICAL: ten wrong tries in a day lock the address, whatever is resent in between', async () => {
+      // THE ABUSE PATH (review, 2026-10-05). Each send resets the 5-try count, so send-and-guess
+      // around the clock was ~100 guesses an hour, about 7% a month to "confirm" a stranger.
+      const email = fresh('day-budget')
+      await list(a.id, 'booking', email)
+
+      const first = await send(a.id, email)
+      for (let i = 0; i < 5; i++) await confirmCode(asA, a.id, email, wrongFor(first.code))
+      await forgetSends(a.id)
+      const second = await send(a.id, email)
+      const verdicts: (string | null)[] = []
+      for (let i = 0; i < 5; i++) verdicts.push((await confirmCode(asA, a.id, email, wrongFor(second.code))).verdict)
+      expect(verdicts).toEqual(['wrong', 'wrong', 'wrong', 'wrong', 'locked'])
+
+      await forgetSends(a.id)
+      const third = await send(a.id, email)
+      // A fresh code with no tries on it: only the day's budget can refuse it now.
+      expect(await row(a.id, email)).toMatchObject({ code_attempts: 0 })
+      expect((await row(a.id, email))!.wrong_at).toHaveLength(10)
+
+      expect((await confirmCode(asA, a.id, email, third.code)).verdict).toBe('locked')
+      expect((await row(a.id, email))!.confirmed_at).toBeNull()
+      expect(await routed(a.id, 'booking')).not.toContain(email)
+
+      // A day later the same live code works: the lock is the window, not a ban.
+      const { error } = await svc
+        .from('artist_email_confirmations')
+        .update({ wrong_at: Array.from({ length: 10 }, () => ago(24 * HOUR + MIN)) })
+        .eq('artist_id', a.id)
+        .eq('email', email)
+      if (error) throw new Error(error.message)
+      expect((await confirmCode(asA, a.id, email, third.code)).verdict).toBe('confirmed')
+    })
+
+    // When the code budget is spent, the link in the email still confirms: it proves the inbox.
+    it('a spent day budget does not stop the link', async () => {
+      const email = fresh('day-budget-link')
+      await list(a.id, 'booking', email)
+      const { code, token } = await send(a.id, email)
+      await svc
+        .from('artist_email_confirmations')
+        .update({ wrong_at: Array.from({ length: 10 }, () => ago(HOUR)) })
+        .eq('artist_id', a.id)
+        .eq('email', email)
+      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('locked')
+
+      expect((await confirmToken(token)).status).toBe('confirmed')
+      expect(await routed(a.id, 'booking')).toContain(email)
+    })
+
     // Guesses fired all at once still count one by one.
     it('CRITICAL: wrong guesses fired at once cannot skip the count', async () => {
       // Without the row lock each call reads "0 tries so far" and gets a verdict, so the limit is
@@ -513,10 +568,32 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       await setSends(a.id, email, [ago(50 * MIN), ago(40 * MIN), ago(30 * MIN), ago(20 * MIN), ago(10 * MIN)])
       expect(await begin(userA, a.id, email)).toMatchObject({ status: 'too_many', code: null, token: null })
 
-      // Only the last hour counts: one of five is older, so this is the 5th, and the old one is dropped.
+      // Only the last hour counts for this rule: one of five is older, so this is the 5th. The old
+      // one is kept, because it still counts toward the day.
       await setSends(a.id, email, [ago(70 * MIN), ago(40 * MIN), ago(30 * MIN), ago(20 * MIN)])
       expect((await begin(userA, a.id, email)).status).toBe('sent')
-      expect((await row(a.id, email))!.sent_at).toHaveLength(4)
+      expect((await row(a.id, email))!.sent_at).toHaveLength(5)
+    })
+
+    // At most 10 sends a day to one address, however they are spaced through the day.
+    it('at most 10 sends a day to one address', async () => {
+      // An hourly limit alone let a manager mail one stranger ~120 times a day (review,
+      // 2026-10-05). Spaced so the 60 s and hourly rules never fire: only the day can refuse.
+      const email = fresh('daily')
+      await list(a.id, 'booking', email)
+      await send(a.id, email)
+      const nine = [23, 20, 17, 14, 11, 8, 5, 3, 2].map((h) => ago(h * HOUR))
+
+      await setSends(a.id, email, nine)
+      expect((await begin(userA, a.id, email)).status).toBe('sent')
+
+      await setSends(a.id, email, [...nine, ago(2 * MIN)])
+      expect(await begin(userA, a.id, email)).toMatchObject({ status: 'too_many', code: null, token: null })
+
+      // A day is 24 hours: the oldest one aged out, so this is the 10th again, and it is dropped.
+      await setSends(a.id, email, [ago(25 * HOUR), ...nine.slice(1), ago(2 * MIN)])
+      expect((await begin(userA, a.id, email)).status).toBe('sent')
+      expect((await row(a.id, email))!.sent_at).toHaveLength(10)
     })
 
     // At most 20 sends an hour for one artist, across all its addresses.
@@ -539,6 +616,52 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
         expect((await begin(userA, c.id, email)).status).toBe('sent')
       } finally {
         await deleteThrowawayArtist(svc, c)
+      }
+    })
+
+    // At most 200 sends an hour across ALL artists, also when they arrive at the same moment.
+    it('CRITICAL: at most 200 sends an hour across the whole platform, also when they arrive at once', async () => {
+      // No number of artists or managers can turn this into a mailing list from the shared
+      // domain. GLOBAL STATE on the live project: the planted sends would refuse real ones too.
+      // They are dated 59 minutes ago, so they stop counting about a minute after they are
+      // planted even if this test dies before its `finally`; on a healthy run they are gone in
+      // seconds. Real sends in the last hour are counted first so the total is exactly 199 (a
+      // real send crossing the hour mark mid-test would make it 198: two would go, and this
+      // would fail loudly, never pass wrongly).
+      const { data: live, error: e1 } = await svc.from('artist_email_confirmations').select('sent_at').neq('sent_at', '{}')
+      if (e1) throw new Error(e1.message)
+      const already = ((live ?? []) as { sent_at: string[] }[])
+        .flatMap((r) => r.sent_at)
+        .filter((t) => Date.parse(t) > Date.now() - HOUR).length
+      expect(already, 'the platform is too busy to plant 199 sends').toBeLessThan(199)
+
+      // The planted sends sit under their own artist, so they spend the platform's hour without
+      // touching the per-artist cap of the artists that send below.
+      const filler = await createThrowawayArtist(svc, 'email confirm platform cap')
+      try {
+        const { error: e2 } = await svc.from('artist_email_confirmations').insert({
+          artist_id: filler.id,
+          email: 'platform-filler@example.com',
+          sent_at: Array.from({ length: 199 - already }, () => ago(59 * MIN)),
+        })
+        if (e2) throw new Error(e2.message)
+        const senders = [
+          ...Array.from({ length: 3 }, () => ({ artist: a.id, user: userA, email: fresh('platform-a') })),
+          ...Array.from({ length: 3 }, () => ({ artist: b.id, user: userB, email: fresh('platform-b') })),
+        ]
+        for (const s of senders) await list(s.artist, 'booking', s.email)
+
+        const statuses = await Promise.all(senders.map((s) => begin(s.user, s.artist, s.email).then((r) => r.status)))
+
+        expect(statuses.filter((st) => st === 'sent')).toHaveLength(1)
+        expect(statuses.filter((st) => st === 'too_many')).toHaveLength(5)
+
+        // The witness: with the planted hour gone, a refused address sends at once.
+        await deleteThrowawayArtist(svc, filler)
+        const refused = senders[statuses.indexOf('too_many')]
+        expect((await begin(refused.user, refused.artist, refused.email)).status).toBe('sent')
+      } finally {
+        await deleteThrowawayArtist(svc, filler)
       }
     })
 

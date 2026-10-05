@@ -31,8 +31,9 @@ booking link). Nothing sends to it. Noted for later.
 | | |
 |---|---|
 | Code | 6 digits, 15 minutes, 5 wrong tries then it is dead (send a new one) |
+| Wrong tries per day | at most 10 per address in any 24 h, across every code sent; then every code is refused (`'locked'`) until the oldest try is a day old. A resend does not reset it. The link still works |
 | Link | the email's Confirm button, 7 days |
-| Resend | not within 60 s of the last; at most 5 per address per hour; at most 20 per artist per hour |
+| Resend | not within 60 s of the last; per address at most 5 an hour and 10 a day; at most 20 per artist per hour; at most 200 per hour across the whole platform (one global lock, so sends arriving at once cannot slip past) |
 | One per address | confirmation is per (artist, lower(email)): skeen@ on three lists confirms once |
 | New send | replaces the code AND the link (only the latest email works) |
 | Only listed addresses | a code is only ever sent to an address on one of the artist's lists |
@@ -50,7 +51,9 @@ Table `public.artist_email_confirmations`, primary key `(artist_id, email)`:
 - `confirmed_at timestamptz` · `grace_until timestamptz`
 - `code_hash text` · `code_expires_at timestamptz` · `code_attempts int not null default 0`
 - `token_hash text unique` · `token_expires_at timestamptz`
-- `sent_at timestamptz[] not null default '{}'` (send times inside the last hour, for the caps)
+- `sent_at timestamptz[] not null default '{}'` (send times inside the last 24 h, for the caps)
+- `wrong_at timestamptz[] not null default '{}'` (wrong-code times inside the last 24 h: the daily
+  budget a resend does not reset)
 - `created_at timestamptz not null default now()`
 
 RLS ON with NO policies: nobody reads it directly. Everything goes through these functions
@@ -60,8 +63,8 @@ RLS ON with NO policies: nobody reads it directly. Everything goes through these
 | function | who (grants per AGENTS.md) | does |
 |---|---|---|
 | `email_confirmation_status(p_artist_id)` → `(email, confirmed bool, waiting bool)` | manager-facing (authenticated, `is_admin() or is_manager_of`) | for every address on the artist's lists: confirmed, or waiting. Never returns hashes |
-| `begin_email_confirmation(p_user_id, p_artist_id, p_email)` → `(status, code, token, artist_name, kinds text[], site_host)` | SERVICE-ONLY | checks `p_user_id` manages the artist (artist_managers) or is admin; the address is on one of the artist's lists; already confirmed → `status 'confirmed'`, nothing generated; caps → `'too_soon'` / `'too_many'`; else generates a 6-digit code and a 32-byte url-safe token, stores their hashes + expiries, resets attempts, appends to `sent_at`, returns `'sent'` with the PLAINTEXT code and token (the only time they exist) |
-| `confirm_email_code(p_artist_id, p_email, p_code)` → `status` | manager-facing | row locked; no live code → `'expired'`; attempts ≥ 5 → `'locked'`; wrong → attempts+1, `'wrong'` (or `'locked'` on the 5th); right → `confirmed_at = now()`, code and token cleared, `'confirmed'` |
+| `begin_email_confirmation(p_user_id, p_artist_id, p_email)` → `(status, code, token, artist_name, kinds text[], site_host)` | SERVICE-ONLY | checks `p_user_id` manages the artist (artist_managers) or is admin; the address is on one of the artist's lists; already confirmed → `status 'confirmed'`, nothing generated; caps → `'too_many'` (checked first) / `'too_soon'`; else generates a 6-digit code and a 32-byte url-safe token, stores their hashes + expiries, resets attempts, appends to `sent_at`, returns `'sent'` with the PLAINTEXT code and token (the only time they exist) |
+| `confirm_email_code(p_artist_id, p_email, p_code)` → `status` | manager-facing | row locked; 10 wrong in the last 24 h → `'locked'`; no live code → `'expired'`; attempts ≥ 5 → `'locked'`; wrong → attempts+1 and logged in `wrong_at`, `'wrong'` (or `'locked'` when that spends either budget); right → `confirmed_at = now()`, code and token cleared, `'confirmed'` |
 | `confirm_email_token(p_token)` → `(status, email, artist_name, kinds text[])` | SERVICE-ONLY | by token hash; expired/unknown → `'invalid'`; else confirms as above |
 
 `resolve_enquiry_recipients` (same signature) filters to confirmed-or-in-grace.
