@@ -44,8 +44,11 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 /** Where the dashboard runs, for the email's Confirm link (/confirm-email/<token>). Optional:
  *  without it the email carries the code only. Not derived from a request header, because a
- *  wrong link in an email cannot be corrected after it is sent. */
-const APP_URL = Deno.env.get('APP_URL') ?? null
+ *  wrong link in an email cannot be corrected after it is sent. SEPARATE from contact's
+ *  LONE_STAR_APP_URL on purpose: that one is set today, and the dashboard it names does not
+ *  serve /confirm-email until it is deployed with it. Set this only then, so no email ever
+ *  carries a link to a page that 404s. */
+const APP_URL = Deno.env.get('EMAIL_CONFIRM_APP_URL') ?? null
 /** Skips the Resend call. For the first deploy's smoke test, like contact's CONTACT_DRY_RUN.
  *  The SQL still runs, so a dry run DOES use a send slot and replace any earlier code. */
 const DRY_RUN = Deno.env.get('EMAIL_CONFIRM_DRY_RUN') === 'true'
