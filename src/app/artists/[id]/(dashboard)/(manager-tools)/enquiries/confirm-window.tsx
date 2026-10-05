@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } 
 import { cx } from '@/lib/cx'
 import {
   CODE_LENGTH,
+  codeIsLive,
   EMPTY_SLOTS,
   codeDigits,
   codeFrom,
@@ -33,8 +34,10 @@ import { confirmEmailCodeAction, sendEmailCodeAction } from './actions'
  *   bottom left      the resend glyph and its 60 s countdown
  *   bottom right     a trash: a waiting address is not click-to-edit, so a typo leaves here
  *
- * Opening it after an add SENDS (`sendOnOpen`); opening it from a blue address does not (the
- * glyph is how to send again). Closing it is fine: the address stays blue and waits.
+ * Opening it after an add SENDS (`sendOnOpen`). Opening it from a blue address sends too, unless
+ * a code it can still type is already out ('unless-live', Sam 2026-10-05: send it "and then the
+ * modal opens after"); then it opens on that code and the glyph is how to send again. Closing
+ * it is fine: the address stays blue and waits.
  *
  * Re-entry latches are refs (AGENTS.md rule 5): a paste and the 6th keypress in one tick check
  * once; two fast clicks on resend send once.
@@ -51,8 +54,9 @@ export function ConfirmWindow({
 }: {
   artistId: string
   email: string
-  /** Send a code as it opens (the address was just added). */
-  sendOnOpen: boolean
+  /** Send a code as it opens: always (the address was just added), or 'unless-live' (a click on
+   *  a blue address: not over a code sent within its 15 minutes). */
+  sendOnOpen: boolean | 'unless-live'
   /** When the last code went to this address on this visit (ms), for the countdown. */
   sentAt?: number
   /** A send went out at this time, or did not after all (undefined: no wait before the next). */
@@ -65,8 +69,10 @@ export function ConfirmWindow({
   const [note, setNote] = useState<string | null>(null)
   /** Locked or expired: the slots stay off until a new code is sent. */
   const [dead, setDead] = useState(false)
+  /** Does this window send as it opens? Decided once, here, where reading the clock is allowed. */
+  const [sendsNow] = useState(() => (sendOnOpen === 'unless-live' ? !codeIsLive(sentBefore, Date.now()) : sendOnOpen))
   /** When the last code went: now, if this window sends as it opens. */
-  const [sentAt, setSentAt] = useState(() => (sendOnOpen ? Date.now() : sentBefore))
+  const [sentAt, setSentAt] = useState(() => (sendsNow ? Date.now() : sentBefore))
   const [now, setNow] = useState(() => Date.now())
   const inputs = useRef<(HTMLInputElement | null)[]>([])
   const checking = useRef(false)
@@ -139,7 +145,7 @@ export function ConfirmWindow({
     if (opened.current) return
     opened.current = true
     focusSlot(0)
-    if (sendOnOpen) {
+    if (sendsNow) {
       onSent(sentAt)
       void send()
     }

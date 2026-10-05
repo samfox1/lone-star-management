@@ -166,6 +166,11 @@ export function confirmStateFrom(res: { data: unknown; error: { code?: string } 
  *  live until then, so a second click does not send over it. */
 export const CODE_LIFE_MS = 15 * 60 * 1000
 
+/** A code sent at `sentAt` can still be typed at `now`. */
+export function codeIsLive(sentAt: number | undefined, now: number): boolean {
+  return sentAt !== undefined && now - sentAt < CODE_LIFE_MS
+}
+
 // ---------------------------------------------------------------------------
 // The link page (/confirm-email/[token])
 // ---------------------------------------------------------------------------

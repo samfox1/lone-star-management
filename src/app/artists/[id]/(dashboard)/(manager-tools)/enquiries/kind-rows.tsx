@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
-import { CODE_LIFE_MS, emailKey, type ConfirmState } from '@/lib/enquiries/confirm'
+import { emailKey, type ConfirmState } from '@/lib/enquiries/confirm'
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
 import { EditList } from '../_ui/edit-list'
@@ -80,16 +80,11 @@ export function KindRows({
   const [confirmed, setConfirmed] = useState(() => new Set(confirm.confirmed))
   const waiting = (email: string) => !confirmed.has(emailKey(email))
   /** The code window: which address, on which kind's row, and whether opening it sends. */
-  const [codeFor, setCodeFor] = useState<{ kindId: string; email: string; send: boolean; sentAt?: number } | null>(null)
+  const [codeFor, setCodeFor] = useState<{ kindId: string; email: string; send: boolean | 'unless-live'; sentAt?: number } | null>(null)
   /** When the last LIVE code went to each address: from the loader (sent before this visit, still
    *  typeable), then this visit's sends. For the window's countdown, and so a click on a blue
    *  address never sends over a code someone is reading out. */
   const sentAt = useRef(new Map<string, number>(Object.entries(confirm.liveCodes ?? {})))
-  /** A code went out within its 15 minutes: a click opens the window on it, sends nothing. */
-  const hasLiveCode = (email: string) => {
-    const at = sentAt.current.get(emailKey(email))
-    return at !== undefined && Date.now() - at < CODE_LIFE_MS
-  }
   /** A confirmed address being changed: the new one's key → the old one, which leaves that
    *  kind's list when the new one confirms. */
   const replacing = useRef(new Map<string, { kindId: string; email: string }>())
@@ -133,8 +128,14 @@ export function KindRows({
     }
   }
 
-  /** Open the code window for one address on one kind's row. */
-  function openCode(kindId: string, email: string, opts: { send: boolean; replaces?: string }) {
+  /**
+   * Open the code window for one address on one kind's row. `send: 'unless-live'` (a click on a
+   * blue address, Sam 2026-10-05: send it "and then the modal opens after") sends only when no
+   * code it can still type is out: a code sent within its 15 minutes, on this visit or before
+   * it (the loader's liveCodes), opens the window on THAT code, never a new one over it. The
+   * window decides as it opens (the clock is read there, not during this render).
+   */
+  function openCode(kindId: string, email: string, opts: { send: boolean | 'unless-live'; replaces?: string }) {
     if (opts.replaces) replacing.current.set(emailKey(email), { kindId, email: opts.replaces })
     setCodeFor({ kindId, email, send: opts.send, sentAt: sentAt.current.get(emailKey(email)) })
   }
@@ -170,7 +171,6 @@ export function KindRows({
             artistId={artistId}
             kind={k}
             waiting={waiting}
-            hasLiveCode={hasLiveCode}
             onCode={(email, opts) => openCode(k.id, email, opts)}
             onSave={(next) => save(k, next)}
             onSaved={(saved) => patch(k.id, saved)}
@@ -252,7 +252,6 @@ function KindRow({
   artistId,
   kind,
   waiting,
-  hasLiveCode,
   onCode,
   onSave,
   onSaved,
@@ -262,11 +261,9 @@ function KindRow({
   kind: EnquiryKindRow
   /** Has this address yet to be confirmed? */
   waiting: (email: string) => boolean
-  /** Is a code it can still type already out? Then a click opens the window on it; otherwise
-   *  the click sends one and the window opens (Sam, 2026-10-05). */
-  hasLiveCode: (email: string) => boolean
-  /** Open the code window for an address on this row; `send` sends a code as it opens. */
-  onCode: (email: string, opts: { send: boolean; replaces?: string }) => void
+  /** Open the code window for an address on this row; `send` sends a code as it opens
+   *  ('unless-live': only when no code it can still type is out). */
+  onCode: (email: string, opts: { send: boolean | 'unless-live'; replaces?: string }) => void
   /** The whole new list. Resolves `{ error }` (unsaid: the caller does not toast). */
   onSave: (next: Addr[]) => Promise<{ error?: string }>
   /** The name and/or description as stored. */
@@ -361,7 +358,7 @@ function KindRow({
         onAdd={add}
         onRemove={(i) => void remove(i)}
         removeLabel={(r) => `Remove ${r.label || r.email}`}
-        atRest={(r) => (waiting(r.email) ? <WaitingAddress email={r.email} onOpen={() => onCode(r.email, { send: !hasLiveCode(r.email) })} /> : undefined)}
+        atRest={(r) => (waiting(r.email) ? <WaitingAddress email={r.email} onOpen={() => onCode(r.email, { send: 'unless-live' })} /> : undefined)}
         className="justify-start min-[900px]:justify-end"
       />
       {dialog}
