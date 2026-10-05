@@ -57,7 +57,7 @@ describe('shows that are up to date pass', () => {
     const k = known({}, { tourDates: [...known().published!.tourDates, { date: '2026-11-01', venue: 'TBA', city: null, isPast: false }] })
     const r = s(evidence({ known: k }))
     expect(r.status).toBe('pass')
-    expect(rowOf(r, 'in Tapir: left out (no city)')).toMatch(/Nov 1, 2026/)
+    expect(rowOf(r, 'in Digital Tapir: left out (no city)')).toMatch(/Nov 1, 2026/)
   })
 
   // With no shows on the card and only a city-less show in Tour, the pass sentence still says Tour has one with no city. (verify-found SH4)
@@ -118,7 +118,7 @@ describe('the site and Tour must agree', () => {
     const k = known({}, { tourDates: [...known().published!.tourDates, { date: '2026-11-01', venue: 'Miramar', city: 'Milwaukee', isPast: false }] })
     const r = s(evidence({ known: k }))
     expect(r.status).toBe('fail')
-    expect(rowOf(r, 'in Tapir: in Tour, not on your site')).toMatch(/Milwaukee/)
+    expect(rowOf(r, 'in Digital Tapir: in Tour, not on your site')).toMatch(/Milwaukee/)
   })
 
   // A show on the site that Tour no longer has as upcoming (marked past or cancelled) fails, and is named.

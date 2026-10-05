@@ -98,7 +98,7 @@ describe('a home page cut at the read cap', () => {
   })
 })
 
-describe('nothing published from Tapir yet', () => {
+describe('nothing published from Digital Tapir yet', () => {
   // The tests that compare the site with what Tapir published say "you haven't published", not that we failed to read the site. (verify-found H2)
   it.each(['bio', 'profiles', 'shows', 'releases'])('%s says nothing is published yet', (id) => {
     const r = THESE[id](evidence({ known: known({ published: null }) }))
@@ -107,7 +107,7 @@ describe('nothing published from Tapir yet', () => {
   })
 })
 
-describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
+describe('a detail stating what Digital Tapir holds is labelled "in Digital Tapir"', () => {
   /** Only Tapir holds these. */
   const TAPIR = ['Zqtapirrelease', 'zqtapirprofile', 'Zqtapirvenue', 'Zqtapirtitle', 'Zqtapirgenre', 'Zqtapirregion', 'Iceland', 'Zqtapirbio', 'zqtapirchannel']
   /** Only the site holds these. */
@@ -118,7 +118,7 @@ describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
   function mismatched() {
     const graph = healthyGraph()
     graph[0] = artistNode({
-      genre: undefined, // so `genre` fails and names the sound Tapir has
+      genre: undefined, // so `genre` fails and names the sound Digital Tapir has
       description: undefined,
       foundingLocation: { '@type': 'Place', name: 'Chicago', address: { '@type': 'PostalAddress', addressLocality: 'Chicago' } },
       sameAs: [...PROFILES, 'https://www.instagram.com/zqsiteprofile/'],
@@ -146,7 +146,7 @@ describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
   const results = SEO_TEST_IDS.map((id) => ALL[id](mismatched()))
 
   // The scenario really puts Tapir-only values in front of the tests, in at least 8 tests: otherwise the two checks below would pass on nothing.
-  it('puts Tapir-only values into the details of the tests that compare', () => {
+  it('puts Digital Tapir-only values into the details of the tests that compare', () => {
     const quoted = results.flatMap((r) => r.evidence).filter((row) => has(row.value, TAPIR).length)
     const ids = new Set(results.filter((r) => r.evidence.some((row) => has(row.value, TAPIR).length)).map((r) => r.id))
     expect(quoted.length).toBeGreaterThanOrEqual(8)
@@ -154,14 +154,14 @@ describe('a detail stating what Tapir holds is labelled "in Tapir"', () => {
   })
 
   // CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in every test, so Tapir's data is never passed off as the site's.
-  it('labels every row quoting a Tapir-only value "in Tapir"', () => {
-    const bad = results.flatMap((r) => r.evidence.filter((row) => has(row.value, TAPIR).length && !/^in Tapir: /.test(row.label)).map((row) => `${r.id} · ${row.label}: ${row.value}`))
+  it('labels every row quoting a Digital Tapir-only value "in Digital Tapir"', () => {
+    const bad = results.flatMap((r) => r.evidence.filter((row) => has(row.value, TAPIR).length && !/^in Digital Tapir: /.test(row.label)).map((row) => `${r.id} · ${row.label}: ${row.value}`))
     expect(bad).toEqual([])
   })
 
   // CRITICAL, rule 3: no row labelled "in Tapir" quotes a value only the site holds.
-  it('never labels a site-only value "in Tapir"', () => {
-    const bad = results.flatMap((r) => r.evidence.filter((row) => /^in Tapir/.test(row.label) && has(row.value, SITE).length).map((row) => `${r.id} · ${row.label}: ${row.value}`))
+  it('never labels a site-only value "in Digital Tapir"', () => {
+    const bad = results.flatMap((r) => r.evidence.filter((row) => /^in Digital Tapir/.test(row.label) && has(row.value, SITE).length).map((row) => `${r.id} · ${row.label}: ${row.value}`))
     expect(bad).toEqual([])
   })
 })

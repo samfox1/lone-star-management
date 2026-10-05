@@ -51,7 +51,7 @@ describe('a bio of 100+ words with all three facts passes', () => {
     expect(rowOf(r, 'genre in your bio')).toMatch(/house/i)
     expect(rowOf(r, 'city in your bio')).toBe('Chicago')
     expect(rowOf(r, 'highlight in your bio')).toMatch(/OutWest|Smartbar|Navy Pier/)
-    expect(r.limits).toMatch(/100-word floor is Tapir[’']s own/)
+    expect(r.limits).toMatch(/100-word floor is Digital Tapir[’']s own/)
     expectPlainWords(r)
   })
 
@@ -79,12 +79,12 @@ describe('a bio of 100+ words with all three facts passes', () => {
   })
 
   // A fact Tapir doesn't have (no genre, no city) is skipped and said, never held against the bio.
-  it('skips a fact Tapir doesn’t have, and says so', () => {
+  it('skips a fact Digital Tapir doesn’t have, and says so', () => {
     const r = run(bioWith('Skeen is a DJ and producer. His EP OutWest came out in 2024.'), { genre: null, location: null })
     expect(r.status).toBe('pass')
     expect(r.value).toMatch(/1 of 1 fact/)
-    expect(rowOf(r, 'genre in your bio')).toMatch(/not set in Tapir/)
-    expect(rowOf(r, 'city in your bio')).toMatch(/not set in Tapir/)
+    expect(rowOf(r, 'genre in your bio')).toMatch(/not set in Digital Tapir/)
+    expect(rowOf(r, 'city in your bio')).toMatch(/not set in Digital Tapir/)
   })
 })
 
@@ -94,7 +94,7 @@ describe('a short bio, or one missing a fact, fails', () => {
     const skeen = 'My name is Skeen I am a Chicago DJ, producer, and filmmaker. I\'m documenting what it looks like to build a career in dance music from the ground up. I spend my days in the studio or somewhere with my USB, three cameras, and a ridiculous idea. Hopefully I\'ll see you in your city soon!'
     const r = run(skeen)
     expect(r.status).toBe('fail')
-    expect(r.sentence).toBe('your bio has 55 words, under Tapir’s 100-word floor, and doesn’t name your genre or a release or show.')
+    expect(r.sentence).toBe('your bio has 55 words, under Digital Tapir’s 100-word floor, and doesn’t name your genre or a release or show.')
     expect(r.value).toBe(`${words(skeen)} words · 1 of 3 facts`)
     expect(rowOf(r, 'city in your bio')).toBe('Chicago')
   })
@@ -200,13 +200,13 @@ describe('only the bio a page shows counts', () => {
   })
 })
 
-describe('no bio in Tapir', () => {
+describe('no bio in Digital Tapir', () => {
   // No bio anywhere: said about Tapir ("you haven't written a bio in Tapir"), not about the site. (verify-found B6)
-  it('fails with no bio, saying it about Tapir', () => {
+  it('fails with no bio, saying it about Digital Tapir', () => {
     const r = b(evidence({ home: homeHtml({ ld: [graphBlock([artistNode({ description: undefined })])] }), known: known({}, { bio: null }) }))
     expect(r.status).toBe('fail')
-    expect(r.sentence).toMatch(/haven[’']t written a bio in Tapir/i)
-    expect(rowOf(r, 'in Tapir: bio')).toBe('none published')
+    expect(r.sentence).toMatch(/haven[’']t written a bio in Digital Tapir/i)
+    expect(rowOf(r, 'in Digital Tapir: bio')).toBe('none published')
     expect(rowOf(r, 'fact card')).toMatch(/no bio/)
   })
 

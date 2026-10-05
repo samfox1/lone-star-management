@@ -55,7 +55,7 @@ function Tags({ row }: { row: TestRow }) {
   return (
     <>
       {row.def.outside ? (
-        <span className={cx(CAPS_VALUE, 'whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 text-ink-faint')}>Outside Tapir</span>
+        <span className={cx(CAPS_VALUE, 'whitespace-nowrap rounded-full border border-hairline px-[7px] py-0.5 text-ink-faint')}>Outside Digital Tapir</span>
       ) : null}
       {row.def.source ? (
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-space text-[12px] text-ink-faint">

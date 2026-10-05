@@ -28,9 +28,9 @@ const withGraph = (graph: Graph, more: Parameters<typeof evidence>[0] = {}) => e
 /** The artist's node with `over` changed, the rest of the healthy card kept. */
 const withArtist = (over: Record<string, unknown>, more: Parameters<typeof evidence>[0] = {}) => withGraph([artistNode(over), ...healthyGraph().slice(1)], more)
 
-describe('the profiles Tapir published pass', () => {
+describe('the profiles Digital Tapir published pass', () => {
   // The one exact-wording check: all 4 profiles listed (tracking and slashes ignored); the limits say we don't open each profile.
-  it('passes when the card lists exactly Tapir’s profiles', () => {
+  it('passes when the card lists exactly Digital Tapir’s profiles', () => {
     const r = p(evidence())
     expect(r.status).toBe('pass')
     expect(r.value).toBe('4 of 4')
@@ -40,12 +40,12 @@ describe('the profiles Tapir published pass', () => {
   })
 
   // CRITICAL: the bridge writes the Spotify profile from the artist id alone; it is Tapir's, never "not in Tapir".
-  it('counts the Spotify profile the site adds from the artist id as Tapir’s', () => {
+  it('counts the Spotify profile the site adds from the artist id as Digital Tapir’s', () => {
     const k = known({}, { links: known().published!.links.filter((l) => l.url !== PROFILES[0]), spotifyArtistId: '26KxuQlgIw8VP8YX2IkMWR' })
     const r = p(evidence({ known: k }))
     expect(r.status).toBe('pass')
     expect(r.value).toBe('4 of 4')
-    expect(rowOf(r, 'not in Tapir')).toBeUndefined()
+    expect(rowOf(r, 'not in Digital Tapir')).toBeUndefined()
   })
 
   // One profile written as a single string is read.
@@ -62,12 +62,12 @@ describe('the profiles Tapir published pass', () => {
 
 describe('a missing, extra or wrong profile fails', () => {
   // A profile Tapir has that the card is missing fails, and the details name it as Tapir's.
-  it('fails a profile Tapir has that the card is missing', () => {
+  it('fails a profile Digital Tapir has that the card is missing', () => {
     const k = known({}, { links: [...known().published!.links, { label: 'Bandcamp', url: 'https://skeen.bandcamp.com/', onSite: false }] })
     const r = p(evidence({ known: k }))
     expect(r.status).toBe('fail')
     expect(r.value).toBe('4 of 5')
-    expect(rowOf(r, 'in Tapir: not on your site')).toMatch(/skeen\.bandcamp\.com/)
+    expect(rowOf(r, 'in Digital Tapir: not on your site')).toMatch(/skeen\.bandcamp\.com/)
     expectPlainWords(r)
   })
 
@@ -75,14 +75,14 @@ describe('a missing, extra or wrong profile fails', () => {
   it('names a Spotify profile from the id that the card is missing', () => {
     const r = p(evidence({ known: known({}, { spotifyArtistId: 'Zq0Other0Id' }) }))
     expect(r.status).toBe('fail')
-    expect(rowOf(r, 'in Tapir: not on your site')).toMatch(/open\.spotify\.com\/artist\/Zq0Other0Id/)
+    expect(rowOf(r, 'in Digital Tapir: not on your site')).toMatch(/open\.spotify\.com\/artist\/Zq0Other0Id/)
   })
 
   // A profile on the card that Tapir doesn't have fails, and is named.
-  it('fails a profile on the card that Tapir does not have', () => {
+  it('fails a profile on the card that Digital Tapir does not have', () => {
     const r = p(withArtist({ sameAs: [...PROFILES, 'https://www.tiktok.com/@skeen200'] }))
     expect(r.status).toBe('fail')
-    expect(rowOf(r, 'not in Tapir')).toMatch(/tiktok\.com\/@skeen200/)
+    expect(rowOf(r, 'not in Digital Tapir')).toMatch(/tiktok\.com\/@skeen200/)
   })
 
   // A playlist is not a profile page: it doesn't say which account is the artist's.
@@ -115,7 +115,7 @@ describe('no profiles, or not your card', () => {
   })
 
   // A card with no artist in it, while Tapir has profiles, fails.
-  it('fails when the card has no artist but Tapir has profiles', () => {
+  it('fails when the card has no artist but Digital Tapir has profiles', () => {
     expect(p(evidence({ home: homeHtml({ ld: [] }) })).status).toBe('fail')
   })
 

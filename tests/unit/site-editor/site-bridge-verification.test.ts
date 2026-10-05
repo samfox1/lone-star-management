@@ -117,13 +117,13 @@ describe('siteVerification(payload)', () => {
   })
 
   // Skeen already proves ownership with its own env-var code; Tapir's joins it, never replaces it.
-  it('keeps the site’s own Google code beside Tapir’s, Tapir’s first', () => {
+  it('keeps the site’s own Google code beside Digital Tapir’s, Digital Tapir’s first', () => {
     expect(siteVerification(site(GOOGLE, BING), { google: OWN })).toEqual({ google: [GOOGLE, OWN], other: { 'msvalidate.01': BING } })
     expect(siteVerification(site(null, null), { google: OWN })).toEqual({ google: [OWN] })
   })
 
   // The same code twice is one tag.
-  it('says a code once when the site’s own and Tapir’s are the same', () => {
+  it('says a code once when the site’s own and Digital Tapir’s are the same', () => {
     expect(siteVerification(site(GOOGLE, null), { google: GOOGLE })).toEqual({ google: [GOOGLE] })
   })
 

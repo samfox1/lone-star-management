@@ -356,7 +356,7 @@ describe('the run-level `reach`: did the site answer at all?', () => {
 
 describe('failures after the claim', () => {
   // A failed read after the claim: the run is marked failed (not left "running") and the raw error stays hidden.
-  it('CRITICAL: reading what Tapir knows failing marks the run FAILED and returns a plain error', async () => {
+  it('CRITICAL: reading what Digital Tapir knows failing marks the run FAILED and returns a plain error', async () => {
     const f = world()
     const out = await runSeoTests(f.client, A, 'manual', WHO(f), { engine: engine(), readKnown: async () => { throw new Error('get_public_site: boom') } })
     expect(out).toMatchObject({ ok: false, reason: 'error' })

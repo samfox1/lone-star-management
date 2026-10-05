@@ -246,7 +246,7 @@ export function googleClient(creds: GoogleCreds, deps: GoogleDeps = {}) {
     async searchAnalytics(siteUrl: string, req: GoogleSearchRequest): Promise<GoogleResult<GoogleSearchAnswer>> {
       const dimensions = req.dimensions ?? []
       if (!DAY.test(req.startDate) || !DAY.test(req.endDate)) return { ok: false, reason: 'google_stats', detail: 'dates must be YYYY-MM-DD' }
-      if (!dimensions.every((d) => (GOOGLE_SEARCH_DIMENSIONS as readonly string[]).includes(d))) return { ok: false, reason: 'google_stats', detail: 'a dimension Tapir does not read' }
+      if (!dimensions.every((d) => (GOOGLE_SEARCH_DIMENSIONS as readonly string[]).includes(d))) return { ok: false, reason: 'google_stats', detail: 'a dimension Digital Tapir does not read' }
       const rowLimit = Math.min(25_000, Math.max(1, Math.floor(req.rowLimit ?? 1000)))
       const body = { startDate: req.startDate, endDate: req.endDate, dimensions, type: 'web', rowLimit, ...(req.dataState ? { dataState: req.dataState } : {}) }
       const r = await call('google_stats', `${CONSOLE_API}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, jsonInit('POST', body))

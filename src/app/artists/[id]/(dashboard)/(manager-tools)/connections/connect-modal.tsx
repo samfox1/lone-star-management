@@ -644,7 +644,7 @@ function YouTubeTrip({ artistId, sync }: { artistId: string; sync: boolean }) {
       <a href={youtubeStartPath(artistId, sync)} className={buttonClass('solid', 'w-fit whitespace-nowrap')}>
         Connect with YouTube
       </a>
-      <span className="text-[12px] leading-snug text-ink-muted">Google shows a warning while Tapir is in testing: that’s expected.</span>
+      <span className="text-[12px] leading-snug text-ink-muted">Google shows a warning while Digital Tapir is in testing: that’s expected.</span>
     </div>
   )
 }

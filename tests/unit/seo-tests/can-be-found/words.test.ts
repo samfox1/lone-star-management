@@ -74,18 +74,18 @@ describe('the bio', () => {
 describe('releases and shows', () => {
   // A missing release is named. The count is what the pages showed; the names are Tapir's, and
   // are labelled so (types.ts rule 3).
-  it('a release missing: fail naming it, the names labelled as Tapir’s', () => {
+  it('a release missing: fail naming it, the names labelled as Digital Tapir’s', () => {
     const home = HOME.replace('<li>OutWest</li>', '').replace(/OutWest EP/g, 'EP')
     const r = run('words', { pages: { '/': home, '/about': ABOUT.replace(/OutWest EP/g, 'EP') }, known: known({ bio: 'Skeen is a Chicago DJ and producer.' }) })
     expect(r).toMatchObject({ status: 'fail', value: '1 item missing', sentence: expect.stringContaining('“OutWest”') })
     expect(r.evidence).toContainEqual({ label: 'releases', value: '1 of 2 in the text' })
-    expect(r.evidence).toContainEqual({ label: 'in Tapir: releases not in the text', value: 'OutWest' })
+    expect(r.evidence).toContainEqual({ label: 'in Digital Tapir: releases not in the text', value: 'OutWest' })
   })
   // An upcoming show missing is named; a past show is never looked for.
   it('an upcoming show missing: fail naming it; a past show is not looked for', () => {
     const r = run('words', { pages: { '/': HOME.replace('Oct 4 · Hideaway, Chicago', 'Oct 4 · TBA'), '/about': ABOUT } })
     expect(r).toMatchObject({ status: 'fail', sentence: expect.stringContaining('“Hideaway”') })
-    expect(r.evidence).toContainEqual({ label: 'in Tapir: shows not in the text', value: 'Hideaway' })
+    expect(r.evidence).toContainEqual({ label: 'in Digital Tapir: shows not in the text', value: 'Hideaway' })
     // Navy Pier is past (and only in the bio): it is never listed as a show.
     expect(details(run('words'))).not.toMatch(/Navy Pier/)
   })

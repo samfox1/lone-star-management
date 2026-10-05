@@ -46,23 +46,23 @@ describe('a city, region and country pass', () => {
 
 describe('a place missing a part fails', () => {
   // CRITICAL: a city only (the shape skeen ships today) is a soft fail; Tapir HAS the region and country, so the advice is publish, not "add", and the details show Tapir's place.
-  it('fails a city only softly, advising publish when Tapir has the rest', () => {
+  it('fails a city only softly, advising publish when Digital Tapir has the rest', () => {
     const r = p(withPlace({ '@type': 'Place', name: 'Chicago' }))
     expect(r.status).toBe('fail')
     expect(r.lead).toBe('Almost')
     expect(r.value).toBe('city only')
     expect(r.action).toEqual(expect.objectContaining({ target: 'facts' }))
-    expect(r.todo).toMatch(/published in Tapir/)
+    expect(r.todo).toMatch(/published in Digital Tapir/)
     expect(r.todo).not.toMatch(/^Add/)
-    expect(rowOf(r, 'in Tapir: place')).toBe('city Chicago, IL · region IL · country United States')
+    expect(rowOf(r, 'in Digital Tapir: place')).toBe('city Chicago, IL · region IL · country United States')
     expectPlainWords(r)
   })
 
   // When Tapir has no region or country either, the advice is to add them on Profile.
-  it('advises adding the region and country when Tapir has neither', () => {
+  it('advises adding the region and country when Digital Tapir has neither', () => {
     const r = p(withPlace({ '@type': 'Place', name: 'Chicago' }, 'MusicGroup', { known: known({}, { region: null, country: null, countryCode: null }) }))
     expect(r.todo).toMatch(/^Add the state or region and the country on Profile/)
-    expect(rowOf(r, 'in Tapir: place')).toBe('city Chicago, IL · region not set · country not set')
+    expect(rowOf(r, 'in Digital Tapir: place')).toBe('city Chicago, IL · region not set · country not set')
   })
 
   // "Chicago, IL" in one line is not a region: search engines want separate facts, and the result says "one line", never "has Chicago, IL but not the state". (verify-found P1)
@@ -103,7 +103,7 @@ describe('a place missing a part fails', () => {
 
 describe('a place that isn’t yours, or isn’t real, fails', () => {
   // Austin when Tapir says Chicago is stale or wrong; "Earth" and "n/a" are not a real country or region. (verify-found P2)
-  it('fails a place that differs from Tapir’s, or a country nobody knows', () => {
+  it('fails a place that differs from Digital Tapir’s, or a country nobody knows', () => {
     expect(p(withPlace({ '@type': 'Place', address: { addressLocality: 'Austin', addressRegion: 'Texas', addressCountry: 'US' } })).status).toBe('fail')
     expect(p(withPlace({ '@type': 'Place', address: { addressLocality: 'Chicago', addressRegion: 'n/a', addressCountry: 'Earth' } })).status).toBe('fail')
   })

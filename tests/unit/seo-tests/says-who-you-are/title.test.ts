@@ -26,13 +26,13 @@ const t = WHO_TESTS.title
 
 describe('a title that says who you are passes', () => {
   // The one exact-wording check: the pass sentence quotes the live title, and the details say it matches Tapir's.
-  it('passes the healthy title, quoting it and naming where Tapir’s came from', () => {
+  it('passes the healthy title, quoting it and naming where Digital Tapir’s came from', () => {
     const r = t(evidence())
     expect(r.status).toBe('pass')
     expect(r.sentence).toBe('Your site’s title is “Skeen · Chicago house DJ and producer”.')
     expect(rowOf(r, 'title')).toBe('Skeen · Chicago house DJ and producer')
     expect(rowOf(r, 'length')).toBe('37 of 70')
-    expect(rowOf(r, 'in Tapir: title')).toMatch(/written on the Listing tab/i)
+    expect(rowOf(r, 'in Digital Tapir: title')).toMatch(/written on the Listing tab/i)
     expect(rowOf(r, 'same as your site')).toBe('yes')
     expectPlainWords(r)
   })
@@ -51,21 +51,21 @@ describe('a title that says who you are passes', () => {
   })
 })
 
-describe('what Tapir holds for the title is shown as Tapir’s', () => {
+describe('what Digital Tapir holds for the title is shown as Digital Tapir’s', () => {
   // A live title that differs from the published one is flagged, and Tapir's is labelled as Tapir's, not the site's.
-  it('says when the live title is not the one published, quoting Tapir’s as Tapir’s', () => {
+  it('says when the live title is not the one published, quoting Digital Tapir’s as Digital Tapir’s', () => {
     const r = t(evidence({ known: known({}, { seoTitle: 'Skeen · Chicago DJ' }) }))
     expect(rowOf(r, 'same as your site')).toBe('no')
-    expect(rowOf(r, 'in Tapir: title')).toBe('Skeen · Chicago DJ (written on the Listing tab)')
+    expect(rowOf(r, 'in Digital Tapir: title')).toBe('Skeen · Chicago DJ (written on the Listing tab)')
   })
 
   // With nothing written, Tapir's title is the one BUILT from the facts: it must never be called "written" by the manager. (verify-found T2)
-  it('calls a title Tapir built from the facts "built", never "written"', () => {
+  it('calls a title Digital Tapir built from the facts "built", never "written"', () => {
     // known.ts fills seoTitle from resolveSeo, so with nothing written it holds the built title, never null.
     const built = 'Skeen · Chicago house musician'
     const r = t(evidence({ home: homeHtml({ title: built }), known: known({}, { seoTitle: built }) }))
     expect(r.status).toBe('pass')
-    expect(rowOf(r, 'in Tapir: title')).toMatch(/built from your facts/i)
+    expect(rowOf(r, 'in Digital Tapir: title')).toMatch(/built from your facts/i)
     expect(r.evidence.map((x) => x.value).join(' ')).not.toMatch(/written on/)
   })
 })

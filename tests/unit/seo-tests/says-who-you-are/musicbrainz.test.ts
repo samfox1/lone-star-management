@@ -65,10 +65,10 @@ describe('the MusicBrainz test', () => {
   })
 
   // An answer that came from the manager's own Connections link is labelled as Tapir's, not as a lookup.
-  it('labels an answer from the Connections link as Tapir’s', () => {
+  it('labels an answer from the Connections link as Digital Tapir’s', () => {
     const r = m(evidence({ musicbrainz: found({ matchedOn: 'your MusicBrainz link in Connections', fromConnections: true }) }))
     expect(r.status).toBe('pass')
-    expect(rowOf(r, 'in Tapir: found by')).toMatch(/Connections/)
+    expect(rowOf(r, 'in Digital Tapir: found by')).toMatch(/Connections/)
   })
 
   // MusicBrainz answered and knows no artist: a fail with a create link on musicbrainz.org, pre-filled with the name.

@@ -63,7 +63,7 @@ describe('a genre on your own node passes', () => {
 
 describe('a missing or wrong genre fails', () => {
   // No genre while Tapir has one: the advice is "publish", pointing to Profile.
-  it('fails with no genre, advising publish when Tapir has one', () => {
+  it('fails with no genre, advising publish when Digital Tapir has one', () => {
     const r = g(withArtist({ genre: undefined }))
     expect(r.status).toBe('fail')
     expect(r.todo).toMatch(/publish/i)
@@ -72,15 +72,15 @@ describe('a missing or wrong genre fails', () => {
   })
 
   // No genre and none in Tapir: the advice is "add it".
-  it('fails with no genre, advising add when Tapir has none', () => {
+  it('fails with no genre, advising add when Digital Tapir has none', () => {
     const r = g(withArtist({ genre: [] }, { known: known({}, { genre: null }) }))
     expect(r.status).toBe('fail')
     expect(r.todo).toMatch(/add/i)
   })
 
   // The details name the sound Tapir has, labelled as Tapir's, when the card has none.
-  it('names the sound Tapir has, as Tapir’s', () => {
-    expect(rowOf(g(withArtist({ genre: undefined })), 'in Tapir: genre')).toBe('House, Tech House')
+  it('names the sound Digital Tapir has, as Digital Tapir’s', () => {
+    expect(rowOf(g(withArtist({ genre: undefined })), 'in Digital Tapir: genre')).toBe('House, Tech House')
   })
 
   // No fact card, or one that doesn't parse, names no genre.
@@ -90,10 +90,10 @@ describe('a missing or wrong genre fails', () => {
   })
 
   // The card's sound must be Tapir's: "Country" on the card when Tapir says House fails, quoting Tapir's. (verify-found G2)
-  it('fails a genre that is not the one in Tapir', () => {
+  it('fails a genre that is not the one in Digital Tapir', () => {
     const r = g(withArtist({ genre: 'Country' }))
     expect(r.status).toBe('fail')
-    expect(rowOf(r, /in Tapir/)).toMatch(/House/)
+    expect(rowOf(r, /in Digital Tapir/)).toMatch(/House/)
   })
 
   // Placeholders and links fill the field without naming a sound. Tapir has no genre here, so nothing but this rule can fail them. (verify-found G3)
@@ -134,10 +134,10 @@ describe('what kind of artist you are', () => {
   })
 
   // A card that calls a musician a person has no place for a style: the card is wrong, and the details show both sides.
-  it('fails a Person card for someone Tapir has as a musician', () => {
+  it('fails a Person card for someone Digital Tapir has as a musician', () => {
     const r = g(withArtist({ '@type': 'Person', genre: undefined }))
     expect(r.status).toBe('fail')
-    expect(rowOf(r, 'in Tapir: artist type')).toBe('Musician')
+    expect(rowOf(r, 'in Digital Tapir: artist type')).toBe('Musician')
     expect(rowOf(r, 'artist type')).toBe('Person')
     expectPlainWords(r)
   })

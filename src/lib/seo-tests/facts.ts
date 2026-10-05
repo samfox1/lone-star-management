@@ -57,12 +57,12 @@ function tooBig(what: string, evidence: Row[] = []): Result {
 }
 
 const noPublished = (what: string): Result => ({
-  status: 'unknown', value: 'nothing published', sentence: `you haven’t published from Tapir yet, so there’s nothing to compare ${what} with.`, evidence: [],
-  limits: 'This test compares your site with what you published in Tapir.',
+  status: 'unknown', value: 'nothing published', sentence: `you haven’t published from Digital Tapir yet, so there’s nothing to compare ${what} with.`, evidence: [],
+  limits: 'This test compares your site with what you published in Digital Tapir.',
 })
 
 const listOf = (xs: string[], max = 5) => xs.slice(0, max).join(' · ') + (xs.length > max ? ` · and ${xs.length - max} more` : '')
-const UPDATE = 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.'
+const UPDATE = 'Publish from Digital Tapir, then test again. If it stays, your site needs an update from whoever built it.'
 const HOME_CARD = 'We read the facts on your home page (top-level only).'
 
 /** The home page's fact card: the artist's own node, every top-level node, or why not. */
@@ -124,12 +124,12 @@ const profiles = make('profiles', (e) => {
   const missing = [...expected].filter(([k]) => !seen.has(k)).map(([, u]) => u)
   const extra = [...seen].filter(([k]) => !expected.has(k)).map(([, u]) => u)
   const connections = { kind: 'edit', target: 'connections', label: 'Open Connections' } as const
-  const limits = `We check the links match the profiles you published in Tapir. We don’t open each profile, so we can’t confirm an account is really yours. ${HOME_CARD}`
+  const limits = `We check the links match the profiles you published in Digital Tapir. We don’t open each profile, so we can’t confirm an account is really yours. ${HOME_CARD}`
   const cardRow: Row[] = card.none ? [{ label: 'fact card', value: 'none on the home page' }] : card.artist ? [] : card.others.length ? [{ label: 'fact card', value: `describes ${card.others.map((o) => `“${clip(o, 40)}”`).join(', ')}, not you` }] : [{ label: 'fact card', value: 'no artist in it' }]
   const evidence = [
     { label: 'listed on your site', value: live.length ? listOf(live.map((u) => clip(shortLink(u), 50)), 8) : 'none' },
-    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing.map((u) => clip(shortLink(u), 50))) }] : []),
-    ...(extra.length ? [{ label: 'not in Tapir', value: listOf(extra.map((u) => clip(shortLink(u), 50))) }] : []),
+    ...(missing.length ? [{ label: 'in Digital Tapir: not on your site', value: listOf(missing.map((u) => clip(shortLink(u), 50))) }] : []),
+    ...(extra.length ? [{ label: 'not in Digital Tapir', value: listOf(extra.map((u) => clip(shortLink(u), 50))) }] : []),
     ...(notProfile.length ? [{ label: 'not a profile page', value: listOf(notProfile.map((u) => clip(shortLink(u), 50))) }] : []),
     ...(twice.length ? [{ label: 'listed twice', value: listOf(twice.map((u) => clip(shortLink(u), 50))) }] : []),
     ...cardRow,
@@ -252,7 +252,7 @@ const apple = make('apple', (e) => {
       action: facts,
       evidence: [
         ...evidence, { label: 'store', value: first.known ? `${first.store} = ${storeName(first.store)}` : `${first.store} (not an Apple store)` },
-        { label: 'in Tapir: you’re based in', value: typed ? `${typed} (a country we don’t recognise)` : 'no country on Profile' },
+        { label: 'in Digital Tapir: you’re based in', value: typed ? `${typed} (a country we don’t recognise)` : 'no country on Profile' },
         { label: 'fact card: based in', value: 'no country' },
       ],
       limits,
@@ -262,7 +262,7 @@ const apple = make('apple', (e) => {
   const wrong = judged.filter((x) => !x.known || x.store !== country.toLowerCase())
   const base = [
     ...evidence,
-    place.from === 'tapir' ? { label: 'in Tapir: you’re based in', value: `${country} = ${countryName(country)}` } : { label: 'fact card: based in', value: `${country} = ${countryName(country)}` },
+    place.from === 'tapir' ? { label: 'in Digital Tapir: you’re based in', value: `${country} = ${countryName(country)}` } : { label: 'fact card: based in', value: `${country} = ${countryName(country)}` },
     ...(place.from === 'tapir' && onCard && onCard !== country ? [{ label: 'fact card: based in', value: `${onCard} = ${countryName(onCard)}` }] : []),
   ]
   if (!wrong.length) {
@@ -273,7 +273,7 @@ const apple = make('apple', (e) => {
   const inTapir = (e.known.published?.links ?? []).some((l) => linkKey(l.url) === linkKey(w.u))
   const fix = w.known && w.kind === 'artist' && country === 'US' && inTapir ? appleStorefrontFix(w.u) : null
   const what = w.kind === 'artist' ? 'link' : `${w.kind.replace('-', ' ')} link`
-  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: w.known ? `${w.store} = ${storeName(w.store)}` : `${w.store} (not an Apple store)` }, ...(wrong.length > 1 ? [{ label: 'other links with the wrong store', value: listOf(wrong.slice(1).map((x) => clip(shortLink(x.u), 60))) }] : []), ...(fix ? [{ label: 'in Tapir: after the fix', value: fix.fixed }] : [])]
+  const rows = [...base, { label: 'link', value: w.u }, { label: 'store', value: w.known ? `${w.store} = ${storeName(w.store)}` : `${w.store} (not an Apple store)` }, ...(wrong.length > 1 ? [{ label: 'other links with the wrong store', value: listOf(wrong.slice(1).map((x) => clip(shortLink(x.u), 60))) }] : []), ...(fix ? [{ label: 'in Digital Tapir: after the fix', value: fix.fixed }] : [])]
   const sentence = w.known
     ? `your Apple Music ${what} opens the ${storeName(w.store)} store, but you’re based in ${countryName(country)}.`
     : `your Apple Music ${what} names a store Apple doesn’t have (“/${w.store}/”); you’re based in ${countryName(country)}.`
@@ -281,7 +281,7 @@ const apple = make('apple', (e) => {
   if (fix) return { status: 'fail', lead: 'Almost', value, sentence, todo: 'Switch it to the US store. One click.', action: { kind: 'fix', fix: 'apple-storefront', label: 'Fix the Apple Music link' }, evidence: rows, limits }
   return {
     status: 'fail', lead: 'Almost', value, sentence,
-    todo: inTapir ? `In Connections, paste your Apple Music link from the ${storeName(country)} store, then publish.` : `This link isn’t from Tapir: ask whoever built your site to use the ${storeName(country)} store (“/${country.toLowerCase()}/”) in it.`,
+    todo: inTapir ? `In Connections, paste your Apple Music link from the ${storeName(country)} store, then publish.` : `This link isn’t from Digital Tapir: ask whoever built your site to use the ${storeName(country)} store (“/${country.toLowerCase()}/”) in it.`,
     action: { kind: 'edit', target: 'connections', label: 'Open Connections' }, evidence: rows, limits,
   }
 })
@@ -346,15 +346,15 @@ const shows = make('shows', (e) => {
     { label: 'upcoming on your site', value: upcoming.length ? listOf(upcoming.map((u) => `${prettyDay(u.day)} · ${u.name}`)) : 'none' },
     ...(stale.length ? [{ label: 'past, listed as coming up', value: listOf(stale) }] : []),
     ...(undated.length ? [{ label: 'dates search engines can’t read', value: listOf(undated) }] : []),
-    ...(missing.length ? [{ label: 'in Tapir: in Tour, not on your site', value: listOf(missing) }] : []),
+    ...(missing.length ? [{ label: 'in Digital Tapir: in Tour, not on your site', value: listOf(missing) }] : []),
     ...(extra.length ? [{ label: 'on your site, not in Tour', value: listOf(extra) }] : []),
-    ...(noCity.length ? [{ label: 'in Tapir: left out (no city)', value: listOf(noCity.map((t) => `${prettyDay(dayOf(t.date)!)} · ${t.venue ?? 'no venue'}`)) }] : []),
+    ...(noCity.length ? [{ label: 'in Digital Tapir: left out (no city)', value: listOf(noCity.map((t) => `${prettyDay(dayOf(t.date)!)} · ${t.venue ?? 'no venue'}`)) }] : []),
     { label: 'today (UTC)', value: prettyDay(today) },
   ]
   const tour = { kind: 'edit', target: 'tour', label: 'Open Tour' } as const
   if (stale.length) return { status: 'fail', value: `${stale.length} old ${plural(stale.length, 'show')}`, sentence: `your site still lists ${stale.length} past ${plural(stale.length, 'show')} as coming up.`, todo: UPDATE, action: tour, evidence, limits }
   if (undated.length) return { status: 'fail', value: `${undated.length} unreadable ${plural(undated.length, 'date')}`, sentence: `${undated.length} ${plural(undated.length, 'show')} on your site ${undated.length === 1 ? 'has a date' : 'have dates'} search engines can’t read.`, todo: UPDATE, action: tour, evidence, limits }
-  if (extra.length) return { status: 'fail', value: `${extra.length} not in Tour`, sentence: `your site lists ${extra.length} upcoming ${plural(extra.length, 'show')} that Tour doesn’t have.`, todo: 'Publish from Tapir so your site catches up with Tour.', action: tour, evidence, limits }
+  if (extra.length) return { status: 'fail', value: `${extra.length} not in Tour`, sentence: `your site lists ${extra.length} upcoming ${plural(extra.length, 'show')} that Tour doesn’t have.`, todo: 'Publish from Digital Tapir so your site catches up with Tour.', action: tour, evidence, limits }
   // What we did NOT see may be past the cut: a missing show, or "all clear", can't be said.
   if (card.cut) return tooBig('every show it lists', evidence)
   if (missing.length) return { status: 'fail', value: `${missing.length} missing`, sentence: `${missing.length} upcoming ${plural(missing.length, 'show')} from Tour ${missing.length === 1 ? 'isn’t' : 'aren’t'} on your site yet.`, todo: UPDATE, action: tour, evidence, limits }
@@ -427,8 +427,8 @@ const releases = make('releases', (e) => {
   const evidence = [
     { label: 'on your site', value: onSite.length ? listOf(onSite, 8) : 'none' },
     ...(newestLive ? [{ label: 'newest on your site', value: `${newestLive.name} · ${prettyDay(newestLive.day!)}` }] : []),
-    { label: 'in Tapir', value: `${n} published ${plural(n, 'release')}` },
-    ...(missing.length ? [{ label: 'in Tapir: not on your site', value: listOf(missing) }] : []),
+    { label: 'in Digital Tapir', value: `${n} published ${plural(n, 'release')}` },
+    ...(missing.length ? [{ label: 'in Digital Tapir: not on your site', value: listOf(missing) }] : []),
     ...(extra.length ? [{ label: 'not in Music', value: listOf(extra) }] : []),
     ...(unshown.length ? [{ label: 'on your fact card, not on your pages', value: listOf(unshown) }] : []),
     ...(unsure.length ? [{ label: 'can’t tell if your pages show', value: listOf(unsure) }] : []),
@@ -438,12 +438,12 @@ const releases = make('releases', (e) => {
   if (!n && !live.length) {
     if (card.cut) return tooBig('which releases it lists', evidence)
     if (pub.artistType === 'Person') {
-      return { status: 'na', value: 'no releases', sentence: 'you’re listed in Tapir as a visual artist with no releases.', evidence, limits }
+      return { status: 'na', value: 'no releases', sentence: 'you’re listed in Digital Tapir as a visual artist with no releases.', evidence, limits }
     }
-    return { status: 'fail', value: 'no releases', sentence: 'Tapir has no published releases for you, so search engines have none to list.', todo: 'Add your releases in Music, then publish.', action: music, evidence, limits }
+    return { status: 'fail', value: 'no releases', sentence: 'Digital Tapir has no published releases for you, so search engines have none to list.', todo: 'Add your releases in Music, then publish.', action: music, evidence, limits }
   }
   const value = `${n - missing.length} of ${n}`
-  if (extra.length) return { status: 'fail', value, sentence: `your site lists ${extra.length} ${plural(extra.length, 'release')} that ${extra.length === 1 ? 'isn’t' : 'aren’t'} in Music.`, todo: 'Publish from Tapir so your site drops it.', action: music, evidence, limits }
+  if (extra.length) return { status: 'fail', value, sentence: `your site lists ${extra.length} ${plural(extra.length, 'release')} that ${extra.length === 1 ? 'isn’t' : 'aren’t'} in Music.`, todo: 'Publish from Digital Tapir so your site drops it.', action: music, evidence, limits }
   if (missing.length && card.cut) return tooBig('every release it lists', evidence)
   if (newest && missing.includes(newest.title)) {
     return { status: 'fail', value, sentence: `your newest release, “${clip(newest.title, 60)}”, isn’t listed for search engines yet.`, todo: UPDATE, action: music, evidence, limits }

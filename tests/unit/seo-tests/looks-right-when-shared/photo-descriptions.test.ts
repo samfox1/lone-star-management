@@ -137,11 +137,11 @@ describe('no photos seen', () => {
   })
 
   // CRITICAL: no photos on the pages while Tapir has published some: a script may add them where we can't see, so "couldn't check".
-  it('is unknown with no photos on the pages but some in Tapir', () => {
+  it('is unknown with no photos on the pages but some in Digital Tapir', () => {
     const k = known({}, { photos: [{ url: 'https://cdn.example/p.jpg', alt: null }, { url: 'https://cdn.example/g.jpg', alt: 'On stage' }] })
     const r = a(evidence({ home: bare, about: null, known: k }))
     expect(r.status).toBe('unknown')
-    expect(rowOf(r, 'in Tapir: photos')).toBe('2 published')
+    expect(rowOf(r, 'in Digital Tapir: photos')).toBe('2 published')
   })
 
   // A page that couldn't be read, while every photo we saw is described: "couldn't check", not a pass.

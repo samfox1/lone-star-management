@@ -1265,9 +1265,9 @@ const words: Inner = (e) => {
     else if (!(v.kind === 'status' && (v.status === 404 || v.status === 410))) unread.push(f.path)
   }
   const rows: Row[] = [{ label: 'JavaScript', value: 'off (we never run scripts)' }, { label: 'pages read', value: readable.map((r) => r.path).join(' · ') || 'none' }]
-  if (skipped.length) rows.push({ label: 'in Tapir: not looked for', value: skipped.slice(0, 5).join('; ') })
+  if (skipped.length) rows.push({ label: 'in Digital Tapir: not looked for', value: skipped.slice(0, 5).join('; ') })
   if (!needles.length) {
-    return { status: 'na', value: 'nothing to look for', sentence: 'there’s no bio, release or upcoming show in Tapir that we can look for yet.', evidence: rows, limits }
+    return { status: 'na', value: 'nothing to look for', sentence: 'there’s no bio, release or upcoming show in Digital Tapir that we can look for yet.', evidence: rows, limits }
   }
   if (!readable.length) return { status: 'unknown', value: 'couldn’t check', sentence: 'we couldn’t read any of your pages.', evidence: rows, limits }
   if (namesArtistOnHome(e) === false) return { status: 'unknown', value: 'couldn’t check', sentence: notTheSite(e), evidence: rows, limits }
@@ -1282,7 +1282,7 @@ const words: Inner = (e) => {
     if (!all.length) continue
     const miss = all.filter((n) => !on(n))
     rows.push({ label: kind === 'release' ? 'releases' : 'shows', value: `${all.length - miss.length} of ${all.length}${kind === 'show' ? ' upcoming' : ''} in the text` })
-    if (miss.length) rows.push({ label: `in Tapir: ${kind === 'release' ? 'releases' : 'shows'} not in the text`, value: miss.slice(0, 5).map((n) => clip(n.label, 30)).join(', ') })
+    if (miss.length) rows.push({ label: `in Digital Tapir: ${kind === 'release' ? 'releases' : 'shows'} not in the text`, value: miss.slice(0, 5).map((n) => clip(n.label, 30)).join(', ') })
   }
   const bioMissing = bioFound.length < bio.length
   if (!bioMissing && !missingItems.length) {

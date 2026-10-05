@@ -257,9 +257,9 @@ const alt = make('alt', (e) => {
     // anywhere there is nothing to describe: the test doesn't apply (not a pass).
     const published = e.known.published?.photos.length ?? 0
     if (published) {
-      return { status: 'unknown', value: 'couldn’t check', sentence: `we found no photos on ${where}, though you published ${published} in Tapir, so a script may add them where we can’t see.`, evidence: [...evidence, { label: 'in Tapir: photos', value: `${published} published` }], limits }
+      return { status: 'unknown', value: 'couldn’t check', sentence: `we found no photos on ${where}, though you published ${published} in Digital Tapir, so a script may add them where we can’t see.`, evidence: [...evidence, { label: 'in Digital Tapir: photos', value: `${published} published` }], limits }
     }
-    return { status: 'na', value: 'no photos', sentence: `we found no photos on ${where} and none in Tapir.`, evidence, limits }
+    return { status: 'na', value: 'no photos', sentence: `we found no photos on ${where} and none in Digital Tapir.`, evidence, limits }
   }
   return { status: 'pass', value: `${described} of ${total}`, sentence: total === 1 ? `Your one photo on ${where} has a description.` : `All ${total} photos on ${where} have a description.`, evidence, limits }
 })

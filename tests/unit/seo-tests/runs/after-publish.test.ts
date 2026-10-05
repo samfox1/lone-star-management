@@ -419,7 +419,7 @@ describe('the test after a publish (testAfterPublish)', () => {
   })
 
   // A failed read is an outcome, never a throw out of the background job.
-  it('reading what Tapir knows failing is an outcome, never a throw', async () => {
+  it('reading what Digital Tapir knows failing is an outcome, never a throw', async () => {
     const { testAfterPublish } = await import('@/lib/seo-tests/after-publish')
     const w = world()
     expect(await testAfterPublish(w.reader.client, A, w.who, { engine, readKnown: async () => { throw new Error('boom') } })).toMatchObject({ ran: false, reason: 'error' })

@@ -234,7 +234,7 @@ describe('the YouTube test', () => {
     expect(r.status).toBe('fail')
     expect(r.value).toBe('no channel there')
     expect(r.action).toEqual({ kind: 'edit', target: 'connections', label: 'Open Connections' })
-    expect(rowOf(r, 'in Tapir: your YouTube link')).toBe('www.youtube.com/@Sskeen')
+    expect(rowOf(r, 'in Digital Tapir: your YouTube link')).toBe('www.youtube.com/@Sskeen')
     expectPlainWords(r)
   })
 
@@ -300,7 +300,7 @@ describe('the YouTube test', () => {
   })
 
   // Tapir has no city or genre: only the site can be asked for, so the site alone passes (a fact Tapir doesn't have is never held against the artist).
-  it('with no city or genre in Tapir, the site alone passes', () => {
+  it('with no city or genre in Digital Tapir, the site alone passes', () => {
     const k = known({}, { location: null, genre: null, links: [...known().published!.links, { label: 'YouTube', url: SKEEN_CHANNEL, onSite: true }] })
     expect(run(answer('example-artist.com'), k).status).toBe('pass')
   })
@@ -309,12 +309,12 @@ describe('the YouTube test', () => {
   it('no YouTube link: does not apply', () => {
     const r = run({ link: null, looked: false, channel: null }, known())
     expect(r.status).toBe('na')
-    expect(rowOf(r, 'in Tapir: YouTube')).toBe('no channel linked')
+    expect(rowOf(r, 'in Digital Tapir: YouTube')).toBe('no channel linked')
   })
 
   // Couldn't ask YouTube (no key, quota, timeout), or the run never asked: "couldn't check", never a fail.
   it('could not ask, or never asked: unknown, saying why', () => {
-    const r = run({ link: SKEEN_LINK, looked: false, channel: null, error: 'Tapir’s daily limit for YouTube ran out' })
+    const r = run({ link: SKEEN_LINK, looked: false, channel: null, error: 'Digital Tapir’s daily limit for YouTube ran out' })
     expect(r.status).toBe('unknown')
     expect(r.sentence).toContain('daily limit')
     expect(run(undefined).status).toBe('unknown')
@@ -328,10 +328,10 @@ describe('the YouTube test', () => {
   })
 
   // The site the test looks for is the one Tapir tests (ORIGIN), labelled as Tapir's.
-  it('labels what it looked for as Tapir’s', () => {
+  it('labels what it looked for as Digital Tapir’s', () => {
     const r = run(answer('nothing here'))
-    expect(rowOf(r, 'in Tapir: site')).toBe(ORIGIN.replace('https://', ''))
-    expect(rowOf(r, 'in Tapir: city')).toBe('Chicago')
-    expect(rowOf(r, 'in Tapir: genre')).toBe('House, Tech House')
+    expect(rowOf(r, 'in Digital Tapir: site')).toBe(ORIGIN.replace('https://', ''))
+    expect(rowOf(r, 'in Digital Tapir: city')).toBe('Chicago')
+    expect(rowOf(r, 'in Digital Tapir: genre')).toBe('House, Tech House')
   })
 })

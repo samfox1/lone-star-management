@@ -156,8 +156,8 @@ function whyRefused(status: number, json: unknown): string {
     ...(Array.isArray(err?.errors) ? err.errors : []),
     ...(Array.isArray(err?.details) ? err.details : []),
   ].flatMap((e) => (isObj(e) && typeof e.reason === 'string' ? [e.reason] : []))
-  if (reasons.some((r) => /quotaExceeded|dailyLimitExceeded|rateLimitExceeded/i.test(r))) return 'Tapir’s daily limit for YouTube ran out'
-  if (reasons.some((r) => /keyInvalid|API_KEY_INVALID|keyExpired|API_KEY_SERVICE_BLOCKED/i.test(r))) return 'YouTube didn’t accept Tapir’s key'
+  if (reasons.some((r) => /quotaExceeded|dailyLimitExceeded|rateLimitExceeded/i.test(r))) return 'Digital Tapir’s daily limit for YouTube ran out'
+  if (reasons.some((r) => /keyInvalid|API_KEY_INVALID|keyExpired|API_KEY_SERVICE_BLOCKED/i.test(r))) return 'YouTube didn’t accept Digital Tapir’s key'
   return `YouTube answered with error ${status}`
 }
 
@@ -208,7 +208,7 @@ export async function lookupYouTube(known: SeoKnown, opts: Opts): Promise<Answer
   const link = channelLink(known)
   if (!link) return { link: null, looked: false, channel: null }
   const notAsked = (error: string): Answer => ({ link: link.url, looked: false, channel: null, error })
-  if (!opts.apiKey) return notAsked('Tapir’s YouTube key isn’t set up')
+  if (!opts.apiKey) return notAsked('Digital Tapir’s YouTube key isn’t set up')
   try {
     for (const selector of channelSelectors(link.ref)) {
       const r = await ask(selector, { ...opts, apiKey: opts.apiKey })

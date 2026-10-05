@@ -100,11 +100,11 @@ describe('a release missing from the card, or one Music lacks, fails', () => {
   })
 
   // An older release missing fails too, and the details name it as Tapir's.
-  it('fails when an older release is missing, naming it as Tapir’s', () => {
+  it('fails when an older release is missing, naming it as Digital Tapir’s', () => {
     const out = r(withGraph(without(5)))
     expect(out.status).toBe('fail')
     expect(out.value).toBe('2 of 3')
-    expect(rowOf(out, 'in Tapir: not on your site')).toBe('OutWest')
+    expect(rowOf(out, 'in Digital Tapir: not on your site')).toBe('OutWest')
   })
 
   // A release on the card that Music doesn't have fails, and is named.

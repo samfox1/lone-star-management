@@ -92,7 +92,7 @@ const title = make('title', (e) => {
   const t = home.page.title
   const action = listing('Change the title')
   const who = tapirWho(e)
-  const limits = `We read your home page’s title${who.city || who.genres.length ? ' and look for your name and the city or sound you gave Tapir' : ' and look for your name; with no city or sound in Tapir we can’t check more than that'}. Google can still show a different title.`
+  const limits = `We read your home page’s title${who.city || who.genres.length ? ' and look for your name and the city or sound you gave Digital Tapir' : ' and look for your name; with no city or sound in Digital Tapir we can’t check more than that'}. Google can still show a different title.`
   if (!t) {
     if (home.truncated) return tooBig('a title')
     return { status: 'fail', value: 'no title', sentence: 'your home page has no title, so Google makes one up.', todo: 'Write a title on the Listing tab, then publish.', action, evidence: [{ label: 'title', value: 'none on the page' }], limits }
@@ -133,7 +133,7 @@ function titleSource(live: string, e: SeoEvidence): { label: string; value: stri
   if (!tapir) return []
   const how = built && fold(tapir) === fold(built) ? 'built from your facts' : 'written on the Listing tab'
   return [
-    { label: 'in Tapir: title', value: `${clip(tapir, 100)} (${how})` },
+    { label: 'in Digital Tapir: title', value: `${clip(tapir, 100)} (${how})` },
     { label: 'same as your site', value: fold(tapir) === fold(live) ? 'yes' : 'no' },
   ]
 }
@@ -240,15 +240,15 @@ const bio = make('bio', (e) => {
   const action = { kind: 'edit', target: 'bio', label: 'Open the bio editor' } as const
   const n = readable.length
   const where = `the ${n === 1 ? 'page' : `${n} pages`} we read`
-  const limits = `The ${BIO_MIN_WORDS}-word floor is Tapir’s own, not a rule from Google or any AI company. We read your bio as words on your home page and the first pages your sitemap lists (5 at most), and look for your genre, city and releases or shows by their exact words from Tapir; a nickname like “the Windy City” isn’t counted, and text hidden by the site’s design still is.`
+  const limits = `The ${BIO_MIN_WORDS}-word floor is Digital Tapir’s own, not a rule from Google or any AI company. We read your bio as words on your home page and the first pages your sitemap lists (5 at most), and look for your genre, city and releases or shows by their exact words from Digital Tapir; a nickname like “the Windy City” isn’t counted, and text hidden by the site’s design still is.`
   const cardRow = fromCard ? [{ label: 'fact card', value: `description · ${num(wordCount(fromCard))} words` }] : []
   const pagesRow = { label: 'pages read', value: readable.map((p) => p.path).join(' · ') }
   // Without anything published there are no facts to look for.
-  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Tapir yet, so we have no genre, city or releases to look for in your bio.', evidence: [...cardRow, pagesRow], limits }
+  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Digital Tapir yet, so we have no genre, city or releases to look for in your bio.', evidence: [...cardRow, pagesRow], limits }
   if (!candidates.length) {
     return {
-      status: 'fail', value: 'no bio', sentence: 'you haven’t written a bio in Tapir.', todo: 'Write your bio: who you are, your genre, your city, your big shows and releases.', action,
-      evidence: [{ label: 'in Tapir: bio', value: 'none published' }, { label: 'fact card', value: cardDesc ? 'no bio in it (only your description)' : 'no bio in it' }, pagesRow], limits,
+      status: 'fail', value: 'no bio', sentence: 'you haven’t written a bio in Digital Tapir.', todo: 'Write your bio: who you are, your genre, your city, your big shows and releases.', action,
+      evidence: [{ label: 'in Digital Tapir: bio', value: 'none published' }, { label: 'fact card', value: cardDesc ? 'no bio in it (only your description)' : 'no bio in it' }, pagesRow], limits,
     }
   }
   let best = { text: '', words: 0, path: '' }
@@ -299,12 +299,12 @@ const bio = make('bio', (e) => {
   const evidence = [
     { label: 'bio on your site', value: `${num(best.words)} words` },
     { label: 'shown on', value: best.path },
-    { label: 'genre in your bio', value: genres.length ? facts[0].row : 'not set in Tapir, so not checked' },
-    { label: 'city in your bio', value: city ? facts[1].row : 'not set in Tapir, so not checked' },
-    { label: 'highlight in your bio', value: highlights.length ? facts[2].row : 'no release or show in Tapir we can look for, so not checked' },
-    ...(genres.length ? [{ label: 'in Tapir: genre', value: clip(genres.join(', '), 80) }] : []),
-    ...(city ? [{ label: 'in Tapir: city', value: city }] : []),
-    { label: 'floor', value: `${BIO_MIN_WORDS} words (Tapir’s own)` },
+    { label: 'genre in your bio', value: genres.length ? facts[0].row : 'not set in Digital Tapir, so not checked' },
+    { label: 'city in your bio', value: city ? facts[1].row : 'not set in Digital Tapir, so not checked' },
+    { label: 'highlight in your bio', value: highlights.length ? facts[2].row : 'no release or show in Digital Tapir we can look for, so not checked' },
+    ...(genres.length ? [{ label: 'in Digital Tapir: genre', value: clip(genres.join(', '), 80) }] : []),
+    ...(city ? [{ label: 'in Digital Tapir: city', value: city }] : []),
+    { label: 'floor', value: `${BIO_MIN_WORDS} words (Digital Tapir’s own)` },
     ...cardRow,
     pagesRow,
   ]
@@ -322,9 +322,9 @@ const bio = make('bio', (e) => {
   const good = example.length ? `e.g. mention ${listWords(example, 'and')}.` : undefined
   const missing = listWords(lacking.map((f) => f.say), 'or')
   const sentence = short && lacking.length
-    ? `your bio has ${num(best.words)} words, under Tapir’s ${BIO_MIN_WORDS}-word floor, and doesn’t name ${missing}.`
+    ? `your bio has ${num(best.words)} words, under Digital Tapir’s ${BIO_MIN_WORDS}-word floor, and doesn’t name ${missing}.`
     : short
-      ? `your bio has ${num(best.words)} words, under Tapir’s ${BIO_MIN_WORDS}-word floor.`
+      ? `your bio has ${num(best.words)} words, under Digital Tapir’s ${BIO_MIN_WORDS}-word floor.`
       : `your bio doesn’t name ${missing}.`
   const add = listWords(lacking.map((f) => (f.key === 'highlight' ? 'a big show or release' : f.say)), 'and')
   const todo = lacking.length ? `Add ${add} to your bio${short ? `, and write at least ${BIO_MIN_WORDS} words` : ''}.` : `Write at least ${BIO_MIN_WORDS} words: who you are, your big shows, your releases.`
@@ -354,15 +354,15 @@ const genre = make('genre', (e) => {
   const limits = 'We read the facts your home page gives search engines (top-level only); words about your sound elsewhere on the page aren’t counted.'
   // Decided from Tapir alone: a visual artist has no music style, whatever the site shows.
   if (visualArtist(e)) {
-    return { status: 'na', value: 'visual artist', sentence: 'you’re listed in Tapir as a visual artist, and a music style is for musicians.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
+    return { status: 'na', value: 'visual artist', sentence: 'you’re listed in Digital Tapir as a visual artist, and a music style is for musicians.', evidence: [{ label: 'in Digital Tapir: artist type', value: 'Visual artist' }], limits }
   }
   const a = cardArtist(e)
   if ('home' in a) return unreadable(a.home, 'read your fact card')
   if ('cut' in a) return tooBig('the fact card about you')
   const facts = { kind: 'edit', target: 'facts', label: 'Change your genre' } as const
   const saved = (e.known.published?.genre ?? '').split(',').map(collapse).filter(Boolean)
-  const todo = saved.length ? 'Your genre is saved in Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your genre on Profile, then publish.'
-  const tapirRow = saved.length ? [{ label: 'in Tapir: genre', value: clip(saved.join(', '), 120) }] : []
+  const todo = saved.length ? 'Your genre is saved in Digital Tapir but isn’t on your site yet. Publish, then test again.' : 'Add your genre on Profile, then publish.'
+  const tapirRow = saved.length ? [{ label: 'in Digital Tapir: genre', value: clip(saved.join(', '), 120) }] : []
   if ('none' in a) {
     return { status: 'fail', value: 'not named', sentence: `your site doesn’t name your genre for search engines: ${a.none}.`, todo, action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
   }
@@ -371,16 +371,16 @@ const genre = make('genre', (e) => {
     if (!e.known.published) {
       return {
         status: 'unknown', value: 'not for a person card',
-        sentence: 'your site tells search engines you’re a person, which has no place for a genre, and you haven’t published from Tapir to say otherwise.',
+        sentence: 'your site tells search engines you’re a person, which has no place for a genre, and you haven’t published from Digital Tapir to say otherwise.',
         evidence: [{ label: 'artist type', value: 'Person' }],
         limits: 'Search engines only read a genre from a musician’s card, and without what you published we can’t tell whether you are one.',
       }
     }
     return {
       status: 'fail', value: 'not named',
-      sentence: 'your site tells search engines you’re a visual artist, but in Tapir you’re a musician.',
-      todo: 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.',
-      action: facts, evidence: [{ label: 'artist type', value: 'Person' }, { label: 'in Tapir: artist type', value: 'Musician' }, ...tapirRow], limits,
+      sentence: 'your site tells search engines you’re a visual artist, but in Digital Tapir you’re a musician.',
+      todo: 'Publish from Digital Tapir, then test again. If it stays, your site needs an update from whoever built it.',
+      action: facts, evidence: [{ label: 'artist type', value: 'Person' }, { label: 'in Digital Tapir: artist type', value: 'Musician' }, ...tapirRow], limits,
     }
   }
   const all = strings(a.node.genre)
@@ -389,7 +389,7 @@ const genre = make('genre', (e) => {
   if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your genre for search engines.', todo, action: facts, evidence, limits }
   const said = genres.length === 1 ? genres[0] : `${genres.slice(0, -1).join(', ')} and ${genres[genres.length - 1]}`
   if (saved.length && !genres.some((g) => saved.some((s) => matchFold(s) === matchFold(g)))) {
-    return { status: 'fail', lead: 'Almost', value: 'not your genre', sentence: `your site says your genre is ${clip(said, 60)}, but in Tapir it’s ${clip(saved.join(', '), 60)}.`, todo: 'Publish from Tapir, then test again. If it stays, your site needs an update from whoever built it.', action: facts, evidence, limits }
+    return { status: 'fail', lead: 'Almost', value: 'not your genre', sentence: `your site says your genre is ${clip(said, 60)}, but in Digital Tapir it’s ${clip(saved.join(', '), 60)}.`, todo: 'Publish from Digital Tapir, then test again. If it stays, your site needs an update from whoever built it.', action: facts, evidence, limits }
   }
   return { status: 'pass', value: clip(genres.join(', '), 28), sentence: `Your site says your genre is ${said}.`, evidence, limits }
 })
@@ -411,7 +411,7 @@ const place = make('place', (e) => {
   const limits = 'We read the place in the facts your home page gives search engines, not the words on your page or what articles say about you. A place with no states or regions can’t pass yet.'
   const pub = e.known.published
   const part = (v: string | null | undefined) => collapse(v ?? '') || 'not set'
-  const tapirRow = pub ? [{ label: 'in Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : []
+  const tapirRow = pub ? [{ label: 'in Digital Tapir: place', value: `city ${part(pub.location)} · region ${part(pub.region)} · country ${part(pub.country)}` }] : []
   if ('none' in a) {
     return { status: 'fail', value: 'not said', sentence: `your site doesn’t say where you’re based: ${a.none}.`, todo: 'Add your city, state and country on Profile, then publish.', action: facts, evidence: [{ label: 'fact card', value: a.row }, ...tapirRow], limits }
   }
@@ -431,7 +431,7 @@ const place = make('place', (e) => {
     { label: 'country', value: country ?? 'missing' },
     ...tapirRow,
   ]
-  const publish = 'It’s published in Tapir but your site doesn’t state it yet. Publish, then test again; if it stays, your site needs an update from whoever built it.'
+  const publish = 'It’s published in Digital Tapir but your site doesn’t state it yet. Publish, then test again; if it stays, your site needs an update from whoever built it.'
   // One line ("Chicago, IL"): the words may all be there, but not as the separate facts
   // search engines read. Said as such, never as "says Chicago, IL, but not the state".
   if (line && !address) {
@@ -451,7 +451,7 @@ const place = make('place', (e) => {
     const countryOff = tapirCountry && countryCode(country) !== tapirCountry
     if (cityOff || countryOff) {
       const tapirSays = [tapirCity, pub?.region, tapirCountry ? countryName(tapirCountry) : pub?.country].filter(Boolean).join(', ')
-      return { status: 'fail', lead: 'Almost', value: 'not your place', sentence: `your site says you’re based in ${clip(`${city}, ${region}, ${country}`, 50)}, but in Tapir it’s ${clip(tapirSays, 50)}.`, todo: publish, action: facts, evidence, limits }
+      return { status: 'fail', lead: 'Almost', value: 'not your place', sentence: `your site says you’re based in ${clip(`${city}, ${region}, ${country}`, 50)}, but in Digital Tapir it’s ${clip(tapirSays, 50)}.`, todo: publish, action: facts, evidence, limits }
     }
     return { status: 'pass', value: clip(`${city}, ${region}, ${country}`, 28), sentence: `Your site says you’re based in ${city}, ${region}, ${country}.`, evidence, limits }
   }
@@ -479,7 +479,7 @@ const mb = make('mb', (e) => {
   // Decided from Tapir alone: MusicBrainz lists people who make music, and its editors remove
   // an entry for someone who doesn't, so "Create the page" would be wrong advice here.
   if (visualArtist(e)) {
-    return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Tapir as a visual artist.', evidence: [{ label: 'in Tapir: artist type', value: 'Visual artist' }], limits }
+    return { status: 'na', value: 'visual artist', sentence: 'MusicBrainz lists people who make music, and you’re listed in Digital Tapir as a visual artist.', evidence: [{ label: 'in Digital Tapir: artist type', value: 'Visual artist' }], limits }
   }
   const m = e.musicbrainz
   const asked = m.asked?.length ? [{ label: 'asked about', value: m.asked.map((u) => clip(shortLink(u), 50)).join(' · ') }] : []
@@ -490,7 +490,7 @@ const mb = make('mb', (e) => {
   const found = [
     ...(m.artistUrl ? [{ label: 'MusicBrainz page', value: m.artistUrl }] : []),
     ...(m.artistName ? [{ label: 'name there', value: m.artistName }] : []),
-    ...(m.matchedOn ? [fromConnections ? { label: 'in Tapir: found by', value: 'your MusicBrainz link in Connections' } : { label: 'found by', value: clip(shortLink(m.matchedOn), 60) }] : []),
+    ...(m.matchedOn ? [fromConnections ? { label: 'in Digital Tapir: found by', value: 'your MusicBrainz link in Connections' } : { label: 'found by', value: clip(shortLink(m.matchedOn), 60) }] : []),
     ...asked,
   ]
   const name = e.known.artistName.trim()
@@ -517,7 +517,7 @@ const mb = make('mb', (e) => {
   const href = musicBrainzCreateUrl({ name, area: pub?.location ?? null, homepage: e.known.siteUrl, links: pub?.links ?? [] })
   return {
     status: 'fail', value: 'no page yet', sentence: 'MusicBrainz has no page linked to your site or profiles.',
-    todo: 'This happens on MusicBrainz, outside Tapir. We fill in what we know; you sign in and save. About 10 minutes.',
+    todo: 'This happens on MusicBrainz, outside Digital Tapir. We fill in what we know; you sign in and save. About 10 minutes.',
     action: { kind: 'outside', href, label: 'Create the page' },
     evidence: [{ label: 'musicbrainz.org', value: 'no artist links to these addresses' }, ...asked],
     limits,
@@ -542,15 +542,15 @@ function quoteOf(description: string, hits: readonly string[]): string {
 }
 
 const youtube = make('youtube', (e) => {
-  const limits = 'We read your channel’s description with YouTube’s own data service and look for your site’s address and the city or genre you gave Tapir, by their exact words. YouTube doesn’t share the links shown under your channel name, so a site link only there isn’t seen.'
+  const limits = 'We read your channel’s description with YouTube’s own data service and look for your site’s address and the city or genre you gave Digital Tapir, by their exact words. YouTube doesn’t share the links shown under your channel name, so a site link only there isn’t seen.'
   const y = e.youtube
   if (!y) return { status: 'unknown', value: 'couldn’t ask', sentence: 'we didn’t get to ask YouTube this time.', evidence: [], limits }
   const pub = e.known.published
-  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Tapir yet, so we don’t know your YouTube channel, city or genre.', evidence: [], limits }
+  if (!pub) return { status: 'unknown', value: 'nothing published', sentence: 'you haven’t published from Digital Tapir yet, so we don’t know your YouTube channel, city or genre.', evidence: [], limits }
   if (!y.link) {
-    return { status: 'na', value: 'no YouTube link', sentence: 'you haven’t linked a YouTube channel in Connections.', evidence: [{ label: 'in Tapir: YouTube', value: 'no channel linked' }], limits }
+    return { status: 'na', value: 'no YouTube link', sentence: 'you haven’t linked a YouTube channel in Connections.', evidence: [{ label: 'in Digital Tapir: YouTube', value: 'no channel linked' }], limits }
   }
-  const linkRow = { label: 'in Tapir: your YouTube link', value: clip(shortLink(y.link), 80) }
+  const linkRow = { label: 'in Digital Tapir: your YouTube link', value: clip(shortLink(y.link), 80) }
   if (!y.looked) {
     return { status: 'unknown', value: 'couldn’t ask', sentence: `we couldn’t ask YouTube this time${y.error ? ` (${y.error})` : ''}.`, evidence: [linkRow, ...(y.error ? [{ label: 'why', value: y.error }] : [])], limits }
   }
@@ -581,9 +581,9 @@ const youtube = make('youtube', (e) => {
     { label: 'your site', value: siteHit ?? 'not found' },
     ...(city ? [{ label: 'city', value: cityHit ?? 'not found' }] : []),
     ...(genres.length ? [{ label: 'genre', value: genreHit ?? 'not found' }] : []),
-    { label: 'in Tapir: site', value: clip(shortLink(site), 80) },
-    ...(city ? [{ label: 'in Tapir: city', value: city }] : []),
-    ...(genres.length ? [{ label: 'in Tapir: genre', value: genres.join(', ') }] : []),
+    { label: 'in Digital Tapir: site', value: clip(shortLink(site), 80) },
+    ...(city ? [{ label: 'in Digital Tapir: city', value: city }] : []),
+    ...(genres.length ? [{ label: 'in Digital Tapir: genre', value: genres.join(', ') }] : []),
     linkRow,
   ]
   if (siteHit && (whoHit || !wantWho)) {

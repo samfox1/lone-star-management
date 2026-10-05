@@ -92,18 +92,18 @@ describe('a link on another country’s store fails', () => {
     expect(r.lead).toBe('Almost')
     expect(r.sentence).toMatch(/Norway/)
     expect(r.action).toEqual({ kind: 'fix', fix: 'apple-storefront', label: expect.any(String) })
-    expect(rowOf(r, 'in Tapir: after the fix')).toBe('https://music.apple.com/us/artist/skeen/1754431714')
+    expect(rowOf(r, 'in Digital Tapir: after the fix')).toBe('https://music.apple.com/us/artist/skeen/1754431714')
     expectPlainWords(r)
   })
 
   // A link that isn't in Tapir (the site hard-codes it) gets no one-click fix: Tapir can't change it.
-  it('offers no fix for a link that is not in Tapir', () => {
+  it('offers no fix for a link that is not in Digital Tapir', () => {
     const e = cardApple(NORWAY)
     e.known = known()
     const r = a(e)
     expect(r.status).toBe('fail')
     expect(r.action?.kind).not.toBe('fix')
-    expect(r.todo).toMatch(/isn’t from Tapir/)
+    expect(r.todo).toMatch(/isn’t from Digital Tapir/)
   })
 
   // A US-store link for a Canadian artist fails without the fix (it only writes /us/), and the advice names the Canada store.
@@ -157,26 +157,26 @@ describe('a link on another country’s store fails', () => {
 
 describe('where you’re based', () => {
   // Neither Tapir nor the card says a country: "couldn't check", pointing to Profile.
-  it('is unknown when neither Tapir nor the site says the country', () => {
+  it('is unknown when neither Digital Tapir nor the site says the country', () => {
     const r = a(cardApple(NORWAY, null))
     expect(r.status).toBe('unknown')
     expect(r.action).toEqual(expect.objectContaining({ target: 'facts' }))
   })
 
   // CRITICAL: the country comes from the Facts published in Tapir first; a card from an older bridge states none, and the test still judges (with the fix).
-  it('uses the country published in Tapir when the card has none', () => {
+  it('uses the country published in Digital Tapir when the card has none', () => {
     const r = a(cardApple(NORWAY, null, '', US))
     expect(r.status).toBe('fail')
     expect(r.action).toEqual(expect.objectContaining({ kind: 'fix' }))
-    expect(rowOf(r, 'in Tapir: you’re based in')).toBe('US = the United States')
+    expect(rowOf(r, 'in Digital Tapir: you’re based in')).toBe('US = the United States')
     expectPlainWords(r)
   })
 
   // CRITICAL: Tapir's country wins over a card that says otherwise, and both are shown, each labelled with where it came from.
-  it('prefers Tapir’s country over the card’s, showing both', () => {
+  it('prefers Digital Tapir’s country over the card’s, showing both', () => {
     const r = a(cardApple(NORWAY, 'US', '', { country: 'Norway', countryCode: 'NO' }))
     expect(r.status).toBe('pass')
-    expect(rowOf(r, 'in Tapir: you’re based in')).toBe('NO = Norway')
+    expect(rowOf(r, 'in Digital Tapir: you’re based in')).toBe('NO = Norway')
     expect(rowOf(r, 'fact card: based in')).toBe('US = the United States')
   })
 
@@ -184,11 +184,11 @@ describe('where you’re based', () => {
   it('falls back to the card’s country, labelled as the site’s', () => {
     const r = a(cardApple(OWN_US, 'CA'))
     expect(rowOf(r, 'fact card: based in')).toBe('CA = Canada')
-    expect(r.evidence.some((e) => /^in Tapir: you/.test(e.label))).toBe(false)
+    expect(r.evidence.some((e) => /^in Digital Tapir: you/.test(e.label))).toBe(false)
   })
 
   // A country Tapir holds without a code is read by its English name; one no table knows ("Atlantis") is not used.
-  it('reads a Tapir country by its English name, else leaves it out', () => {
+  it('reads a Digital Tapir country by its English name, else leaves it out', () => {
     expect(a(cardApple(NORWAY, null, '', { country: 'Norway', countryCode: null })).status).toBe('pass')
     expect(a(cardApple(NORWAY, null, '', { country: 'Atlantis', countryCode: null })).status).toBe('unknown')
   })
