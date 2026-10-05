@@ -125,5 +125,19 @@ deployed with this page, confirming is by code.
 
 ## Going live (each needs Sam's yes)
 
-1. Full suite green. 2. Push the migration. 3. Deploy `email-confirm`. 4. Send Ross and skeen@
-their one email (a script calling the function per waiting address). 5. The grace runs 14 days.
+1. Full suite green.
+2. Push the migration (`npm run db:push`).
+3. Deploy `email-confirm` RIGHT AFTER (from the push on, new addresses get nothing until
+   confirmed, and only this function sends a code). Smoke-test with `EMAIL_CONFIRM_DRY_RUN`
+   first if wanted (a dry run still uses a send slot).
+4. Same change: set `EMAIL_CONFIRMATIONS_PUSHED = true` (`tests/helpers/email-confirmations.ts`),
+   REMOVE the PGRST202 fallback in `confirmStateFrom` (`src/lib/enquiries/confirm.ts`; it fails
+   open), run `tests/integration/enquiries/` and `npm run audit:grants`.
+5. Send Ross and skeen@ their one email (the resend glyph in each one's window, or a script).
+6. The grace runs 14 days. Check before it ends who is still blue (an unconfirmed address then
+   stops getting enquiries; a kind with nobody confirmed is stored unroutable).
+7. `EMAIL_CONFIRM_APP_URL` stays unset until the dashboard serving /confirm-email is online;
+   until then the email carries the code only.
+
+Later (from the 2026-10-05 review, LOW): the link token is in the URL path, so it shows in
+hosting request logs for its 7 days (move it to a `#fragment`); no warning before grace ends.
