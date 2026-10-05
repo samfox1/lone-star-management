@@ -32,6 +32,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SEED, anonClient, artistIdBySlug, serviceClient, signInAs } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { expectExecuteDenied, expectRlsDenied } from '@tests/helpers/rls'
+import { confirmForRouting } from '@tests/helpers/email-confirmations'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const svc = serviceClient()
@@ -115,6 +116,9 @@ async function addRecipient(
     .select('id')
     .single()
   if (error) throw new Error(`addRecipient(${slug}, ${email}): ${error.message}`)
+  // Confirmed too: since 20261006120000 only a confirmed address routes, and this file is about
+  // LISTS. Unconfirmed routing has its own file (email-confirmations.test.ts).
+  await confirmForRouting(svc, artistId, [email])
   return (data as { id: string }).id
 }
 

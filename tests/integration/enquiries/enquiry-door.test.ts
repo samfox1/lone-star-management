@@ -60,6 +60,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { serviceClient } from '@tests/helpers/supabase'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
+import { EMAIL_CONFIRMATIONS_PUSHED, confirmForRouting } from '@tests/helpers/email-confirmations'
 
 const svc = serviceClient()
 
@@ -153,6 +154,9 @@ async function setFloor(slugs: string[] = ['booking', 'demo', 'other']) {
     const { error } = await svc.from('enquiry_recipients').insert({ artist_id: artistA, kind_id: await kindId(slug), email: FLOOR_TO })
     if (error) throw new Error(`floor on ${slug}: ${error.message}`)
   }
+  // Since 20261006120000 only a CONFIRMED address routes. The floor is "somewhere to go", so it
+  // is confirmed; an unconfirmed address has its own test below.
+  await confirmForRouting(svc, artistA, [FLOOR_TO])
 }
 
 async function setSiteText(value: string) {
@@ -288,6 +292,7 @@ describe('submit_enquiry — the old fallback routes NOTHING (20261002210000)', 
     await giveOldRungs()
     const { error } = await svc.from('enquiry_recipients').insert({ artist_id: artistA, kind_id: await kindId('demo'), email: 'ar@example.com' })
     if (error) throw new Error(error.message)
+    await confirmForRouting(svc, artistA, ['ar@example.com'])
 
     const row = await submit({ p_purpose: 'demo' })
 
@@ -313,6 +318,7 @@ describe('submit_enquiry — sender identity', () => {
         .from('enquiry_recipients')
         .insert({ artist_id: onHouse.id, kind_id: (k as { id: string }).id, email: FLOOR_TO })
       if (error) throw new Error(`recipient: ${error.message}`)
+      await confirmForRouting(svc, onHouse.id, [FLOOR_TO])
       const row = await submit({ p_slug: onHouse.slug })
       expect(row).toMatchObject({
         status: 'ok',
@@ -668,6 +674,7 @@ describe('submit_enquiry — forwarding to more than one person', () => {
       ...(createdAt ? { created_at: createdAt } : {}),
     })
     if (error) throw new Error(`addRecipient(${slug}, ${email}): ${error.message}`)
+    await confirmForRouting(svc, artistA, [email])
   }
 
   async function storedRow(id: string) {
@@ -753,6 +760,31 @@ describe('submit_enquiry — forwarding to more than one person', () => {
     const stored = await storedRow(row.enquiry_id!)
     expect(stored.status).toBe('unroutable')
     expect(stored.to_emails).toEqual(['waiting@example.com'])
+  })
+
+  // An address its owner never confirmed is not sent the enquiry; once confirmed, it is.
+  it.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('CRITICAL: an address nobody has CONFIRMED is never addressed; once confirmed, it is', async () => {
+    // Sam, 2026-09-30: "there should be a confirmation email sent with a code for us to make sure
+    // the email is legit" (20261006120000). The door end to end: a stranger's enquiry must not
+    // reach an address its owner never agreed to. Planted on the list, deliberately NOT through
+    // addRecipient, which confirms.
+    await clearRungs()
+    await dropFloor()
+    const { error } = await svc
+      .from('enquiry_recipients')
+      .insert({ artist_id: artistA, kind_id: await kindId('booking'), email: 'unconfirmed@example.com' })
+    if (error) throw new Error(error.message)
+
+    const before = await submit()
+
+    expect(before.status).toBe('no_recipient')
+    expect(await storedRow(before.enquiry_id!)).toMatchObject({ status: 'unroutable', to_email: null, to_emails: null })
+
+    await confirmForRouting(svc, artistA, ['unconfirmed@example.com'])
+    const after = await submit()
+
+    expect(after).toMatchObject({ status: 'ok', to_email: 'unconfirmed@example.com' })
+    expect(after.to_emails).toEqual(['unconfirmed@example.com'])
   })
 })
 
