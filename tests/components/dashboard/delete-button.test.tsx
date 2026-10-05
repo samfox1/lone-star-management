@@ -152,11 +152,20 @@ function setupMedia() {
   )
 }
 
+/** A red trash glyph named for what it deletes, no "Delete" word (Sam, 2026-10-05). */
+const mediaTrash = () => screen.getByRole('button', { name: 'Delete video' })
+
 describe('MediaDeleteButton', () => {
+  it('is a trash glyph with no words, named for what it deletes', () => {
+    setupMedia()
+    expect(mediaTrash().textContent).toBe('')
+    expect(mediaTrash().querySelector('svg')).not.toBeNull()
+  })
+
   it('toasts "{noun} removed" on success', async () => {
     mockDeleteMedia.mockResolvedValue({})
     setupMedia()
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(mediaTrash())
     await say('Confirm')
     expect(await screen.findByText('Video removed')).toBeInTheDocument()
     expect(mockDeleteMedia).toHaveBeenCalledWith('m1', 'a1/hero.mp4', 'a1')
@@ -165,7 +174,7 @@ describe('MediaDeleteButton', () => {
   it('toasts a fallback when the action THROWS', async () => {
     mockDeleteMedia.mockRejectedValue(new Error('network down'))
     setupMedia()
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(mediaTrash())
     await say('Confirm')
     expect(await screen.findByText("Couldn't remove that video.")).toBeInTheDocument()
   })
@@ -173,7 +182,7 @@ describe('MediaDeleteButton', () => {
   it('CRITICAL: a declined confirmation does NOT delete the asset', async () => {
     // The file leaves Storage as well as the row — nothing to restore it from.
     setupMedia()
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(mediaTrash())
     await say('Cancel')
     expect(mockDeleteMedia).not.toHaveBeenCalled()
   })
@@ -186,7 +195,7 @@ describe('MediaDeleteButton', () => {
     mockDeleteMedia.mockReturnValue(new Promise((r) => (resolve = r)))
     setupMedia()
 
-    await doubleClick(screen.getByText('Delete'))
+    await doubleClick(mediaTrash())
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
 
     await say('Confirm')

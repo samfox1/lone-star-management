@@ -212,10 +212,10 @@ describe('added rows', () => {
 })
 
 describe('the add flow', () => {
-  /** "+ Add logo" is the AddRow's text control — not a row's + icon, which is also named
-   *  "Add logo" but carries an aria-label and sits inside a ledger row. */
+  /** The AddRow's + (in its `data-ledger-add` row) — not a row's + icon, which is also named
+   *  "Add logo" but sits inside a ledger row. */
   const addControl = () =>
-    screen.getAllByRole('button', { name: 'Add logo' }).find((b) => !b.closest('[data-ledger-row]') && !b.hasAttribute('aria-label'))!
+    screen.getAllByRole('button', { name: 'Add logo' }).find((b) => !b.closest('[data-ledger-row]') && b.closest('[data-ledger-add]'))!
 
   async function startRow(title: string) {
     fireEvent.click(addControl())

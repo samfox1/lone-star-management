@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from './icons'
+import { ICON_HOVER } from './icon-hover'
 
 export type NavItem = {
   label: string
@@ -45,7 +46,8 @@ export function AppShell({
                 'group inline-flex items-center rounded-lg px-2.5 py-2.5 transition-colors',
                 item.active
                   ? 'text-accent'
-                  : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+                  : // Colour and stroke only, no grey box (Sam, 2026-10-02), as the dashboard's nav.
+                    `text-ink-muted ${ICON_HOVER} hover:[text-shadow:0_0_0.45px_currentColor]`,
               )}
             >
               <Icon name={item.icon} />

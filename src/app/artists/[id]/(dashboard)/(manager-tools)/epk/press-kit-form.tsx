@@ -1,13 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { PITCH_MAX, QUOTES_MAX, QUOTE_MAX, SOURCE_MAX, pressKitFormData, type PressKitDraft, type PressQuote } from '@/lib/epk'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
 import { toast } from '../../toast'
-import { ADD_BUTTON } from '../_ui/add-row'
+import { AddPlus } from '../_ui/add-row'
 import { AreaField, LineField } from '../_ui/fields'
 import { END_SLOT, LEDGER_ROW_GRID, LedgerRow, LedgerSection } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
@@ -125,11 +124,8 @@ export function PressKitForm({ artistId, pitch: savedPitch, quotes }: { artistId
         ))}
         {rows.length < QUOTES_MAX ? (
           // `data-ledger-add`: the list can grow a row with a trash, so it reserves the column.
-          <div data-ledger-add="" className="pt-2.5">
-            <button type="button" onClick={addRow} className={ADD_BUTTON}>
-              <Icon name="plus" size={16} />
-              Add quote
-            </button>
+          <div data-ledger-add="" className="mt-2.5 flex h-9 items-center">
+            <AddPlus label="Add quote" onClick={addRow} />
           </div>
         ) : null}
       </LedgerSection>

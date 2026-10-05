@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { isCustom } from '@/lib/custom-site'
 import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
 import { dirtyBySeg } from './sections'
@@ -106,13 +107,13 @@ export default async function DashboardLayout({
 
         {/* tools: search / settings / avatar (like the roster) */}
         <div className="flex items-center justify-end gap-3.5 text-ink-muted">
-          <Link href="/" title="Home / search" className="inline-flex transition-colors hover:text-ink">
+          <Link href="/" title="Home / search" className={`inline-flex transition-colors ${ICON_HOVER}`}>
             <Icon name="search" size={18} />
           </Link>
           <Link
             href={`/artists/${id}/tools`}
             title="Manager tools"
-            className="inline-flex transition-colors hover:text-ink"
+            className={`inline-flex transition-colors ${ICON_HOVER}`}
           >
             <Icon name="settings" size={18} />
           </Link>

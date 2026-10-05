@@ -4,13 +4,15 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from 'reac
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
-import { Icon } from '@/components/ui/icons'
+import { Icon, type IconName } from '@/components/ui/icons'
+import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
 import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { UploadError } from './file-drop-field'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { TagInput, joinTags, splitTags } from './tag-input'
 import { BoolToggle } from './bool-toggle'
 import { toast } from './toast'
+import { CANCEL_WORD } from './confirm-dialog'
 
 export type AddField = {
   name: string
@@ -116,32 +118,54 @@ function Fields({
 }
 
 /**
+ * A TOOLBAR GLYPH: the bare icon every asset page adds, syncs and imports with (Sam, 2026-10-02:
+ * no boxes, no words, "Have it be a plus (+)"; applied 2026-10-05). No border at rest and no
+ * label sliding open: its name is the hover title and the accessible name. A 28px target, the
+ * old box's size, so the toolbar keeps its rhythm. Hover is colour and stroke only (ICON_HOVER);
+ * a + turns blue, as every + does. ONE definition: Add (here, tour, song, photo, video), Sync
+ * (sync-dialog) and Drive (drive-import-button).
+ */
+export function ToolbarGlyph({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  icon: IconName
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={cx(
+        'inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors disabled:opacity-60',
+        icon === 'plus' ? cx('hover:text-accent', ICON_BOLD) : ICON_HOVER,
+        FOCUS_RING,
+      )}
+    >
+      <Icon name={icon} size={icon === 'plus' ? 16 : 15} />
+    </button>
+  )
+}
+
+/** The header "+" every page adds with: a bare plus, its name on hover only. */
+export function AddTrigger({ onClick, label = 'Add' }: { onClick: () => void; label?: string }) {
+  return <ToolbarGlyph icon="plus" label={label} onClick={onClick} />
+}
+
+/**
  * The "Add" control shared by videos / merch / tour: a toolbar button that opens a
  * two-pane modal (live preview on the left, tight-sized fields on the right). When
  * `auto` is set, the modal opens on a Manual / Automatic choice — Automatic takes a
  * pasted URL and prefills the fields (video oEmbed, merch Open-Graph). Styled with
  * the site primitives (buttonClass / inputClass / Icon), so it matches everything else.
  */
-/** The header "+" every page adds with: a plus that slides an "Add" label open on hover
- *  (matches Music Refresh). ONE definition — Sam (2026-09-11) caught the tour page's
- *  copy drifting from the merch page's. */
-export function AddTrigger({ onClick, label = 'Add' }: { onClick: () => void; label?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
-    >
-      <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
-        {label}
-      </span>
-      <Icon name="plus" size={14} />
-    </button>
-  )
-}
-
 export function CreateModal({
   kind,
   title,
@@ -331,7 +355,7 @@ export function CreateModal({
                 />
                 {error && <div className="mt-3"><UploadError>{error}</UploadError></div>}
                 <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
-                  <button type="button" onClick={close} className={buttonClass('ghost')}>
+                  <button type="button" onClick={close} className={CANCEL_WORD}>
                     Cancel
                   </button>
                   <button type="button" onClick={loadUrl} disabled={!urlInput.trim() || pending} className={buttonClass('solid')}>
@@ -352,7 +376,7 @@ export function CreateModal({
                 </div>
                 {error && <div className="mt-3"><UploadError>{error}</UploadError></div>}
                 <div className="mt-5 flex justify-end gap-2 border-t border-hairline pt-4">
-                  <button type="button" onClick={close} className={buttonClass('ghost')}>
+                  <button type="button" onClick={close} className={CANCEL_WORD}>
                     Cancel
                   </button>
                   <button type="button" onClick={add} disabled={pending} className={buttonClass('solid')}>

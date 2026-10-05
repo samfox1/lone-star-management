@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { CANCEL_WORD } from './confirm-dialog'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 
 /**
@@ -176,7 +177,7 @@ export function PublishPasswordDialog({
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>
+          <button type="button" onClick={close} disabled={busy} className={CANCEL_WORD}>
             Cancel
           </button>
           <button type="submit" disabled={!password || busy} className={buttonClass('solid')}>

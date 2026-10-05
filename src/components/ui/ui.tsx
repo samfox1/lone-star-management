@@ -43,9 +43,13 @@ export function Button({
   )
 }
 
-/** Shared text-input classes for the dashboard's compact inline edit forms. */
+/** Shared text-input classes for the dashboard's forms (add modals, publish notes, sync and
+ *  connect fields). A LINE, not a box (Sam, 2026-10-02: "I dont like the border around the
+ *  container"; app-wide 2026-10-05): a hairline under the text that turns ink on focus, so where
+ *  the caret is stays plain. Dashboard only: the login, roster and apply pages use `Input`
+ *  (fieldBase below), which keeps its box. */
 export const inputClass =
-  'min-w-0 rounded-lg border border-hairline px-2.5 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink-faint'
+  'min-w-0 border-b border-hairline bg-transparent px-0 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-ink'
 
 /** One shape for every dashboard modal: a dim overlay + a squarish paper card. Shared
  *  so Add / edit / publish / confirm dialogs never drift apart. */

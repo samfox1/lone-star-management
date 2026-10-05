@@ -77,7 +77,7 @@ export function BrandCheckFailed() {
       <button
         type="button"
         onClick={() => router.refresh()}
-        className="flex-none rounded-[10px] border border-hairline px-[18px] py-2.5 text-[14px] font-medium text-ink transition-colors hover:bg-surface-hover"
+        className="flex-none rounded-[10px] border border-hairline px-[18px] py-2.5 text-[14px] font-medium text-ink transition-colors hover:border-ink"
       >
         Reload
       </button>

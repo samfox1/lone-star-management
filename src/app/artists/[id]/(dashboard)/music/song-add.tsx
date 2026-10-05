@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
-import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
 import { mediaUrl } from '@/lib/site'
 import { slugify } from '@/lib/slug'
@@ -15,6 +15,8 @@ import { FileDropField, UploadError } from '../file-drop-field'
 import { resolveStreamingSongAction } from '../actions'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from '../toast'
+import { CANCEL_WORD } from '../confirm-dialog'
+import { AddTrigger } from '../create-modal'
 
 /** "A, B feat. C" → ['A', 'B feat. C'] — comma-separated collaborators. */
 export function parseContributors(raw: string): string[] {
@@ -442,18 +444,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Add music"
-        aria-label="Add music"
-        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
-      >
-        <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[90px] group-hover:pl-1 group-hover:pr-1.5">
-          Add Music
-        </span>
-        <Icon name="plus" size={14} />
-      </button>
+      <AddTrigger label="Add music" onClick={() => setOpen(true)} />
 
       {open && (
         <div
@@ -634,7 +625,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
               <div className="mt-4 space-y-3">
                 {error && <UploadError>{error}</UploadError>}
                 <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
-                  <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>
+                  <button type="button" onClick={close} disabled={busy} className={CANCEL_WORD}>
                     Cancel
                   </button>
                   {/* Streaming resolves into a review step first; everything else adds directly. */}

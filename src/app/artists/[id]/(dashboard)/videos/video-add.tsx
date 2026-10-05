@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
 import { addVideoAction, resolveVideoUrlAction } from '../actions'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from '../toast'
+import { CANCEL_WORD } from '../confirm-dialog'
+import { AddTrigger } from '../create-modal'
 
 type Step = 'choose' | 'manual' | 'streaming'
 
@@ -150,18 +152,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Add video"
-        aria-label="Add video"
-        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
-      >
-        <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
-          Add
-        </span>
-        <Icon name="plus" size={14} />
-      </button>
+      <AddTrigger label="Add video" onClick={() => setOpen(true)} />
 
       {open && (
         <div
@@ -242,7 +233,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
               <div className="mt-4 space-y-3">
                 {(error || upload.error) && <UploadError>{error ?? upload.error}</UploadError>}
                 <div className="flex items-center justify-end gap-2 border-t border-hairline pt-4">
-                  <button type="button" onClick={() => close()} disabled={busy} className={buttonClass('ghost')}>
+                  <button type="button" onClick={() => close()} disabled={busy} className={CANCEL_WORD}>
                     Cancel
                   </button>
                   <button type="button" onClick={submit} disabled={busy} className={buttonClass('solid')}>

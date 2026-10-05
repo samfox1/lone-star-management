@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CardModal } from './card-modal'
 import { buttonClass } from '@/components/ui/ui'
+import { CANCEL_WORD } from './confirm-dialog'
 import {
   budgetVerdict,
   bytesLabel,
@@ -155,7 +156,7 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
           {pending.original.name} is {bytesLabel(pending.original.size)}. {copy.body}
         </p>
         <div className="mt-5 flex justify-end">
-          <button type="button" className={buttonClass('ghost')} onClick={() => onSettle(null)}>
+          <button type="button" className={CANCEL_WORD} onClick={() => onSettle(null)}>
             Cancel
           </button>
         </div>
@@ -176,7 +177,7 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
             <img src={previewUrl} alt="Compressed preview" className="mt-3 max-h-48 w-full rounded object-contain bg-hairline-soft" />
           )}
           <div className="mt-5 flex items-center justify-end gap-2">
-            <button type="button" className={buttonClass('ghost')} onClick={() => onSettle(null)}>
+            <button type="button" className={CANCEL_WORD} onClick={() => onSettle(null)}>
               Cancel
             </button>
             {/* The budget is a strong default, not a cage — EXCEPT past 4× over, where
@@ -195,7 +196,7 @@ function BudgetGateModal({ pending, onSettle }: { pending: Pending; onSettle: (f
         <>
           <p className="mt-2 text-[13px] text-ink-muted">Preparing a smaller version…</p>
           <div className="mt-5 flex justify-end">
-            <button type="button" className={buttonClass('ghost')} onClick={() => onSettle(null)}>
+            <button type="button" className={CANCEL_WORD} onClick={() => onSettle(null)}>
               Cancel
             </button>
           </div>

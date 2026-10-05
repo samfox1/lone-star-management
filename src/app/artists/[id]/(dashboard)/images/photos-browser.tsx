@@ -127,7 +127,6 @@ export function PhotosBrowser({
                   storagePath={m.storage_path}
                   artistId={artistId}
                   noun="Photo"
-                  className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
                 />
               </span>
             </div>

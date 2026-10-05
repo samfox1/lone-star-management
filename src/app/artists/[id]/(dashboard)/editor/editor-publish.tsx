@@ -6,6 +6,7 @@ import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/co
 import { Icon } from '@/components/ui/icons'
 import type { SectionDiff, UnpublishedDiff } from '@/lib/content'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
+import { CANCEL_WORD } from '../confirm-dialog'
 import { getUnpublishedDiffAction, publishAllGatedAction } from '../actions'
 
 /**
@@ -172,7 +173,7 @@ export function EditorPublish({ artistId }: { artistId: string }) {
             )}
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={close} disabled={busy} className={buttonClass('ghost')}>
+              <button type="button" onClick={close} disabled={busy} className={CANCEL_WORD}>
                 {done || total === 0 ? 'Close' : 'Cancel'}
               </button>
               {!done && total > 0 && diff && (

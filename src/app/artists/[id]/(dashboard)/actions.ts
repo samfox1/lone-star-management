@@ -224,7 +224,8 @@ export async function deleteContentAction(
 }
 
 /**
- * The Overview's "Publish all" — PASSWORD-GATED, like every other publish (Sam,
+ * The Overview's Publish (its rising bar, tools/overview-riser.tsx; the standing "Publish
+ * all" button until 2026-10-05): everything waiting. PASSWORD-GATED, like every other publish (Sam,
  * 2026-09-28: a client-only prompt is not enough). Goes through the same `publishGated`
  * helper as the editor's `publishAllGatedAction` and the Music/Brand/Site publishes, so
  * the password check is verified server-side, not just asked for on the client.

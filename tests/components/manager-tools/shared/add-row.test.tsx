@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The add flow on every Brand list: "+ Add logo" → a name field with ✓ and × → a new row.
+// The add flow on every Brand list: a bare + → a name field with ✓ and × → a new row.
 /**
  * AddRow (BRAND_PAGE_PLAN.md, Sam 2026-09-23). What has to hold:
- *   - closed, it is one "+ Add <noun>" control that turns ink on hover, with no box;
+ *   - closed, it is a bare + named "Add <noun>" (hover label only, no words on screen);
  *   - open, a name field with ✓ (accent on hover) and × (red on hover);
  *   - Enter is ✓, Escape is ×; an empty name adds nothing;
  *   - ✓ hands the trimmed name to onAdd once, however fast it is pressed (a ref latch);
@@ -23,10 +23,11 @@ const openForm = (props: Partial<Parameters<typeof AddRow>[0]> = {}) => {
 }
 
 describe('AddRow', () => {
-  it('closed: one "Add <noun>" control that turns ink on hover, no background box', () => {
+  it('closed: a bare + named "Add <noun>", with no words on screen (Sam, 2026-10-05)', () => {
     render(<AddRow noun="font" onAdd={vi.fn()} />)
     const btn = screen.getByRole('button', { name: 'Add font' })
-    expect(btn.textContent).toBe('Add font')
+    // The name is the hover label and aria-label only: no text node says "Add font".
+    expect(btn.textContent).toBe('')
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 

@@ -2,9 +2,8 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
-import { Icon } from '@/components/ui/icons'
-import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
+import { ToolbarGlyph } from './create-modal'
 
 /**
  * Lets the modal's content (DriveBrowser) report whether an import is in flight,
@@ -50,18 +49,7 @@ export function DriveImportButton({ title, children }: { title: string; children
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title={title}
-        aria-label={title}
-        className={`group inline-flex items-center rounded-lg border border-hairline p-1.5 text-ink-muted transition-colors hover:border-ink-faint hover:text-ink ${ICON_BOLD}`}
-      >
-        <span className="max-w-0 overflow-hidden whitespace-nowrap font-space text-xs font-semibold transition-all duration-200 group-hover:max-w-[70px] group-hover:pl-1 group-hover:pr-1.5">
-          Drive
-        </span>
-        <Icon name="upload" size={14} />
-      </button>
+      <ToolbarGlyph icon="upload" label={title} onClick={() => setOpen(true)} />
 
       {open && (
         <div

@@ -1,18 +1,43 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Icon } from '@/components/ui/icons'
-import { cx } from '@/lib/cx'
-import { FOCUS_RING } from './focus-ring'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { RowIcon } from './row-icon'
 
-/** The quiet "+ Add …" that ends a list: grey words beside a 16px plus, black on hover, no
- *  box. AddRow's closed state, and Connections' "+ Connect", which opens a picker instead of a
- *  name field (Batch 3, Sam 2026-10-02). Render it with `<Icon name="plus" size={16} />`. */
-export const ADD_BUTTON = cx(
-  'inline-flex w-max items-center gap-2 py-1.5 text-[14px] text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-offset-2 motion-reduce:transition-none',
-  FOCUS_RING,
-)
+/**
+ * THE ADD CONTROL, everywhere: a bare + and no words (Sam, 2026-10-02: "Dont say add email. Have
+ * it be a plus (+)"; applied app-wide 2026-10-05). Its name ("Add logo", "Connect") is the hover
+ * label and the accessible name, never text on the screen. Ink at rest, blue and bold on hover
+ * (every + turns blue, RowIcon's `accent` tone), no box.
+ *
+ * The glyph sits where the list's text starts; the padding (cancelled by the same negative
+ * margin) makes it a 28px target without moving it. AddRow's closed state, the press kit's
+ * quotes, Connections' Connect (which opens a picker instead of a name field), and EditList's +
+ * (edit-list.tsx).
+ */
+export function AddPlus({
+  label,
+  onClick,
+  ref,
+  className,
+}: {
+  label: string
+  onClick: () => void
+  ref?: Ref<HTMLButtonElement>
+  className?: string
+}) {
+  return (
+    <RowIcon
+      ref={ref}
+      icon="plus"
+      label={label}
+      variant="bare"
+      labelAlign="start"
+      glyphSize={16}
+      onClick={onClick}
+      className={className ?? '-m-1.5 p-1.5'}
+    />
+  )
+}
 
 /** The open add flow's one-line field: a LINE, not a box (Sam, 2026-10-02: "I dont like the
  *  border around the container when adding"). 320px everywhere (Batch 2): a 40-character brand
@@ -24,7 +49,7 @@ export const ADD_FIELD =
 /**
  * THE ADD FLOW, every Brand list (Sam, 2026-09-23, BRAND_PAGE_PLAN.md):
  *
- *   "+ Add logo / color / font" (hover turns it black, no box) → a name field with ✓ (blue
+ *   a bare + ("Add logo / color / font" on hover only, 2026-10-05) → a name field with ✓ (blue
  *   on hover) and × (red on hover) → focus lands in the new row's note → Enter moves it to
  *   the row's + → that + does the thing.
  *
@@ -44,7 +69,7 @@ export function AddRow({
   maxLength = 40,
   label = 'Name',
 }: {
-  /** "logo" → "Add logo". */
+  /** "logo" → the +'s name and hover label, "Add logo". */
   noun: string
   /** The trimmed, non-empty name. The parent adds the row and focuses its note. Returning
    *  `false` refuses it: the field stays open with the text still in it, so a refused entry
@@ -113,16 +138,11 @@ export function AddRow({
   // row with a trash, so every row reserves the trash column from the start.
   if (!open) {
     return (
+      // h-9: as tall as the open field (36px), so opening it moves nothing below.
       <div data-ledger-add="" className="pt-2.5">
-        <button
-          ref={addButton}
-          type="button"
-          onClick={start}
-          className={ADD_BUTTON}
-        >
-          <Icon name="plus" size={16} />
-          {`Add ${noun}`}
-        </button>
+        <div className="flex h-9 items-center">
+          <AddPlus ref={addButton} label={`Add ${noun}`} onClick={start} />
+        </div>
       </div>
     )
   }

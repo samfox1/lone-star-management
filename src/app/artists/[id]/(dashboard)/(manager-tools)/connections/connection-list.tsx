@@ -7,7 +7,7 @@ import { displayAddress } from '@/lib/settings'
 import { Icon } from '@/components/ui/icons'
 import type { ConnectionRow } from '@/lib/connections'
 import { toast } from '../../toast'
-import { ADD_BUTTON } from '../_ui/add-row'
+import { AddPlus } from '../_ui/add-row'
 import { RowChevron } from '../_ui/disclosure'
 import { FOCUS_RING } from '../_ui/focus-ring'
 import { LedgerSection } from '../_ui/ledger'
@@ -77,11 +77,8 @@ export function ConnectionList({
         ))}
       </div>
 
-      <div className="pt-2.5">
-        <button type="button" onClick={() => setConnect(true)} className={ADD_BUTTON}>
-          <Icon name="plus" size={16} />
-          Connect
-        </button>
+      <div className="mt-2.5 flex h-9 items-center">
+        <AddPlus label="Connect" onClick={() => setConnect(true)} />
       </div>
 
       {connect && (

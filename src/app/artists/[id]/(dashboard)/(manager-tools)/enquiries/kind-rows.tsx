@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { cx } from '@/lib/cx'
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
-import { LineField } from '../_ui/fields'
+import { EditList } from '../_ui/edit-list'
 import { FOCUS_RING } from '../_ui/focus-ring'
 import { LEDGER_ROW_GRID, LedgerSection } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
@@ -47,7 +47,7 @@ import {
  * public booking contact (its link or text) is NOT a recipient and is not shown here.
  *
  * Click an address and it becomes its field, with ✓ and a trash; Enter or ✓ saves, Escape or a
- * click away puts it back. Click a kind's NAME and the name and its description both become
+ * click away puts it back (the shared click-to-edit list, _ui/edit-list.tsx, lifted from here). Click a kind's NAME and the name and its description both become
  * fields (KindHead), the same way. Every kind but `other` can be deleted from its name's trash
  * (`other` is the fallback every unknown purpose lands on; the database refuses).
  *
@@ -142,18 +142,15 @@ function KindRow({
   const deletingRef = useRef(false)
   const addresses = kind.recipients
 
-  /** The row's +: one more address on THIS kind's list. */
-  function add(email: string) {
-    const problem = recipientProblem(addresses.map((r) => r.email), email)
-    if (problem) return { error: problem }
-    return onSave([...addresses, { email: email.trim(), label: null }])
-  }
+  /** Why an address can't go on this list (`index`: the one being edited, left out of the
+   *  repeat check), or nothing. EditList asks before it saves. */
+  const problem = (email: string, index: number | null) =>
+    recipientProblem(addresses.filter((_, j) => j !== index).map((r) => r.email), email)
 
-  function edit(i: number, email: string) {
-    const problem = recipientProblem(addresses.filter((_, j) => j !== i).map((r) => r.email), email)
-    if (problem) return { error: problem }
-    return onSave(addresses.map((r, j) => (j === i ? { email, label: r.label } : r)))
-  }
+  /** The row's +: one more address on THIS kind's list. */
+  const add = (email: string) => onSave([...addresses, { email, label: null }])
+
+  const edit = (i: number, email: string) => onSave(addresses.map((r, j) => (j === i ? { email, label: r.label } : r)))
 
   /** No question for an ordinary address; asked only for the kind's LAST one, after which
    *  this kind of enquiry is stored and reaches nobody. */
@@ -194,33 +191,26 @@ function KindRow({
   return (
     <div data-ledger-row="" data-kind={kind.slug} className={LEDGER_ROW_GRID}>
       <KindHead kind={kind} onSave={saveDetails} onDelete={kind.slug !== PURPOSE_FALLBACK ? () => void del() : undefined} />
-      <div className="flex min-w-0 flex-wrap items-center justify-start gap-x-4 gap-y-1 min-[900px]:justify-end">
-        {addresses.map((r, i) => (
-          // Keyed by POSITION: a refused edit puts the list back, and the field must survive
-          // that with what was typed still in it.
-          <ClickEdit
-            key={i}
-            value={r.email}
-            title={r.label ?? undefined}
-            label="Email"
-            text={EMAIL_TEXT}
-            email
-            maxLength={254}
-            onSave={(v) => edit(i, v)}
-            onDelete={() => void remove(i)}
-            deleteLabel={`Remove ${r.label || r.email}`}
-          />
-        ))}
-        <PlusField
-          label={`Add email to ${kind.label}`}
-          fieldLabel={`New email for ${kind.label}`}
-          placeholder="name@example.com"
-          maxLength={254}
-          email
-          text={cx(EMAIL_TEXT, 'min-w-[16ch] max-w-full [field-sizing:content]')}
-          onAdd={add}
-        />
-      </div>
+      {/* Keyed by POSITION (EditList's default): a refused edit puts the list back, and the
+          field must survive that with what was typed still in it. */}
+      <EditList
+        items={addresses}
+        text={(r) => r.email}
+        title={(r) => r.label ?? undefined}
+        label="Email"
+        addLabel={`Add email to ${kind.label}`}
+        addFieldLabel={`New email for ${kind.label}`}
+        placeholder="name@example.com"
+        maxLength={254}
+        inputMode="email"
+        textClass={EMAIL_TEXT}
+        validate={problem}
+        onSave={edit}
+        onAdd={add}
+        onRemove={(i) => void remove(i)}
+        removeLabel={(r) => `Remove ${r.label || r.email}`}
+        className="justify-start min-[900px]:justify-end"
+      />
       {dialog}
     </div>
   )
@@ -373,237 +363,5 @@ function KindHead({
         className={cx(UNDERLINE, GUIDE_TEXT, 'mt-1 w-full max-w-[40ch] focus:text-ink')}
       />
     </div>
-  )
-}
-
-/**
- * TEXT YOU CLICK TO EDIT (Sam, 2026-10-02: "The delete icon appears after I click on it, same
- * with the edit. I want minimal stuff on the screen"). At rest, the text alone, as a button (so
- * a keyboard reaches it: focus, Enter). Clicked, it is an underline field in the same type, with
- * ✓ and, when there is something to delete, a trash.
- *
- *   Enter or ✓      saves the trimmed text, only when it changed; a refusal says why in a toast
- *                   and KEEPS what was typed in the field
- *   Escape          puts it back
- *   a click away    puts it back (focus leaving the field and its glyphs)
- *
- * The glyphs keep the field focused on mousedown, so clicking ✓ is a save, not a click away.
- */
-function ClickEdit({
-  value,
-  label,
-  text,
-  email = false,
-  maxLength,
-  title,
-  onSave,
-  onDelete,
-  deleteLabel,
-}: {
-  value: string
-  /** The field's accessible name: "Email". */
-  label: string
-  /** The text's look, at rest and while edited. */
-  text: string
-  email?: boolean
-  maxLength: number
-  title?: string
-  onSave: (next: string) => Promise<{ error?: string }> | { error?: string }
-  onDelete?: () => void
-  deleteLabel?: string
-}) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const input = useRef<HTMLInputElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const savingRef = useRef(false)
-  /** Hand focus back to the text after Enter or Escape (a keyboard user's place). */
-  const refocus = useRef(false)
-  const editing = draft !== null
-
-  useEffect(() => {
-    if (editing) input.current?.focus()
-    else if (refocus.current) {
-      refocus.current = false
-      button.current?.focus()
-    }
-  }, [editing])
-
-  function close(keyboard: boolean) {
-    refocus.current = keyboard
-    setDraft(null)
-  }
-
-  async function save() {
-    if (draft === null || savingRef.current) return
-    const next = draft.trim()
-    if (next === value) return close(true)
-    savingRef.current = true
-    try {
-      const res = await onSave(next)
-      if (res?.error) {
-        toast(res.error, 'error')
-        input.current?.focus()
-        return
-      }
-      close(true)
-    } catch {
-      toast(`Couldn’t save that ${label.toLowerCase()}.`, 'error')
-    } finally {
-      savingRef.current = false
-    }
-  }
-
-  if (!editing) {
-    return (
-      <button ref={button} type="button" title={title} onClick={() => setDraft(value)} className={cx('max-w-full cursor-text truncate rounded text-left', text, FOCUS_RING)}>
-        {value}
-      </button>
-    )
-  }
-
-  return (
-    <span
-      className="inline-flex max-w-full items-center gap-1.5"
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(false)
-      }}
-    >
-      <LineField
-        ref={input}
-        label={label}
-        value={draft}
-        onChange={(v) => setDraft(v.slice(0, maxLength))}
-        mono={email ? 'value' : undefined}
-        inputMode={email ? 'email' : undefined}
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            void save()
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            e.stopPropagation()
-            close(true)
-          }
-        }}
-        // As wide as the text (field-sizing where supported), never wider than the row.
-        className={cx('min-w-[8ch] max-w-full [field-sizing:content]', !email && 'font-medium')}
-      />
-      {/* mousedown would blur the field first, and a blur is "put it back". */}
-      <span className="inline-flex items-center gap-1.5" onMouseDown={(e) => e.preventDefault()}>
-        <RowIcon icon="check" label="Save" variant="bare" tone="accent" glyphSize={14} onClick={() => void save()} />
-        {onDelete ? (
-          <RowIcon
-            icon="trash"
-            label={deleteLabel ?? 'Delete'}
-            variant="bare"
-            tone="danger"
-            glyphSize={14}
-            onClick={() => {
-              close(false)
-              onDelete()
-            }}
-          />
-        ) : null}
-      </span>
-    </span>
-  )
-}
-
-/**
- * A BARE + THAT OPENS A LINE (Sam: "Dont say add email. Have it be a plus"; no boxes). Clicked,
- * it becomes an underline field in the type of the text it will add, with bare ✓ and ×, in the
- * place that text will sit: at the end of the row's addresses.
- *
- *   Enter or ✓   adds; a refusal says why in a toast and KEEPS what was typed in the field
- *   Escape or ×  closes it and adds nothing
- *
- * The latch is a ref (AGENTS.md rule 5): Enter and ✓ in one tick must add once.
- */
-function PlusField({
-  label,
-  fieldLabel,
-  placeholder,
-  maxLength,
-  email = false,
-  text,
-  onAdd,
-}: {
-  /** The +'s name and hover label. */
-  label: string
-  /** The open field's accessible name. */
-  fieldLabel: string
-  placeholder: string
-  maxLength: number
-  email?: boolean
-  /** The field's type and width: the look of what it adds. */
-  text: string
-  onAdd: (value: string) => Promise<{ error?: string }> | { error?: string }
-}) {
-  const [value, setValue] = useState<string | null>(null)
-  const field = useRef<HTMLInputElement>(null)
-  const plus = useRef<HTMLButtonElement>(null)
-  const busyRef = useRef(false)
-  /** Focus goes back to the + after a cancel or an add. */
-  const refocus = useRef(false)
-  const open = value !== null
-
-  useEffect(() => {
-    if (open) field.current?.focus()
-    else if (refocus.current) {
-      refocus.current = false
-      plus.current?.focus()
-    }
-  }, [open])
-
-  function close() {
-    refocus.current = true
-    setValue(null)
-  }
-
-  async function confirm() {
-    const next = (value ?? '').trim()
-    if (!next || busyRef.current) return
-    busyRef.current = true
-    try {
-      const res = await onAdd(next)
-      if (res?.error) {
-        toast(res.error, 'error')
-        field.current?.focus()
-        return
-      }
-      close()
-    } finally {
-      busyRef.current = false
-    }
-  }
-
-  if (!open) return <RowIcon ref={plus} icon="plus" label={label} variant="bare" glyphSize={16} onClick={() => setValue('')} />
-
-  return (
-    <span className="inline-flex max-w-full items-center gap-2">
-      <input
-        ref={field}
-        aria-label={fieldLabel}
-        value={value}
-        maxLength={maxLength}
-        placeholder={placeholder}
-        inputMode={email ? 'email' : undefined}
-        spellCheck={false}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            void confirm()
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            e.stopPropagation()
-            close()
-          }
-        }}
-        className={cx(UNDERLINE, text)}
-      />
-      <RowIcon icon="check" label="Add" variant="bare" tone="accent" glyphSize={16} onClick={() => void confirm()} />
-      <RowIcon icon="close" label="Cancel" variant="bare" tone="danger" glyphSize={16} onClick={close} />
-    </span>
   )
 }

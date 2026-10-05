@@ -29,8 +29,9 @@ export type RowIconVariant =
   /** The empty state's one action (+): full ink, and a blue focus ring, because focus
    *  lands here after the note (Enter) and the manager must see where it went. */
   | 'primary'
-  /** A bordered square — modal actions, the add form's ✓ and ×, the kit download. The border
-   *  is its rest look; hover adds no fill. */
+  /** A modal action's glyph (the logo and tab-icon editors, Subscribers' search and CSV, the
+   *  share-image picker's ✓): a 44px or 36px TARGET with no box drawn (Sam, 2026-10-02: no icons
+   *  in a box; the border went 2026-10-05). Muted at rest; hover is colour and stroke only. */
   | 'boxed'
   /** A BARE GLYPH (Sam dislikes icons in a box): ink, no padding, no background. The AI test's
    *  "what to do" ↗ / pencil / wrench at the end of a sentence, and the Profiles cards' actions.
@@ -46,7 +47,7 @@ export type RowIconProps = {
   labelSide?: 'bottom' | 'top'
   /** How the hover label lines up with the control. `end` for a control at a right edge. */
   labelAlign?: HoverLabelAlign
-  /** `boxed` only: 44px (modal actions) or 36px (add form, kit). */
+  /** `boxed` only: a 44px (modal actions) or 36px (search, CSV, a picker's ✓) target. */
   size?: 'md' | 'sm'
   /** Hover colour. `default`: ink (Sam, 2026-10-02: "black and bold"). `accent` for ✓ and
    *  every +, `danger` for × and trash. A `plus` icon is `accent` unless told otherwise (Sam,
@@ -92,7 +93,7 @@ const VARIANT: Record<RowIconVariant, string> = {
   // h-8 w-8: the 32px a 20px glyph and p-1.5 made, now fixed, so a 14px pencil keeps it.
   faint: 'h-8 w-8 rounded-lg text-ink-muted hover:opacity-100 focus-visible:opacity-100 group-hover/ledger:opacity-100',
   primary: 'h-8 w-8 rounded-lg text-ink',
-  boxed: 'rounded-xl border border-hairline text-ink-muted',
+  boxed: 'rounded-xl text-ink-muted',
   bare: '',
 }
 

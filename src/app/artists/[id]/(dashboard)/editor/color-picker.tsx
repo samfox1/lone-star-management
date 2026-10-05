@@ -527,7 +527,8 @@ export function ColorPalette({
         aria-label={fieldLabel}
         spellCheck={false}
         className={cx(
-          'rounded-lg border border-hairline bg-paper px-2.5 py-[7px] font-space text-[13px] uppercase text-ink outline-none focus:border-ink',
+          // A line, not a box (Sam, 2026-10-02: no boxed inputs): the hex reads as the row's value.
+          'border-b border-hairline bg-transparent px-0 py-[7px] font-space text-[13px] uppercase text-ink outline-none focus:border-ink',
           className,
         )}
       />
@@ -678,7 +679,7 @@ export function ColorPalette({
           placeholder="None"
           aria-label={`${aria} hex`}
           spellCheck={false}
-          className="w-full min-w-0 rounded-md bg-surface px-2.5 py-1.5 font-space text-[12px] text-ink outline-none ring-1 ring-hairline placeholder:font-space placeholder:text-ink-faint focus:ring-ink-faint"
+          className="w-full min-w-0 border-b border-hairline bg-transparent px-0 py-1.5 font-space text-[12px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink"
         />
       </div>
 

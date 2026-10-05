@@ -21,14 +21,16 @@ export function plural(n: number, noun: string): string {
 }
 
 export const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
-// Red ring for a field whose value the server would reject (a blank required field, a
-// bad price) — gating the save so the panel can't claim "Saved" on a dropped write.
-export const INVALID_FIELD = 'ring-1 ring-accent-red focus:ring-accent-red'
+// A red underline for a field whose value the server would reject (a blank required field, a
+// bad price) — gating the save so the panel can't claim "Saved" on a dropped write. Important
+// (`!`), because it joins FIELD's own border colour and cx does not resolve a clash.
+export const INVALID_FIELD = 'border-accent-red! focus:border-accent-red!'
 
 /* ── Panel layout primitives (the "grid sheet" inspector) ────────────────────────────
  * The Style / Links / Text panels share one visual language: NO bordered containers.
  * Structure comes from grouping (a mono eyebrow + trailing rule), a leading icon per
- * row, and whitespace — not from boxes. Fields are tinted rather than outlined.
+ * row, and whitespace — not from boxes. Fields are a LINE, never a box (Sam, 2026-10-02: no
+ * boxed inputs; applied to the editor 2026-10-05).
  *
  * TYPE RULE: the panel is Space Mono THROUGHOUT — labels, names, values, and the text
  * the manager types into a field (Sam, 2026-07-21). `font-space` sits on the <aside>
@@ -37,14 +39,15 @@ export const INVALID_FIELD = 'ring-1 ring-accent-red focus:ring-accent-red'
  * is 13px where Inter was 14px, keeping the same line count per row.
  */
 
-/** A borderless field on the panel's white ground: tinted at rest, paper on focus. */
+/** A field on the panel: a hairline under the text, ink on focus. No fill, no box: the text
+ *  starts where the row's text starts. */
 export const FIELD =
-  'w-full rounded-md bg-surface px-2.5 py-2 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:bg-paper focus:ring-1 focus:ring-hairline'
+  'w-full border-b border-hairline bg-transparent px-0 py-1.5 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink'
 
-/** The same field INSIDE an expanded body, which is itself tinted — so it inverts:
- *  paper on grey, or it would vanish into its own background. */
+/** The same field INSIDE an expanded body, which is tinted. The line is darker than the
+ *  hairline, which all but vanishes on grey. */
 export const FIELD_ON_TINT =
-  'w-full rounded-md bg-paper px-2.5 py-2 font-space text-[13px] text-ink outline-none ring-1 ring-hairline placeholder:font-space placeholder:text-ink-faint focus:ring-ink-faint'
+  'w-full border-b border-ink-faint bg-transparent px-0 py-1.5 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink'
 
 /** An expanded section's body. The grey ground is what separates a section from the
  *  controls it owns — the parent row stays on white and needs no extra weight. */

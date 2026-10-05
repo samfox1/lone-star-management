@@ -145,7 +145,7 @@ export function PublishRiser({ dirty, message, onPublish, onRevert, noun = 'bran
               type="button"
               onClick={() => void revert()}
               disabled={reverting}
-              className="rounded-[10px] px-[18px] py-2.5 text-[14px] font-medium text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
+              className="rounded-[10px] px-[18px] py-2.5 text-[14px] font-medium text-ink-muted transition-colors hover:text-ink hover:[text-shadow:0_0_0.45px_currentColor] disabled:opacity-50"
             >
               {reverting ? 'Reverting…' : 'Revert'}
             </button>

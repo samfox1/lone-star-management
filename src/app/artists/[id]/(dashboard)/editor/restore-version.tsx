@@ -6,6 +6,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { EYEBROW, plural } from './inspector-shared'
+import { CANCEL_WORD } from '../confirm-dialog'
 import { listPublishMomentsAction, restorePublishedAction } from '../actions'
 import type { PublishMoment } from '@/lib/content'
 
@@ -188,12 +189,8 @@ function RestoreDialog({
             </div>
           </>
         )}
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-ink hover:text-ink"
-          >
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button type="button" onClick={onCancel} className={CANCEL_WORD}>
             Cancel
           </button>
           {/* No restore button at all when there is nothing to restore — an enabled
@@ -203,7 +200,7 @@ function RestoreDialog({
               type="button"
               disabled={busy || !chosen}
               onClick={() => chosen && onRestore(chosen)}
-              className="flex-1 rounded-lg border border-accent-red bg-accent-red px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85 disabled:opacity-40"
+              className="rounded-lg border border-accent-red bg-accent-red px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-paper hover:opacity-85 disabled:opacity-40"
             >
               {busy ? 'Restoring…' : 'Restore this version'}
             </button>

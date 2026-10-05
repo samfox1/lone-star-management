@@ -21,7 +21,6 @@ function DeleteButton({ row, artistId }: { row: MediaRow; artistId: string }) {
       storagePath={row.storage_path}
       artistId={artistId}
       noun={row.purpose === 'hero_video' ? 'Video' : row.purpose === 'profile_photo' ? 'Photo' : 'Image'}
-      className="rounded-md px-2 py-1 text-xs font-medium text-accent-red transition-colors hover:bg-danger-soft"
     />
   )
 }

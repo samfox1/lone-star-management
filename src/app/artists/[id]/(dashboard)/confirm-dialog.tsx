@@ -28,7 +28,12 @@ import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
  *  icons dont work on the confirmation … It should say Confirm or cancel"). Mono caps, the same
  *  size, so neither is the default by being the bigger target; hover = darker and a touch bolder
  *  (a same-colour hairline shadow, so the word doesn't widen). */
-const ANSWER = `inline-flex h-9 items-center px-2 font-space text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:[text-shadow:0_0_0.45px_currentColor] ${FOCUS_RING}`
+export const ANSWER = `inline-flex h-9 items-center px-2 font-space text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:[text-shadow:0_0_0.45px_currentColor] ${FOCUS_RING}`
+
+/** EVERY DIALOG'S "CANCEL" is this word (Sam, 2026-10-05: no bordered Cancel anywhere): the
+ *  question's own Cancel, grey until hovered. The way out never looks like the thing to press.
+ *  A dialog's main action keeps its own look. */
+export const CANCEL_WORD = `${ANSWER} text-ink-muted hover:text-ink disabled:opacity-50`
 
 /** The answer button's voice. Tied to the button vocabulary rather than spelled out
  *  again, so renaming a variant is a compile error here instead of a silent fallback. */
@@ -109,7 +114,7 @@ export function useConfirm(): {
         <div className="mt-5 flex items-center justify-end gap-2">
           {/* Focus lands on CANCEL, never on the destructive answer: a stray Enter or
               Space arriving right after the question opens must not delete anything. */}
-          <button autoFocus type="button" onClick={() => settle(false)} className={`${ANSWER} text-ink-muted hover:text-ink`}>
+          <button autoFocus type="button" onClick={() => settle(false)} className={CANCEL_WORD}>
             Cancel
           </button>
           {/* Named for what it DOES — never an "OK" that could mean either half. */}

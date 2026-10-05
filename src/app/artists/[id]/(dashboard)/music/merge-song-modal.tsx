@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CardModal } from '../card-modal'
-import { useConfirm } from '../confirm-dialog'
+import { CANCEL_WORD, useConfirm } from '../confirm-dialog'
 import { toast } from '../toast'
 import { mergeSongsAction } from './actions'
 
@@ -93,11 +93,7 @@ export function MergeSongModal({
       label="Merge song"
       footer={
         <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-xl border border-hairline bg-paper px-5 py-2.5 font-space text-sm font-semibold text-ink transition-colors hover:border-ink-faint"
-          >
+          <button type="button" onClick={onClose} className={CANCEL_WORD}>
             Cancel
           </button>
           <button
