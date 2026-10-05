@@ -401,6 +401,16 @@ verify_jwt = false
 [functions.event]
 verify_jwt = false
 
+# The confirmation-code sender (EMAIL_CONFIRM_PLAN.md): supabase/functions/email-confirm.
+# verify_jwt ON, unlike contact and event, because the reason they turned it off does not
+# apply: nothing calls this from a browser. The dashboard's server action calls it
+# server-to-server with the manager's own access token, so there is no CORS preflight for
+# the gateway to 401. The gateway check only turns away callers with no session at all;
+# the handler still resolves the user from the token, and begin_email_confirmation checks
+# that user manages the artist.
+[functions.email-confirm]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
