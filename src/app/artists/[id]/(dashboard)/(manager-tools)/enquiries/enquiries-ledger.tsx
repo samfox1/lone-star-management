@@ -453,7 +453,10 @@ function EnquiryModal({
         </div>
       }
     >
-      <div ref={body} tabIndex={-1} data-enquiry-detail="" className="outline-none">
+      {/* Pulled up under the × (Sam, 2026-10-05: "remove some of that gap at the top of the
+          modal above the email/name"): with no title, the top bar is only the ×, so the From
+          row starts level with it rather than a whole bar below. */}
+      <div ref={body} tabIndex={-1} data-enquiry-detail="" className="-mt-4 outline-none">
         <div data-enquiry-facts="">
           <KvRow label="From">
             <span className="flex min-w-0 items-baseline gap-2.5 text-[14px]">
