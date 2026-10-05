@@ -453,12 +453,13 @@ function EnquiryModal({
         </div>
       }
     >
-      {/* Pulled up under the × (Sam, 2026-10-05: "remove some of that gap at the top of the
-          modal above the email/name"): with no title, the top bar is only the ×, so the From
-          row starts level with it rather than a whole bar below. */}
-      <div ref={body} tabIndex={-1} data-enquiry-detail="" className="-mt-4 outline-none">
+      {/* Pulled up level with the × (Sam, 2026-10-05: "remove some of that gap at the top of
+          the modal above the email/name", then "Tighten more"): with no title, the top bar is
+          only the ×, so the From row sits on its line. The row's right padding keeps a long
+          address clear of the ×. */}
+      <div ref={body} tabIndex={-1} data-enquiry-detail="" className="-mt-[38px] outline-none">
         <div data-enquiry-facts="">
-          <KvRow label="From">
+          <KvRow label="From" className="pr-10">
             <span className="flex min-w-0 items-baseline gap-2.5 text-[14px]">
               <span className="flex-none font-semibold text-ink">{row.name}</span>
               <span className="min-w-0 truncate text-ink-muted">{row.email}</span>

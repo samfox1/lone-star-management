@@ -139,7 +139,9 @@ export function CardModal({
             margins keep the icons where they always sat, 16px in from the corner. */}
         <div className="-mr-3 -mt-3 flex min-h-8 items-center gap-3">
           {title ? <h2 className={`${modalTitleClass} min-w-0 flex-1 truncate`}>{title}</h2> : <div className="flex-1" />}
-          <div className="flex flex-none items-center gap-0.5">
+          {/* Above the body, so content pulled up beside the × (the enquiry modal) never
+              covers it or takes its clicks. */}
+          <div className="relative z-10 flex flex-none items-center gap-0.5">
             {analyticsHref ? (
               <Link
                 href={analyticsHref}
