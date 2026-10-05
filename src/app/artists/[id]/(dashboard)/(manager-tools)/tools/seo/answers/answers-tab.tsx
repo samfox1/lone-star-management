@@ -6,7 +6,6 @@ import { FAQ_AUTO_ONLY, probePrompts } from '@samfox1/site-bridge/seo'
 import { FAQ_EXTRA, FAQ_KEYS, FAQ_QUESTION_MAX } from '@/lib/site-content-schema'
 import { cx } from '@/lib/cx'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
-import { Icon } from '@/components/ui/icons'
 import { useDebouncedFieldSave } from '../../../../editor/use-debounced-field-save'
 import { saveSeoFieldAction } from '../../../../actions'
 import { useConfirm } from '../../../../confirm-dialog'
@@ -19,8 +18,8 @@ import { AreaField, EndSlot, LineField } from '../../../_ui/fields'
 
 /** Where an automatic-only answer comes from, and the tool that holds it. */
 const FROM = {
-  tour: { label: 'Tour', icon: 'tour', seg: 'tour' },
-  music: { label: 'Music', icon: 'tracks', seg: 'music' },
+  tour: { label: 'Tour', seg: 'tour' },
+  music: { label: 'Music', seg: 'music' },
 } as const
 
 type Row =
@@ -210,14 +209,13 @@ function AnswerRow({
 
   // At rest the answer is its text, and the text is the way in (no pencil, no trash).
   // An automatic-only answer's source is a quiet line UNDER its question, never beside the
-  // answer (Sam, 2026-10-05: "be under the question or something. Some other spot"). The tag IS
-  // the way there: the tool's own icon, no arrow (an arrow means "leaves Tapir" on these tabs).
+  // answer (Sam, 2026-10-05: "be under the question or something. Some other spot"). The words
+  // ARE the way there, with no icon (Sam: "Remove the icons from … comes from tour/music").
   const source = from ? (
     <Link
       href={`/artists/${artistId}/${from.seg}`}
-      className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded transition-colors hover:text-accent', FOCUS_RING)}
+      className={cx('inline-flex items-center whitespace-nowrap rounded transition-colors hover:text-accent', FOCUS_RING)}
     >
-      <Icon name={from.icon} size={12} aria-hidden="true" />
       {`comes from ${from.label}`}
     </Link>
   ) : undefined
