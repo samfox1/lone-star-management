@@ -1,4 +1,4 @@
-import { COUNTRIES, type AboutPlacement } from '@samfox1/site-bridge/seo'
+import { COUNTRIES } from '@samfox1/site-bridge/seo'
 import type { BioRow } from '../seo/profiles/bio-state'
 import { plural } from '../format'
 
@@ -14,9 +14,6 @@ export const SCHEMA_TYPES = [
   { value: 'Person', label: 'Visual artist' },
 ] as const
 export type SchemaType = (typeof SCHEMA_TYPES)[number]['value']
-
-/** Where the bio shows on the site, in the bio window's words. */
-export const PLACEMENT: Record<AboutPlacement, string> = { home: 'On the homepage', page: 'Its own page', hidden: 'Hidden from visitors' }
 
 /** The countries a manager picks from: exactly the bridge's table (the save gate accepts only
  *  those), A to Z, with "—" to clear. */

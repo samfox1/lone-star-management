@@ -20,7 +20,9 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { ControlRow, EditRow, EYEBROW, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { clickedAControl, ControlRow, EditRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { RowIcon } from '../../(manager-tools)/_ui/row-icon'
+import { EDIT_TARGET } from '../../(manager-tools)/_ui/styles'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
 import { GallerySlotUploader } from '../../media-uploader'
@@ -168,16 +170,16 @@ export function SiteTools({
             row shows a snippet and the words open full-panel. Multiline — a single-line
             input in a wider panel would move the clipping, not end it. */}
         <SeoEditRow store="seo" fieldKey="seo_description" label="Description" value={seo.seo_description ?? ''} multiline onEdit={onEditText} />
+        {/* Glyphs, not words (Sam, 2026-10-05): ↗ goes to the social card; Bio is a row with a
+            hover pencil, and a click anywhere on it opens the bio. */}
         <ControlRow label="Social card">
-          <a href={`/artists/${artistId}/tools/seo#share`} className={`${EYEBROW} text-ink underline underline-offset-2`}>
-            Open
-          </a>
+          <RowIcon icon="external" label="Open the social card" variant="bare" glyphSize={14} labelAlign="end" href={`/artists/${artistId}/tools/seo#share`} link="app" />
         </ControlRow>
-        <ControlRow label="Bio">
-          <button type="button" onClick={onEditBio} aria-label="Edit bio" className={`${EYEBROW} text-ink underline underline-offset-2`}>
-            Edit
-          </button>
-        </ControlRow>
+        <div onClick={(e) => !clickedAControl(e) && onEditBio?.()} className={cx(EDIT_TARGET, onEditBio && 'cursor-pointer')}>
+          <ControlRow label="Bio">
+            <RowIcon icon="edit" label="Edit bio" variant="bare" labelAlign="end" onClick={onEditBio} />
+          </ControlRow>
+        </div>
         <ControlRow label="About">
           <select
             aria-label="About placement"
@@ -193,6 +195,11 @@ export function SiteTools({
             ))}
           </select>
         </ControlRow>
+        {/* The words over the bio (site_content.about_heading, the key the Profile bio window
+            saved until 2026-10-05), through the same SEO gate and its 60-character cap. No
+            site declares a heading of its own, so the row follows the About section: shown
+            only when the site declares one. */}
+        {about ? <SeoEditRow store="seo" fieldKey="about_heading" label="Heading" value={seo.about_heading ?? ''} onEdit={onEditText} /> : null}
         <SeoEditRow store="fact" fieldKey="genre" label="Genre" value={facts.genre} onEdit={onEditText} />
         <SeoEditRow store="fact" fieldKey="location" label="Location" value={facts.location} onEdit={onEditText} />
         <ControlRow label="Type">
@@ -351,23 +358,9 @@ function CursorImageRow({
         <span className="text-[13px] font-medium">{label}</span>
         <span className="font-space text-[10px] tracking-[0.04em] text-ink-faint">{hint}</span>
       </span>
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange('')}
-          aria-label={`Remove ${label}`}
-          className="font-space text-[11px] text-ink-muted underline underline-offset-2 hover:text-ink"
-        >
-          Remove
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={() => setPicking(true)}
-        className="rounded-md border border-hairline px-2 py-1 font-space text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:border-ink hover:text-ink"
-      >
-        {value ? 'Change' : 'Choose'}
-      </button>
+      {/* Glyphs, not words (Sam, 2026-10-05): ↻ picks another, + picks the first, the trash clears. */}
+      <RowIcon icon={value ? 'refresh' : 'plus'} label={value ? `Change ${label}` : `Choose ${label}`} variant="bare" glyphSize={16} labelAlign="end" onClick={() => setPicking(true)} />
+      {value && <RowIcon icon="trash" label={`Remove ${label}`} variant="bare" tone="danger" glyphSize={16} labelAlign="end" onClick={() => onChange('')} />}
       {picking && (
         <LibraryPicker<GalleryPhoto>
           title={`Choose a ${label.toLowerCase()} image`}

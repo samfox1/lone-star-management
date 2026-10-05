@@ -30,7 +30,6 @@ export type ProfileViewProps = {
   /** Tapir's own floor for a bio, in WORDS (lib/seo-tests who.ts BIO_MIN_WORDS): the bio test
    *  also asks that it name the genre, the city and a release or show. Shown while editing. */
   bioMinWords: number
-  about: { placement: string; heading: string }
   /** "N outside bios may be out of date" under the Bio row, or '' (outsideBiosNudge). */
   bioNudge?: string
   /** The Profile photo row, first under Who (photo-row.tsx). A slot, so the page can render it
@@ -212,7 +211,7 @@ export function ProfileView(p: ProfileViewProps) {
           </div>
           <EndSlot />
         </LedgerRow>
-        <BioRow artistId={artistId} bio={p.bio} minWords={p.bioMinWords} about={p.about} nudge={p.bioNudge} />
+        <BioRow artistId={artistId} bio={p.bio} minWords={p.bioMinWords} nudge={p.bioNudge} />
         <LedgerRow title="Type">
           <ChoiceMenu label="Type" value={type} options={SCHEMA_TYPES} onChange={changeType} />
           <EndSlot />

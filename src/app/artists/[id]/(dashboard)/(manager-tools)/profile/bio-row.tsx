@@ -1,27 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ABOUT_PLACEMENTS, type AboutPlacement } from '@samfox1/site-bridge/seo'
 import { cx } from '@/lib/cx'
-import { SAVE_FAILED } from '@/lib/manager-tools/format'
-import { PLACEMENT } from '@/lib/manager-tools/profile/profile'
 import { BIO_ANCHOR } from '@/lib/manager-tools/profile/route'
 import { seoTabSeg } from '@/lib/manager-tools/seo/sections'
 import { Icon } from '@/components/ui/icons'
-import { isTooLong, TEXT_LIMITS } from '@/lib/site-editor/text-limits'
+import { formatCount, isTooLong, nearLimit, TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
-import { TextLimitHint } from '../../editor/inspector-shared'
-import { saveEditorFieldAction, saveSeoFieldAction } from '../../actions'
+import { saveEditorFieldAction } from '../../actions'
 import { CardModal } from '../../card-modal'
-import { KvRow } from '../../modal-kit'
 import { LedgerRow } from '../_ui/ledger'
 import { RowIcon } from '../_ui/row-icon'
-import { FOCUS_RING_OFFSET, MONO_META } from '../_ui/styles'
-import { AreaField, EndSlot, LineField } from '../_ui/fields'
+import { FOCUS_RING_OFFSET } from '../_ui/styles'
+import { EndSlot } from '../_ui/fields'
 import { FieldError } from '../_ui/field-error'
 import { clearHash, useOpenOnHash } from '../_ui/hash'
-import { ChoiceMenu } from './choice-menu'
 
 /**
  * The bio (`#bio`): a calm row, its first words and the pencil; the counts live in the editor,
@@ -36,13 +30,11 @@ export function BioRow({
   artistId,
   bio: initialBio,
   minWords,
-  about,
   nudge = '',
 }: {
   artistId: string
   bio: string
   minWords: number
-  about: { placement: string; heading: string }
   nudge?: string
 }) {
   const [bio, setBio] = useState(initialBio)
@@ -66,7 +58,7 @@ export function BioRow({
           <RowIcon icon="edit" label="Edit the bio" onClick={() => setOpen(true)} />
         </EndSlot>
       </LedgerRow>
-      {open ? <BioModal artistId={artistId} bio={bio} minWords={minWords} about={about} onChange={setBio} onClose={close} /> : null}
+      {open ? <BioModal artistId={artistId} bio={bio} minWords={minWords} onChange={setBio} onClose={close} /> : null}
     </>
   )
 }
@@ -88,90 +80,91 @@ function Nudge({ artistId, text }: { artistId: string; text: string }) {
 }
 
 /**
- * The bio editor: the one bio (artists.bio, through the editor's own gate), its length, and
- * where it shows. Placement offers only what can take effect here: `hidden` always, the rest
- * only when the connected site declares them, and this page has no declaration (the Site
- * panel in the editor does) — the old About section's rule, kept.
+ * The bio window: only the writing (Sam, 2026-10-05, prototypes/bio_window_20261005.html, A
+ * "Just the writing"). A reading measure (~64ch at 16px, 1.7 leading, so a blank line reads as
+ * the paragraph gap), a hairline under the text that turns ink while writing, and the caret at
+ * the end on open. Under it one faint count: "55 / 100 words" below the AI test's floor
+ * (BIO_MIN_WORDS), "104 words" in ink once met, characters only near the cap.
  *
- * "Where it shows" and "Heading" are how the SITE shows the bio, so they belong in the site
- * editor (PROFILE_TOOL_PLAN.md); until that move they stay here, where Facts had them.
+ * No Save and no footer: the bio autosaves to the draft (closing is done, the rising Publish
+ * bar takes it live). "Where it shows" and "Heading" are how the SITE shows the bio, so they
+ * live in the editor: Site › About (the site's real places) and Site › Heading beside it.
  */
 function BioModal({
   artistId,
   bio,
   minWords,
-  about,
   onChange,
   onClose,
 }: {
   artistId: string
   bio: string
   minWords: number
-  about: { placement: string; heading: string }
   onChange: (b: string) => void
   onClose: () => void
 }) {
-  const [placement, setPlacement] = useState(about.placement)
-  const [heading, setHeading] = useState(about.heading)
+  const box = useRef<HTMLTextAreaElement>(null)
+  // The writing IS the window: open with the caret after the last word.
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.focus({ preventScroll: true })
+    el.setSelectionRange(el.value.length, el.value.length)
+  }, [])
   const bioSave = useDebouncedFieldSave<string>({
     persist: (_k, val) => saveEditorFieldAction(artistId, 'artist_bio', val, { store: 'artist', column: 'bio' }).then((r) => ({ ok: r.ok, error: r.error })),
     // Refused here too, before it is queued or sent: the server refuses it anyway, but this
-    // box says why (TextLimitHint) and never spends a round trip finding out.
+    // window says why (the refusal under the count) and never spends a round trip finding out.
     normalize: (val) => (isTooLong(val, TEXT_LIMITS.bio) ? null : val),
   })
-  const seoSave = useDebouncedFieldSave<string>({ persist: (k, val) => saveSeoFieldAction(artistId, k, val).then((r) => ({ ok: r.ok, error: r.error })) })
+  const max = TEXT_LIMITS.bio
   const n = bio.trim().length
   const words = bio.trim() ? bio.trim().split(/\s+/).length : 0
-  // A stored choice the editor made (with the site's declaration in hand) is kept on offer.
-  const placements: AboutPlacement[] = ABOUT_PLACEMENTS.filter((x) => x === 'hidden' || x === about.placement)
+  const met = words >= minWords
+  const tooLong = isTooLong(bio, max)
   return (
-    <CardModal open onClose={onClose} label="Bio">
-      <div className="mt-2">
-        <AreaField
-          label="Bio"
-          value={bio}
-          rows={8}
-          placeholder="Who you are, your sound, your big shows and releases."
-          onChange={(v) => {
-            onChange(v)
-            bioSave.save('artist_bio', v)
+    <CardModal open onClose={onClose} label="Bio" footer={null}>
+      <div className="px-3 pb-0.5">
+        {/* A click on the hairline's padding still lands in the text, as the mock's does. */}
+        <div
+          onMouseDown={(e) => {
+            if (e.target === box.current) return
+            e.preventDefault()
+            box.current?.focus()
           }}
-          className="max-h-[50vh] min-h-[180px] w-full overflow-auto"
-        />
-        {/* The counts, while the bio is being written (Sam, 2026-09-29). They sat in the
-            header's meta line until modal headers went (2026-10-02): a hint under the box. */}
-        <div data-bio-counts="" className={cx('mt-2', MONO_META)}>
-          {`${words} of ${minWords} words · ${n.toLocaleString('en-US')} characters`}
+          className="cursor-text border-b border-hairline pb-4 transition-colors focus-within:border-ink"
+        >
+          <textarea
+            ref={box}
+            aria-label="Bio"
+            value={bio}
+            rows={8}
+            spellCheck={false}
+            placeholder="Who you are, your sound, your big shows and releases."
+            onChange={(e) => {
+              onChange(e.target.value)
+              bioSave.save('artist_bio', e.target.value)
+            }}
+            className="block max-h-[56vh] min-h-[220px] w-full max-w-[64ch] resize-none overflow-auto border-0 bg-transparent p-0 text-[16px] leading-[1.7] text-ink caret-ink outline-none [field-sizing:content] placeholder:text-ink-faint"
+          />
         </div>
-        <TextLimitHint value={bio} max={TEXT_LIMITS.bio} />
-        {bioSave.status === 'error' ? <FieldError>Couldn’t save the bio.</FieldError> : null}
-      </div>
-      <div className="mt-4">
-        <KvRow label="Where it shows">
-          <ChoiceMenu
-            label="Where it shows"
-            value={placement}
-            options={[{ value: '', label: 'Site default' }, ...placements.map((x) => ({ value: x, label: PLACEMENT[x] }))]}
-            align="start"
-            onChange={(v) => {
-              setPlacement(v)
-              seoSave.save('about_placement', v)
-            }}
-          />
-        </KvRow>
-        <KvRow label="Heading">
-          <LineField
-            label="Heading"
-            value={heading}
-            placeholder="About"
-            onChange={(v) => {
-              setHeading(v)
-              seoSave.save('about_heading', v)
-            }}
-            className="w-full"
-          />
-        </KvRow>
-        {seoSave.status === 'error' ? <FieldError>{SAVE_FAILED}</FieldError> : null}
+        <div className="mt-2.5 flex min-h-4 items-baseline justify-between gap-4">
+          {bioSave.status === 'error' ? <FieldError>Couldn’t save the bio.</FieldError> : null}
+          <span
+            data-bio-counts=""
+            data-met={met ? '' : undefined}
+            className={cx('ml-auto whitespace-nowrap font-space text-[11px] transition-colors duration-200 motion-reduce:transition-none', met ? 'text-ink' : 'text-ink-faint')}
+          >
+            {met ? `${words} words` : `${words} / ${minWords} words`}
+            {nearLimit(bio, max) ? (
+              <>
+                {' · '}
+                <span className={tooLong ? 'text-accent-red' : undefined}>{`${formatCount(n)} / ${formatCount(max)}`}</span>
+              </>
+            ) : null}
+          </span>
+        </div>
+        {tooLong ? <FieldError>{tooLongError(max)}</FieldError> : null}
       </div>
     </CardModal>
   )

@@ -32,7 +32,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         facts={p.facts}
         bio={p.bio}
         bioMinWords={BIO_MIN_WORDS}
-        about={p.about}
         bioNudge={p.bioNudge}
         photo={<PhotoRow artistId={id} />}
       />

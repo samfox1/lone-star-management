@@ -39,8 +39,9 @@ and the outside-bios nudge all read from it.
 
 - **SEO/GEO loses the Facts tab.** Its tabs become Details · Answers · AI test · Profiles. The old
   route redirects to `/profile`, the same way the other old SEO routes do.
-- **The bio's placement and heading** belong to how the site shows it. They move to the site
-  editor; until then they stay where they are.
+- **The bio's placement and heading** belong to how the site shows it. Moved to the site editor
+  on 2026-10-05: Site › About (the site's declared places) and Site › Heading (shown when the
+  site declares an About). The bio window is now only the writing.
 - **The connected profiles and MusicBrainz parts of Facts** go to SEO/GEO › Profiles.
 - **Settings › General** no longer edits the name. It points to Profile.
 

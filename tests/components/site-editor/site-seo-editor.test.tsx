@@ -92,6 +92,19 @@ describe('the SEO description opens in the full editor', () => {
     expect(screen.getByText('SKEEN — live')).toBeTruthy()
   })
 
+  // The About heading moved here from the Profile bio window (2026-10-05): same key, same SEO gate; shown only beside a declared About.
+  it('the Heading row saves about_heading through the SEO gate, and shows only when the site declares an About', async () => {
+    openSite({ manifestAbout: { placements: ['page'], default: 'page' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Heading' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Who is Skeen' } })
+    await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('artist-1', 'about_heading', 'Who is Skeen'))
+    expect(factMock).not.toHaveBeenCalled()
+    cleanup()
+    openSite({ manifestAbout: null })
+    expect(screen.getByRole('button', { name: 'Edit Title' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Edit Heading' })).toBeNull()
+  })
+
   it('the title opens single-line — only the description is a paragraph', () => {
     openSite()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Title' }))

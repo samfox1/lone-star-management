@@ -20,8 +20,11 @@
  *             the gate accepts; a country with regions turns Region into its list, saved AFTER
  *             the country (waiting for it); a new country drops a region not on its list; a
  *             country stored in another spelling is shown in the table's
- *           • the bio: a calm row, the id a test's pencil lands on, the save and its cap, "Where
- *             it shows" offering only what can take effect; the nudge to SEO / GEO › Profiles
+ *           • the bio: a calm row, the id a test's pencil lands on, the save and its cap, a
+ *             window that is only the writing, whose count switches at the AI test's floor
+ *             (where it shows and its heading moved to the editor's Site panel,
+ *             tests/components/site/site-tools.test.tsx, site-seo-editor.test.tsx); the nudge
+ *             to SEO / GEO › Profiles
  * Not here: the save rules themselves (tests/unit/manager-tools/seo/save-rules.test.ts); how the
  *           page reads the stored facts (tests/unit/manager-tools/seo/seo-facts.test.ts); the
  *           connected profiles and MusicBrainz, now on SEO / GEO › Profiles
@@ -31,7 +34,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ABOUT_PLACEMENTS, COUNTRIES, FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
+import { COUNTRIES, FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
 import { REGIONS } from '@/lib/seo-regions'
 import { cleanFactValue, thisYearAt } from '@/lib/seo-facts'
 import { TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
@@ -75,7 +78,6 @@ const props = (over: Partial<ProfileViewProps> = {}): ProfileViewProps => ({
   facts: EMPTY_FACTS,
   bio: 'Old',
   bioMinWords: 100,
-  about: { placement: '', heading: '' },
   ...over,
 })
 const show = (over: Partial<ProfileViewProps> = {}) => render(<ProfileView {...props(over)} />)
@@ -279,7 +281,7 @@ describe('the bio', () => {
     expect(document.body.textContent).not.toMatch(/2,500|2500/)
     fireEvent.click(screen.getByRole('button', { name: 'Edit the bio' }))
     const dialog = screen.getByRole('dialog', { name: 'Bio' })
-    expect(dialog.textContent).toMatch(/8 of 100 words/)
+    expect(dialog.querySelector('[data-bio-counts]')?.textContent).toBe('8 / 100 words')
     expect(document.body.textContent).not.toMatch(/2,500|2500/)
   })
   // The bio test's pencil lands here: the row carries its id, and arriving opens the editor.
@@ -309,14 +311,21 @@ describe('the bio', () => {
     })
     expect(fieldMock).not.toHaveBeenCalled()
   })
-  // "Where it shows" offers only what can take effect here (no site declaration on this page).
-  it('CRITICAL: "Where it shows" offers only what can take effect here (no site declaration on this page)', () => {
-    show()
+  // The window is only the writing; its count reads "N / floor" below the AI test's floor, then just "N words" in ink.
+  it('the window is only the bio; the count says "N / 100 words" below the floor and "N words" once met', () => {
+    show({ bio: Array(99).fill('word').join(' ') })
     fireEvent.click(screen.getByRole('button', { name: 'Edit the bio' }))
-    fireEvent.click(screen.getByRole('combobox', { name: 'Where it shows' }))
-    const offered = screen.getAllByRole('option').map((o) => o.textContent)
-    expect(offered).toEqual(['Site default', 'Hidden from visitors'])
-    expect(ABOUT_PLACEMENTS).toContain('page')
+    const dialog = screen.getByRole('dialog', { name: 'Bio' })
+    const count = () => dialog.querySelector('[data-bio-counts]')!
+    expect(count().textContent).toBe('99 / 100 words')
+    expect(count().hasAttribute('data-met')).toBe(false)
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Bio' }), { target: { value: Array(104).fill('word').join(' ') } })
+    expect(count().textContent).toBe('104 words')
+    expect(count().hasAttribute('data-met')).toBe(true)
+    // Where it shows and its heading live in the editor now; closing is done (it autosaves).
+    expect(within(dialog).queryByRole('combobox')).toBeNull()
+    expect(within(dialog).getAllByRole('textbox')).toHaveLength(1)
+    expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull()
   })
 })
 
