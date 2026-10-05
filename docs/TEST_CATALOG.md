@@ -1686,7 +1686,7 @@ The Profile page: each row saves through its own gate, a value the gate would re
 - The bio row is calm: its first words only; the counts live in the editor, and no 2,500 anywhere (Sam's call).
 - The bio test's pencil lands here: the row carries its id, and arriving opens the editor.
 - The bio saves to artists.bio; over the cap it is kept, refused and never sent (never cut).
-- "Where it shows" offers only what can take effect here (no site declaration on this page).
+- The window is only the writing; its count reads "N / floor" below the AI test's floor, then just "N words" in ink.
 - After a Publish changed a fact, the Bio row says how many outside bios may be out of date, linking to SEO / GEO › Profiles.
 
 ### tests/unit/manager-tools/profile/profile.test.ts · 2 tests

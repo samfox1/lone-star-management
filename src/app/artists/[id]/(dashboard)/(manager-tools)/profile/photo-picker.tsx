@@ -8,6 +8,7 @@ import { cx } from '@/lib/cx'
 import { mediaThumbUrl } from '@/lib/storage-url'
 import { MediaUploader } from '../../media-uploader'
 import { toast } from '../../toast'
+import { ADD_TRIGGER, EDIT_TRIGGER } from '../_ui/edit-row'
 import { HoverLabel } from '../_ui/row-icon'
 import { FOCUS_RING_OFFSET } from '../_ui/styles'
 import { useSeeded } from '../_ui/use-seeded'
@@ -83,6 +84,8 @@ export function ProfilePhotoControl({ artistId, current, photos }: { artistId: s
         onClick={() => setOpen(true)}
         aria-label={shown ? 'Change the profile photo' : 'Add a profile photo'}
         data-profile-photo={shown ? 'set' : 'empty'}
+        // What a click anywhere on the Profile photo row opens: the change, or the first add.
+        {...(shown ? EDIT_TRIGGER : ADD_TRIGGER)}
         className={cx(
           'group relative grid h-16 w-16 flex-none cursor-pointer place-items-center overflow-hidden rounded-full border border-hairline',
           shown ? 'bg-surface' : 'border-dashed text-ink transition-colors hover:border-accent hover:text-accent',

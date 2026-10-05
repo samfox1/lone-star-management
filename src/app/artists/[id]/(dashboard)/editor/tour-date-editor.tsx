@@ -7,6 +7,7 @@ import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { FIELD, FieldRow, SaveLine } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { EditorPanel } from './editor-panel'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 import { setSupportUrlAction, updateContentAction } from '../actions'
 import { useRouter } from 'next/navigation'
 
@@ -219,13 +220,9 @@ export function TourDateEditor({
               className={FIELD}
             />
           </label>
-          <button
-            type="button"
-            onClick={addAct}
-            className="flex-none rounded-lg border border-hairline px-3 py-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink hover:border-accent hover:text-accent"
-          >
-            Add act
-          </button>
+          {/* A bare ✓, not a bordered "Add act" (Sam, 2026-10-05: glyphs, not words); the name is
+              its hover label, as EditList's add field confirms. */}
+          <RowIcon icon="check" label="Add act" variant="bare" tone="accent" glyphSize={16} labelAlign="end" onClick={addAct} className="mb-2 flex-none" />
         </div>
         {actError && <p className="pt-1 text-[11px] text-accent-red">{actError}</p>}
       </div>

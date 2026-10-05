@@ -338,7 +338,7 @@ function FramingControls({
 }) {
   const id = useId()
   return (
-    // `mt-4`: the "Upload new" hover label hangs 8px + 24px under the +; the column's 20px gap
+    // `mt-4`: the "Upload new" hover label hangs 8px + 24px under the upload glyph; the column's 20px gap
     // plus this 16px keeps it clear of the Size label (Sam, 2026-09-23: it covered SIZE).
     <div data-framing="" className={cx('mt-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2.5', disabled && 'opacity-35')}>
       <span aria-hidden="true" className={LABEL}>Size</span>
@@ -378,7 +378,7 @@ function FramingControls({
  * icon and the home-screen icon, each with its OWN source and framing (`target` goes to
  * every action). A BrandModal titled only "<name> edit" (no thumbnail): the icon on the
  * board (its own shape, no background circles); beside it, level with the board's top,
- * "+" (Upload new) and "Select a logo…", then Size and Up / down; Reset in the footer,
+ * the upload glyph (Upload new) and "Select a logo…", then Size and Up / down; Reset in the footer,
  * just left of Save.
  *
  * Source changes save at once (they are a choice, not a drag); the icon then regenerates
@@ -460,8 +460,8 @@ export function IconEditor({
           label={`${label} preview`}
           className={cx('absolute inset-0 h-full w-full', ed.saving && 'opacity-60')}
         />
-        {/* Empty: the board stays empty (no "No logo yet" filler, Sam 2026-10-05); the + beside
-            it and "Select a logo…" are the way in. */}
+        {/* Empty: the board stays empty (no "No logo yet" filler, Sam 2026-10-05); the upload
+            glyph beside it and "Select a logo…" are the way in. */}
         {empty ? null : ed.loading ? (
           <span
             role="status"
@@ -519,8 +519,8 @@ export function IconEditor({
           writeRow={writeUploadedSource}
           trigger={(open, { busy }) => (
             // Its label opens below (above, the modal body's scroll edge clips it now that the
-            // + sits at the column's top); the sliders keep clear of it — see FramingControls.
-            <RowIcon icon="plus" label="Upload new" variant="boxed" onClick={open} disabled={busy} />
+            // upload glyph sits at the column's top); the sliders keep clear of it — see FramingControls.
+            <RowIcon icon="upload" label="Upload new" variant="boxed" onClick={open} disabled={busy} />
           )}
         />
         {/* A line, not a box (Sam, 2026-10-02: no boxed fields). */}

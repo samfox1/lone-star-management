@@ -596,13 +596,8 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     <div className="flex items-center gap-2.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={reviewCoverUrl} alt="" className="h-12 w-12 flex-none rounded-lg object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setReviewCoverUrl(null)}
-                        className="text-xs text-ink-muted hover:text-ink hover:underline"
-                      >
-                        Replace
-                      </button>
+                      {/* ↻, not the word (Sam, 2026-10-05: glyphs, not words). */}
+                      <RowIcon icon="refresh" label="Replace cover" variant="bare" glyphSize={16} labelAlign="start" onClick={() => setReviewCoverUrl(null)} />
                     </div>
                   ) : (
                     <input

@@ -19,7 +19,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { RowIcon } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/row-icon'
 import { ModalBoard } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/modal-board'
-import { ColorPlayground } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/colors/playground'
 import { LABEL_GAP, LABEL_MARGIN } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/label-placement'
 
 const CHIP = { width: 100, height: 24 }
@@ -167,13 +166,5 @@ describe('HoverLabel — every Brand label goes through it', () => {
       expect(chip()!.getAttribute('data-placed')).toBe('top')
       fireEvent.pointerLeave(c)
     }
-  })
-
-  it('the playground\'s colour dots', () => {
-    render(<ColorPlayground palette={[{ key: 'p', name: 'Paper', hex: '#ffffff' }, { key: 'i', name: 'Ink', hex: '#111111' }]} startKey="p" onClose={vi.fn()} />)
-    const dot = within(screen.getAllByRole('radiogroup')[0]).getByRole('radio', { name: 'Ink' })
-    fireEvent.pointerEnter(dot)
-    expect(chip()!.textContent).toBe('Ink')
-    expect(chip()!.parentElement).toBe(document.body)
   })
 })

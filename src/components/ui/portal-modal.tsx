@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './icons'
+import { ICON_HOVER } from './icon-hover'
 import { modalOverlayClass } from './ui'
 import { useLockBodyScroll } from './use-lock-body-scroll'
 
@@ -70,7 +71,7 @@ export function PortalModal({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 text-ink-faint transition-colors hover:text-ink"
+          className={`absolute right-4 top-4 text-ink-faint transition-colors ${ICON_HOVER}`}
         >
           <Icon name="plus" size={18} className="rotate-45" />
         </button>

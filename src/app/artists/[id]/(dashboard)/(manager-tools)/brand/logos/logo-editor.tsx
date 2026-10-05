@@ -241,7 +241,7 @@ export function LogoEditor({
           successMessage={`${title} uploaded`}
           writeRow={writeRow}
           trigger={(pick, { busy }) => (
-            <RowIcon icon="plus" label={shown ? 'Upload new' : 'Add logo'} variant="boxed" labelSide="top" onClick={pick} disabled={busy || cutting || removing} />
+            <RowIcon icon="upload" label={shown ? 'Upload new' : 'Add logo'} variant="boxed" labelSide="top" onClick={pick} disabled={busy || cutting || removing} />
           )}
         />
   )
@@ -259,14 +259,12 @@ export function LogoEditor({
           start={upload}
           end={<RowIcon icon="trash" label="Remove" variant="boxed" tone="danger" labelSide="top" onClick={() => void remove()} disabled={!logo || cutting || removing} />}
         >
+          {/* Empty: the board stays empty (no "No logo yet" filler, Sam 2026-10-05); the upload
+              glyph under it is the way in. */}
           {shown ? (
             // eslint-disable-next-line @next/next/no-img-element -- a storage render URL or a local preview
             <img src={shown} alt={title} data-board-logo="" className="max-h-[85%] max-w-[85%] object-contain" />
-          ) : (
-            <span className="rounded-lg bg-paper px-3 py-1.5 text-[14px] text-ink-muted">
-              {target.kind === 'builtin' ? `No ${title.toLowerCase()} yet` : 'No logo yet'}
-            </span>
-          )}
+          ) : null}
         </ModalBoard>
       }
     >

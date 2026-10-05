@@ -150,7 +150,7 @@ function ImageFieldTile({
           {removing && <div className="absolute inset-0 grid place-items-center bg-paper/60 text-[10px] text-ink-muted">Removing…</div>}
         </SelectableTile>
       ) : (
-        <EmptySlot label="Add" ariaLabel={field.label} aspect="aspect-square" focused={focused} onClick={() => setUploadOpen(true)} />
+        <EmptySlot label="Upload" icon="upload" ariaLabel={field.label} aspect="aspect-square" focused={focused} onClick={() => setUploadOpen(true)} />
       )}
 
       {uploadOpen && (

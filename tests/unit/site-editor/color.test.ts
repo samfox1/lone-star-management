@@ -1,6 +1,6 @@
 // Colour maths for the picker: reading a hex, converting to and from HSV, and hue positions.
 import { describe, it, expect } from 'vitest'
-import { clamp, contrastInk, fractionAt, hexToHsv, hsvToHex, hueHex, normalizeHex } from '@/lib/color'
+import { clamp, contrastInk, fractionAt, hexToHsv, hsvToHex, hueHex, normalizeHex, rgbToHex } from '@/lib/color'
 
 describe('normalizeHex', () => {
   it('accepts 3/6/8-digit hexes, with or without the #, and lowercases them', () => {
@@ -113,5 +113,12 @@ describe('clamp', () => {
     expect(clamp(5, 0, 1)).toBe(1)
     expect(clamp(-5, 0, 1)).toBe(0)
     expect(clamp(0.5, 0, 1)).toBe(0.5)
+  })
+})
+
+describe('rgbToHex', () => {
+  it('two digits per channel, zero-padded, rounded and clamped', () => {
+    expect(rgbToHex(0, 10, 255)).toBe('#000aff')
+    expect(rgbToHex(300, -5, 127.6)).toBe('#ff0080')
   })
 })

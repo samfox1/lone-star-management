@@ -15,7 +15,6 @@ import { deleteBrandColorAction } from '../actions'
 import { AddRow } from '../../_ui/add-row'
 import { useOnBrandRevert } from '../_ui/brand-events'
 import { ColorRow, type ColorItem } from './color-row'
-import { ColorPlayground } from './playground'
 
 /** The page's rows, from the server's palette: Primary and Secondary ALWAYS — from the slot
  *  list, not from the rows, so an unpicked one (no row at all) is still there — then the
@@ -82,7 +81,6 @@ export function ColorsLedger({
       setGeneration((g) => g + 1)
     }
   }
-  const [preview, setPreview] = useState<string | null>(null)
   const { ask, dialog } = useConfirm()
   /** Client keys for added rows. A ref: two adds in one tick must not share a key. */
   const nextKey = useRef(0)
@@ -113,7 +111,6 @@ export function ColorsLedger({
     setItems((all) => all.filter((it) => it.key !== item.key))
   }
 
-  const palette = items.filter((it) => it.hex).map((it) => ({ key: it.key, name: it.name, hex: it.hex }))
   const addedNames = items.filter((it) => !it.slot).map((it) => it.name)
 
   return (
@@ -126,14 +123,10 @@ export function ColorsLedger({
           swatches={siteSwatches}
           onPatch={patch}
           onRemove={remove}
-          onPreview={setPreview}
         />
       ))}
       {addedNames.length < MAX_ADDED_COLORS ? (
         <AddRow noun="color" onAdd={add} prefill={nextColorName(addedNames, FIRST_ADDED_COLOR)} maxLength={40} />
-      ) : null}
-      {preview && palette.some((c) => c.key === preview) ? (
-        <ColorPlayground palette={palette} startKey={preview} onClose={() => setPreview(null)} />
       ) : null}
       {dialog}
     </>

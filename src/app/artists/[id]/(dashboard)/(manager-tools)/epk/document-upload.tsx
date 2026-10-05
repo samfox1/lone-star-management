@@ -85,8 +85,8 @@ export function DocumentUpload({
             </button>
           ) : (
             <>
-              {/* Empty: a mouse shortcut only, and an empty dashed box (no word, no second +). The
-                  + beside it is the keyboard's and the screen reader's way in, so the tile is out
+              {/* Empty: a mouse shortcut only, and an empty dashed box (no word, no second glyph). The
+                  upload glyph beside it is the keyboard's and the screen reader's way in, so the tile is out
                   of the tab order (logo-tile.tsx's rule). */}
               <button
                 type="button"
@@ -99,7 +99,7 @@ export function DocumentUpload({
               >
                 {busy ? '…' : null}
               </button>
-              <RowIcon icon="plus" label="Upload PDF" variant="primary" onClick={open} disabled={busy} />
+              <RowIcon icon="upload" label="Upload PDF" variant="primary" onClick={open} disabled={busy} />
             </>
           )
         }

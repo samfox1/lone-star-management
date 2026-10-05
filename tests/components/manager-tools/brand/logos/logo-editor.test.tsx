@@ -130,11 +130,12 @@ describe('LogoEditor: the board', () => {
     expect(names).toEqual([...BOARD_BACKGROUNDS.map((b) => b.name), ...SWATCHES.map((s) => s.name)])
   })
 
-  it('an empty slot: "Add logo", Remove disabled, and the board says there is none', () => {
+  it('an empty slot: "Add logo", Remove disabled, and an empty board (no filler, Sam 2026-10-05)', () => {
     const dialog = mount({ kind: 'builtin', purpose: 'logo_secondary', title: 'Secondary logo', logo: null })
     expect(within(dialog).getByRole('button', { name: 'Add logo' })).toBeEnabled()
     expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeDisabled()
-    expect(within(board()).getByText('No secondary logo yet')).toBeTruthy()
+    expect(boardSrc()).toBeNull()
+    expect(within(board()).queryByText(/yet/i)).toBeNull()
   })
 
   it('a logo with a file: "Upload new" and an enabled Remove', () => {

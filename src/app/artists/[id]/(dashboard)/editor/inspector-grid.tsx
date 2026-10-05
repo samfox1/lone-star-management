@@ -108,9 +108,13 @@ export function EmptySlot({
   title,
   stretch = false,
   focused = false,
+  icon = 'plus',
 }: {
   label: string
   onClick: () => void
+  /** `upload` where the tile opens an upload-only drop zone (Sam, 2026-10-05: a file goes up,
+   *  so the upload glyph, not a +). A + picks from the library. */
+  icon?: 'plus' | 'upload'
   aspect?: string
   /** Selected from the FRAME. An empty slot is exactly when a manager needs telling
    *  WHICH slot they clicked — there is no thumbnail to recognize it by — and it was
@@ -145,7 +149,7 @@ export function EmptySlot({
         aspect,
       )}
     >
-      <Icon name="plus" size={18} />
+      <Icon name={icon} size={18} />
       <HoverLabel label={label} />
     </button>
   )

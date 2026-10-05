@@ -6,7 +6,7 @@
  * `outline-style: var(--tw-outline-style)`. So an element that carries `outline-none` AND a
  * ring under some variant computes `outline-style: none` in every state: the ring never
  * shows. That is how the Brand page shipped with no keyboard focus ring on any row icon,
- * no ring on the Add control, and no ring on the selected logo background or playground dot.
+ * no ring on the Add control, and no ring on the selected logo background.
  *
  * THE RULE PINNED HERE: on an element that hides the browser outline, a ring declared under
  * a variant is visible only if that SAME variant also says `outline-solid`; and an
@@ -23,7 +23,6 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { RowIcon } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/row-icon'
 import { AddRow } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/add-row'
 import { ModalBoard } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/_ui/modal-board'
-import { ColorPlayground } from '@/app/artists/[id]/(dashboard)/(manager-tools)/brand/colors/playground'
 import { FOCUS_RING } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/focus-ring'
 import { SubscribersLedger } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/subscribers-ledger'
 
@@ -106,26 +105,6 @@ describe('focus and selected rings paint (Tailwind v4 outline-style)', () => {
       else expectFocusRing(c)
     }
     expect(circles.filter((c) => c.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-    expect(everyDeadRing()).toEqual([])
-  })
-
-  it('CRITICAL: the picked playground dot is visibly ringed in every part', () => {
-    const palette = [
-      { key: 'p', name: 'Paper', hex: '#ffffff' },
-      { key: 'i', name: 'Ink', hex: '#111111' },
-      { key: 'r', name: 'Red', hex: '#d02020' },
-    ]
-    render(<ColorPlayground palette={palette} startKey="p" onClose={vi.fn()} />)
-    const groups = screen.getAllByRole('radiogroup')
-    expect(groups).toHaveLength(4)
-    for (const g of groups) {
-      const dots = within(g).getAllByRole('radio')
-      expect(dots.filter((d) => d.getAttribute('aria-checked') === 'true')).toHaveLength(1)
-      for (const d of dots) {
-        if (d.getAttribute('aria-checked') === 'true') expectSelectedRing(d)
-        else expectFocusRing(d)
-      }
-    }
     expect(everyDeadRing()).toEqual([])
   })
 

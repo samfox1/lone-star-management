@@ -137,13 +137,12 @@ describe('Primary and Secondary, built in', () => {
     expect(within(row).getByRole('button', { name: 'Remove' })).toBeTruthy()
   })
 
-  it('a saved Primary shows its swatch and hex, and its eye opens the playground', () => {
+  it('a saved Primary shows its swatch and hex, and no preview (Sam, 2026-10-05: removed)', () => {
     renderLedger([...COLORS, PRIMARY]) // the server's order does not matter: the slot does
     const row = rowOf('Primary')
     expect(within(row).getByRole('button', { name: 'Primary palette' }).style.backgroundColor).toBe('rgb(229, 72, 77)')
     expect((within(row).getByLabelText('Primary hex') as HTMLInputElement).value).toBe('#e5484d')
-    fireEvent.click(within(row).getByRole('button', { name: 'Preview' }))
-    expect(screen.getByRole('dialog', { name: 'Primary' })).toBeTruthy()
+    expect(within(row).queryByRole('button', { name: 'Preview' })).toBeNull()
     // Secondary is still empty, and still there.
     expect(within(rowOf('Secondary')).getByText('No color yet')).toBeTruthy()
   })
@@ -207,7 +206,7 @@ describe('the palette', () => {
     const { container } = renderLedger()
     expect(screen.getByText('Color 1')).toBeTruthy()
     expect(screen.getByText('Color 2')).toBeTruthy()
-    // Primary and Secondary are the only roles (the playground's parts live in its modal).
+    // Primary and Secondary are the only roles.
     const ROLE = /\b(background|text|accent|border|brand|tertiary)\b/i
     expect(container.textContent).not.toMatch(ROLE)
     for (const el of container.querySelectorAll('[aria-label]')) expect(el.getAttribute('aria-label')).not.toMatch(ROLE)

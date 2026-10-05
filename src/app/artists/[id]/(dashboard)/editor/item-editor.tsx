@@ -1,8 +1,9 @@
 import { MEDIA_KINDS, type MediaKind } from '@samfox1/site-bridge/payload'
-import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { buttonClass } from '@/components/ui/ui'
+import { PortalModal } from '@/components/ui/portal-modal'
 import { useMemo, useState } from 'react'
 import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
-import { EYEBROW, GroupLabel, SaveLine } from './inspector-shared'
+import { EditRow, FIELD, GroupLabel, SaveLine } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
@@ -10,6 +11,7 @@ import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import { LibraryPicker } from './inspector-grid'
 import { useStyleRegionSave } from './use-style-save'
 import { RowIcon } from '../(manager-tools)/_ui/row-icon'
+import { KvRow } from '../modal-kit'
 
 /**
  * The per-ITEM editor (SITE_EDITOR_PLAN.md — image/video customization). Clicking Edit on an
@@ -35,10 +37,13 @@ import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 const KIND_LABEL: Record<MediaKind, string> = { photo: 'Photo', artwork: 'Artwork', none: 'Not listed' }
 
 /**
- * Alt text + fact-sheet kind live behind ONE thin, underlined, centred "Edit alt tag"
- * link (Sam, 2026-08-26: "this seems like too much… just needs to say edit alt tag on the
- * main panel, not the name"). It opens a small modal; the recommended alt sits in the
- * input as its placeholder.
+ * Alt text + fact-sheet kind: ONE row on the panel, the description itself (Sam, 2026-10-05:
+ * click-to-edit, no "Edit alt tag" words). It is the panel's EditRow: "ALT TEXT" over the words,
+ * a pencil that shows on hover, and a click anywhere on the row opens the small modal. Never the
+ * recommendation (Sam, 2026-08-26: "not the name"): that is the modal input's placeholder.
+ *
+ * The modal is a SIBLING of the row, not inside it: it is portaled, and a click in it would
+ * bubble through React to the row and open it again as it closes.
  */
 function AltRow({
   label,
@@ -53,23 +58,28 @@ function AltRow({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    // pt-4 above; the Style label brings its own pt-4 below: equal air both sides.
-    <div className="flex justify-center px-5 pt-4">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`Edit alt for ${label}`}
-        className="text-[11px] font-normal text-ink-muted underline underline-offset-2 hover:text-ink"
-      >
-        Edit alt tag
-      </button>
+    <>
+      {/* pt-2 above; the Style label brings its own pt-4 below. px-1 + the row's px-4 puts its
+          words on the panel's 20px line, under the ↻ and over STYLE. */}
+      <div className="px-1 pt-2">
+        <EditRow label="Alt text" value={alt.value || 'Not set'} empty={!alt.value} editLabel={`alt for ${label}`} onEdit={() => setOpen(true)} />
+      </div>
       {open && <AltModal label={label} alt={alt} kind={kind} slug={slug} onClose={() => setOpen(false)} />}
-    </div>
+    </>
   )
 }
 
-/** The little window "Edit alt" opens (Sam, 2026-08-26: a modal, not more side panel).
- *  Same overlay/card as the other editor dialogs; saves live as the title does. */
+/** The modal's card: narrower than the dashboard's 640px, three short rows need no more. */
+const ALT_CARD = 'relative flex max-h-[88vh] w-[520px] max-w-[90vw] flex-col overflow-auto rounded-2xl bg-paper p-7 shadow-2xl'
+
+/** A value typed straight into a modal row: no box, no line of its own (the row's hairline is
+ *  the line), as tour-add's rows are. */
+const ROW_INPUT = 'min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint'
+
+/** The little window the alt row opens (Sam, 2026-08-26: a modal, not more side panel).
+ *  The modal kit's rows (LABEL  value), a bare × and no header (Sam, 2026-10-05: no "Close"
+ *  word; the row that opened it already said what it is). Alt text and type save as they
+ *  change, as the title does. */
 function AltModal({
   label,
   alt,
@@ -85,68 +95,61 @@ function AltModal({
 }) {
   const [text, setText] = useState(alt.value)
   const [name, setName] = useState(slug?.value ?? '')
-  // The file name is a storage copy, so it saves on Done — not per keystroke.
+  // The file name is a storage copy, so it saves on Save — not per keystroke, and not on ×.
   const done = () => {
     const next = name.trim() || slug?.preset || ''
     if (slug && next && next !== slug.value) slug.onSave(next)
     onClose()
   }
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Alt text for ${label}`}
-      className={modalOverlayClass}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className={`${modalCardClass} w-[420px] gap-3`}>
-        <div className="flex items-start justify-between gap-4">
-          <div className={EYEBROW}>Alt text</div>
-          <button type="button" onClick={onClose} aria-label="Close" className={`${EYEBROW} text-ink-faint hover:text-ink`}>
-            Close
-          </button>
-        </div>
-        <input
-          autoFocus
-          value={text}
-          placeholder={alt.preset}
-          aria-label={`Alt text for ${label}`}
-          onChange={(e) => {
-            setText(e.target.value)
-            alt.onSave(e.target.value)
-          }}
-          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <div className={`${EYEBROW} mt-1`}>Type</div>
-        <select
-          value={kind.value ?? 'photo'}
-          aria-label={`Type for ${label}`}
-          onChange={(e) => kind.onSave(e.target.value as MediaKind)}
-          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          {MEDIA_KINDS.map((o) => (
-            <option key={o} value={o}>
-              {KIND_LABEL[o]}
-            </option>
-          ))}
-        </select>
+    <PortalModal ariaLabel={`Alt text for ${label}`} onClose={onClose} cardClass={ALT_CARD}>
+      {/* mt-6 keeps the first row clear of the × in the corner. */}
+      <div className="mt-6">
+        <KvRow label="Alt text">
+          <input
+            autoFocus
+            value={text}
+            placeholder={alt.preset}
+            aria-label={`Alt text for ${label}`}
+            onChange={(e) => {
+              setText(e.target.value)
+              alt.onSave(e.target.value)
+            }}
+            className={ROW_INPUT}
+          />
+        </KvRow>
+        <KvRow label="Type">
+          <select
+            value={kind.value ?? 'photo'}
+            aria-label={`Type for ${label}`}
+            onChange={(e) => kind.onSave(e.target.value as MediaKind)}
+            className={`${ROW_INPUT} cursor-pointer`}
+          >
+            {MEDIA_KINDS.map((o) => (
+              <option key={o} value={o}>
+                {KIND_LABEL[o]}
+              </option>
+            ))}
+          </select>
+        </KvRow>
         {slug && (
-          <>
-            <div className={`${EYEBROW} mt-1`}>File name</div>
+          <KvRow label="File name">
             <input
               value={name}
               placeholder={slug.preset}
               aria-label={`File name for ${label}`}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 font-space text-sm outline-none focus:border-accent"
+              className={`${ROW_INPUT} font-space text-[13px]`}
             />
-          </>
+          </KvRow>
         )}
-        <button type="button" onClick={done} className="mt-1 self-end rounded-lg border border-hairline px-4 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] hover:bg-paper">
+      </div>
+      <div className="mt-6 flex justify-end">
+        <button type="button" onClick={done} className={buttonClass('confirm', 'min-w-[88px] justify-center')}>
           Save
         </button>
       </div>
-    </div>
+    </PortalModal>
   )
 }
 
@@ -188,7 +191,7 @@ function ItemTextField({
             setText(e.target.value)
             title.onSave(e.target.value)
           }}
-          className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+          className={FIELD}
         />
       </div>
     </>

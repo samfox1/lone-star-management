@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { createClient } from '@/lib/supabase/client'
 import { acceptFor, AUDIO_UPLOAD_RULES } from '@/lib/upload'
@@ -44,7 +45,8 @@ function AudioUploadModal({ open, onClose, children }: { open: boolean; onClose:
 /**
  * The audio section on every single-style modal. One control at the left: when the song
  * HAS audio it's a bare black play/pause driving the scrub timeline; when it has NONE it's
- * a plus that reveals a drag-and-drop / click upload zone. No separate "Add audio" button.
+ * an upload glyph (Sam, 2026-10-05: a file is uploaded, so not a +) that reveals a
+ * drag-and-drop / click upload zone. No separate "Add audio" button.
  * Draft audio lives in the PRIVATE `audio` bucket, streamed to the owner through a
  * short-lived signed URL (RLS scopes storage to the artist's folder).
  */
@@ -119,9 +121,9 @@ export function TrackAudio({
             onClick={() => setUploadOpen((v) => !v)}
             aria-label="Add audio"
             aria-expanded={uploadOpen}
-            className="flex-none text-ink transition-opacity hover:opacity-70"
+            className={`flex-none text-ink transition-colors ${ICON_BOLD}`}
           >
-            <Icon name="plus" size={20} />
+            <Icon name="upload" size={20} />
           </button>
         )}
         <input
@@ -152,10 +154,10 @@ export function TrackAudio({
         )}
       </div>
 
-      {/* The plus opens the drop zone in its OWN portaled modal, so the player never resizes.
+      {/* The upload glyph opens the drop zone in its OWN portaled modal, so the player never resizes.
           Gated on hasFile so it can never open for a track that already has audio. */}
       <AudioUploadModal open={uploadOpen && !hasFile} onClose={() => setUploadOpen(false)}>
-        {/* No title (Sam, 2026-10-02): the + that opened it already said "Add audio". The
+        {/* No title (Sam, 2026-10-02): the glyph that opened it already said "Add audio". The
             margin keeps the drop zone clear of the × in the corner. */}
         <div className="mt-6">
           {/* No gate kind: track audio is not something the site's asset budgets

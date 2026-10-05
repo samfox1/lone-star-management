@@ -7,7 +7,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { placeLabel, type LabelAlign } from './label-placement'
-import { EDIT_TRIGGER } from './edit-row'
+import { ADD_TRIGGER, EDIT_TRIGGER } from './edit-row'
 import { FOCUS_RING_OFFSET, REVEAL_ON_HOVER } from './styles'
 
 /**
@@ -140,8 +140,8 @@ function focusVisible(el: Element) {
 }
 
 /**
- * THE HOVER LABEL, for every Brand control (RowIcon, the board's background circles, the
- * playground's dots). One definition, so every label on the page is the same chip.
+ * THE HOVER LABEL, for every Brand control (RowIcon, the board's background circles). One
+ * definition, so every label on the page is the same chip.
  *
  * PORTALED AND FIXED (Sam, 2026-09-23: the icon editor's "Upload new" was cut off by the
  * modal body's top edge). A chip inside its control was clipped by any scrolling or
@@ -297,8 +297,9 @@ export function RowIcon({
           'disabled:cursor-default disabled:opacity-35 disabled:hover:text-ink-muted',
           className,
         )
-  // A hover pencil is what a click anywhere on its row stands for (edit-row.tsx).
-  const trigger = icon === 'edit' && reveal ? EDIT_TRIGGER : undefined
+  // A hover pencil is what a click anywhere on its row stands for (edit-row.tsx); in a row with
+  // no pencil, a + or an upload glyph is (Sam, 2026-10-05).
+  const trigger = icon === 'edit' && reveal ? EDIT_TRIGGER : icon === 'plus' || icon === 'upload' ? ADD_TRIGGER : undefined
   const inner = (
     <>
       <Icon name={icon} size={icon === 'edit' ? EDIT_GLYPH : (glyphSize ?? box?.glyph ?? 20)} />

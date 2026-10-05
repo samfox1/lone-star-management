@@ -40,7 +40,8 @@ const SAVE_DELAY_MS = 300
 
 /**
  * ONE ROW OF THE PALETTE (BRAND_PAGE_PLAN.md, Colors). A renamable title, a note, and the
- * swatch + hex (ColorPalette's row presentation), then the eye and a faint trash.
+ * swatch + hex (ColorPalette's row presentation), then a faint trash. No preview window
+ * (Sam, 2026-10-05: "Lets remove the preview modal for the colors").
  *
  * SAVING A COLOUR. The swatch and hex follow every change at once (`onPatch`); the save
  * waits out SAVE_DELAY_MS and then sends only where the colour ENDED, and only if that is
@@ -64,7 +65,6 @@ export function ColorRow({
   swatches,
   onPatch,
   onRemove,
-  onPreview,
 }: {
   artistId: string
   item: ColorItem
@@ -74,8 +74,6 @@ export function ColorRow({
   onPatch: (key: string, patch: Partial<ColorItem>) => void
   /** The trash. `abandon` marks a row that never reached the database. */
   onRemove: (item: ColorItem, done: { abandon: () => void }) => void
-  /** The eye: open the playground on this colour. */
-  onPreview: (key: string) => void
 }) {
   const plusRef = useRef<HTMLButtonElement>(null)
 
@@ -254,7 +252,6 @@ export function ColorRow({
           </>
         )}
       />
-      {item.hex ? <RowIcon icon="eye" label="Preview" onClick={() => onPreview(item.key)} /> : null}
     </LedgerRow>
   )
 }
