@@ -104,12 +104,19 @@ function sentence(e: ConfirmEmail): string {
 }
 
 const IGNORE = 'Not you? Ignore this email and nothing is sent.'
+
+/** Without the link, the code is the only way, and it is typed by whoever added the address:
+ *  the email must say so, or a booking agent holds a code with nowhere to put it. */
+function handOver(e: ConfirmEmail): string {
+  const name = stripHeader(e.artistName)
+  return `To confirm, give this code to ${name ? `${name}'s team` : 'whoever added this address'}.`
+}
 const CODE_LIFE = 'The code works for 15 minutes.'
 
 export function buildConfirmText(e: ConfirmEmail): string {
   const link = confirmLink(e.appUrl, e.token)
   const lines = [sentence(e), '', `Your code: ${formatCode(e.code)}`, CODE_LIFE, '']
-  if (link) lines.push(`Or confirm here: ${link}`, '')
+  lines.push(link ? `Or confirm here: ${link}` : handOver(e), '')
   lines.push(IGNORE)
   return lines.join('\n')
 }
@@ -132,6 +139,8 @@ export function buildConfirmHtml(e: ConfirmEmail): string {
     parts.push(
       `<p style="margin:0 0 24px;"><a href="${escapeHtml(link)}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;font-family:${SANS};font-size:15px;font-weight:600;padding:12px 24px;">Confirm</a></p>`,
     )
+  } else {
+    parts.push(p(handOver(e)))
   }
   parts.push(p(IGNORE, 'color:#555;font-size:13px;margin:0;'))
   return `<!doctype html><html><body style="margin:0;padding:32px 24px;background:#fff;"><div style="max-width:480px;">${parts.join('')}</div></body></html>`

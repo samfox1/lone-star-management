@@ -153,6 +153,16 @@ describe('buildConfirmText', () => {
     expect(t).not.toContain(TOKEN)
     expect(t).toContain('482 913')
   })
+
+  // Code only: the reader must be told who the code is for, or it has nowhere to go.
+  it('without a link it says to give the code to the artist’s team', () => {
+    expect(buildConfirmText({ ...base, appUrl: null })).toContain("To confirm, give this code to Skeen's team.")
+    expect(buildConfirmText({ ...base, appUrl: null, artistName: '' })).toContain(
+      'To confirm, give this code to whoever added this address.',
+    )
+    // With the link there is no hand-over line: the button is the way.
+    expect(buildConfirmText(base)).not.toContain('give this code')
+  })
 })
 
 describe('buildConfirmHtml', () => {
@@ -187,10 +197,11 @@ describe('buildConfirmHtml', () => {
     expect(h).toMatch(/<[^>]*font-family:[^"]*monospace[^>]*>482 913</)
   })
 
-  it('has no button and no token without APP_URL', () => {
+  it('has no button and no token without APP_URL, and says who the code is for', () => {
     const h = buildConfirmHtml({ ...base, appUrl: '' })
     expect(h).not.toContain('<a ')
     expect(h).not.toContain(TOKEN)
+    expect(h).toContain('To confirm, give this code to Skeen&#39;s team.')
   })
 
   it('CRITICAL: escapes a hostile artist name, host and kind label', () => {
