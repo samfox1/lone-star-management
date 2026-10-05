@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Codes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* Every added email address is confirmed with a code (Sam, 2026-09-30: "a confirmation email
+   sent with a code for us to make sure the email is legit"; a launch blocker, TODO.md).
+   Round 2 (Sam, 2026-10-05): "after initially sending it, a window should appear telling the
+   user to enter the 6 digit code. If they want to close this window, thats fine … the blue
+   email should have some sort of indication or symbol … that if you click on it, the slot to
+   enter the 6 digit code appears." And: "Lets try the confirmation email for Ross and Skeen."
+   The row is copied from the live Settings › Email (enquiries/kind-rows.tsx). Blue = waiting,
+   the on-site check's "pending" colour. Tokens: globals.css @theme. Nothing here saves. */
+:root{--paper:#fff;--surface:#fafafa;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec;--hair-soft:#f1f1f3;--accent:#2563eb;--red:#e5484d;--scrim:rgba(0,0,0,.45)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--scrim:rgba(0,0,0,.6)}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a;--hair-soft:#222;--accent:#7aa2ff;--scrim:rgba(0,0,0,.6)}
+*{box-sizing:border-box}
+html{overflow-x:clip}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.ic{flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:stroke-width .15s}
+.mono{font-family:"Space Mono",ui-monospace,monospace}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── prototype chrome (not the product) ── */
+.proto{position:sticky;top:0;z-index:70;min-height:44px;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--hair)}
+.proto .t{font:10px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.proto .vs{display:flex;flex:none;gap:2px;padding:3px;border:1px solid var(--hair);border-radius:10px;background:var(--paper)}
+.proto .vs button{padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.proto .vs button:hover{color:var(--ink)}
+.proto .vs button.on{background:var(--ink);color:var(--paper)}
+.proto .again{margin-left:auto;font-size:12px;color:var(--muted)}
+.proto .again:hover{color:var(--ink)}
+
+/* ── the storyboard ── */
+.board{max-width:1180px;margin:0 auto;padding:28px 32px 56px}
+.step{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;padding:28px 0;border-bottom:1px solid var(--hair)}
+.cap .k{font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.cap h2{margin:6px 0 0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.cap p{margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--muted)}
+.cap p b{font-weight:500;color:var(--ink)}
+.try{margin:12px 0 0;font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+@media (max-width:980px){.step{grid-template-columns:1fr;gap:16px}}
+@media (max-width:640px){.board{padding:20px 16px 40px}}
+
+/* ── THE ROW (kind-rows.tsx): name 15/500 + guide 13 muted · mono 13 addresses · a + ── */
+.page{border:1px solid var(--hair);border-radius:12px;padding:4px 24px;background:var(--paper)}
+.row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,1.6fr);gap:24px;align-items:center;padding:16px 0;border-bottom:1px solid var(--hair-soft)}
+.row:last-child{border-bottom:0}
+@media (max-width:700px){.row{grid-template-columns:1fr}}
+.nm{font-size:15px;font-weight:500;line-height:24px}
+.gd{margin-top:2px;font-size:13px;line-height:20px;color:var(--muted)}
+.addrs{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;column-gap:16px;row-gap:6px}
+.ad{font:13px/24px "Space Mono",monospace;color:var(--ink);white-space:nowrap}
+.g{position:relative;display:inline-flex;width:24px;height:24px;align-items:center;justify-content:center;color:var(--muted);transition:color .15s}
+.g:hover{color:var(--ink)}
+.g:hover .ic{stroke-width:2.2}
+.g.acc{color:var(--accent)}
+.g:disabled{color:var(--faint);cursor:default}
+.g:disabled:hover .ic{stroke-width:1.6}
+/* HoverLabel: a small mono word above, only on hover */
+[data-l]:hover::after{content:attr(data-l);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);padding:2px 6px;border-radius:4px;background:var(--ink);color:var(--paper);font:10px/14px "Space Mono",monospace;letter-spacing:0;white-space:nowrap;pointer-events:none;z-index:5}
+.uf{border:0;border-bottom:1px solid var(--ink);background:transparent;padding:0;outline:none;font:13px/24px "Space Mono",monospace;width:21ch}
+
+/* THE WAITING ADDRESS: blue, with a mark that says "click me for the code".
+   ENVELOPE: a small mail glyph after it ("check your email").  DOT: a small blue dot before it. */
+.wait{position:relative;display:inline-flex;align-items:center;gap:6px;border-radius:4px;font:13px/24px "Space Mono",monospace;color:var(--accent);white-space:nowrap}
+.wait .mk{display:inline-flex;transition:transform .15s}
+.wait:hover .mk .ic{stroke-width:2.2}
+.wait .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+body:not([data-mark=dot]) .wait .dot{display:none}
+[data-mark=dot] .wait .mk{display:none}
+.wait.done{color:var(--ink);animation:settle .9s ease-out}
+.wait.done .mk,.wait.done .dot{display:none}
+@keyframes settle{0%{color:var(--accent)}100%{color:var(--ink)}}
+
+.marks{padding:8px 24px}
+.mrow{display:grid;grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:center;padding:12px 0;border-bottom:1px solid var(--hair-soft)}
+.mrow:last-child{border-bottom:0}
+.mrow .wait{justify-self:start}
+.marks .wait .mk{display:inline-flex!important}
+.mw{font-size:13px;color:var(--muted)}
+.mw b{font-weight:500;color:var(--ink)}
+@media (max-width:700px){.mrow{grid-template-columns:1fr;gap:4px}}
+
+/* THE WINDOW: untitled card, its first line level with the × (2026-10-05) */
+.scrim{display:flex;justify-content:center;padding:28px;border-radius:12px;background:linear-gradient(var(--scrim),var(--scrim)),var(--surface)}
+.overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:var(--scrim)}
+.card{position:relative;width:420px;max-width:calc(100vw - 32px);border-radius:16px;background:var(--paper);padding:28px;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
+.card .x{position:absolute;right:16px;top:16px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:var(--muted)}
+.card .x:hover{color:var(--ink)}
+.card .x:hover .ic{stroke-width:2.2}
+.card .h{margin:-8px 40px 0 0;font-size:15px;font-weight:500;line-height:24px}
+.card .to{margin:2px 0 0;font-size:13px;line-height:20px;color:var(--muted)}
+.card .to .mono{font-size:12.5px;color:var(--ink)}
+.slots{display:flex;justify-content:center;gap:10px;margin:28px 0 30px}
+.slots .sl{width:34px;border:0;border-bottom:1.5px solid var(--faint);background:transparent;padding:0 0 4px;outline:none;text-align:center;font:26px/36px "Space Mono",monospace;color:var(--ink)}
+.slots .sl:focus{border-bottom-color:var(--ink)}
+.slots .sl:nth-child(3){margin-right:14px}
+.slots.ok .sl{border-bottom-color:var(--ink)}
+.card .foot{display:flex;align-items:center;gap:6px}
+.card .foot .t{font:11px "Space Mono",monospace;color:var(--faint)}
+
+/* THE EMAIL they get (sent by Resend from Tapir) */
+.mail{border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:var(--paper)}
+.mh{padding:12px 18px;border-bottom:1px solid var(--hair);font-size:12.5px;line-height:1.7;color:var(--muted)}
+.mh b{font-weight:500;color:var(--ink)}
+.mb{padding:28px 32px 30px;max-width:520px}
+.mb .brand{font:700 11px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
+.mb p{margin:18px 0 0;font-size:15px;line-height:1.55}
+.mb .big{margin:22px 0 0;font:700 30px "Space Mono",monospace;letter-spacing:.18em}
+.mb .btn{display:inline-block;margin-top:22px;padding:10px 22px;border-radius:8px;background:var(--ink);color:var(--paper);font:700 11px "Space Mono",monospace;letter-spacing:.06em;text-transform:uppercase}
+.mb .small{margin-top:24px;font-size:12.5px;line-height:1.5;color:var(--faint)}
+
+/* THE PAGE the button opens */
+.land{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;padding:32px;border:1px solid var(--hair);border-radius:12px;text-align:center}
+.land .ok{display:flex;width:44px;height:44px;align-items:center;justify-content:center;border-radius:50%;background:var(--ink);color:var(--paper)}
+.land h3{margin:16px 0 0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.land p{margin:6px 0 0;font-size:14px;color:var(--muted)}
+.land p .mono{font-size:13px;color:var(--ink)}
+
+/* the rules */
+.rules{margin:8px 0 0;padding:0;list-style:none}
+.rules li{display:grid;grid-template-columns:220px minmax(0,1fr);gap:32px;padding:10px 0;border-bottom:1px solid var(--hair-soft);font-size:14px;line-height:1.5}
+.rules li:last-child{border-bottom:0}
+.rules .k{font:10px/21px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.rules .ask{color:var(--accent)}
+@media (max-width:980px){.rules li{grid-template-columns:1fr;gap:2px}}
+</style>
+</head>
+<body data-mark="mail">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6 8.5-6"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="M3.5 17h4M10 17h4M16.5 17h4"/><circle cx="5.5" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="18.5" cy="11" r="1.1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="8" cy="15.5" r="4"/><path d="M10.8 12.7L19.5 4M16 7.5l2.2 2.2M18.3 5.2l2.2 2.2"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.8v5.2c0 4.3-2.9 7.6-7 9.3-4.1-1.7-7-5-7-9.3V6.3z"/><path d="M9 12.2l2.1 2.1 4-4"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.5M4 4v3.5h3.5"/><path d="M4 13a8 8 0 0 0 14.3 4.5M20 20v-3.5h-3.5"/></symbol>
+</svg>
+
+<div class="proto">
+  <span class="t">Email codes · round 2</span>
+  <span class="t">The mark on a blue address</span>
+  <div class="vs" role="tablist" aria-label="Mark">
+    <button class="on" data-m="mail">Envelope</button>
+    <button data-m="code">Code</button>
+    <button data-m="key">Key</button>
+    <button data-m="clock">Clock</button>
+    <button data-m="shield">Shield</button>
+    <button data-m="dot">Dot</button>
+  </div>
+  <button class="again" id="again">Start over</button>
+</div>
+
+<main class="board">
+
+  <!-- 01 ADD -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">01</span>
+      <h2>Add an address</h2>
+      <p>Same as today: the <b>+</b>, type, Enter. The code email goes out.</p>
+      <div class="try">Try it: press ✓</div>
+    </div>
+    <div class="page">
+      <div class="row">
+        <div><div class="nm">Booking</div><div class="gd">For shows, festivals and private events</div></div>
+        <div class="addrs">
+          <span class="ad">ross.guignon@everesttm.com</span>
+          <span class="ad">skeen@skeenmusic.com</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><input class="uf" id="new" value="jo@northbooking.com" aria-label="New email for Booking"><button class="g acc" id="send" aria-label="Save"><svg class="ic" width="14" height="14"><use href="#check"/></svg></button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 THE WINDOW -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">02</span>
+      <h2>A window asks for the code</h2>
+      <p>It opens right away. It confirms on the 6th number. No button.</p>
+      <p>Closing it is fine. The address stays <b style="color:var(--accent)">blue</b> and waits.</p>
+    </div>
+    <div class="scrim">
+      <div class="card" role="dialog" aria-label="Enter the code">
+        <button class="x" aria-label="Close"><svg class="ic" width="16" height="16"><use href="#close"/></svg></button>
+        <div class="h">Enter the 6-digit code</div>
+        <div class="to">Sent to <span class="mono">jo@northbooking.com</span></div>
+        <div class="slots"><span class="sl">4</span><span class="sl">8</span><span class="sl">2</span><span class="sl">&nbsp;</span><span class="sl">&nbsp;</span><span class="sl">&nbsp;</span></div>
+        <div class="foot">
+          <button class="g" data-l="Send again" aria-label="Send the code again" disabled><svg class="ic" width="14" height="14"><use href="#refresh"/></svg></button>
+          <span class="t">0:42</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 CLOSED: BLUE + A MARK -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">03</span>
+      <h2>Closed: blue, with a mark</h2>
+      <p>The mark says "there's a code to enter". Click the address and the window comes back.</p>
+      <p>Nothing is sent to a blue address, and the site never shows it.</p>
+      <div class="try">Try it: click the blue address</div>
+    </div>
+    <div class="page">
+      <div class="row">
+        <div><div class="nm">Booking</div><div class="gd">For shows, festivals and private events</div></div>
+        <div class="addrs">
+          <span class="ad">ross.guignon@everesttm.com</span>
+          <span class="ad">skeen@skeenmusic.com</span>
+          <button class="wait" id="waiting" data-l="Enter code" aria-label="jo@northbooking.com: enter the code">
+            <span class="dot"></span>jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#mail" data-mk/></svg></span>
+          </button>
+          <button class="g" aria-label="Add email to Booking"><svg class="ic" width="16" height="16"><use href="#plus"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03b THE MARKS SIDE BY SIDE -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">03 · the mark</span>
+      <h2>Side by side</h2>
+      <p>Click one to use it everywhere on this page.</p>
+    </div>
+    <div class="page marks">
+      <div class="mrow"><button class="wait" data-pick="mail">jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#mail"/></svg></span></button><span class="mw"><b>Envelope</b> · "check your email"</span></div>
+      <div class="mrow"><button class="wait" data-pick="code">jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#code"/></svg></span></button><span class="mw"><b>Code</b> · looks like the six lines in the window</span></div>
+      <div class="mrow"><button class="wait" data-pick="key">jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#key"/></svg></span></button><span class="mw"><b>Key</b> · "a code unlocks it"</span></div>
+      <div class="mrow"><button class="wait" data-pick="clock">jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#clock"/></svg></span></button><span class="mw"><b>Clock</b> · "waiting", but doesn't say "click me"</span></div>
+      <div class="mrow"><button class="wait" data-pick="shield">jo@northbooking.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#shield"/></svg></span></button><span class="mw"><b>Shield</b> · "not checked yet"</span></div>
+      <div class="mrow"><button class="wait" data-pick="dot"><span class="dot" style="display:inline-block"></span>jo@northbooking.com</button><span class="mw"><b>Dot</b> · quietest, says the least</span></div>
+    </div>
+  </section>
+
+  <!-- 04 THEIR EMAIL -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">04</span>
+      <h2>What they get</h2>
+      <p>The code is for you, if you can open that inbox.</p>
+      <p>The button is for them. If it's Ross's address, <b>Ross clicks Confirm</b>. He never needs to send you anything.</p>
+    </div>
+    <div class="mail">
+      <div class="mh"><b>Tapir</b> &lt;confirm@tapirwebsites.com&gt;<br>Confirm Skeen's booking enquiries</div>
+      <div class="mb">
+        <div class="brand">Tapir</div>
+        <p>Skeen's team wants to send booking enquiries from skeenmusic.com to this address.</p>
+        <div class="big">482 913</div>
+        <span class="btn">Confirm</span>
+        <div class="small">Not you? Ignore this email and nothing is sent.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 CONFIRMED -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">05</span>
+      <h2>Confirmed</h2>
+      <p>The address turns black and the mark goes away. Enquiries start going to it.</p>
+      <p>Under it: the page the email's button opens.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="page">
+        <div class="row">
+          <div><div class="nm">Booking</div><div class="gd">For shows, festivals and private events</div></div>
+          <div class="addrs">
+            <span class="ad">ross.guignon@everesttm.com</span>
+            <span class="ad">skeen@skeenmusic.com</span>
+            <span class="ad">jo@northbooking.com</span>
+            <button class="g" aria-label="Add email to Booking"><svg class="ic" width="16" height="16"><use href="#plus"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="land">
+        <span class="ok"><svg class="ic" width="20" height="20" style="stroke-width:2"><use href="#check"/></svg></span>
+        <h3>Confirmed</h3>
+        <p><span class="mono">jo@northbooking.com</span> gets Skeen's booking enquiries.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 ROSS + SKEEN@ -->
+  <section class="step">
+    <div class="cap">
+      <span class="k">06</span>
+      <h2>Ross and skeen@ get one too</h2>
+      <p>When this goes live, each gets the same email once. Until they click, they show <b style="color:var(--accent)">blue</b> with the mark.</p>
+    </div>
+    <div class="page">
+      <div class="row">
+        <div><div class="nm">Booking</div><div class="gd">For shows, festivals and private events</div></div>
+        <div class="addrs">
+          <button class="wait" data-l="Enter code" aria-label="ross.guignon@everesttm.com: enter the code"><span class="dot"></span>ross.guignon@everesttm.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#mail" data-mk/></svg></span></button>
+          <button class="wait" data-l="Enter code" aria-label="skeen@skeenmusic.com: enter the code"><span class="dot"></span>skeen@skeenmusic.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#mail" data-mk/></svg></span></button>
+          <button class="g" aria-label="Add email to Booking"><svg class="ic" width="16" height="16"><use href="#plus"/></svg></button>
+        </div>
+      </div>
+      <div class="row">
+        <div><div class="nm">Demo</div><div class="gd">For music and demo submissions</div></div>
+        <div class="addrs">
+          <button class="wait" data-l="Enter code" aria-label="skeen@skeenmusic.com: enter the code"><span class="dot"></span>skeen@skeenmusic.com<span class="mk"><svg class="ic" width="14" height="14"><use href="#mail" data-mk/></svg></span></button>
+          <button class="g" aria-label="Add email to Demo"><svg class="ic" width="16" height="16"><use href="#plus"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE RULES -->
+  <section class="step" style="display:block;border-bottom:0">
+    <div class="cap"><span class="k">The rules</span></div>
+    <ul class="rules">
+      <li><span class="k">The code</span><span>6 numbers. Works for 15 minutes. 5 wrong tries and it needs a new one.</span></li>
+      <li><span class="k">The button</span><span>Works for 7 days, so Ross can confirm whenever he sees it.</span></li>
+      <li><span class="k">Send again</span><span>After 60 seconds. A few times an hour at most.</span></li>
+      <li><span class="k">One email per address</span><span>skeen@ is on all three lists. One click confirms it for all three.</span></li>
+      <li><span class="k">Changing one</span><span>The new address turns blue. The old one keeps getting enquiries until the new one is confirmed.</span></li>
+      <li><span class="k">Ross + skeen@ waiting</span><span class="ask">Do they keep getting enquiries until they click? Yes for 14 days, then stop (my pick). Or stop right away.</span></li>
+    </ul>
+  </section>
+</main>
+
+<!-- THE LIVE WINDOW (opened by ✓ in 01 and by a blue address in 03) -->
+<div class="overlay" id="win" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-label="Enter the code">
+    <button class="x" id="winx" aria-label="Close"><svg class="ic" width="16" height="16"><use href="#close"/></svg></button>
+    <div class="h">Enter the 6-digit code</div>
+    <div class="to">Sent to <span class="mono" id="winto">jo@northbooking.com</span></div>
+    <div class="slots" id="code">
+      <input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 1"><input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 2"><input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 3"><input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 4"><input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 5"><input class="sl" inputmode="numeric" maxlength="1" aria-label="Digit 6">
+    </div>
+    <div class="foot">
+      <button class="g" id="resend" data-l="Send again" aria-label="Send the code again" disabled><svg class="ic" width="14" height="14"><use href="#refresh"/></svg></button>
+      <span class="t" id="timer">1:00</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* The mark switch */
+const marks = document.querySelectorAll('.proto .vs button')
+function mark(m) {
+  marks.forEach((x) => x.classList.toggle('on', x.dataset.m === m))
+  document.body.dataset.mark = m
+  if (m !== 'dot') document.querySelectorAll('[data-mk]').forEach((u) => u.setAttribute('href', `#${m}`))
+}
+marks.forEach((b) => b.addEventListener('click', () => mark(b.dataset.m)))
+document.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => mark(b.dataset.pick)))
+
+/* The window: six slots; a digit moves on, Backspace moves back, a pasted code fills them,
+   the sixth confirms. Escape, × or a click outside closes it (the address stays blue). */
+const win = document.getElementById('win')
+const ins = [...document.querySelectorAll('#code .sl')]
+let target = null
+let tick = null
+function open(btn, addr) {
+  target = btn
+  document.getElementById('winto').textContent = addr
+  ins.forEach((x) => { x.value = '' })
+  document.getElementById('code').classList.remove('ok')
+  win.hidden = false
+  ins[0].focus()
+  let s = 60
+  const t = document.getElementById('timer'), r = document.getElementById('resend')
+  r.disabled = true
+  clearInterval(tick)
+  const show = () => { t.textContent = s > 0 ? `0:${String(s).padStart(2, '0')}` : ''; r.disabled = s > 0 }
+  show()
+  tick = setInterval(() => { s--; show(); if (s <= 0) clearInterval(tick) }, 1000)
+}
+function close() { win.hidden = true; clearInterval(tick) }
+function confirmed() {
+  document.getElementById('code').classList.add('ok')
+  setTimeout(() => {
+    close()
+    if (target) target.classList.add('done')
+  }, 450)
+}
+ins.forEach((el, i) => {
+  el.addEventListener('input', () => {
+    el.value = el.value.replace(/\D/g, '').slice(-1)
+    if (el.value && i < 5) ins[i + 1].focus()
+    if (ins.every((x) => x.value)) confirmed()
+  })
+  el.addEventListener('keydown', (e) => { if (e.key === 'Backspace' && !el.value && i > 0) ins[i - 1].focus() })
+  el.addEventListener('paste', (e) => {
+    const d = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6)
+    if (!d) return
+    e.preventDefault()
+    d.split('').forEach((c, j) => { ins[j].value = c })
+    if (d.length === 6) confirmed()
+  })
+})
+document.getElementById('winx').addEventListener('click', close)
+win.addEventListener('click', (e) => { if (e.target === win) close() })
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !win.hidden) close() })
+document.getElementById('resend').addEventListener('click', () => open(target, document.getElementById('winto').textContent))
+
+/* 01: ✓ (or Enter) "sends" and opens the window; 03's blue address reopens it. */
+const waiting = document.getElementById('waiting')
+const send = () => open(waiting, document.getElementById('new').value.trim() || 'jo@northbooking.com')
+document.getElementById('send').addEventListener('click', send)
+document.getElementById('new').addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
+document.querySelectorAll('.wait:not([data-pick])').forEach((b) => b.addEventListener('click', () => {
+  if (b.classList.contains('done')) return
+  open(b, b.textContent.trim())
+}))
+document.getElementById('again').addEventListener('click', () => {
+  close()
+  document.querySelectorAll('.wait').forEach((b) => b.classList.remove('done'))
+})
+</script>
+</body>
+</html>
