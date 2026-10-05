@@ -69,9 +69,11 @@ export const RAIL_LANE = 'absolute top-0 bottom-0 h-[round(100%,1px)]'
  * GEO) put their sections in a pill row at the top of the page, not a second rail.
  */
 /**
- * The rail is thin on a tabbed tool and widens on hover, the icons re-centre with it, and
- * nothing moves VERTICALLY (Sam, 2026-09-22, with a screenshot: "it should horizontally
- * center just not move vertical position").
+ * The rail is thin on EVERY tool page and widens on hover (Sam, 2026-10-05: "When a manager
+ * tools page is open, I would like the left panel to always be the thinner icon only look with
+ * the extension on hover"; until then only a tabbed tool had it). The icons re-centre as it
+ * widens, and nothing moves VERTICALLY (Sam, 2026-09-22, with a screenshot: "it should
+ * horizontally center just not move vertical position").
  *
  *   HORIZONTAL MOVEMENT IS THE POINT. The icon column fills the nav, so each icon is
  *   centred at 26px while thin and 42px while hovered, sliding across with the width. An
@@ -87,8 +89,7 @@ export const RAIL_LANE = 'absolute top-0 bottom-0 h-[round(100%,1px)]'
  *   The labels are only ever READ in the widened state, where the column is the full 84px
  *   and every one of them fits. That is why the thin width is free to be genuinely thin.
  */
-const RAIL_W = 84
-/** Thin state: the icon and its breathing room, nothing else. */
+/** Thin state: the icon and its breathing room, nothing else. It widens to 84px on hover. */
 const RAIL_COLLAPSED_W = 52
 /** The second panel's FLOOR, beside the rail when a tool has sub-tabs. Text only, and
  *  otherwise as wide as its longest label (Sam, 2026-09-23: "Tab icon" never wraps or
@@ -115,22 +116,18 @@ const RAIL_ITEM_GAP = 4
  */
 const railColumnTop = (count: number) => (count * RAIL_ITEM_H + (count - 1) * RAIL_ITEM_GAP) / 2
 
-function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { artistId: string; active: string; collapsed?: boolean; tools?: readonly Tool[] }) {
+function ToolsRail({ artistId, active, tools = TOOLS }: { artistId: string; active: string; tools?: readonly Tool[] }) {
   return (
-    // Collapsed (a tabbed tool), this in-flow slot lies exactly under the rail and draws
-    // the SAME line the whole height of the page (see ToolsShell: FULL-HEIGHT LINES).
-    <div data-rail-slot="" className={cx('hidden flex-none md:block', collapsed && 'md:border-r md:border-hairline')} style={{ width: collapsed ? RAIL_COLLAPSED_W : RAIL_W }}>
+    // This in-flow slot lies exactly under the thin rail and draws the SAME line the whole
+    // height of the page (see ToolsShell: FULL-HEIGHT LINES).
+    <div data-rail-slot="" className="hidden flex-none md:block md:border-r md:border-hairline" style={{ width: RAIL_COLLAPSED_W }}>
       {/* The full-page lane the sticky rail rides in — see RIDING THE BOUNCE above. */}
       <div className={cx(RAIL_LANE, 'left-0')}>
         <nav
           aria-label="Manager tools"
-          data-collapsed={collapsed ? 'true' : 'false'}
-          // z-20 while thin: the hover-widened rail has to paint OVER the second panel, which
-          // sits at the same level and starts where the thin rail ends. Header (z-30) wins.
-          className={cx(
-            'group sticky top-0 flex h-screen flex-col overflow-hidden border-r border-hairline bg-paper transition-[width] duration-150',
-            collapsed ? 'z-20 w-[52px] hover:w-[84px]' : 'z-10 w-[84px]',
-          )}
+          // z-20: the hover-widened rail paints OVER the second panel (which starts where the
+          // thin rail ends) and over the page beside it. Header (z-30) wins.
+          className="group sticky top-0 z-20 flex h-screen w-[52px] flex-col overflow-hidden border-r border-hairline bg-paper transition-[width] duration-150 hover:w-[84px]"
         >
           {/* Stretches to the nav, so the icons re-centre as it widens. Deliberately NOT a
               fixed width — see the note on RAIL_COLLAPSED_W. */}
@@ -150,12 +147,9 @@ function ToolsRail({ artistId, active, collapsed = false, tools = TOOLS }: { art
                 >
                   <Icon name={t.icon} size={20} />
                   <span
-                    className={cx(
-                      'max-w-[84px] truncate font-space text-[10px] leading-[12px] tracking-[0.02em] transition-opacity duration-150',
-                      // opacity, NEVER `hidden`: the label keeps its height even while
-                      // invisible, which is what stops the stack sliding vertically on hover.
-                      collapsed && 'opacity-0 group-hover:opacity-100',
-                    )}
+                    // opacity, NEVER `hidden`: the label keeps its height even while invisible,
+                    // which is what stops the stack sliding vertically on hover.
+                    className="max-w-[84px] truncate font-space text-[10px] leading-[12px] tracking-[0.02em] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
                   >
                     {t.short ?? t.label}
                   </span>
@@ -277,9 +271,9 @@ function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: To
  */
 export const TOOL_FRAME = 'max-w-[1180px] pb-28'
 
-/** Wraps the dashboard's page: on a tool route, the rail plus the page; elsewhere the
+/** Wraps the dashboard's page: on a tool route, the thin rail plus the page; elsewhere the
  *  page alone. One place, so every tool gets the rail and no tool can forget it. A tool
- *  with sub-tabs collapses the rail and adds the second panel. */
+ *  with sub-tabs adds the second panel beside the rail. */
 export function ToolsShell({ artistId, customSite = false, children }: { artistId: string; customSite?: boolean; children: React.ReactNode }) {
   const pathname = usePathname() ?? ''
   const tool = toolFor(pathname, artistId)
@@ -288,37 +282,27 @@ export function ToolsShell({ artistId, customSite = false, children }: { artistI
   // The rail's list, not TOOLS: the Site tool leaves it for a custom-site artist, and the
   // second panel's offset has to count the rows that are actually there.
   const tools = toolsFor(customSite)
-  if (!tab) {
-    return (
-      <div className="flex gap-8">
-        <ToolsRail artistId={artistId} active={tool.seg} tools={tools} />
-        <div data-tool-frame="" className={cx('min-w-0 flex-1', TOOL_FRAME)}>
-          {children}
-        </div>
-      </div>
-    )
-  }
   return (
     <div className="flex gap-8">
-      {/* ONE slot for both panels, 32px from the page (visual check, 2026-09-23: the
-          mock's gap; it was ~92px). The panels sit at x=0 (their lanes are positioned
-          against the dashboard root, not this slot), but this slot sits inside
-          <main>'s px-7 (layout.tsx), so each placeholder started 28px right of its panel
-          and the shell's gap-8 ran twice. `md:-ml-7` pulls the pair back under their
-          panels, with no gap between them; the shell's one gap-8 is then the whole gap.
+      {/* ONE slot for the rail (and the second panel, on a tabbed tool), 32px from the page
+          (visual check, 2026-09-23: the mock's gap; it was ~92px). The panels sit at x=0
+          (their lanes are positioned against the dashboard root, not this slot), but this
+          slot sits inside <main>'s px-7 (layout.tsx), so each placeholder started 28px right
+          of its panel and the shell's gap-8 ran twice. `md:-ml-7` pulls the slot back under
+          the panels, with no gap between them; the shell's one gap-8 is then the whole gap.
           The test reads main's padding from layout.tsx, so the two cannot drift apart. */}
       {/* FULL-HEIGHT LINES (Sam, 2026-09-29: "the column stops partway down the page"). The
-          two panels are `h-screen` (fixed then, sticky now), so they end one window-height
-          down wherever the page is captured whole (a full-page screenshot). The in-flow
-          slots under them carry the same two lines, stretched the page's full height and,
-          with `md:-mb-8`, over <main>'s bottom padding too. Inside the window the panels
+          panels are `h-screen` (fixed then, sticky now), so they end one window-height down
+          wherever the page is captured whole (a full-page screenshot). The in-flow slots
+          under them carry the same lines, stretched the page's full height and, with
+          `md:-mb-8`, over <main>'s bottom padding too. Inside the window the panels
           (bg-paper) cover them, so there is only ever one line. */}
       <div className="hidden flex-none md:-mb-8 md:-ml-7 md:flex">
-        <ToolsRail artistId={artistId} active={tool.seg} collapsed tools={tools} />
-        <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} />
+        <ToolsRail artistId={artistId} active={tool.seg} tools={tools} />
+        {tab ? <SubRail artistId={artistId} tool={tool} activeSeg={tab.seg} railCount={tools.length} /> : null}
       </div>
       <div data-tool-frame="" className={cx('min-w-0 flex-1', TOOL_FRAME)}>
-        <SubTabStrip artistId={artistId} tool={tool} activeSeg={tab.seg} />
+        {tab ? <SubTabStrip artistId={artistId} tool={tool} activeSeg={tab.seg} /> : null}
         {children}
       </div>
     </div>

@@ -59,14 +59,13 @@ describe('tabFor', () => {
 })
 
 describe('ToolsShell — a tool with sub-tabs (Sam, 2026-09-22)', () => {
-  it('CRITICAL: collapses the rail to icons and opens a second panel listing EVERY tab, current one marked', () => {
+  it('CRITICAL: opens a second panel beside the thin rail listing EVERY tab, current one marked', () => {
     for (const tool of tabbed) {
       const last = tool.tabs![tool.tabs!.length - 1]
       pathname = `/artists/a1/${last.seg}`
       render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
 
       const rail = screen.getByRole('navigation', { name: 'Manager tools' })
-      expect(rail.getAttribute('data-collapsed')).toBe('true')
       // The rail still marks the TOOL, so Settings lights up while a sub-tab is open.
       expect(rail.querySelector('a[aria-current="page"]')?.getAttribute('href')).toBe(`/artists/a1/${tool.seg}`)
 
@@ -96,16 +95,28 @@ describe('ToolsShell — a tool with sub-tabs (Sam, 2026-09-22)', () => {
     }
   })
 
-  it('a tool WITHOUT sub-tabs keeps the full rail and no second panel', () => {
+  it('a tool WITHOUT sub-tabs has no second panel', () => {
     const tool = plain[0]
     pathname = `/artists/a1/${tool.seg}`
     render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
 
-    expect(screen.getByRole('navigation', { name: 'Manager tools' }).getAttribute('data-collapsed')).toBe('false')
     for (const t of tabbed) expect(screen.queryByRole('navigation', { name: t.label })).toBeNull()
   })
 
-  it('CRITICAL: the collapsed rail keeps every label IN THE FLOW, faded not removed', () => {
+  // Sam, 2026-10-05: "When a manager tools page is open, I would like the left panel to always
+  // be the thinner icon only look with the extension on hover". Every tool, tabbed or not.
+  it('every tool page gets the thin rail that widens on hover', () => {
+    for (const tool of TOOLS) {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      const rail = screen.getByRole('navigation', { name: 'Manager tools' })
+      expect(rail.className, tool.seg).toMatch(/(^|\s)w-\[52px\]/)
+      expect(rail.className, tool.seg).toMatch(/hover:w-\[84px\]/)
+      cleanup()
+    }
+  })
+
+  it('CRITICAL: the thin rail keeps every label IN THE FLOW, faded not removed', () => {
     // Sam, 2026-09-22: the icons must not move when the labels appear. jsdom does no
     // layout, so what can be pinned is the mechanism — `opacity-0`, which reserves the
     // label's height, and never `hidden`, which drops it from the flow and lets this
@@ -380,13 +391,16 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
     }
   })
 
-  it('a tool WITHOUT tabs keeps its spacing: no pull, the same gap-8', () => {
-    const tool = plain[0]
-    pathname = `/artists/a1/${tool.seg}`
-    const { container } = render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-    const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!
-    const shell = railSlot.parentElement!
-    expect(shell.className.split(/\s+/)).toContain('gap-8')
-    expect(container.innerHTML).not.toMatch(/-ml-/)
+  // Since every tool has the thin rail (Sam, 2026-10-05), a tool without tabs sits the same
+  // way: its rail slot pulled back under the rail, then the one gap-8 to the page.
+  it('a tool WITHOUT tabs: the rail slot pulled back over main\'s padding, then ONE gap-8', () => {
+    for (const tool of plain) {
+      pathname = `/artists/a1/${tool.seg}`
+      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
+      const side = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!.parentElement!
+      expect(side.className.split(/\s+/), tool.seg).toContain(`md:-ml-${mainPad}`)
+      expect(side.parentElement!.className.split(/\s+/), tool.seg).toContain('gap-8')
+      cleanup()
+    }
   })
 })
