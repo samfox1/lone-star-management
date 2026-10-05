@@ -120,7 +120,7 @@ describe('Primary and Secondary, built in', () => {
     }
   })
 
-  it('CRITICAL: a fixed title and grey guide text — no rename, no note, no trash', () => {
+  it('CRITICAL: a fixed title and nothing under it — no guide, no rename, no note, no trash', () => {
     renderLedger([PRIMARY, ...COLORS])
     for (const title of ['Primary', 'Secondary']) {
       const row = rowOf(title)
@@ -128,8 +128,8 @@ describe('Primary and Secondary, built in', () => {
       expect(within(row).queryByRole('textbox', { name: 'Note' }), title).toBeNull()
       expect(within(row).queryByRole('button', { name: 'Remove' }), title).toBeNull()
     }
-    expect(within(rowOf('Primary')).getByText('Your main color.')).toBeTruthy()
-    expect(within(rowOf('Secondary')).getByText('Your second color.')).toBeTruthy()
+    // No filler under a built-in (Sam, 2026-10-05: "Your main color." said nothing).
+    expect(within(rowOf('Primary')).queryByText('Your main color.')).toBeNull()
     // An added colour keeps all three.
     const row = rowOf('Color 1')
     expect(within(row).getByRole('textbox', { name: 'Name' })).toBeTruthy()

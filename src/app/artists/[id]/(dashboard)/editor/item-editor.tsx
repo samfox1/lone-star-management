@@ -9,6 +9,7 @@ import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
 import { LibraryPicker } from './inspector-grid'
 import { useStyleRegionSave } from './use-style-save'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /**
  * The per-ITEM editor (SITE_EDITOR_PLAN.md — image/video customization). Clicking Edit on an
@@ -294,23 +295,11 @@ export function ItemEditor({
   return (
     <>
       <EditorPanel label={label} thumb={preview} onBack={onBack}>
-        <div className="px-5 pt-4">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPicking(true)}
-              className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors hover:border-accent hover:text-accent"
-            >
-              Replace
-            </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="flex-1 rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-accent-red transition-colors hover:bg-danger-soft"
-            >
-              Remove
-            </button>
-          </div>
+        {/* Glyphs, not words (Sam, 2026-10-02): ↻ swaps the item for another, the trash takes
+            it off; each says its name on hover. */}
+        <div className="flex items-center gap-4 px-5 pt-4">
+          <RowIcon icon="refresh" label="Replace" variant="bare" labelAlign="start" glyphSize={16} onClick={() => setPicking(true)} />
+          <RowIcon icon="trash" label="Remove" variant="bare" tone="danger" glyphSize={16} onClick={onRemove} />
         </div>
 
         {title && <ItemTitleField label={label} title={title} />}

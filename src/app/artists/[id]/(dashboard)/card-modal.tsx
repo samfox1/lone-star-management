@@ -90,7 +90,10 @@ export function CardModal({
     if (!open) return
     // While the question is up, Escape answers IT — dismissing the card underneath would
     // lose the manager's place to a keypress meant for the dialog on top.
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    // An Escape a field inside already handled (EditList, AddRow: preventDefault) closes
+    // that field, not the card. stopPropagation cannot say so: in the app React's root IS
+    // document, the node this listens on, so it would hear the Escape anyway.
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && onClose()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])

@@ -16,6 +16,7 @@ import {
   type GalleryPhoto,
 } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 import {
+  addContentAction,
   deleteContentAction,
   deleteMediaAction,
   renameVideoAction,
@@ -589,6 +590,14 @@ describe('EditorInspector — Text component', () => {
     expect(saveMock).not.toHaveBeenCalled()
   })
 
+  it('a click anywhere on a row opens it, as its pencil does', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    renderInspector([], { textFields: TEXT_FIELDS })
+    fireEvent.click(screen.getByRole('button', { name: /Text/ }))
+    fireEvent.click(screen.getByText('DJ & Producer'))
+    expect(screen.getByLabelText('Hero tagline')).toBeTruthy()
+  })
+
   it('a seeded field can still be CLEARED — the site falls back on its own', () => {
     // The seed must behave like typed text, or clearing it would snap straight back and
     // the manager could never empty a field.
@@ -666,15 +675,17 @@ describe('EditorInspector — Text component', () => {
   })
 })
 
-// The Socials group (the site's buttons, each a connection's link, 2026-09-28) has its own
-// file: tests/components/site-editor/editor-social-buttons.test.tsx. What is left to edit
-// in place here is a CONTACT row — a booking address is not a connection, so its label and
-// address are still typed in the panel.
+// Contact rows (Sam, 2026-10-05, prototypes/lists_before_after_20261002.html §4): a contact is
+// its LABEL alone at rest — never its address ("Keep it just dont say what the email is") — and
+// a click opens the label and the address as lines with ✓, the trash (a delete, which asks)
+// and the on/off-site check. The + adds one. How a line opens, saves and closes is EditList's
+// (_ui/edit-list.tsx) and pinned there; this is the Contact wiring. The Socials group has its
+// own file: tests/components/site-editor/editor-social-buttons.test.tsx.
 describe('EditorInspector — Links: Contact rows', () => {
   const CONTACTS: EditorLink[] = [
     { id: 'c1', label: 'Bookings', url: 'mailto:book@x.com', onSite: true },
     { id: 'c2', label: 'Press', url: 'mailto:press@x.com', onSite: true },
-    // Off-site, to prove the toggle reflects state rather than always reading "On site".
+    // Off-site: the witness that the list hides it, and that the eye brings it back.
     { id: 'c3', label: 'Phone', url: 'tel:+15125550100', onSite: false },
   ]
   function openLinks(extra: Partial<Parameters<typeof renderInspector>[1]> = {}) {
@@ -682,154 +693,112 @@ describe('EditorInspector — Links: Contact rows', () => {
     fireEvent.click(screen.getByRole('button', { name: /Links/ }))
     return view
   }
-  // Rows show label + URL as plain text; the inputs mount only once the pencil opens
-  // the row (version A, 2026-08-12). Open by the row index (1-based).
-  function expandLink(n: number) {
-    fireEvent.click(screen.getByRole('button', { name: `Edit contact link ${n}` }))
-  }
-  /** The same button, which reads "Close …" once the row is open (2026-08-14). */
-  function collapseLink(n: number) {
-    fireEvent.click(screen.getByRole('button', { name: `Close contact link ${n}` }))
-  }
+  /** At rest the label IS the button that opens the contact. */
+  const openContact = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }))
 
-  it('shows label + URL as plain text; the pencil opens the label AND the URL', () => {
+  it('CRITICAL: at rest a contact is its label alone — never its address', () => {
     openLinks()
-    expect(screen.getByText('Bookings')).toBeTruthy()
-    expect(screen.getByText('mailto:book@x.com')).toBeTruthy()
-    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
-    expandLink(1)
-    expect((screen.getByLabelText('Contact link 1 URL') as HTMLInputElement).value).toBe('mailto:book@x.com')
-    expect((screen.getByLabelText('Contact link 1 label') as HTMLInputElement).value).toBe('Bookings')
-    expect(screen.getByRole('button', { name: 'Remove contact link 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Bookings' })).toBeTruthy()
+    expect(screen.queryByText(/book@x\.com/), 'the address shows at rest').toBeNull()
+    openContact('Bookings')
+    expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('mailto:book@x.com')
   })
 
-  it('is single-open: expanding another row collapses the first', () => {
+  it('CRITICAL: ✓ saves the label and the address to that row, a bare email as mailto:', async () => {
     openLinks()
-    expandLink(1)
-    expect(screen.queryByLabelText('Contact link 1 URL')).not.toBeNull()
-    expandLink(2)
-    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
-    expect((screen.getByLabelText('Contact link 2 URL') as HTMLInputElement).value).toBe('mailto:press@x.com')
+    openContact('Bookings')
+    expect((screen.getByLabelText('Contact label') as HTMLInputElement).value).toBe('Bookings')
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'agent@x.com' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
+    expect(updateContentMock).toHaveBeenCalledTimes(1)
+    const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+    expect([type, id, artistId]).toEqual(['link', 'c1', 'artist-1'])
+    expect((fd as FormData).get('label')).toBe('Bookings')
+    expect((fd as FormData).get('url')).toBe('mailto:agent@x.com')
+    expect(screen.queryByLabelText('Address')).toBeNull() // closed: the label alone again
+  })
+
+  it('CRITICAL: a blank label or address is refused — nothing is sent, the lines keep the draft', async () => {
+    // Both columns are required; the server would drop a blank, so the panel must not
+    // close as if it saved.
+    openLinks()
+    openContact('Bookings')
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: '  ' } })
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText('Address'), { key: 'Enter' })
+    })
+    expect(updateContentMock).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Address')).toBeTruthy()
   })
 
   it('CRITICAL: an OFF-site contact is not listed (only what is on the site)', () => {
     // Sam, 2026-09-09, for every item panel: the editor is a view of the SITE.
     openLinks()
-    expect(screen.getByText('Bookings')).toBeTruthy() // the witness: the list rendered
+    expect(screen.getByRole('button', { name: 'Bookings' })).toBeTruthy() // the witness: the list rendered
     expect(screen.queryByText('Phone'), 'an off-site contact is still listed').toBeNull()
   })
 
-  it('CRITICAL: "Add contact" offers the off-site ones and puts the picked one ON the site', () => {
-    // Contact addresses have no dashboard page of their own, so the way back lives here,
-    // the same shape as the socials' Add button.
+  it('CRITICAL: the eye lists the off-site ones and puts the picked one ON the site', () => {
+    // Contact addresses have no dashboard page of their own, so the way back lives here.
     openLinks()
-    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts off the site' }))
     fireEvent.click(screen.getByRole('button', { name: 'Put Phone on the site' }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c3', 'artist-1', true)
   })
 
-  it('takes an on-site link OFF the site (writes on_site via setOnSiteAction)', () => {
+  it('the open contact’s check takes it OFF the site (writes on_site)', () => {
     openLinks()
-    expandLink(1)
-    fireEvent.click(screen.getByRole('button', { name: /On the site/ }))
+    expect(screen.queryByRole('checkbox', { name: /Bookings/ })).toBeNull() // only while open
+    openContact('Bookings')
+    fireEvent.click(screen.getByRole('checkbox', { name: /Bookings — on site/ }))
     expect(setOnSiteMock).toHaveBeenCalledWith('link', 'c1', 'artist-1', false)
   })
 
-  it('does NOT save a blank required field and flags it invalid (no false "Saved")', () => {
-    vi.useFakeTimers()
-    try {
-      openLinks()
-      expandLink(1)
-      fireEvent.change(screen.getByLabelText('Contact link 1 URL'), { target: { value: '' } })
-      vi.advanceTimersByTime(500)
-      expect(updateContentMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('Contact link 1 URL').getAttribute('aria-invalid')).toBe('true')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('CRITICAL: an edit debounced-saves the label AND the address, to that row', () => {
-    vi.useFakeTimers()
-    try {
-      openLinks()
-      expandLink(1)
-      fireEvent.change(screen.getByLabelText('Contact link 1 URL'), { target: { value: 'mailto:agent@x.com' } })
-      expect(updateContentMock).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(500)
-      expect(updateContentMock).toHaveBeenCalledTimes(1)
-      const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
-      expect([type, id, artistId]).toEqual(['link', 'c1', 'artist-1'])
-      expect((fd as FormData).get('label')).toBe('Bookings')
-      expect((fd as FormData).get('url')).toBe('mailto:agent@x.com')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reflects an edited label on the collapsed row', () => {
-    vi.useFakeTimers()
-    try {
-      openLinks()
-      expandLink(1)
-      fireEvent.change(screen.getByLabelText('Contact link 1 label'), { target: { value: 'Agent' } })
-      collapseLink(1)
-      expect(screen.queryByLabelText('Contact link 1 label')).toBeNull()
-      expect(screen.getByText('Agent')).toBeTruthy()
-      expect(screen.queryByText('Bookings')).toBeNull()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('CRITICAL: clicking outside an open row closes it', () => {
-    // The same rule as the Style panel (Sam, 2026-08-14). Pinned per PANEL because the
-    // boundary ref is wired per panel — Style passing is no evidence Links does.
+  it('CRITICAL: the + adds a contact — label and address — and lists it at once', async () => {
+    vi.mocked(addContentAction).mockResolvedValueOnce({ id: 'c9' })
     openLinks()
-    expandLink(1)
-    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
-    fireEvent.mouseDown(document.body)
-    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }))
+    fireEvent.change(screen.getByLabelText('New contact label'), { target: { value: 'Agent' } })
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'agent@x.com' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    })
+    const [type, artistId, fd] = vi.mocked(addContentAction).mock.calls[0]
+    expect([type, artistId]).toEqual(['link', 'artist-1'])
+    expect((fd as FormData).get('label')).toBe('Agent')
+    expect((fd as FormData).get('url')).toBe('mailto:agent@x.com')
+    expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy()
   })
 
-  it('typing in an open row never closes it', () => {
-    openLinks()
-    expandLink(1)
-    fireEvent.mouseDown(screen.getByLabelText('Contact link 1 URL'))
-    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
-    // WITNESS: prove the listener is actually armed. Without this, an unattached
-    // boundary ref makes the assertion above vacuously true.
-    fireEvent.mouseDown(document.body)
-    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
-  })
-
-  it('CRITICAL: a preview click on dead space closes an open row too', () => {
+  it('CRITICAL: a preview click on dead space closes an open contact', () => {
     const view = openLinks({ deselectedAt: 1 })
-    expandLink(1)
-    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
+    openContact('Bookings')
+    expect(screen.getByLabelText('Address')).toBeTruthy()
     view.rerender(inspector([], { links: CONTACTS, deselectedAt: 2 }))
-    expect(screen.queryByLabelText('Contact link 1 URL')).toBeNull()
+    expect(screen.queryByLabelText('Address')).toBeNull()
   })
 
-  it('CRITICAL: Remove asks first — Cancel keeps the contact', async () => {
+  it('CRITICAL: the trash asks first — Cancel keeps the contact', async () => {
     // Sam, 2026-09-28: "'are you sure' is good when its a delete". Revert never re-inserts
     // a deleted contact (a link off the declared buttons only gets its order back).
     openLinks()
-    expandLink(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
+    openContact('Bookings')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Bookings' }))
     const dialog = screen.getByRole('dialog')
     expect(deleteContentMock).not.toHaveBeenCalled()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     })
     expect(deleteContentMock).not.toHaveBeenCalled()
-    expect(screen.getByText('Bookings')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Bookings' })).toBeTruthy()
   })
 
   it('removes a contact via deleteContentAction once the manager confirms', async () => {
     openLinks()
-    expandLink(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Remove contact link 1' }))
+    openContact('Bookings')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Bookings' }))
     await act(async () => {
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
     })
@@ -892,16 +861,15 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     expect(screen.getAllByRole('button', { name: /^Add button$/ }).length).toBe(1)
   })
 
-  it('a Contact row is typed in place; a Socials row is a button with nothing to type', () => {
-    // A booking address is not a connection, so it keeps its label + address editor. A
-    // social is the connection's own link, edited in Connections (Sam, 2026-09-28).
+  it('a Contact row opens its label AND address; a Socials row opens only its handle', () => {
+    // A booking address is not a connection, so it keeps a label of its own. A social's
+    // name is its connection's, so only the handle opens (editor-social-buttons.test.tsx).
     const booking: EditorLink = { id: 'l9', label: 'Bookings', url: 'mailto:b@x.com', onSite: true }
     openLinks({ links: [...LINKS, booking] })
-    fireEvent.click(screen.getByRole('button', { name: 'Edit contact link 1' }))
-    expect(screen.getByLabelText('Contact link 1 label')).toBeTruthy()
-    expect(screen.getByLabelText('Contact link 1 URL')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Edit social link/ })).toBeNull()
-    expect(screen.queryByLabelText(/Social link \d/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Bookings' }))
+    expect(screen.getByLabelText('Contact label')).toBeTruthy()
+    expect(screen.getByLabelText('Address')).toBeTruthy()
+    expect(screen.queryByLabelText(/^Spotify/)).toBeNull()
   })
 
   it('shows NO Contact group when every link is a plain profile URL', () => {
@@ -940,56 +908,43 @@ describe('EditorInspector — Buttons group inside the Links panel (manifest-dec
     expect(screen.getByText('Buttons')).toBeTruthy()
   })
 
-  it('lists each declared button by label, with a URL field each', () => {
+  it('lists each declared button by its key over its address; a click opens the address', () => {
     openSiteLinks({ linkValues: { usb: 'https://open.spotify.com/playlist/usb' } })
-    // The label alone names the button. A "Powers: …" line under it restated the label
-    // in a longer sentence and pushed every input down a row (Sam, 2026-08-09); the
-    // site's description rides the label's hover text instead of costing a row.
-    // The URL is PLAIN TEXT until the pencil opens the box (Sam, 2026-08-12): the
-    // value shows on the row, no input yet.
-    expect(screen.getByText('USB button')).toBeTruthy()
-    expect(screen.getByText('https://open.spotify.com/playlist/usb')).toBeTruthy()
+    // The label alone names the button; the site's description rides its hover text
+    // instead of costing a row (Sam, 2026-08-09).
+    expect(screen.getByText('USB button').getAttribute('title')).toBe('Disco-ball playlist link (Videos band)')
     expect(screen.queryByLabelText('USB button URL')).toBeNull()
-    // Merch is declared but UNSET → a visible, muted "Add a link" row (not invisible).
+    // Merch is declared but UNSET → a visible, faint "Add a link" (not invisible).
     expect(screen.getByText('Add a link')).toBeTruthy()
-    // Open USB's box: now the input exists, seeded, with the site's description attached.
-    fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
-    const input = screen.getByLabelText('USB button URL') as HTMLInputElement
-    expect(input.value).toBe('https://open.spotify.com/playlist/usb')
-    const describedBy = input.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    expect(document.getElementById(describedBy!)?.textContent).toBe('Disco-ball playlist link (Videos band)')
+    // Click to edit (Sam, 2026-10-05): the address itself opens as a line.
+    fireEvent.click(screen.getByRole('button', { name: 'https://open.spotify.com/playlist/usb' }))
+    expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('https://open.spotify.com/playlist/usb')
   })
 
-  it('debounce-saves a URL by key + optimistically updates the frame', () => {
-    vi.useFakeTimers()
-    try {
-      const onApplyLink = vi.fn()
-      openSiteLinks({ onApplyLink })
-      fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
-      fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'https://open.spotify.com/playlist/x' } })
-      // Optimistic frame repaint is immediate; the save is debounced.
-      expect(onApplyLink).toHaveBeenCalledWith('usb', 'https://open.spotify.com/playlist/x')
-      expect(saveLinkMock).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(500)
-      expect(saveLinkMock).toHaveBeenCalledWith('artist-1', 'usb', 'https://open.spotify.com/playlist/x', 'USB button')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('CRITICAL: ✓ saves the URL by key, then repaints the frame', async () => {
+    const onApplyLink = vi.fn()
+    openSiteLinks({ onApplyLink })
+    fireEvent.click(screen.getAllByText('Add a link')[0]) // USB, unset
+    fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'https://open.spotify.com/playlist/x' } })
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText('USB button URL'), { key: 'Enter' })
+    })
+    expect(saveLinkMock).toHaveBeenCalledWith('artist-1', 'usb', 'https://open.spotify.com/playlist/x', 'USB button')
+    expect(onApplyLink).toHaveBeenCalledWith('usb', 'https://open.spotify.com/playlist/x')
+    expect(screen.getByRole('button', { name: 'https://open.spotify.com/playlist/x' })).toBeTruthy()
   })
 
-  it('does NOT save an unsafe URL and flags the field invalid', () => {
-    vi.useFakeTimers()
-    try {
-      openSiteLinks()
-      fireEvent.click(screen.getByRole('button', { name: 'Edit USB button' }))
-      fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'javascript:alert(1)' } })
-      vi.advanceTimersByTime(500)
-      expect(saveLinkMock).not.toHaveBeenCalled()
-      expect(screen.getByLabelText('USB button URL').getAttribute('aria-invalid')).toBe('true')
-    } finally {
-      vi.useRealTimers()
-    }
+  it('CRITICAL: an unsafe URL is refused — never sent, never painted, the draft kept', async () => {
+    const onApplyLink = vi.fn()
+    openSiteLinks({ onApplyLink })
+    fireEvent.click(screen.getAllByText('Add a link')[0])
+    fireEvent.change(screen.getByLabelText('USB button URL'), { target: { value: 'javascript:alert(1)' } })
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText('USB button URL'), { key: 'Enter' })
+    })
+    expect(saveLinkMock).not.toHaveBeenCalled()
+    expect(onApplyLink).not.toHaveBeenCalled()
+    expect((screen.getByLabelText('USB button URL') as HTMLInputElement).value).toBe('javascript:alert(1)')
   })
 
   it('shows an empty-state under Buttons when the site declares none', () => {
@@ -1168,6 +1123,15 @@ describe('EditorInspector — Videos component', () => {
     expect(screen.getByRole('button', { name: /Pick a YouTube video/ })).toBeTruthy()
   })
 
+  it('a click on a band card opens its editor; a click in its title field does not', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    openVideos()
+    fireEvent.click(screen.getByLabelText('Slot 1 title')) // a control of its own
+    expect(screen.queryByRole('heading', { name: 'Edit Video slot 1' })).toBeNull()
+    fireEvent.click(screen.getByLabelText('Video slot 1'))
+    expect(screen.getByRole('heading', { name: 'Edit Video slot 1' })).toBeTruthy()
+  })
+
   it('band Edit opens the full-panel item editor with the EMBED control set', () => {
     openVideos()
     fireEvent.click(screen.getByRole('button', { name: /Edit video slot 1/ }))
@@ -1240,6 +1204,16 @@ describe('EditorInspector — Merch component', () => {
     // p2 is out of stock — its card carries the badge; in-stock p1 does not.
     expect(screen.getAllByText('Sold out')).toHaveLength(1)
     expect(screen.getByRole('link', { name: /Add product/ }).getAttribute('href')).toBe('/artists/artist-1/merch')
+  })
+
+  it('a click on the card, not just its pencil, opens it — and outlines it on the site', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    const onHighlight = vi.fn()
+    renderInspector([], { merch: MERCH, onHighlight })
+    fireEvent.click(screen.getByRole('button', { name: /Merch/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select Tour Tee' }))
+    expect((screen.getByLabelText('Product name') as HTMLInputElement).value).toBe('Tour Tee')
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'merch', id: 'p1' })
   })
 
   it('the Edit pencil opens the full-panel editor with the product loaded', () => {
@@ -2043,6 +2017,13 @@ const TOURS: EditorTour[] = [
 ]
 const ON_SITE_TOURS = TOURS.filter((t) => t.onSite)
 
+/** Open a show full-panel: its venue opens the line, and ⋯ (All details) hands it the panel
+ *  (2026-10-05; it was a hover pencil on the row). */
+function openShowDetails(venue: string) {
+  fireEvent.click(screen.getByRole('button', { name: venue }))
+  fireEvent.click(screen.getByRole('button', { name: 'All details' }))
+}
+
 describe('EditorInspector — a show’s supporting acts are linked ON the show', () => {
   // MOVED from the Links panel (Sam, 2026-08-09): "Those should just be added on the
   // tour dates section. There should be an edit button for the specific tour show and in
@@ -2052,13 +2033,13 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
   const openShow = (opts: { support?: EditorSupportLink[] } = {}) => {
     renderInspector([], { tours: TOURS, supportLinks: opts.support ?? SUPPORT })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    openShowDetails('Mohawk')
   }
 
-  it('CRITICAL: every show has an Edit button that opens it full-panel', () => {
+  it('CRITICAL: an open show’s ⋯ opens it full-panel', () => {
     renderInspector([], { tours: TOURS, supportLinks: SUPPORT })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    openShowDetails('Mohawk')
     // Headed by the show, since the date column and venue line are no longer beside it.
     expect(screen.getByRole('heading', { name: /12 SEP 26 · Mohawk/ })).toBeTruthy()
     expect(screen.getByText('Supporting acts')).toBeTruthy()
@@ -2101,7 +2082,7 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
     // item select opens no editor at all, so a stale tour panel has nothing hiding it.
     const { rerender } = renderInspector([], { tours: TOURS, supportLinks: SUPPORT, videos: VIDEOS })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    openShowDetails('Mohawk')
     expect(screen.getByText('Supporting acts')).toBeTruthy()
 
     rerender(
@@ -2138,7 +2119,7 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
       tours: TOURS, supportLinks: SUPPORT, styleRegions: STYLE_REGIONS,
     })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+    openShowDetails('Mohawk')
     expect(screen.getByText('Supporting acts')).toBeTruthy()
 
     rerender(inspector([], { tours: TOURS, supportLinks: SUPPORT, styleRegions: STYLE_REGIONS, selectedStyle: 'footer' }))
@@ -2228,7 +2209,7 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
       supportLinks: [],
     })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Solo Room/ }))
+    openShowDetails('Solo Room')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Remove Only Act' }))
     })
@@ -2253,7 +2234,7 @@ describe('EditorInspector — a show’s supporting acts are linked ON the show'
     // elsewhere — so the empty state has to point there.
     renderInspector([], { tours: TOURS, supportLinks: [] })
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Edit Empty Bottle/ }))
+    openShowDetails('Empty Bottle')
     expect(screen.getByText(/No supporting acts on this show yet/i)).toBeTruthy()
   })
 })
@@ -2361,35 +2342,55 @@ describe('EditorInspector — tour tools', () => {
     expect(reorderContentMock).toHaveBeenCalledWith('tour_date', 'artist-1', ['t2', 't1', 't3', 't4'])
   })
 
-  it('takes a date off the site, LIVE, keyed to the tour kind', () => {
-    // 'tour' is the EDITOR kind; it maps to the tour_dates table via LIVE_TOGGLE.
+  it('a click anywhere on a row opens its venue, and outlines the date on the site', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    const onHighlight = vi.fn()
+    renderInspector([], { tours: TOURS, onHighlight })
+    fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
+    fireEvent.click(screen.getByText('12 SEP 26'))
+    expect((screen.getByLabelText('Venue') as HTMLInputElement).value).toBe('Mohawk')
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'tour_date', id: 't1' })
+  })
+
+  it('CRITICAL: an open date’s trash takes it OFF the site — it deletes nothing', () => {
+    // Sam, 2026-10-05 (the lists mock): the trash here is "off the site"; deleting a date
+    // stays on the Tour page. 'tour' is the EDITOR kind; it maps to tour_dates.
     openTour()
-    fireEvent.click(screen.getAllByRole('button', { name: /On the site/ })[0]) // Mohawk
+    fireEvent.click(screen.getByRole('button', { name: 'Mohawk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Take Mohawk off the site' }))
     expect(setOnSiteMock).toHaveBeenCalledWith('tour', 't1', 'artist-1', false)
+    expect(deleteContentMock).not.toHaveBeenCalled()
+    expect(screen.queryByText('Mohawk')).toBeNull() // off the site, so off the panel
   })
 
-  it('CRITICAL: the trash asks first — Cancel keeps the show', async () => {
-    // Sam, 2026-09-28: "'are you sure' is good when its a delete". Nothing brings a
-    // deleted show back — Revert never re-inserts a library row (its coordinates and
-    // source are not in the publish log) — so the question is the only safety net.
+  it('CRITICAL: a venue typed here saves through the tour-date door (a draft), and shows at once', async () => {
+    // The SAME door the Tour page saves a venue by (tour/tour-row.tsx): one write path, a
+    // draft until Publish (PRESENCE_PLAN).
     openTour()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
-    const dialog = screen.getByRole('dialog')
-    expect(deleteContentMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Mohawk' }))
+    fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'Mohawk Outdoor' } })
     await act(async () => {
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      fireEvent.keyDown(screen.getByLabelText('Venue'), { key: 'Enter' })
     })
-    expect(deleteContentMock).not.toHaveBeenCalled()
-    expect(screen.getByText('Mohawk')).toBeTruthy()
+    expect(updateContentMock).toHaveBeenCalledTimes(1)
+    const [type, id, artistId, fd] = updateContentMock.mock.calls[0]
+    expect([type, id, artistId]).toEqual(['tour_date', 't1', 'artist-1'])
+    expect([...(fd as FormData).keys()]).toEqual(['venue']) // that column and nothing else
+    expect((fd as FormData).get('venue')).toBe('Mohawk Outdoor')
+    expect(screen.getByRole('button', { name: 'Mohawk Outdoor' })).toBeTruthy()
   })
 
-  it('removes a date via deleteContentAction once the manager confirms', async () => {
+  it('a refused venue puts the old name back and keeps the line open with the draft', async () => {
+    updateContentMock.mockResolvedValueOnce({ error: 'Save failed.' })
     openTour()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Mohawk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mohawk' }))
+    fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'Nope' } })
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }))
+      fireEvent.keyDown(screen.getByLabelText('Venue'), { key: 'Enter' })
     })
-    expect(deleteContentMock).toHaveBeenCalledWith('tour_date', 't1', 'artist-1')
+    expect((screen.getByLabelText('Venue') as HTMLInputElement).value).toBe('Nope')
+    fireEvent.keyDown(screen.getByLabelText('Venue'), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Mohawk' })).toBeTruthy()
   })
 
   it('a DATED show drags like any other (manual mode, 2026-08-17)', () => {
@@ -2404,9 +2405,11 @@ describe('EditorInspector — tour tools', () => {
     expect(dated[0].getAttribute('draggable')).toBe('true')
   })
 
-  it('points at the Tour page to add a date', () => {
+  it('points at the Tour page to add a date — a bare +, no words', () => {
     openTour()
-    expect(screen.getByRole('link', { name: /Add date/ }).getAttribute('href')).toBe('/artists/artist-1/tour')
+    const add = screen.getByRole('link', { name: 'Add date' })
+    expect(add.getAttribute('href')).toBe('/artists/artist-1/tour')
+    expect(add.textContent).toBe('')
   })
 
   it('an empty Tour panel shows NO copy at all (Sam, 2026-08-12)', () => {
@@ -2645,6 +2648,16 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect((screen.getByRole('textbox', { name: /^Alt text for/ }) as HTMLInputElement).placeholder).toBe('Skeen')
   })
 
+  it('a click on the tile, not just its pencil, selects it AND opens it', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    const onHighlight = vi.fn()
+    renderInspector(HELD_SLOT, { components: [POLAROID], onHighlight })
+    fireEvent.click(screen.getByRole('button', { name: /Images/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select Slot 1' }))
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'field', key: 'polaroid_1_photo' })
+    expect(screen.getByRole('heading', { name: 'Edit Slot 1' })).toBeTruthy()
+  })
+
   it('Edit hands the WHOLE panel to that slot: header "Edit Slot 1", Replace, Remove, controls', () => {
     openImages(HELD_SLOT)
     // Not editing yet — the wall is shown, not the item editor.
@@ -2751,7 +2764,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     }
   }
 
-  it('the palette opens as a modal and closes on Escape, Save, or the backdrop', () => {
+  it('the palette opens as a modal and closes on Escape or the backdrop — no Save that only closes', () => {
     renderInspector(HELD_SLOT, { components: [POLAROID] })
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
@@ -2764,11 +2777,9 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
 
     openIt()
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-
-    openIt()
     const dialog = screen.getByRole('dialog')
+    // Every pick applies at once, so a Save would say a save was waiting (2026-10-05).
+    expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull()
     fireEvent.click(dialog) // the backdrop itself, not the card
     expect(screen.queryByRole('dialog')).toBeNull()
   })
@@ -2779,7 +2790,7 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.pointerDown(area, { clientX: 200, clientY: 0 })
     expect(onApplyStyle).toHaveBeenLastCalledWith('slot:polaroid_1_photo', 'border-[#0000ff]')
     // No confirm step: the edit is already applied, so closing just closes.
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect((screen.getByLabelText('Slot 1 Border color hex') as HTMLInputElement).value).toBe('#0000ff')
   })
@@ -2884,7 +2895,6 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Images/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
-    expect(screen.getByText('On site')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Slot 1 Border color #ff0000' })).toBeTruthy()
     // Clicking one applies it to this item.
     fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color #123abc' }))
@@ -2900,8 +2910,8 @@ describe('EditorInspector — component slots (flat numbered wall)', () => {
       // Nothing used yet on a site with no saved styles and no declared palette.
       fireEvent.click(screen.getByRole('button', { name: 'Edit Slot 1' }))
       fireEvent.click(screen.getByRole('button', { name: 'Slot 1 Border color palette' }))
-      expect(screen.queryByText('On site')).toBeNull()
-      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
+      expect(screen.queryAllByRole('button', { name: /^Slot 1 Border color #/ })).toHaveLength(0)
+      fireEvent.keyDown(document, { key: 'Escape' })
       const hex = screen.getByLabelText('Slot 1 Border color hex')
       fireEvent.change(hex, { target: { value: '#ff8800' } })
       fireEvent.blur(hex)
@@ -3059,7 +3069,7 @@ describe('EditorInspector — CRITICAL: a routed frame click dismisses whichever
     tour: {
       open: () => {
         fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-        fireEvent.click(screen.getByRole('button', { name: /Edit Mohawk/ }))
+        openShowDetails('Mohawk')
       },
       signature: () => screen.queryByText('Supporting acts'),
     },

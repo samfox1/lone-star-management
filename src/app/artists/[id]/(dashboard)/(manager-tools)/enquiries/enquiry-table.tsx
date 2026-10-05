@@ -21,6 +21,7 @@ import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
 import { deleteEnquiryAction, setEnquiryReadAction, signEnquiryAttachmentsAction } from './actions'
 import { CAPS_LABEL, CAPS_META, MONO_META } from '../_ui/styles'
+import { RowIcon } from '../_ui/row-icon'
 
 function received(iso: string): string {
   const d = new Date(iso)
@@ -167,8 +168,9 @@ export function EnquiryTable({
               type="button"
               onClick={() => setFilter(f.key)}
               aria-pressed={filter === f.key}
+              // The chosen filter is bold ink, no grey box behind it (Sam, 2026-10-02).
               className={`rounded-md px-2 py-1 font-space text-[11px] transition-colors ${
-                filter === f.key ? 'bg-surface font-bold text-ink' : 'text-ink-muted hover:text-ink'
+                filter === f.key ? 'font-bold text-ink' : 'text-ink-muted hover:text-ink'
               }`}
             >
               {f.label}
@@ -365,13 +367,9 @@ function FragmentRow({
                       ) : (
                         <>
                           <audio controls preload="none" src={a.url ?? undefined} className="mt-1.5 w-full" />
-                          <a
-                            href={a.url ?? undefined}
-                            download={a.filename}
-                            className="mt-1 inline-block font-space text-[11px] text-ink-muted underline underline-offset-2"
-                          >
-                            Download
-                          </a>
+                          {a.url ? (
+                            <RowIcon icon="download" label="Download" variant="bare" glyphSize={16} href={a.url} download={a.filename} className="mt-1" />
+                          ) : null}
                         </>
                       )}
                     </li>
@@ -388,28 +386,34 @@ function FragmentRow({
               >
                 {row.email}
               </a>
-              {isRead && (
-                <button
-                  type="button"
+              {/* Bare glyphs named on hover, no words (Sam, 2026-10-02). */}
+              <span className="ml-auto flex items-center gap-3">
+                {isRead && (
+                  <RowIcon
+                    icon="mail"
+                    label="Mark unread"
+                    variant="bare"
+                    glyphSize={16}
+                    labelAlign="end"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onMarkUnread()
+                    }}
+                  />
+                )}
+                <RowIcon
+                  icon="trash"
+                  label="Delete"
+                  variant="bare"
+                  tone="danger"
+                  glyphSize={16}
+                  labelAlign="end"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onMarkUnread()
+                    onDelete()
                   }}
-                  className="text-ink-muted underline underline-offset-2 hover:text-ink"
-                >
-                  Mark unread
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete()
-                }}
-                className="ml-auto text-ink-muted underline underline-offset-2 hover:text-accent-red"
-              >
-                Delete
-              </button>
+                />
+              </span>
             </div>
           </td>
         </tr>

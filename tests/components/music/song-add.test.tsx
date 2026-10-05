@@ -3,7 +3,7 @@
 /**
  * SongAddButton — the Music page's "+ Add Music". Manual path asks the format
  * first (Single / EP / Album): a single is one song; an EP/album is a manual
- * RELEASE with song rows (+ Add song appends one) whose songs inherit its
+ * RELEASE with song rows (a bare + appends one) whose songs inherit its
  * released/unreleased choice (REQUIRED, no default). Streaming path: URL rows
  * only — metadata resolves FROM the service, automatically released.
  */
@@ -242,14 +242,16 @@ describe('SongAddButton', () => {
     expect(within(dialog).getByRole('switch', { name: 'Unreleased' })).toHaveAttribute('aria-checked', 'false')
   })
 
-  it('EP: creates the release and its song rows (+ Add song appends one)', async () => {
+  it('EP: creates the release and its song rows (the bare + appends one)', async () => {
     const dialog = openModal()
     fireEvent.click(within(dialog).getByText('Add Manually'))
     fireEvent.click(within(dialog).getByText('EP'))
 
-    // EPs start with two rows; + Add song appends a third.
+    // EPs start with two rows; the + (a glyph, no words) appends a third.
     expect(within(dialog).getAllByPlaceholderText('Song title')).toHaveLength(2)
-    fireEvent.click(within(dialog).getByRole('button', { name: '+ Add song' }))
+    const plus = within(dialog).getByRole('button', { name: 'Add song' })
+    expect(plus.textContent).toBe('')
+    fireEvent.click(plus)
     const titles = within(dialog).getAllByPlaceholderText('Song title')
     expect(titles).toHaveLength(3)
 

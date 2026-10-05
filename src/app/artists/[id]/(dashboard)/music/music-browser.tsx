@@ -162,7 +162,7 @@ const sorted = sortLibrary
 /**
  * The ONE Music surface: every release and song, filtered by two segmented
  * controls — release state (All / Released / Unreleased) and site visibility
- * (All / On site / Off site) — with a shared toolbar (Refresh · Add Music ·
+ * (All / On site / Off site) — with a shared toolbar (Sync · Add Music ·
  * sort) in the same place for every view. Sync is absent on
  * Unreleased (platform pulls only ever produce Released music). The site
  * filter reads every card's OWN `on_site` — releases, orphan singles AND the
@@ -415,11 +415,8 @@ export function MusicBrowser({
         <EmptyState
           icon="releases"
           title={bucket === 'unreleased' ? 'No unreleased music' : 'No music yet'}
-          hint={
-            bucket === 'unreleased'
-              ? 'Demos live here until they’re on a platform. Add a song, then upload its audio.'
-              : 'Hit Refresh to pull your catalog, or add a release or song.'
-          }
+          // No "Hit Refresh" line: there is no Refresh button any more (sync is the ↻ dialog).
+          hint={bucket === 'unreleased' ? 'Demos live here until they’re on a platform. Add a song, then upload its audio.' : undefined}
         />
       ) : (
         <div className="space-y-8">

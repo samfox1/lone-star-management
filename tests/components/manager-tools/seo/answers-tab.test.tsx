@@ -13,6 +13,7 @@
  *           • going back to the automatic answer asks first; No keeps the words, Yes clears the key
  *           • Add question fills the next free slot; Remove asks, then clears both halves; Add
  *             goes when the slots are full
+ *           • click to edit: the trash and the replay exist only once a row is opened
  * Not here: the FAQ keys' caps and prose rule (tests/unit/manager-tools/seo/save-rules.test.ts).
  * Fixtures: the save action is a mock; the questions come from the bridge's probePrompts; the
  *           automatic answers are made-up sentences.
@@ -65,6 +66,7 @@ describe('the fixed questions', () => {
   // Going back to automatic asks first; No keeps the manager's words.
   it('CRITICAL: going back to the automatic answer asks first; No keeps the words', async () => {
     show({ [FAQ_KEYS[0]]: 'My own words.' })
+    fireEvent.click(screen.getByRole('button', { name: `Edit: ${Q[0]}` }))
     fireEvent.click(screen.getByRole('button', { name: 'Use the automatic answer' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
     await new Promise((r) => setTimeout(r, 20))
@@ -75,11 +77,15 @@ describe('the fixed questions', () => {
   it('a written answer can go back to the automatic one (after Yes); with none written there is nothing to clear', async () => {
     show({ [FAQ_KEYS[0]]: 'My own words.' })
     expect(screen.getByText('My own words.')).toBeTruthy()
+    // At rest there is no replay: it exists only once the row is opened.
+    expect(screen.queryByRole('button', { name: 'Use the automatic answer' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: `Edit: ${Q[0]}` }))
     fireEvent.click(screen.getByRole('button', { name: 'Use the automatic answer' }))
     const ask = await screen.findByRole('dialog', { name: /^Replace your answer with the automatic one\?/ })
     fireEvent.click(within(ask).getByRole('button', { name: 'Confirm' }))
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_KEYS[0], ''))
     expect(screen.getByText(AUTO[0])).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: `Edit: ${Q[0]}` }))
     expect(screen.queryByRole('button', { name: 'Use the automatic answer' })).toBeNull()
   })
 })
@@ -96,6 +102,9 @@ describe('your own questions', () => {
     // Its answer opens in place.
     fireEvent.change(screen.getByRole('textbox', { name: 'Answer: Where is Skeen from?' }), { target: { value: 'Chicago.' } })
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('a1', FAQ_EXTRA[1].a, 'Chicago.'))
+    // The trash is the open row's only: none at rest.
+    expect(screen.queryByRole('button', { name: 'Remove: Can I book Skeen?' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit: Can I book Skeen?' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove: Can I book Skeen?' }))
     // It asks first: nothing is removed until the question is confirmed.
     expect(seoMock).not.toHaveBeenCalledWith('a1', FAQ_EXTRA[0].q, '')
@@ -108,6 +117,6 @@ describe('your own questions', () => {
   it('no more than the slots there are: Add question goes when they are full', () => {
     show(Object.fromEntries(FAQ_EXTRA.flatMap((e, i) => [[e.q, `Q${i}?`], [e.a, `A${i}.`]])))
     expect(screen.queryByRole('button', { name: 'Add question' })).toBeNull()
-    expect(within(document.body).getAllByRole('button', { name: /^Remove: / })).toHaveLength(FAQ_EXTRA.length)
+    expect(within(document.body).getAllByRole('button', { name: /^Edit: Q\d+\?$/ })).toHaveLength(FAQ_EXTRA.length)
   })
 })

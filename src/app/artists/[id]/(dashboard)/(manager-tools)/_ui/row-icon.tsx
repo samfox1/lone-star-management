@@ -7,6 +7,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { placeLabel, type LabelAlign } from './label-placement'
+import { EDIT_TRIGGER } from './edit-row'
 import { FOCUS_RING_OFFSET, REVEAL_ON_HOVER } from './styles'
 
 /**
@@ -296,6 +297,8 @@ export function RowIcon({
           'disabled:cursor-default disabled:opacity-35 disabled:hover:text-ink-muted',
           className,
         )
+  // A hover pencil is what a click anywhere on its row stands for (edit-row.tsx).
+  const trigger = icon === 'edit' && reveal ? EDIT_TRIGGER : undefined
   const inner = (
     <>
       <Icon name={icon} size={icon === 'edit' ? EDIT_GLYPH : (glyphSize ?? box?.glyph ?? 20)} />
@@ -304,27 +307,27 @@ export function RowIcon({
   )
   if (href && link === 'app') {
     return (
-      <Link href={href} aria-label={label} className={cls}>
+      <Link href={href} aria-label={label} {...trigger} className={cls}>
         {inner}
       </Link>
     )
   }
   if (href && link === 'external') {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className={cls}>
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} {...trigger} className={cls}>
         {inner}
       </a>
     )
   }
   if (href) {
     return (
-      <a href={href} download={download} aria-label={label} className={cls}>
+      <a href={href} download={download} aria-label={label} {...trigger} className={cls}>
         {inner}
       </a>
     )
   }
   return (
-    <button ref={ref} type="button" aria-label={label} onClick={onClick} disabled={disabled} className={cls}>
+    <button ref={ref} type="button" aria-label={label} onClick={onClick} disabled={disabled} {...trigger} className={cls}>
       {inner}
     </button>
   )

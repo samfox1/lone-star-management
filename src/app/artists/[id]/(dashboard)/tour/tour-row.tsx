@@ -8,7 +8,6 @@ import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, updateContentAction } from '../actions'
-import { listRowClass } from '@/components/ui/ui'
 import { toast } from '../toast'
 import { SupportActs } from './support-acts'
 import { supportActsOf } from '@/lib/content'
@@ -105,8 +104,9 @@ export function TourRow({
   return (
     <>
       {/* No hairline between dates (Sam, 2026-09-11): the rhythm is the rows' own spacing.
-          Venue and place truncate before they can touch the column beside them. */}
-      <div className={`${listRowClass} gap-5 py-3.5`} onClick={() => setOpen(true)}>
+          Venue and place truncate before they can touch the column beside them. Hover is
+          colour only, the venue turning blue: no grey box (Sam, 2026-10-02). */}
+      <div className="flex cursor-pointer items-center gap-5 py-3.5" onClick={() => setOpen(true)}>
         {/* `selected` is the draft (optimistic), `onSite` what is PUBLISHED — a toggle is a
             draft until Publish (PRESENCE_PLAN, revised 2026-09-11), so the pending states
             "checked, publish to put on site" / "on site, publish to remove" are real here. */}

@@ -164,8 +164,9 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                 // stuck, that padding is the breathing room under the header's hairline.
                 className={cx('sticky z-20 -mt-4 flex flex-wrap items-center gap-2.5 border-b border-hairline bg-paper pb-3.5 pt-4', ...STICKY_TOP)}
               >
+                {/* A line, not a box (Sam, 2026-10-02: no bordered fields). */}
                 <div className="relative min-w-0 flex-1 basis-full sm:max-w-[420px] sm:basis-auto">
-                  <Icon name="search" size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+                  <Icon name="search" size={16} className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-ink-faint" />
                   <input
                     ref={searchRef}
                     type="search"
@@ -175,7 +176,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                     aria-label="Search emails"
                     autoComplete="off"
                     spellCheck={false}
-                    className="w-full rounded-[10px] border border-hairline bg-paper py-[9px] pl-[34px] pr-8 text-[14px] text-ink outline-hidden transition-colors placeholder:text-ink-faint focus:border-ink [&::-webkit-search-cancel-button]:appearance-none"
+                    className="w-full border-b border-hairline bg-transparent py-[9px] pl-[26px] pr-8 text-[14px] text-ink outline-hidden transition-colors placeholder:text-ink-faint focus:border-ink [&::-webkit-search-cancel-button]:appearance-none"
                   />
                   {query ? (
                     <button
@@ -193,7 +194,8 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                   ) : null}
                 </div>
 
-                <div role="group" aria-label="Sort" className="flex flex-none gap-0.5 rounded-[10px] border border-hairline bg-surface p-[3px] sm:ml-auto">
+                {/* Plain words, the chosen one bold ink: no box, no pill (Sam, 2026-10-02). */}
+                <div role="group" aria-label="Sort" className="flex flex-none gap-1 sm:ml-auto">
                   {SUBSCRIBER_SORTS.map((s) => {
                     const on = s.key === sort
                     return (
@@ -203,9 +205,9 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                         aria-pressed={on}
                         onClick={() => setSort(s.key)}
                         className={cx(
-                          'whitespace-nowrap rounded-[7px] px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-offset-1',
+                          'whitespace-nowrap rounded-[7px] px-2 py-1.5 text-[12px] transition-colors focus-visible:outline-offset-1',
                           FOCUS_RING,
-                          on ? 'bg-paper text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]' : 'text-ink-muted hover:text-ink',
+                          on ? 'font-semibold text-ink' : 'font-medium text-ink-muted hover:text-ink',
                         )}
                       >
                         {s.label}

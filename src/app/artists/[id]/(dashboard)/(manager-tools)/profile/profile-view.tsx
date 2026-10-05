@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { FACT_CONTENT_KEYS, MAX_ALIASES, countryOf } from '@samfox1/site-bridge/seo'
+import { FACT_CONTENT_KEYS, MAX_ALIASES, MAX_ALIAS_LENGTH, countryOf } from '@samfox1/site-bridge/seo'
 import { cx } from '@/lib/cx'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { COUNTRY_OPTIONS, GENRE_MAX, SCHEMA_TYPES, artistNameError, type SchemaType } from '@/lib/manager-tools/profile/profile'
@@ -11,7 +11,8 @@ import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
 import { saveArtistFactAction, saveSeoFieldAction } from '../../actions'
 import { LedgerRow, LedgerSection } from '../_ui/ledger'
 import { CAPS_LABEL, MONO_META } from '../_ui/styles'
-import { Chips, EndSlot, LineField } from '../_ui/fields'
+import { EndSlot, LineField } from '../_ui/fields'
+import { EditList } from '../_ui/edit-list'
 import { FieldError } from '../_ui/field-error'
 import { saveArtistNameAction } from './actions'
 import { BioRow } from './bio-row'
@@ -133,17 +134,20 @@ export function ProfileView(p: ProfileViewProps) {
     artistSave.save('location', raw)
   }
 
+  /* ── genre and other names: click-to-edit lists (_ui/edit-list.tsx, Sam 2026-10-05) ──
+     Each check runs on the WHOLE list the edit would make, before anything is sent: a refusal
+     is a toast in the rule's own words and the field keeps what was typed. An item edited to
+     nothing leaves the list. */
   const genres = genre
     .split(',')
     .map((g) => g.trim())
     .filter(Boolean)
-  const setGenres = (next: string[]): string | null => {
+  const genreProblem = (next: readonly string[]): string | null => {
     const joined = next.join(', ')
-    const bad = factTextError(joined) ?? (joined.length > GENRE_MAX ? `Keep it under ${GENRE_MAX} characters.` : null)
-    if (bad) {
-      refuse('genre', bad)
-      return bad
-    }
+    return factTextError(joined) ?? (joined.length > GENRE_MAX ? `Keep it under ${GENRE_MAX} characters.` : null)
+  }
+  const saveGenres = (next: readonly string[]) => {
+    const joined = next.filter(Boolean).join(', ')
     refuse('genre', null)
     setGenre(joined)
     artistSave.runNow('genre', async () => {
@@ -151,20 +155,14 @@ export function ProfileView(p: ProfileViewProps) {
       refuse('genre', r.ok ? null : (r.error ?? SAVE_FAILED))
       return r
     })
-    return null
   }
 
   const aliases = (facts[FACT_CONTENT_KEYS.aliases] ?? '').split(/\r\n?|\n/).map((a) => a.trim()).filter(Boolean)
-  const setAliases = (next: string[]): string | null => {
-    const raw = joinAliases(next)
-    const r = cleanFactValue(FACT_CONTENT_KEYS.aliases, raw, { artistName, thisYear: thisYearAt(new Date()) })
-    if ('error' in r) {
-      refuse('aliases', r.error)
-      return r.error
-    }
-    setFact('aliases', raw)
-    return null
+  const aliasProblem = (next: readonly string[]): string | null => {
+    const r = cleanFactValue(FACT_CONTENT_KEYS.aliases, joinAliases(next), { artistName, thisYear: thisYearAt(new Date()) })
+    return 'error' in r ? r.error : null
   }
+  const saveAliases = (next: readonly string[]) => setFact('aliases', joinAliases(next))
 
   const changeType = (next: string) => {
     if (next !== 'MusicGroup' && next !== 'Person') return
@@ -222,14 +220,41 @@ export function ProfileView(p: ProfileViewProps) {
         {errors.type ? <FieldError>{errors.type}</FieldError> : null}
         <LedgerRow title="Genre" guide="Search, AI answers and outside bios.">
           <div className="flex min-w-0 flex-col items-end gap-1">
-            <Chips label="Genre" items={genres} onChange={setGenres} addLabel="Add a genre" />
+            <EditList
+              items={genres}
+              text={(g) => g}
+              label="Genre"
+              addLabel="Add genre"
+              placeholder="Genre"
+              maxLength={GENRE_MAX}
+              validate={(v, i) => genreProblem(withItem(genres, i, v))}
+              onSave={(i, v) => saveGenres(withItem(genres, i, v))}
+              onAdd={(v) => saveGenres([...genres, v])}
+              onRemove={(i) => saveGenres(genres.filter((_, j) => j !== i))}
+              removeLabel={(g) => `Remove ${g}`}
+              className="justify-start min-[900px]:justify-end"
+            />
             {errors.genre ? <FieldError>{errors.genre}</FieldError> : null}
           </div>
           <EndSlot />
         </LedgerRow>
         <LedgerRow title="Other names" guide="Other spellings people search.">
           <div className="flex min-w-0 flex-col items-end gap-1">
-            <Chips label="Other names" items={aliases} onChange={setAliases} addLabel="Add a name" max={MAX_ALIASES} />
+            <EditList
+              items={aliases}
+              text={(a) => a}
+              label="Other name"
+              addLabel="Add name"
+              placeholder="Name"
+              maxLength={MAX_ALIAS_LENGTH}
+              validate={(v, i) => aliasProblem(withItem(aliases, i, v))}
+              onSave={(i, v) => saveAliases(withItem(aliases, i, v))}
+              // No + once the list is full (the gate's MAX_ALIASES).
+              onAdd={aliases.length < MAX_ALIASES ? (v) => saveAliases([...aliases, v]) : undefined}
+              onRemove={(i) => saveAliases(aliases.filter((_, j) => j !== i))}
+              removeLabel={(a) => `Remove ${a}`}
+              className="justify-start min-[900px]:justify-end"
+            />
             {errors.aliases ? <FieldError>{errors.aliases}</FieldError> : null}
           </div>
           <EndSlot />
@@ -299,4 +324,11 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
       {children}
     </div>
   )
+}
+
+/** The list with item `index` replaced by `value` (or `value` added at the end, for null). An
+ *  emptied item drops out. */
+function withItem(list: readonly string[], index: number | null, value: string): string[] {
+  const next = index === null ? [...list, value] : list.map((x, j) => (j === index ? value : x))
+  return next.filter(Boolean)
 }

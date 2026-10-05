@@ -100,11 +100,11 @@ describe('ReleaseCard tracklist merge', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
 
     // The modal names the row's song as the one that disappears…
-    expect(screen.getByRole('dialog', { name: 'Merge song' })).toBeInTheDocument()
-    expect(screen.getByText('Beta', { selector: 'span' })).toBeInTheDocument()
-    // …and the keeper selector offers its twin and nothing else (the placeholder aside).
-    const select = screen.getByLabelText(/Keep this song/i)
-    const options = within(select).getAllByRole('option').map((o) => o.textContent)
+    const modal = screen.getByRole('dialog', { name: 'Merge song' })
+    expect(within(modal).getByRole('heading', { name: 'Merge “Beta”' })).toBeInTheDocument()
+    // …and the keeper selector offers its twin and nothing else (the empty choice aside).
+    fireEvent.click(within(modal).getByRole('combobox', { name: 'Keep' }))
+    const options = within(screen.getByRole('listbox', { name: 'Keep' })).getAllByRole('option').map((o) => o.textContent)
     expect(options.slice(1)).toEqual(['Beta (feat. Kay)'])
   })
 
@@ -119,7 +119,8 @@ describe('ReleaseCard tracklist merge', () => {
   /** Fill in the keeper and press Merge; returns the question that raises. */
   async function askToMerge() {
     fireEvent.click(screen.getByRole('button', { name: 'Merge Beta into…' }))
-    fireEvent.change(screen.getByLabelText(/Keep this song/i), { target: { value: 'x8' } })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Keep' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Beta (feat. Kay)' }))
     fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
     // The QUESTION names the action; the answer itself is just "Confirm" (Sam, 2026-10-02).
     return screen.findByRole('dialog', { name: /^Merge “Beta” into “/ })

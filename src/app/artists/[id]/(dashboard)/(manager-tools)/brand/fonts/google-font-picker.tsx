@@ -86,7 +86,8 @@ export function GoogleFontPicker({
         onKeyDown={onKey}
         spellCheck={false}
         autoComplete="off"
-        className="w-full rounded-lg border border-hairline bg-paper px-3 py-2 font-ui text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
+        // A line, not a box (Sam, 2026-10-02: no boxed fields).
+        className="w-full border-b border-hairline bg-transparent px-0 py-2 font-ui text-[14px] text-ink outline-none placeholder:text-ink-faint focus:border-ink [&::-webkit-search-cancel-button]:appearance-none"
       />
       <ul aria-label="Google Fonts" className="m-0 -mx-2 max-h-[min(420px,calc(100dvh-260px))] list-none overflow-auto p-0">
         {shown.map(([family, category]) => {

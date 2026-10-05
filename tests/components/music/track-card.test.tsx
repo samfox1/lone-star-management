@@ -21,7 +21,7 @@
  *     there is a target.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { act, render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { TrackCard, type Track } from '@/app/artists/[id]/(dashboard)/tracks/track-card'
 import { RELEASE_TYPE_LABEL, RELEASE_TYPES } from '@/lib/releases'
 import { setTrackFeaturedAction, setTrackOnSiteAction, setTrackReleasedAction, setTrackTypeAction, updateContentAction } from '@/app/artists/[id]/(dashboard)/actions'
@@ -322,22 +322,24 @@ describe('Share on a song', () => {
 
 /* ── collaborators (Sam, 2026-09-11: "where do we put collaborators?") ─────────────── */
 describe('the Featuring row', () => {
-  it('shows each collaborator as a chip and adds one through the "+" dialog, as one list', async () => {
+  it('shows each collaborator as plain text; the bare + adds one, as one list; a click opens one with its trash', async () => {
     const dialog = openModal(track({ featured_artists: ['Arlo'] }))
-    expect(within(dialog).getByRole('button', { name: 'Arlo' })).toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add collaborator' }))
-    const pop = screen.getByRole('dialog', { name: 'Collaborator' })
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bo Reed' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Arlo', 'Bo Reed']))
+    const plus = within(dialog).getByRole('button', { name: 'Add collaborator' })
+    expect(plus.textContent).toBe('')
+    fireEvent.click(plus)
+    const field = within(dialog).getByRole('textbox', { name: 'New collaborator' })
+    fireEvent.change(field, { target: { value: 'Bo Reed' } })
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' })
+    })
+    expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Arlo', 'Bo Reed'])
     expect(within(dialog).getByRole('button', { name: 'Bo Reed' })).toBeInTheDocument()
-  })
 
-  it('removes one from its chip, leaving the rest', async () => {
-    const dialog = openModal(track({ featured_artists: ['Arlo', 'Bo Reed'] }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Arlo' }))
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Collaborator' })).getByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('t1', 'a1', ['Bo Reed']))
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove Arlo' }))
+    })
+    await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenLastCalledWith('t1', 'a1', ['Bo Reed']))
     expect(within(dialog).queryByRole('button', { name: 'Arlo' })).toBeNull()
   })
 })

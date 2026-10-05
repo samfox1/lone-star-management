@@ -5,7 +5,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import type { SeoCrawl, SeoTestStatus } from '@/lib/seo-tests/types'
 import { shortLink } from '@/lib/manager-tools/format'
-import { CAPS_LABEL, FOCUS_RING_OFFSET } from '../../../_ui/styles'
+import { CAPS_LABEL } from '../../../_ui/styles'
 import { useMounted } from '../_ui/clock'
 import { CardField, DisclosureCard, DisclosureGroup, DisclosureItem, RowFace, RowValue, SentenceAction } from '../../../_ui/disclosure'
 import {
@@ -233,26 +233,11 @@ function OutsideLink({ link }: { link: { label: string; href: string } }) {
   return <SentenceAction icon="external" label={link.label} href={link.href} link="external" />
 }
 
-/** "ASK GOOGLE ↗" beside a page Google doesn't list: Search Console's inspect page for it, where
- *  its "Request indexing" button is (a new tab). */
+/** A bare ↗ beside a page Google doesn't list (Sam, 2026-10-02: glyphs, not words): Search
+ *  Console's inspect page for it, where its "Request indexing" button is (a new tab). "Ask Google
+ *  to list /about" is its hover label and its accessible name. */
 function AskGoogleLink({ href, path }: { href: string; path: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${ASK_GOOGLE} to list ${path}`}
-      data-ask-google
-      className={cx(
-        CAPS_LABEL,
-        'ml-2.5 inline-flex items-center gap-1 whitespace-nowrap rounded align-middle text-ink transition-colors hover:text-accent',
-        FOCUS_RING_OFFSET,
-      )}
-    >
-      {ASK_GOOGLE}
-      <Icon name="external" size={12} aria-hidden="true" />
-    </a>
-  )
+  return <SentenceAction icon="external" label={`${ASK_GOOGLE} to list ${path}`} href={href} link="external" />
 }
 
 function CardBody({ id, crawl, origin, mounted }: { id: CrawlRowId; crawl: SeoCrawl; origin: string | null; mounted: boolean }) {

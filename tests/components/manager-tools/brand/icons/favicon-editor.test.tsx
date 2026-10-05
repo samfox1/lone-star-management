@@ -131,7 +131,8 @@ describe('IconEditor — the modal (Sam, 2026-09-23)', () => {
   it('Reset sits in the footer, immediately LEFT of Save — not in the controls column', async () => {
     await renderEditor()
     const footer = screen.getByRole('dialog', { name: 'Tab icon' }).querySelector('footer')!
-    const buttons = within(footer).getAllByRole('button').map((b) => b.textContent)
+    // By accessible name: Reset is a glyph named on hover (2026-10-05), Save a word.
+    const buttons = within(footer).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)
     expect(buttons.slice(-2)).toEqual(['Reset', 'Save'])
     expect(screen.getByRole('button', { name: 'Reset' }).closest('[data-modal-body]')).toBeNull()
   })

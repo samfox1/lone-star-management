@@ -4,7 +4,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { Icon } from '@/components/ui/icons'
 import { EDIT_GLYPH } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
-import { CAPS_LABEL, EDIT_TARGET, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
+import { EDIT_TRIGGER, EditRow } from './(manager-tools)/_ui/edit-row'
+import { CAPS_LABEL, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
 
 /**
  * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11; its header
@@ -43,7 +44,8 @@ export function KvLabel({ children, top = false }: { children: ReactNode; top?: 
 
 /** The row shell: a mono label on the left, whatever the row holds on the right. The row is
  *  its pencil's EDIT_TARGET (_ui/styles.ts): the pencil shows while the row is hovered or its
- *  value has keyboard focus. */
+ *  value has keyboard focus. It is an EditRow (_ui/edit-row.tsx): a click anywhere on a row
+ *  with a pencil opens its value, as a click on the value does. */
 export function KvRow({
   label,
   labelNode,
@@ -62,9 +64,8 @@ export function KvRow({
   align?: 'center' | 'start'
 }) {
   return (
-    <div
+    <EditRow
       className={cx(
-        EDIT_TARGET,
         'group flex min-h-[44px] gap-4 border-b border-hairline-soft py-3 last:border-b-0',
         align === 'start' ? 'items-start' : 'items-center',
         className,
@@ -79,7 +80,7 @@ export function KvRow({
         <KvLabel top={align === 'start'}>{label}</KvLabel>
       )}
       <div className={cx('relative flex min-w-0 flex-1 gap-3', align === 'start' ? 'items-start' : 'items-center')}>{children}</div>
-    </div>
+    </EditRow>
   )
 }
 
@@ -106,7 +107,23 @@ type EditableProps = {
  * value is saved — an untouched row never writes — and a refused save puts the old
  * value back and reports why. Optimistic: the new value shows while the save is out.
  */
-function Editable({ label, value, onSave, onError, mono, type = 'text', options, required, readOnly, size }: EditableProps & { size: 'row' | 'cell' }) {
+function Editable({
+  label,
+  value,
+  onSave,
+  onError,
+  mono,
+  type = 'text',
+  options,
+  required,
+  readOnly,
+  size,
+  trigger = false,
+}: EditableProps & {
+  size: 'row' | 'cell'
+  /** The value is what a click anywhere on its row opens (the row's pencil is only a mark). */
+  trigger?: boolean
+}) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
   // What the row SHOWS. Seeded from the prop and re-seeded when the prop changes (a
@@ -149,7 +166,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
     return (
       // No chevron here: the row already wears the pencil on hover; a click on the value
       // opens the menu (Sam, 2026-09-11).
-      <SelectMenu label={label} value={current} options={options} required={required} mono={mono} chevron={false} onChange={(v) => void commit(v)} />
+      <SelectMenu label={label} value={current} options={options} required={required} mono={mono} chevron={false} trigger={trigger} onChange={(v) => void commit(v)} />
     )
   }
 
@@ -172,6 +189,7 @@ function Editable({ label, value, onSave, onError, mono, type = 'text', options,
     <span
       role="button"
       tabIndex={0}
+      {...(trigger ? EDIT_TRIGGER : undefined)}
       onClick={() => {
         setDraft(current)
         setEditing(true)
@@ -201,7 +219,7 @@ function RowPencil() {
 export function KvField({ trailing, labelNode, ...props }: EditableProps & { trailing?: ReactNode; labelNode?: ReactNode }) {
   return (
     <KvRow label={props.label} labelNode={labelNode}>
-      <Editable {...props} size="row" />
+      <Editable {...props} size="row" trigger />
       {trailing}
       {props.readOnly ? null : <RowPencil />}
     </KvRow>
@@ -217,7 +235,8 @@ export function KvCells({ label, cells }: { label: string; cells: EditableProps[
         {cells.map((c) => (
           <div key={c.label} className="flex min-w-0 flex-col gap-0.5">
             <span className={cx(CAPS_LABEL, 'text-ink-faint')}>{c.label}</span>
-            <Editable {...c} size="cell" />
+            {/* A click on a cell's own label opens that cell; on the row's label, the first. */}
+            <Editable {...c} size="cell" trigger />
           </div>
         ))}
       </div>
@@ -240,6 +259,7 @@ export function SelectMenu({
   required,
   mono,
   chevron = true,
+  trigger = false,
   onChange,
   placeholder = '—',
 }: {
@@ -252,6 +272,8 @@ export function SelectMenu({
   /** The small arrow after the value. Off inside a row, whose hover pencil already says
    *  "this is editable". */
   chevron?: boolean
+  /** Inside a KvField: a click anywhere on its row opens this menu (_ui/edit-row.tsx). */
+  trigger?: boolean
   onChange: (value: string) => void
   placeholder?: string
 }) {
@@ -304,6 +326,7 @@ export function SelectMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
+        {...(trigger ? EDIT_TRIGGER : undefined)}
         onClick={() => setOpen((v) => !v)}
         className={cx(
           'flex h-6 w-full min-w-0 items-center gap-1.5 border-b border-transparent text-left leading-6 outline-none',

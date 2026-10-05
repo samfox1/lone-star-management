@@ -2,8 +2,9 @@
 // The press kit's typed half saves itself (Batch 3): an edit reaches the existing action, whole and aligned.
 /**
  * PressKitForm: Pitch and Quotes in Brand's ledger, with NO Save button (Sam, 2026-10-02,
- * prototypes/batch3_20261002.html). Every edit saves itself half a second later through the
- * same action the old Save button posted.
+ * prototypes/batch3_20261002.html). The pitch saves itself half a second later through the
+ * same action the old Save button posted; a quote is a click-to-edit row (2026-10-05,
+ * prototypes/lists_before_after_20261002.html): click, edit, Enter or ✓ saves it.
  *
  * LIGHT on the look (it is still settling); what is pinned is the main path and the CONTRACT
  * WITH THE SERVER: the action receives the whole kit, and the three quote lists stay aligned
@@ -69,7 +70,10 @@ describe('PressKitForm saves itself', () => {
 
   it('CRITICAL: removing the first quote takes its source and link with it', async () => {
     render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0])
+    // At rest a quote is its text: no trash until it is opened.
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /A blistering live act\./ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await settle()
 
     const fd = sent()
@@ -78,21 +82,39 @@ describe('PressKitForm saves itself', () => {
     expect(fd.getAll('quote_url')).toEqual([''])
   })
 
-  it('Add quote opens a row at "Who said it", and what is typed there saves with its own quote', async () => {
+  it('the + opens a quote at "Who said it"; ✓ adds it with its own source and link', async () => {
     render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
     fireEvent.click(screen.getByRole('button', { name: 'Add quote' }))
-    const who = screen.getAllByRole('textbox', { name: 'Who said it' })[2]
+    const who = screen.getByRole('textbox', { name: 'Who said it' })
     expect(who).toHaveFocus()
 
     fireEvent.change(who, { target: { value: 'Mixmag' } })
-    fireEvent.change(screen.getAllByRole('textbox', { name: 'The quote' })[2], { target: { value: 'A warmer room.' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'The quote' }), { target: { value: 'A warmer room.' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Link to the review' }), { target: { value: 'https://mixmag.net/r' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     await settle()
 
     expect(mockedSave).toHaveBeenCalledTimes(1)
     const fd = sent()
     expect(fd.getAll('quote')).toEqual(['A blistering live act.', 'Unmissable.', 'A warmer room.'])
     expect(fd.getAll('source')).toEqual(['NME', 'Pitchfork', 'Mixmag'])
-    expect(fd.getAll('quote_url')).toEqual(['https://nme.com/x', '', ''])
+    expect(fd.getAll('quote_url')).toEqual(['https://nme.com/x', '', 'https://mixmag.net/r'])
+  })
+
+  it('a quote edited and saved with Enter sends its new words; Escape puts one back unsent', async () => {
+    render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
+    fireEvent.click(screen.getByRole('button', { name: /Unmissable\./ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'The quote' }), { target: { value: 'Thrown away.' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'The quote' }), { key: 'Escape' })
+    await settle()
+    expect(mockedSave).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Unmissable\./ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'The quote' }), { target: { value: 'Essential.' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'The quote' }), { key: 'Enter' })
+    await settle()
+    expect(sent().getAll('quote')).toEqual(['A blistering live act.', 'Essential.'])
+    expect(sent().getAll('source')).toEqual(['NME', 'Pitchfork'])
   })
 
   it('CRITICAL: a pitch edit and a quote edit inside one pause send ONE save holding both', async () => {
@@ -100,7 +122,9 @@ describe('PressKitForm saves itself', () => {
     // the older one (new pitch, old quotes) could land last and undo the quote.
     render(<PressKitForm artistId="a1" pitch="" quotes={QUOTES} />)
     fireEvent.change(screen.getByRole('textbox', { name: 'One-line pitch' }), { target: { value: 'Austin four-piece.' } })
-    fireEvent.change(screen.getAllByRole('textbox', { name: 'The quote' })[1], { target: { value: 'Essential.' } })
+    fireEvent.click(screen.getByRole('button', { name: /Unmissable\./ }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'The quote' }), { target: { value: 'Essential.' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'The quote' }), { key: 'Enter' })
     await settle()
 
     expect(mockedSave).toHaveBeenCalledTimes(1)

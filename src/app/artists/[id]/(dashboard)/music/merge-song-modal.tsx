@@ -4,10 +4,10 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CardModal } from '../card-modal'
 import { CANCEL_WORD, useConfirm } from '../confirm-dialog'
+import { KvRow, SelectMenu } from '../modal-kit'
 import { toast } from '../toast'
 import { mergeSongsAction } from './actions'
 
-/** A song this one can be merged into (id + title, for the selector). */
 /** A song that can be merged into. `release_id` lets the song modal tell an intended twin
  *  (the same song on another release — one row per release, 2026-09-11) from a real
  *  duplicate (same title on the SAME release, or with no release at all). */
@@ -23,6 +23,10 @@ export type MergeTarget = { id: string; title: string; release_id?: string | nul
  * DIRECTION: the song this control belongs to is the one that DISAPPEARS; the selected
  * song survives and gains the missing platform links. The confirm names both, in that
  * order, because getting it backwards deletes the wrong row and there is no undo.
+ *
+ * The window is a few plain words naming the song (Sam, 2026-10-02: a title only to say WHICH
+ * item) and one row, Keep: the dashboard's own drop-down on the row's line, no box. No sentence
+ * restating what the confirm asks anyway.
  *
  * Refusals from the server (conflicting platform ids, a vanished row) surface as their
  * own toast rather than a generic failure — the message tells the manager what to clear
@@ -89,7 +93,8 @@ export function MergeSongModal({
     <CardModal
       open={open}
       onClose={onClose}
-      // No title: "Merge duplicate…" opened it, and the sentence below says what happens.
+      // Which song goes, in a few plain words; the confirm spells out the rest.
+      title={`Merge “${song.title}”`}
       label="Merge song"
       footer={
         <div className="flex items-center justify-end gap-3">
@@ -107,26 +112,15 @@ export function MergeSongModal({
         </div>
       }
     >
-      <div className="space-y-5 font-space">
-        <p className="text-sm leading-relaxed text-ink-muted">
-          <span className="font-semibold text-ink">{song.title}</span> will be deleted, and its
-          platform links and details moved onto the song you keep.
-        </p>
-        <label className="block space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Keep this song</span>
-          <select
+      <div className="mt-5">
+        <KvRow label="Keep">
+          <SelectMenu
+            label="Keep"
             value={keepId}
-            onChange={(e) => setKeepId(e.target.value)}
-            className="block w-full rounded-lg border border-hairline bg-paper px-2.5 py-2 font-space text-sm text-ink outline-none focus:border-ink-faint"
-          >
-            <option value="">— Choose a song —</option>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
-              </option>
-            ))}
-          </select>
-        </label>
+            options={targets.map((t) => ({ value: t.id, label: t.title }))}
+            onChange={setKeepId}
+          />
+        </KvRow>
       </div>
       {dialog}
     </CardModal>

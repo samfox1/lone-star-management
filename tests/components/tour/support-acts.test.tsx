@@ -1,20 +1,18 @@
 // @vitest-environment jsdom
-// The lineup chips on a tour date: click a chip to edit or remove an act, "+" to add one.
+// The lineup on a tour date: click an act to edit its name and website, the + to add one.
 /**
- * SupportActs — the LINEUP row (prototype G, 2026-09-11). Acts are chips; a chip opens a
- * small popover with the act's name and website, plus Remove. The dashed "+" chip opens
- * the same popover empty. Every change is ONE call carrying the whole lineup (names +
- * links), so the server never sees a name without its link.
+ * SupportActs, the LINEUP row, on the click-to-edit list (Sam, 2026-10-05). At rest each act
+ * is its name alone; its website shows only once the act is clicked open, as a second line
+ * beside the name. Every change is ONE call carrying the whole lineup (names + links), so the
+ * server never sees a name without its link.
  *
- *   - a chip with a website wears the link mark; one without does not;
- *   - Add: "+" → name + website → the lineup with the new act appended;
- *   - Edit: rename and relink in place, order kept;
- *   - Remove: the lineup without that act;
- *   - a refused save shows the error and the chips stay as they were;
- *   - Enter inside the popover commits — it must NOT submit a surrounding form.
+ *   - Edit: click an act → name and website lines → Enter saves both, order kept;
+ *   - Add: the bare + → name and website lines → the lineup with the new act appended;
+ *   - Remove: the open act's trash → the lineup without it;
+ *   - a refused save says why and KEEPS what was typed (the website is the usual refusal).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SupportActs } from '@/app/artists/[id]/(dashboard)/tour/support-acts'
 import { setSupportActsAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
@@ -36,78 +34,62 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const chip = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) })
-const popover = () => screen.getByRole('dialog', { name: /act/i })
+const actButton = (name: string) => screen.getByRole('button', { name })
+const website = () => screen.getByRole('textbox', { name: 'Website' })
 
-describe('SupportActs (chips)', () => {
-  it('shows each act as a chip; only a linked act wears the link mark', () => {
+describe('SupportActs (click-to-edit)', () => {
+  it('an act is its name at rest; clicked, its name and website open, and Enter saves both in place', async () => {
     render(<SupportActs artistId={ARTIST} tourDateId={DATE} acts={two} />)
-    expect(chip('Jigitz')).toHaveAccessibleName('Jigitz, linked')
-    expect(chip('Gudfella')).toHaveAccessibleName('Gudfella')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByText('https://www.jigitz.online/')).toBeNull()
+
+    fireEvent.click(actButton('Gudfella'))
+    const name = screen.getByRole('textbox', { name: 'Act' })
+    expect(name).toHaveValue('Gudfella')
+    expect(website()).toHaveValue('')
+    fireEvent.change(name, { target: { value: 'Gudfella Trio' } })
+    fireEvent.change(website(), { target: { value: 'https://gudfella.example' } })
+    await act(async () => {
+      fireEvent.keyDown(website(), { key: 'Enter' })
+    })
+    expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [two[0], { name: 'Gudfella Trio', url: 'https://gudfella.example' }])
+    expect(actButton('Gudfella Trio')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('adds ONE act with its website through the "+" chip, appended to the lineup', async () => {
+  it('the bare + adds ONE act with its website, appended; the trash removes one', async () => {
     render(<SupportActs artistId={ARTIST} tourDateId={DATE} acts={two} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Add act' }))
-    const pop = popover()
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'ZHU' } })
-    fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://zhumusic.com' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
-    await waitFor(() =>
-      expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [...two, { name: 'ZHU', url: 'https://zhumusic.com' }]),
-    )
-    expect(chip('ZHU')).toBeInTheDocument()
-    expect(screen.queryByRole('dialog', { name: /act/i })).toBeNull()
+    const plus = screen.getByRole('button', { name: 'Add act' })
+    expect(plus.textContent).toBe('')
+    fireEvent.click(plus)
+    fireEvent.change(screen.getByRole('textbox', { name: 'New act' }), { target: { value: 'ZHU' } })
+    fireEvent.change(website(), { target: { value: 'https://zhumusic.com' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    })
+    expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [...two, { name: 'ZHU', url: 'https://zhumusic.com' }])
+    expect(actButton('ZHU')).toBeInTheDocument()
+
+    fireEvent.click(actButton('Jigitz'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Jigitz' }))
+    })
+    await waitFor(() => expect(setSupportActsAction).toHaveBeenLastCalledWith(ARTIST, DATE, [two[1], { name: 'ZHU', url: 'https://zhumusic.com' }]))
+    expect(screen.queryByRole('button', { name: 'Jigitz' })).toBeNull()
   })
 
-  it('Enter in the popover commits and does NOT submit the surrounding form', async () => {
-    const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
-    render(
-      <form onSubmit={onSubmit}>
-        <SupportActs artistId={ARTIST} tourDateId={DATE} acts={[]} />
-      </form>,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Add act' }))
-    const name = within(popover()).getByLabelText('Name')
-    fireEvent.change(name, { target: { value: 'Solo' } })
-    fireEvent.keyDown(name, { key: 'Enter' })
-    await waitFor(() => expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [{ name: 'Solo', url: null }]))
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
-
-  it('edits an act in place — new name and link, same position', async () => {
-    render(<SupportActs artistId={ARTIST} tourDateId={DATE} acts={two} />)
-    fireEvent.click(chip('Gudfella'))
-    const pop = popover()
-    expect(within(pop).getByLabelText('Name')).toHaveValue('Gudfella')
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Gudfella Trio' } })
-    fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://gudfella.example' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
-    await waitFor(() =>
-      expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [two[0], { name: 'Gudfella Trio', url: 'https://gudfella.example' }]),
-    )
-    expect(chip('Gudfella Trio')).toBeInTheDocument()
-  })
-
-  it('removes one act from its popover, leaving the rest in order', async () => {
-    render(<SupportActs artistId={ARTIST} tourDateId={DATE} acts={two} />)
-    fireEvent.click(chip('Jigitz'))
-    fireEvent.click(within(popover()).getByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, DATE, [two[1]]))
-    expect(screen.queryByRole('button', { name: /^Jigitz/ })).toBeNull()
-    expect(chip('Gudfella')).toBeInTheDocument()
-  })
-
-  it('CRITICAL: a refused save shows the error and keeps the chips as they were', async () => {
-    vi.mocked(setSupportActsAction).mockResolvedValueOnce({ error: 'Enter a valid URL.' })
+  it('CRITICAL: a refused save says why, keeps the lineup as it was, and keeps what was typed', async () => {
+    vi.mocked(setSupportActsAction).mockResolvedValueOnce({ error: 'Enter a valid URL for Bad.' })
     render(<SupportActs artistId={ARTIST} tourDateId={DATE} acts={two} />)
     fireEvent.click(screen.getByRole('button', { name: 'Add act' }))
-    const pop = popover()
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bad' } })
-    fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'javascript:alert(1)' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('Enter a valid URL.', 'error'))
-    expect(screen.queryByRole('button', { name: /^Bad/ })).toBeNull()
-    expect(chip('Jigitz')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'New act' }), { target: { value: 'Bad' } })
+    fireEvent.change(website(), { target: { value: 'javascript:alert(1)' } })
+    await act(async () => {
+      fireEvent.keyDown(website(), { key: 'Enter' })
+    })
+    expect(toast).toHaveBeenCalledWith('Enter a valid URL for Bad.', 'error')
+    expect(screen.queryByRole('button', { name: 'Bad' })).toBeNull()
+    expect(actButton('Jigitz')).toBeInTheDocument()
+    expect(website()).toHaveValue('javascript:alert(1)')
   })
 })

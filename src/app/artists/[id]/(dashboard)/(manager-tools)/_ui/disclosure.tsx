@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { FOCUS_RING } from './focus-ring'
+import { EditRow } from './edit-row'
 import { HoverLabel, RowIcon, type RowIconProps } from './row-icon'
 import { CAPS_LABEL, EDIT_TARGET, EYEBROW, MONO_META } from './styles'
 
@@ -260,21 +261,24 @@ export function DisclosureCard({ id, labelledBy, noMark = false, children }: { i
 
 /** One LABEL | value row of the card (RESULT, WHAT WE SAW, PAGE…). Above its value on a phone.
  *  `name` is the value's `data-card` hook; `className` lays the value out. The value is its
- *  pencil's EDIT_TARGET (styles.ts): a pencil in it shows only while the pointer is on that line. */
+ *  pencil's EDIT_TARGET (styles.ts): a pencil in it shows only while the pointer is on that line,
+ *  and a click anywhere on the line opens it (EditRow, edit-row.tsx). */
 export function CardField({ label, name, className, children }: { label: string; name?: string; className?: string; children: ReactNode }) {
   return (
     <>
       <span className={cx(CAPS_LABEL, 'pt-3 leading-[1.4] text-ink-faint first:pt-0 min-[700px]:pt-1 min-[700px]:first:pt-1')}>{label}</span>
-      <div data-card={name} className={cx(EDIT_TARGET, 'min-w-0', className)}>
+      <EditRow data-card={name} className={cx('min-w-0', className)}>
         {children}
-      </div>
+      </EditRow>
     </>
   )
 }
 
 /** A card's last line when its actions are more than one sentence can end in (the bio email's
  *  Open in Mail · Copy · Download · Mark as sent): bare glyphs in the value column, no line
- *  above them. `ml-auto` on one sends it to the right edge. The line is a pencil's EDIT_TARGET. */
+ *  above them. `ml-auto` on one sends it to the right edge. The line is a pencil's EDIT_TARGET,
+ *  but not an EditRow: it is nothing but glyphs, each its own control, so the gaps between them
+ *  stand for none of them. */
 export function CardActions({ children }: { children: ReactNode }) {
   return <div className={cx(EDIT_TARGET, 'flex flex-wrap items-center gap-4 pt-3 min-[700px]:col-start-2 min-[700px]:pt-0')}>{children}</div>
 }

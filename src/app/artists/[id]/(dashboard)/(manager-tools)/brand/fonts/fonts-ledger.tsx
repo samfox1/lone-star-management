@@ -396,15 +396,14 @@ function FontRow({
       meta={font ? font.source === 'google' ? 'Google Fonts' : <WeightLine weight={font.weight} /> : undefined}
       {...words}
       // An added row's trash, in the row's end slot so every row's sample lines up.
-      remove={row.guide ? undefined : <RowIcon icon="trash" label="Remove" tone="danger" onClick={onDelete} />}
+      remove={row.guide ? undefined : <RowIcon icon="trash" label="Remove" tone="danger" reveal onClick={onDelete} />}
     >
+      {/* Empty: only the + (no "No font yet" filler, Sam 2026-10-05). */}
       {font ? (
         <FontSample family={font.family} googleFamily={font.googleFamily} className="min-w-0 truncate whitespace-nowrap tracking-[-0.005em] text-ink">
           {font.label}
         </FontSample>
-      ) : (
-        <span className="whitespace-nowrap text-[14px] text-ink-faint">No font yet</span>
-      )}
+      ) : null}
       <div className="relative flex-none">
         <RowIcon
           ref={trigger}

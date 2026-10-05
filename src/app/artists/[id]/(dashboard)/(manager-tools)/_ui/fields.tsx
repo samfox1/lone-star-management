@@ -1,18 +1,14 @@
 'use client'
 
-import { forwardRef, useRef, useState, type KeyboardEventHandler, type ReactNode, type TextareaHTMLAttributes } from 'react'
+import { forwardRef, type KeyboardEventHandler, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { cx } from '@/lib/cx'
-import { Icon } from '@/components/ui/icons'
-import { ICON_BOLD } from '@/components/ui/icon-hover'
-import { HoverLabel, RowIcon } from './row-icon'
-import { FOCUS_RING } from './focus-ring'
 import { END_SLOT } from './ledger'
 
 /**
  * THE LEDGER'S SMALL FIELDS, in round 2's row grammar (prototypes/seo_variants_20260928_r2.html,
  * Brand's ledger): values that read as text and edit in place with a thin underline, faint
  * icons with hover labels for every action (Sam, 2026-09-28: "I dont like the white pill form
- * buttons to take action... I like icons"), chips for lists.
+ * buttons to take action... I like icons"). Lists are click-to-edit (edit-list.tsx, 2026-10-05).
  *
  * Users: the SEO / GEO tabs (Details, Answers) and Profile (2026-10-02, when Facts moved there).
  * Was tools/seo/_ui/parts.tsx until a second tool used it.
@@ -103,111 +99,3 @@ export const AreaField = forwardRef<
     />
   )
 })
-
-/**
- * A short list as CHIPS (modal-kit grammar: "Lists are CHIPS"): each chip has its own ×, the
- * dashed + at the end opens a one-line field; Enter or ✓ adds, Escape or × cancels. The
- * caller decides whether a new list is allowed (`onChange` returns an error to show, or null).
- */
-export function Chips({
-  label,
-  items,
-  onChange,
-  addLabel,
-  max,
-}: {
-  /** "Genre": names the list, its + ("Add genre") and each chip's × ("Remove House"). */
-  label: string
-  items: readonly string[]
-  /** The whole new list. Resolves to an error sentence to show, or null when it was taken. */
-  onChange: (next: string[]) => string | null
-  addLabel: string
-  max?: number
-}) {
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState('')
-  const input = useRef<HTMLInputElement>(null)
-  const plus = useRef<HTMLButtonElement>(null)
-  const done = useRef(false)
-  const full = max !== undefined && items.length >= max
-
-  function add() {
-    const v = draft.trim()
-    if (!v || done.current) return
-    done.current = true
-    if (onChange([...items, v]) === null) {
-      setDraft('')
-      setAdding(false)
-    } else {
-      done.current = false
-      input.current?.focus()
-    }
-  }
-  function cancel() {
-    done.current = true
-    setDraft('')
-    setAdding(false)
-    setTimeout(() => plus.current?.focus(), 0)
-  }
-
-  return (
-    <div role="group" aria-label={label} className="flex flex-wrap items-center justify-start gap-1.5 min-[900px]:justify-end">
-      {items.map((it, i) => (
-        <span key={`${it}-${i}`} className="group/chip relative inline-flex items-center gap-1 rounded-full border border-hairline bg-paper py-1 pl-2.5 pr-1.5 text-[12px] text-ink">
-          {it}
-          <button
-            type="button"
-            aria-label={`Remove ${it}`}
-            onClick={() => onChange(items.filter((_, j) => j !== i))}
-            // Always visible: a touch screen has no hover to reveal it (review L7).
-            className={cx('-my-1 -mr-1 inline-flex rounded-full p-1 text-ink-faint transition-colors hover:text-accent-red', ICON_BOLD, FOCUS_RING)}
-          >
-            <Icon name="close" size={11} />
-          </button>
-        </span>
-      ))}
-      {adding ? (
-        <span className="inline-flex items-center gap-1">
-          <input
-            ref={input}
-            autoFocus
-            aria-label={addLabel}
-            value={draft}
-            spellCheck={false}
-            onChange={(e) => {
-              done.current = false
-              setDraft(e.target.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                add()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                cancel()
-              }
-            }}
-            className="w-[140px] border-b border-hairline bg-transparent px-0 pt-[5px] pb-[4px] text-[12px] text-ink outline-none placeholder:text-ink-faint focus:border-ink"
-          />
-          <RowIcon icon="check" label="Add" variant="primary" tone="accent" onClick={add} />
-          <RowIcon icon="close" label="Cancel" variant="primary" tone="danger" onClick={cancel} />
-        </span>
-      ) : full ? null : (
-        <button
-          ref={plus}
-          type="button"
-          aria-label={addLabel}
-          onClick={() => {
-            done.current = false
-            setAdding(true)
-          }}
-          className={cx('relative inline-flex items-center rounded-full border border-dashed border-hairline px-2 py-[5px] text-ink-faint transition-colors hover:border-ink-faint hover:text-accent', FOCUS_RING)}
-        >
-          <Icon name="plus" size={12} />
-          <HoverLabel label={addLabel} />
-        </button>
-      )}
-    </div>
-  )
-}

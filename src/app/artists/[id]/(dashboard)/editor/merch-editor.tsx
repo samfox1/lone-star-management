@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { type EditorMerch } from './inspector-types'
-import { Icon } from '@/components/ui/icons'
 import { FIELD, FieldRow, SaveLine } from './inspector-shared'
 import { useDebouncedFieldSave } from './use-debounced-field-save'
 import { EditorPanel } from './editor-panel'
 import { updateContentAction } from '../actions'
 import { useRouter } from 'next/navigation'
 import { useConfirm } from '../confirm-dialog'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /**
  * ONE merch item, opened full-panel from the grid's Edit button (Sam, 2026-08-18: "The
@@ -183,15 +183,9 @@ export function MerchEditor({
           </button>
         </div>
 
+        {/* A trash glyph, not words (Sam, 2026-10-02); it asks before it deletes. */}
         <div className="pt-5">
-          <button
-            type="button"
-            onClick={() => void remove()}
-            className="flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint hover:border-accent-red hover:bg-danger-soft hover:text-accent-red"
-          >
-            <Icon name="trash" size={12} />
-            Remove product
-          </button>
+          <RowIcon icon="trash" label="Remove product" variant="bare" tone="danger" labelAlign="start" glyphSize={16} onClick={() => void remove()} />
         </div>
       </div>
       <SaveLine status={status} />

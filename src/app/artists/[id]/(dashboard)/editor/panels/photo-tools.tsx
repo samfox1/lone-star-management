@@ -134,6 +134,7 @@ function ImageFieldTile({
           label={field.label}
           focused={focused}
           onSelect={onFocus}
+          onEdit={() => setEditing(true)}
           thumb={<PhotoThumb url={preview} aspect="aspect-square" fit="cover" />}
         >
           {editing ? (
@@ -360,6 +361,7 @@ function SlotTile({
             label={label}
             focused={focused}
             onSelect={onFocus}
+            onEdit={onEdit}
             title={fileNameOf(placed.storage_path)}
             thumb={
               // Off-site dims (the music-card treatment) so a hidden slot reads hidden.

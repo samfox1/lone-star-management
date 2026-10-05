@@ -150,7 +150,7 @@ export function LogosList({
             title={logo.label ?? 'Logo'}
             onRename={(next) => saved(renameLogoAction(artistId, logo.id, next))}
             note={{ value: logo.note ?? '', onSave: (next) => saved(setLogoNoteAction(artistId, logo.id, next || null)) }}
-            remove={<RowIcon icon="trash" label="Remove" tone="danger" onClick={() => void removeAdded(logo)} />}
+            remove={<RowIcon icon="trash" label="Remove" tone="danger" reveal onClick={() => void removeAdded(logo)} />}
           >
             <LogoTile url={tileUrl(logo)} onClick={edit} />
             <RowIcon icon="edit" label="Edit" onClick={edit} />
@@ -221,7 +221,7 @@ function PendingRow({
       title={row.title}
       onRename={onRename}
       note={{ value: row.note, onSave: onNote, primaryRef: plus, autoFocus: true }}
-      remove={<RowIcon icon="trash" label="Remove" tone="danger" onClick={onDrop} />}
+      remove={<RowIcon icon="trash" label="Remove" tone="danger" reveal onClick={onDrop} />}
     >
       <LogoTile url={null} onClick={onEdit} />
       <RowIcon ref={plus} icon="plus" label="Add logo" variant="primary" onClick={onEdit} />

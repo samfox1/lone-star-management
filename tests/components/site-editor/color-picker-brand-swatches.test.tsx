@@ -76,7 +76,7 @@ describe('ColorPalette inside a BrandSwatchProvider', () => {
     expect(black.getAttribute('title')).toBe('Our black')
     expect(black.style.backgroundColor).toBe('rgb(13, 13, 13)')
     // Brand colours alone still earn the row — a site with nothing used yet has them.
-    expect(within(dialog).getByText('On site')).toBeTruthy()
+    expect(within(dialog).getAllByRole('button', { name: /^Hero Text color (Our black|Warm cream)$/ })).toHaveLength(2)
   })
 
   it('a brand swatch applies its hex, and is the pressed one when it is the value', () => {

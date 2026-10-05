@@ -91,11 +91,7 @@ export function MerchBrowser({
       />
 
       {groups.length === 0 ? (
-        <EmptyState
-          icon="merch"
-          title={siteEmptyTitle(site, 'No products yet')}
-          hint={site === 'all' ? 'Hit + Add, or connect Shopify to sync.' : undefined}
-        />
+        <EmptyState icon="merch" title={siteEmptyTitle(site, 'No products yet')} />
       ) : (
         <div className="space-y-8">
           {groups.map((g) => (

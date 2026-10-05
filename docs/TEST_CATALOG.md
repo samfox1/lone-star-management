@@ -7,11 +7,11 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**90 test files · 1483 tests**
+**90 test files · 1484 tests**
 
 - [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 32 files · 625 tests
 - [SEO / GEO page](#seo--geo-page) · 25 files · 337 tests
-- [Profile page](#profile-page) · 2 files · 21 tests
+- [Profile page](#profile-page) · 2 files · 22 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 93 tests
@@ -1658,7 +1658,7 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 
 Who the artist is, on one page: the name, bio, type, genre, other names, the year they started and where they are based (the SEO/GEO Facts tab until 2026-10-02).
 
-### tests/components/manager-tools/profile/profile-view.test.tsx · 19 tests
+### tests/components/manager-tools/profile/profile-view.test.tsx · 20 tests
 
 The Profile page: each row saves through its own gate, a value the gate would refuse shows the gate's own words and is never sent, the bio keeps its rules, and the nudge under it leads to the outside bios. Moved here with the SEO / GEO Facts tab (2026-10-02, PROFILE_TOOL_PLAN.md).
 
@@ -1678,8 +1678,9 @@ The Profile page: each row saves through its own gate, a value the gate would re
 - The name saves through its own action (moved from Settings); a blank name shows the rule's words and is never sent.
 - The year: four digits only; anything else shows the validator's words and is not sent.
 - A visual artist: the year is kept but not on the fact card, and the page says so.
-- Other names: the artist's own name is refused in the validator's words, unsent.
-- A genre chip is added and saved to the artist row as one list.
+- Other names: the artist's own name is refused in the validator's words, unsent, and the field keeps it (EditList: a refusal never wipes the draft).
+- Other names, the main path: add, edit and remove each save the whole list to its fact key.
+- Genres, the main path: add, edit and remove each save artists.genre as one list.
 - A stored value the gate would now refuse is flagged on arrival.
 - The type saves as the artist's schema type.
 - The bio row is calm: its first words only; the counts live in the editor, and no 2,500 anywhere (Sam's call).

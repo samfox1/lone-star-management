@@ -5,11 +5,12 @@ import { cx } from '@/lib/cx'
 import { CONTENT_KINDS, type ContentKind, type ContentItem, type ContentList, type EntityFacts } from '@/lib/analytics'
 import { coverThumbUrl } from '@/lib/cover-url'
 import { Icon } from './icons'
+import { ICON_HOVER } from './icon-hover'
 import { SourceGlyph } from './source-glyphs'
 import { PortalModal } from './portal-modal'
 import { modalCardClass } from './ui'
 
-/** How many rows a column shows before the rest go behind View all. */
+/** How many rows a column shows before the rest go behind the View all glyph. */
 export const TOP_N = 5
 
 /**
@@ -23,9 +24,10 @@ export const TOP_N = 5
  * no layout, where a border would push every row below it down and knock the two
  * columns out of step.
  *
- * A column shows TOP_N rows. View all opens a window with the whole list, and it is
- * rendered ONLY where rows are actually hidden: over a list that already fits, it
- * would open a window identical to the page behind it.
+ * A column shows TOP_N rows. View all (a › glyph, its name on hover: no words, Sam
+ * 2026-10-02) opens a window with the whole list, and it is rendered ONLY where rows are
+ * actually hidden: over a list that already fits, it would open a window identical to the
+ * page behind it.
  *
  * The kinds come from CONTENT_KINDS, which carries each column's own heading — there
  * is no label above the block, and no line about how many events named a thing.
@@ -62,15 +64,17 @@ export function TopContent({ lists, facts, className }: {
         const items = lists[kind.key].items
         return (
           <section key={kind.key}>
-            <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-2">
+            <div className="flex items-center justify-between gap-4 border-b border-hairline pb-2">
               <h2 className="font-space text-[11px] uppercase tracking-[0.1em] text-ink">{kind.heading}</h2>
               {items.length > TOP_N && (
                 <button
                   type="button"
+                  aria-label="View all"
+                  title="View all"
                   onClick={() => setOpen(kind.key)}
-                  className="font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint transition-colors hover:text-ink"
+                  className={`-my-1 flex h-6 w-6 items-center justify-center text-ink-faint transition-colors ${ICON_HOVER}`}
                 >
-                  View all
+                  <Icon name="chevronRight" size={16} />
                 </button>
               )}
             </div>

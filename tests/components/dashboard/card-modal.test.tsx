@@ -138,3 +138,30 @@ describe('the footer pair', () => {
     expect(done.className).not.toMatch(/text-accent-red\b/)
   })
 })
+
+describe('CardModal Escape', () => {
+  it('closes the card, unless a field inside already handled that Escape (it closes the field)', () => {
+    // In the app React's root IS document, the node CardModal listens on, so a field's
+    // stopPropagation cannot keep the card from hearing it (a lineup act's field closed the
+    // whole tour date, 2026-10-05). The field says "mine" with preventDefault, which this
+    // listener stands in for: registered first on document, as React's root listener is.
+    const handled = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).tagName === 'INPUT') e.preventDefault()
+    }
+    document.addEventListener('keydown', handled)
+    try {
+      const onClose = vi.fn()
+      render(
+        <CardModal open onClose={onClose} label="Card">
+          <input aria-label="Field" />
+        </CardModal>,
+      )
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Field' }), { key: 'Escape' })
+      expect(onClose).not.toHaveBeenCalled()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    } finally {
+      document.removeEventListener('keydown', handled)
+    }
+  })
+})

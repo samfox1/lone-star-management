@@ -165,7 +165,7 @@ describe('Shopify’s edit window', () => {
   it('CRITICAL: not configured — today’s token field and Change token, no link', async () => {
     const dialog = openEdit()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
-    expect(within(dialog).getByLabelText(/token/i)).toHaveAttribute('type', 'password')
+    expect(within(dialog).getByLabelText('New storefront token')).toHaveAttribute('type', 'password')
     expect(within(dialog).getByRole('button', { name: /change token/i })).toBeInTheDocument()
     expect(within(dialog).queryByRole('link', { name: 'Connect with Shopify' })).toBeNull()
   })

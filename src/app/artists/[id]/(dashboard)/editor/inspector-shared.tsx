@@ -21,10 +21,6 @@ export function plural(n: number, noun: string): string {
 }
 
 export const EYEBROW = 'font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
-// A red underline for a field whose value the server would reject (a blank required field, a
-// bad price) — gating the save so the panel can't claim "Saved" on a dropped write. Important
-// (`!`), because it joins FIELD's own border colour and cx does not resolve a clash.
-export const INVALID_FIELD = 'border-accent-red! focus:border-accent-red!'
 
 /* ── Panel layout primitives (the "grid sheet" inspector) ────────────────────────────
  * The Style / Links / Text panels share one visual language: NO bordered containers.
@@ -43,11 +39,6 @@ export const INVALID_FIELD = 'border-accent-red! focus:border-accent-red!'
  *  starts where the row's text starts. */
 export const FIELD =
   'w-full border-b border-hairline bg-transparent px-0 py-1.5 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink'
-
-/** The same field INSIDE an expanded body, which is tinted. The line is darker than the
- *  hairline, which all but vanishes on grey. */
-export const FIELD_ON_TINT =
-  'w-full border-b border-ink-faint bg-transparent px-0 py-1.5 font-space text-[13px] text-ink outline-none placeholder:font-space placeholder:text-ink-faint focus:border-ink'
 
 /** An expanded section's body. The grey ground is what separates a section from the
  *  controls it owns — the parent row stays on white and needs no extra weight. */
@@ -117,6 +108,33 @@ export function runSerialized(
   )
 }
 
+
+/**
+ * THE ROW IS THE TARGET (Sam, 2026-10-05: "if I am hovering over a row that has an edit
+ * button when I hover, I think that clicking anywhere on that row should open the editing. I
+ * dont think that I should only be able to click the button to do it.").
+ *
+ * A row's click opens its editing UNLESS it landed on a control of its own inside the row (a
+ * button, a link, a field, a switch), which keeps doing its own thing. The row never becomes a
+ * button itself: its pencil (or its text, in a click-to-edit list) stays the focusable control,
+ * so nothing interactive nests inside anything interactive.
+ */
+const OWN_CONTROLS = 'button, a[href], input, select, textarea, label, [role="checkbox"], [role="switch"]'
+
+/** Whether a row's click landed on a control of its own rather than on the row around it. */
+export function clickedAControl(e: React.MouseEvent<HTMLElement>): boolean {
+  const hit = e.target instanceof Element ? e.target.closest(OWN_CONTROLS) : null
+  return !!hit && hit !== e.currentTarget && e.currentTarget.contains(hit)
+}
+
+/** A click-to-edit list's row (EditList, one item per row): a click anywhere on it opens its
+ *  line, as a click on its text does. Nothing happens while the line is already open. */
+export function openRowOnClick(e: React.MouseEvent<HTMLElement>): void {
+  if (clickedAControl(e)) return
+  const row = e.currentTarget
+  if (row.querySelector('input')) return
+  row.querySelector('button')?.click()
+}
 
 /** One control on the sheet grid: [mono label] [control]. No icon — the style controls
  *  read as a clean list of named values, and a glyph per row was noise, not navigation. */
@@ -228,7 +246,14 @@ export function EditRow({
 }) {
   const singleLine = value === undefined
   return (
-    <div className={cx(EDIT_TARGET, 'group flex items-center gap-3 py-2.5 hover:bg-surface', !flush && 'px-4')}>
+    // The whole row opens it (Sam, 2026-10-05); an OPEN row is closed by its X, not by a
+    // stray click on its header.
+    <div
+      onClick={(e) => {
+        if (!expanded && !clickedAControl(e)) onEdit()
+      }}
+      className={cx(EDIT_TARGET, 'group flex items-center gap-3 py-2.5 hover:bg-surface', !expanded && 'cursor-pointer', !flush && 'px-4')}
+    >
       {grip && (
         <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
           <Icon name="grip" size={16} />

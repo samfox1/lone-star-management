@@ -15,6 +15,9 @@ import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connect
 import { EventbriteTrip, ShopifyLink } from './connect-modal'
 import { connectOneAction, disconnectConnectionAction, getShopifyDomainAction, pullConnectionAction, syncProfileAction, type ConnectResult } from './actions'
 import { FieldError } from '../_ui/field-error'
+import { HoverLabel } from '../_ui/row-icon'
+import { FOCUS_RING_OFFSET } from '../_ui/styles'
+import { ICON_BOLD } from '@/components/ui/icon-hover'
 
 const FIELD_CLASS =
   'block h-6 min-w-0 w-full border-b border-hairline bg-transparent p-0 font-space text-[13px] leading-6 text-ink outline-none placeholder:text-hairline focus:border-ink'
@@ -245,10 +248,7 @@ export function ConnectionModal({
                 className={cx(FIELD_CLASS, 'font-space')}
               />
               <div className="flex items-center gap-3">
-                <button type="button" onClick={saveStore} disabled={savingStore} className={buttonClass('ghost', 'disabled:opacity-50')}>
-                  <Icon name="refresh" size={13} className={cx(savingStore && 'animate-spin')} />
-                  {savingStore ? 'Saving…' : 'Change token'}
-                </button>
+                <SpinGlyph label={savingStore ? 'Saving…' : 'Change token'} busy={savingStore} onClick={saveStore} />
                 {storeResult && (
                   <span className={cx('min-w-0 truncate font-space text-[11px]', storeResult.ok ? 'text-ink-muted' : 'text-accent-red')}>
                     {storeResult.ok ? storeResult.message ?? 'Saved' : `${storeResult.error}${storeResult.detail ? ` ${storeResult.detail}` : ''}`}
@@ -268,10 +268,7 @@ export function ConnectionModal({
         {/* 'none' with a source: a sign-in source whose app is not set up here — nothing can pull. */}
         {row.def.source && row.state !== 'none' && (
           <KvRow label="Catalog">
-            <button type="button" onClick={pull} disabled={pulling} className={buttonClass('ghost', 'disabled:opacity-50')}>
-              <Icon name="refresh" size={13} className={cx(pulling && 'animate-spin')} />
-              {pulling ? 'Pulling…' : row.state === 'connect' ? 'Sync' : 'Pull now'}
-            </button>
+            <SpinGlyph label={pulling ? 'Pulling…' : row.state === 'connect' ? 'Sync' : 'Pull now'} busy={pulling} onClick={pull} />
             {result && (
               <span className={cx('min-w-0 truncate font-space text-[11px]', result.ok ? 'text-ink-muted' : 'text-accent-red')}>
                 {result.ok ? result.message ?? 'Pulled' : result.error}
@@ -281,5 +278,25 @@ export function ConnectionModal({
         )}
       </div>
     </CardModal>
+  )
+}
+
+/**
+ * A BARE ↻ (Sam, 2026-10-02: glyphs, not words; no bordered buttons): what it does is its hover
+ * label and its accessible name ("Pull now", "Change token"). It spins while it works. A plain
+ * button rather than RowIcon, because only the glyph turns, not the control its label reads.
+ */
+function SpinGlyph({ label, busy, onClick }: { label: string; busy: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={busy}
+      className={cx('relative inline-flex flex-none rounded text-ink transition-colors hover:text-accent disabled:cursor-default disabled:opacity-50', ICON_BOLD, FOCUS_RING_OFFSET)}
+    >
+      <Icon name="refresh" size={16} className={cx(busy && 'animate-spin')} />
+      <HoverLabel label={label} />
+    </button>
   )
 }

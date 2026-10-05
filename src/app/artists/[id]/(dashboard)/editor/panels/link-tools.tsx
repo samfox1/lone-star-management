@@ -1,39 +1,78 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { type ManifestLinkRegion } from '@/lib/site-editor/manifest'
-import { safeHref } from '@/lib/url'
+import { looksLikeEmail, safeHref } from '@/lib/url'
 import { displayAddress } from '@/lib/settings'
-import { connectionHandle, connectionOfLink } from '@/lib/connections'
+import { connectionHandle, connectionOfLink, methodOf, profileLink, type ConnectionDef } from '@/lib/connections'
+import { parseHandle } from '@/lib/connect-methods'
 import { type EditorLink } from '../inspector-types'
 import { useScrollIntoFocus } from '../inspector-grid'
-import {
-  EditRow,
-  SaveLine,
-  OnSiteToggle,
-  NoSlots,
-  INVALID_FIELD,
-  FIELD,
-  FIELD_ON_TINT,
-  onSiteOnly,
-  useCollapseOnOutsideClick,
-} from '../inspector-shared'
-import { useSignal } from '../use-signal'
 import { useDragReorder } from '../use-drag-reorder'
-import { useDebouncedFieldSave } from '../use-debounced-field-save'
-import { saveEditorLinkAction, updateContentAction } from '../../actions'
+import { CONTROL_LABEL, NoSlots, onSiteOnly, openRowOnClick } from '../inspector-shared'
+import { saveEditorLinkAction } from '../../actions'
 import { ConnectionMark } from '../../(manager-tools)/connections/connection-mark'
+import { EditList, type EditListResult } from '../../(manager-tools)/_ui/edit-list'
+import { AddPlus } from '../../(manager-tools)/_ui/add-row'
+import { RowIcon } from '../../(manager-tools)/_ui/row-icon'
+import { SelectToggle } from '../../select-toggle'
 import { AddButtonModal } from '../add-button-modal'
 import { useConfirm } from '../../confirm-dialog'
 
+/*
+ * THE LINKS PANEL'S LISTS, CLICK TO EDIT (Sam, 2026-10-05, prototypes/lists_before_after_20261002.html
+ * §4: "Looks great, lets do it"). Every list here is the Settings › Email grammar (EditList,
+ * _ui/edit-list.tsx): plain text at rest; a click opens the item as an underline field with ✓
+ * and its trash; a bare + ends the list. No pencils, no pills, no words on buttons.
+ */
+
+/** The panel's type: Space Mono throughout (inputs restate it, they do not inherit it). */
+const ROW_TEXT = 'font-space text-[13px] leading-6 text-ink'
+
+/** Where a list's text starts, past the hover grip: the + lines up with it. */
+function PlusRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-4 py-2">
+      <span className="w-4 flex-none" aria-hidden />
+      {children}
+    </div>
+  )
+}
+
+/** The hover grip on a draggable row (the whole row drags; this only says so). */
+function Grip() {
+  return (
+    <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
+      <Icon name="grip" size={16} />
+    </span>
+  )
+}
+
+/**
+ * When the PREVIEW was clicked on dead space (`collapseAt` ticks), whatever item in this list
+ * is open closes. An EditList item closes when its field loses focus, so the tick blurs it.
+ */
+function useCollapseOnTick(collapseAt: number) {
+  const ref = useRef<HTMLDivElement>(null)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    const active = document.activeElement
+    if (active instanceof HTMLElement && ref.current?.contains(active)) active.blur()
+  }, [collapseAt])
+  return ref
+}
+
 /* ── Site-link tools: set the href for each manifest-declared link button ────────────
- * Mirrors StyleTools (manifest-driven, Phase 2): the site declares its link-powered
- * elements (USB / Merch buttons) in its manifest; here the manager sets each one's URL
- * BY KEY. An unset link shows as an EMPTY, labelled row, so a missing one (e.g. USB) is
+ * The site declares its link-powered elements (USB / Merch buttons) in its manifest; here
+ * the manager sets each one's URL BY KEY. Each is its KEY over its address as plain text; a
+ * click opens the address as a line with ✓ (no trash and no +: the site declares these, and a
+ * blank address means no link). An unset one shows a faint "Add a link", so a missing one is
  * visible rather than invisible. Saving writes a `links` row keyed by role and posts
- * `apply-link` so the frame updates live. Selecting the element in the frame focuses its
- * row. Socials are a SEPARATE panel — these are only the declared buttons. */
+ * `apply-link` so the frame updates live. Selecting the element in the frame opens its row. */
 export function SiteLinkTools({
   regions,
   values,
@@ -45,146 +84,78 @@ export function SiteLinkTools({
   regions: ManifestLinkRegion[]
   values: Record<string, string>
   selected: { key: string; nonce: number } | null
-  /** Ticks when a preview click hit nothing editable — collapse the open row. */
+  /** Ticks when a preview click hit nothing editable — close the open row. */
   collapseAt?: number
   artistId: string
   onApplyLink?: (key: string, url: string) => void
 }) {
-  const [text, setText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])),
-  )
-  const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  const fieldRefs = useRef<Map<string, HTMLInputElement | null>>(new Map())
-  // Manifest labels, so the (unmount) flush can name each row without the region list
-  // being an effect dependency (same trick as SupportLinkTools' linksRef).
-  const labelsRef = useRef<Record<string, string>>({})
-  useEffect(() => {
-    labelsRef.current = Object.fromEntries(regions.map((r) => [r.key, r.label]))
-  }, [regions])
+  // What each button links to now: the saved values, then what this panel saved since.
+  const [saved, setSaved] = useState<Record<string, string>>({})
+  const rows = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const listRef = useCollapseOnTick(collapseAt)
 
-  // A link's URL is trimmed before it is saved, but the box keeps the raw text; a blank
-  // clears the link (valid), a non-blank one must be a safe http(s)/relative URL —
-  // validated with the SAME safeHref the action uses, so the panel can't claim "Saved" on
-  // a write the server will reject. The label rides along from the manifest at save time.
-  const { status, save } = useDebouncedFieldSave<string>({
-    persist: (key, url) => saveEditorLinkAction(artistId, key, url, labelsRef.current[key] ?? key),
-    normalize: (raw) => {
-      const trimmed = raw.trim()
-      return trimmed === '' || safeHref(trimmed) !== undefined ? trimmed : null
-    },
-    onApply: onApplyLink,
-  })
-
-  // The frame's manifest arrives on `ready`, so regions/values can land after first
-  // render — re-seed when they do, without clobbering typing.
-  const seedKey = regions.map((r) => r.key).join(',')
-  const [seeded, setSeeded] = useState(seedKey)
-  if (seeded !== seedKey) {
-    setSeeded(seedKey)
-    setText(Object.fromEntries(regions.map((r) => [r.key, values[r.key] ?? ''])))
-  }
-
-  // Which button's inline URL box is revealed. A button's URL is PLAIN TEXT until its
-  // pencil is pressed (Sam, 2026-08-12: "the link shouldn't appear editable until the
-  // edit button is pressed") — then a box drops below the row. One open at a time.
-  const [openKey, setOpenKey] = useState<string | null>(null)
-  // A click anywhere outside the open row (or Escape) collapses it.
-  const openRef = useCollapseOnOutsideClick(openKey !== null, () => setOpenKey(null))
-  // A preview click that hit nothing editable collapses the open row too. Compared
-  // against the last seen tick (an event, not a state) so the manager can immediately
-  // open another row afterwards.
-  const [lastCollapse, setLastCollapse] = useState(collapseAt)
-  if (collapseAt !== lastCollapse) {
-    setLastCollapse(collapseAt)
-    setOpenKey(null)
-  }
-
-  // A click on the button IN THE FRAME opens its row. Reset-on-prop-change DURING render
-  // (the repo's sanctioned pattern), not in an effect — an effect setState cascades a
-  // render and the lint rule rightly rejects it. The scroll/focus is a real side effect,
-  // so it stays in the effect below, keyed off the now-open row.
-  // Nonce-gated, like every other routed select: a REPEAT click on the same element is
-  // a new gesture and must re-open/re-scroll (Sam, 2026-08-17).
-  useSignal(selected, (s) => setOpenKey(s.key))
+  // A click on the button IN THE FRAME opens its row (and rings it, below). Nonce-gated by
+  // `selected`'s identity: a REPEAT click on the same element is a new gesture (Sam, 2026-08-17).
   useEffect(() => {
     if (!selected) return
-    const el = fieldRefs.current.get(selected.key)
-    el?.scrollIntoView?.({ block: 'center' })
-    el?.focus()
+    const row = rows.current.get(selected.key)
+    row?.scrollIntoView?.({ block: 'center' })
+    const open = row?.querySelector('input')
+    if (open) open.focus()
+    else row?.querySelector('button')?.click()
   }, [selected])
-
-  function edit(key: string, raw: string) {
-    setText((t) => ({ ...t, [key]: raw }))
-    const ok = save(key, raw) // normalize + optimistic paint + debounced persist, all in the hook
-    setInvalid((s) => {
-      const next = new Set(s)
-      if (ok) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
 
   if (!regions.length) return <NoSlots noun="link" />
 
   return (
-    <div className="pb-2 pt-1">
+    <div ref={listRef} className="pb-2 pt-1">
       {regions.map((r) => {
-        const url = text[r.key] ?? ''
-        const isOpen = openKey === r.key
+        const url = saved[r.key] ?? values[r.key] ?? ''
+        const isSelected = selected?.key === r.key
         return (
           <div
             key={r.key}
-            ref={isOpen ? openRef : undefined}
-            // The same accent ring every other selected thing wears. The row already
-            // OPENED on a frame click, but opening alone did not read as "this is the
-            // one you clicked" (Sam, 2026-08-17, wren's Listen button).
-            // INSET: these rows span the panel's full width, and an outside ring is
-            // clipped by the aside's overflow-hidden (Sam's screenshot, 2026-08-20).
-            className={cx('rounded-lg', selected?.key === r.key && 'ring-2 ring-accent ring-inset')}
-            aria-current={selected?.key === r.key ? 'true' : undefined}
+            ref={(el) => {
+              rows.current.set(r.key, el)
+            }}
+            // The same accent ring every other selected thing wears (Sam, 2026-08-17). INSET:
+            // an outside ring is clipped by the aside's overflow-hidden (2026-08-20).
+            // A click anywhere on the row opens its address (Sam, 2026-10-05: the row is the target).
+            onClick={openRowOnClick}
+            className={cx('flex cursor-pointer flex-col gap-1 rounded-lg px-4 py-2.5', isSelected && 'ring-2 ring-accent ring-inset')}
+            aria-current={isSelected ? 'true' : undefined}
           >
-            {/* The URL is plain text until the pencil opens the box (no "lit" editable
-                link, no bolt icon). The site's `description` rides the row's hover title
-                and the box's accessible description, so it never costs a row. */}
-            <div title={r.description}>
-              <EditRow
-                label={r.label}
-                value={url || 'Add a link'}
-                empty={!url}
-                expanded={isOpen}
-                onEdit={() => setOpenKey(isOpen ? null : r.key)}
-              />
-            </div>
-            {isOpen && (
-              <div className="px-4 pb-3">
-                <input
-                  autoFocus
-                  aria-describedby={r.description ? `link-desc-${r.key}` : undefined}
-                  ref={(el) => {
-                    fieldRefs.current.set(r.key, el)
-                  }}
-                  aria-label={`${r.label} URL`}
-                  aria-invalid={invalid.has(r.key) || undefined}
-                  type="url"
-                  value={url}
-                  onChange={(e) => edit(r.key, e.target.value)}
-                  placeholder="https://…  (blank = no link)"
-                  className={cx(FIELD, invalid.has(r.key) && INVALID_FIELD)}
-                />
-                {r.description && (
-                  <span id={`link-desc-${r.key}`} className="sr-only">
-                    {r.description}
-                  </span>
-                )}
-              </div>
-            )}
+            {/* The site's description rides the key's hover title, so it never costs a row. */}
+            <span className={CONTROL_LABEL} title={r.description}>
+              {r.label}
+            </span>
+            <EditList
+              items={[url]}
+              text={(u) => u}
+              label={`${r.label} URL`}
+              placeholder="Add a link"
+              maxLength={2048}
+              inputMode="url"
+              textClass={ROW_TEXT}
+              className="min-w-0"
+              // A blank clears the link; anything else must be a link the site can safely
+              // use — the SAME safeHref the action uses, so the panel never claims a save the
+              // server will refuse.
+              validate={(v) => (v === '' || safeHref(v) !== undefined ? null : 'That isn’t a link the site can use.')}
+              onSave={async (_, next) => {
+                const res = await saveEditorLinkAction(artistId, r.key, next, r.label)
+                if (!res.ok) return { error: res.error ?? 'Couldn’t save that link.' }
+                setSaved((s) => ({ ...s, [r.key]: next }))
+                onApplyLink?.(r.key, next)
+              }}
+            />
           </div>
         )
       })}
-      <SaveLine status={status} />
     </div>
   )
 }
+
 /** A frame click on a link lands as `item:link:<label lowercased>` — the LABEL, because the
  *  row id never reaches the deployed site (socials arrive there as label-mapped config
  *  values), and lowercasing is the exact normalization that pipeline already joins on. */
@@ -197,21 +168,19 @@ function focusedLinkLabel(focusedKey: string | null | undefined): string | null 
  *  handler and class passes straight through. */
 function FocusScroll({
   focused,
-  boundaryRef,
+  rowRef,
   children,
   ...rest
 }: { focused: boolean; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement> & {
   draggable?: boolean
-  /** Published to the caller when this row is the OPEN one, so the outside-click
-   *  hook can tell "inside the row I'm editing" from "somewhere else". */
-  boundaryRef?: React.RefObject<HTMLDivElement | null>
+  rowRef?: (el: HTMLDivElement | null) => void
 }) {
   const ref = useScrollIntoFocus<HTMLDivElement>(focused)
   return (
     <div
       ref={(el) => {
         ref.current = el
-        if (boundaryRef) boundaryRef.current = el
+        rowRef?.(el)
       }}
       aria-current={focused ? 'true' : undefined}
       {...rest}
@@ -221,6 +190,23 @@ function FocusScroll({
   )
 }
 
+/**
+ * The link a social button saves from what was typed on its line — the rule Connections'
+ * window saves by (connections/connection-modal.tsx): a handle platform builds its link from
+ * the handle (a pasted link is read back to its handle first), a link platform's link is
+ * checked the way Connect checks it. A row no connection owns takes any safe web link.
+ */
+function socialUrl(def: ConnectionDef | undefined, raw: string): { url: string } | { error: string } {
+  const method = def ? methodOf(def) : undefined
+  if (method?.kind === 'handle') {
+    const parsed = parseHandle(method, raw)
+    return 'error' in parsed ? parsed : { url: parsed.url }
+  }
+  if (def && method?.kind === 'link') return profileLink(def, { url: raw })
+  const url = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`
+  return safeHref(url) !== undefined ? { url } : { error: 'That isn’t a link the site can use.' }
+}
+
 /* ── Social buttons: the site's socials, each one a connection's link ──────────────
  * Sam, 2026-09-28: "when the connection is added, and I travel to the socials list in the
  * site editor, I can add a new button based on one of the existing connections that I
@@ -228,24 +214,28 @@ function FocusScroll({
  * switched on and off: "Only in the editor."
  *
  * So this lists the BUTTONS — the social links ON the site (`onSiteOnly`, the rule every
- * item panel lists by) — each as mark · name · handle. None is a URL box: a button is the
- * connection's own links row, and its link is edited in Connections. "Add button" picks
- * from the connections not on the site yet and turns THAT row on (AddButtonModal); the ×
- * takes a button off the site and deletes nothing, so the connection stays. Rows drag to
- * reorder by id across the WHOLE list, so the links not shown here keep their place. */
+ * item panel lists by) — each as mark · name · handle. A click on the handle opens it as a
+ * line with ✓ and a trash (Sam, 2026-10-05): the handle is the connection's own link, the
+ * same one Connections edits. The trash takes the button OFF the site and deletes nothing,
+ * so the connection stays. The + picks from the connections not on the site yet
+ * (AddButtonModal) and turns THAT row on. Rows drag to reorder by id across the WHOLE list,
+ * so the links not shown here keep their place. */
 export function SocialButtons({
   links,
   artistId,
   onReorder,
   onToggleOnSite,
+  onSaveUrl,
   focusedKey,
 }: {
   /** Every social link, on the site and off it: the off ones are the picker's choices. */
   links: EditorLink[]
   artistId: string
   onReorder: (fromId: string, toId: string) => void
-  /** The live toggle: on from the picker, off from a row's ×. */
+  /** The live toggle: on from the picker, off from an open row's trash. */
   onToggleOnSite: (l: EditorLink) => void
+  /** Save a button's new link (its connection's row). `{ error }` keeps the field open. */
+  onSaveUrl: (l: EditorLink, url: string) => Promise<EditListResult>
   /** The selected region's stable key (`item:link:<label lowercased>`). */
   focusedKey?: string | null
 }) {
@@ -268,42 +258,43 @@ export function SocialButtons({
             focused={isFocused}
             data-social-button={name}
             {...dragProps(l.id)}
+            onClick={openRowOnClick}
             className={cx(
-              'group flex items-center gap-3 px-4 py-2.5 hover:bg-surface',
+              'group flex cursor-pointer items-center gap-3 px-4 py-2',
               (isOver(l.id) || isFocused) && 'ring-2 ring-accent ring-inset',
             )}
           >
-            <span className="flex-none cursor-grab text-ink-faint opacity-0 transition-opacity group-hover:opacity-60" aria-hidden>
-              <Icon name="grip" size={16} />
-            </span>
+            <Grip />
             <span className="flex w-4 flex-none justify-center text-ink">
               {def ? <ConnectionMark def={def} size={15} /> : <Icon name="links" size={15} />}
             </span>
             <span className="flex-none text-[13px] text-ink">{name}</span>
-            <span className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{handle}</span>
-            <button
-              type="button"
-              aria-label={`Remove the ${name} button`}
-              title="Take it off the site. The connection stays."
-              onClick={() => onToggleOnSite(l)}
-              className="flex-none text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <Icon name="close" size={15} />
-            </button>
+            <EditList
+              items={[l]}
+              itemKey={(x) => x.id}
+              text={() => handle}
+              label={`${name} link`}
+              maxLength={2048}
+              textClass="font-space text-[12px] leading-6 text-ink-muted focus:text-ink"
+              className="min-w-0 flex-1"
+              onSave={async (_, raw) => {
+                const next = socialUrl(def, raw)
+                if ('error' in next) return next
+                if (next.url === l.url) return
+                return onSaveUrl(l, next.url)
+              }}
+              onRemove={() => onToggleOnSite(l)}
+              removeLabel={() => `Remove the ${name} button`}
+            />
           </FocusScroll>
         )
       })}
 
-      {/* The same footer the socials always had — a button that opens in place, never a
-          link out of the editor (Sam, 2026-08-09) — now picking from the connections. */}
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
-      >
-        <Icon name="plus" size={16} />
-        <span className="text-[13px]">Add button</span>
-      </button>
+      {/* A bare + where the marks start (Sam, 2026-10-02: never "Add button" in words). It
+          opens the picker in place, never a link out of the editor (Sam, 2026-08-09). */}
+      <PlusRow>
+        <AddPlus label="Add button" onClick={() => setAdding(true)} />
+      </PlusRow>
 
       {adding && (
         <AddButtonModal
@@ -320,199 +311,163 @@ export function SocialButtons({
   )
 }
 
-/* ── Contact links: edit / reorder / remove a booking address ────────────────────
+/** A contact's address as the site uses it: a bare email becomes a mailto: link, the shape
+ *  every saved contact row has. Anything else is saved as typed (the server checks it). */
+function contactUrl(raw: string): string {
+  return looksLikeEmail(raw) ? `mailto:${raw}` : raw
+}
+
+/* ── Contact links: a booking address, typed in place ────────────────────────────
  * A mailto:/tel: row is a contact route, not a profile to follow, so it is not a button
- * made from a connection: its label and address are edited here, in place.
+ * made from a connection: its label and address are edited here.
+ *
+ * At rest a contact is its LABEL alone (Sam, 2026-10-05: "Keep it just dont say what the
+ * email is" — Skeen's site uses the contact form). A click opens the label and the address
+ * as lines, with ✓, the trash (a DELETE, so it asks) and the on/off-site check, which shows
+ * only while the contact is open. The + adds a new contact (label + address).
  *
  * ON-SITE ONLY, like every item panel (Sam, 2026-09-09; Contact followed 2026-09-28). A
  * contact taken off the site leaves the list. Contact addresses have no dashboard page of
- * their own to be the library, so the way back is here: "Add contact" lists the off-site
- * ones and turns the picked one on (the socials' Add button, in the same place). A drag
- * renumbers the WHOLE list, so a hidden contact keeps its place. */
+ * their own to be the library, so the way back is here: the eye beside the + (shown only
+ * when there are any) lists the off-site ones, and a click puts one back. A drag renumbers
+ * the WHOLE list, so a hidden contact keeps its place. */
 export function ContactLinkTools({
   links,
-  artistId,
   onRemove,
   onReorder,
   onToggleOnSite,
+  onSave,
+  onAdd,
   focusedKey,
   collapseAt = 0,
 }: {
   links: EditorLink[]
-  artistId: string
   onRemove: (l: EditorLink) => void
   onReorder: (fromId: string, toId: string) => void
   onToggleOnSite: (l: EditorLink) => void
+  /** Save a contact's label and address. `{ error }` keeps the fields open. */
+  onSave: (l: EditorLink, patch: { label: string; url: string }) => Promise<EditListResult>
+  /** Add a contact (on the site). `{ error }` keeps the fields open. */
+  onAdd: (label: string, url: string) => Promise<EditListResult>
   /** The selected region's stable key (`item:link:<label lowercased>`). */
   focusedKey?: string | null
-  /** Ticks when a preview click hit nothing editable — collapse the open row. */
+  /** Ticks when a preview click hit nothing editable — close the open contact. */
   collapseAt?: number
 }) {
-  const [values, setValues] = useState<Record<string, { label: string; url: string }>>(() =>
-    Object.fromEntries(links.map((l) => [l.id, { label: l.label, url: l.url }])),
-  )
-  const [invalid, setInvalid] = useState<Set<string>>(new Set())
-  // Which row is expanded. Rows collapse to just their label; clicking one opens the
-  // edit/remove controls below it (single-open accordion — keeps the list short).
-  const [open, setOpen] = useState<string | null>(null)
-  // A click anywhere outside the open row (or Escape) collapses it.
-  const rowOpenRef = useCollapseOnOutsideClick(open !== null, () => setOpen(null))
-  // Same collapse-on-preview-deselect tick as the other lists.
-  const [lastCollapse, setLastCollapse] = useState(collapseAt)
-  if (collapseAt !== lastCollapse) {
-    setLastCollapse(collapseAt)
-    setOpen(null)
-  }
+  const listRef = useCollapseOnTick(collapseAt)
+  const rows = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const [showingOff, setShowingOff] = useState(false)
+  const offSite = links.filter((l) => !l.onSite)
 
-  // A link selected in the FRAME opens its row, or the "selected link" is a closed
-  // accordion line indistinguishable from its neighbours. Render-time reset on prop change
-  // (the repo's selectedStyle pattern), so the manager's own accordion clicks still win after.
+  // A link selected in the FRAME opens its contact, or the "selected link" is a closed line
+  // indistinguishable from its neighbours.
   const focusedLabel = focusedLinkLabel(focusedKey)
   const focusedRow = focusedLabel != null ? links.find((l) => l.label.trim().toLowerCase() === focusedLabel) : undefined
-  const [lastFocusedLabel, setLastFocusedLabel] = useState<string | null>(null)
-  if (focusedLabel !== lastFocusedLabel) {
-    setLastFocusedLabel(focusedLabel)
-    if (focusedRow) setOpen(focusedRow.id)
-  }
+  const focusedId = focusedRow?.onSite ? focusedRow.id : null
+  useEffect(() => {
+    if (!focusedId) return
+    const row = rows.current.get(focusedId)
+    if (!row?.querySelector('input')) row?.querySelector('button')?.click()
+  }, [focusedId])
+
   const { dragProps, isOver } = useDragReorder(onReorder)
-  const [adding, setAdding] = useState(false)
-  const offSite = links.filter((l) => !l.onSite)
   // The trash ASKS (Sam, 2026-09-28: "'are you sure' is good when its a delete"). Revert
   // never re-inserts a deleted contact: only a declared button's link comes back whole.
   const { ask, dialog } = useConfirm()
-  async function remove(l: EditorLink, label: string) {
-    if (await ask(`Delete ${label || 'this contact'}? This can't be undone.`)) onRemove(l)
+  async function remove(l: EditorLink) {
+    if (await ask(`Delete ${l.label.trim() || 'this contact'}? This can't be undone.`)) onRemove(l)
   }
 
-  // Both label and url are required — a blank one is dropped, not saved. The pending
-  // row itself is what the (unmount) flush persists, so there is no separate values ref.
-  const { status, save } = useDebouncedFieldSave<{ label: string; url: string }>({
-    persist: (id, v) => {
-      const fd = new FormData()
-      fd.set('label', v.label)
-      fd.set('url', v.url)
-      return updateContentAction('link', id, artistId, fd)
-    },
-    normalize: (v) => (v.label.trim() !== '' && v.url.trim() !== '' ? v : null),
-  })
-
-  function edit(id: string, patch: Partial<{ label: string; url: string }>) {
-    const row = { ...(values[id] ?? { label: '', url: '' }), ...patch }
-    setValues((v) => ({ ...v, [id]: { ...v[id], ...patch } }))
-    const ok = save(id, row)
-    setInvalid((s) => {
-      const n = new Set(s)
-      if (ok) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  }
+  /** Both are required: a blank one would be dropped by the server, so it is refused here. */
+  const missing = (label: string, url: string) =>
+    !label || !url ? 'A contact needs a label and an address.' : null
 
   return (
-    <div className="pb-2 pt-1">
+    <div ref={listRef} className="pb-2 pt-1">
       {dialog}
-      {onSiteOnly(links).map((l, i) => {
-        const v = values[l.id] ?? { label: l.label, url: l.url }
-        const isOpen = open === l.id
-        const labelBlank = !v.label.trim()
-        const urlBlank = !v.url.trim()
-        const rowInvalid = invalid.has(l.id)
-        const isFocused = focusedRow?.id === l.id
-        return (
-          <FocusScroll
-            key={l.id}
-            focused={isFocused}
-            boundaryRef={isOpen ? rowOpenRef : undefined}
-            {...dragProps(l.id)}
-            className={cx(
-              (isOver(l.id) || isFocused) && 'ring-2 ring-accent ring-inset',
-              rowInvalid && 'ring-1 ring-accent-red',
-            )}
-          >
-            {/* The shared version-A row (EditRow): label over URL as plain text, a
-                hover grip (the reorder handle — the whole row still drags), and the
-                hover pencil that reveals the box below. */}
-            <EditRow
-              grip
-              label={v.label.trim() || 'Untitled link'}
-              value={v.url.trim() || 'Add a link'}
-              empty={urlBlank}
-              expanded={isOpen}
-              editLabel={`contact link ${i + 1}`}
-              onEdit={() => setOpen(isOpen ? null : l.id)}
-            />
+      {onSiteOnly(links).map((l) => (
+        <FocusScroll
+          key={l.id}
+          focused={focusedRow?.id === l.id}
+          rowRef={(el) => {
+            rows.current.set(l.id, el)
+          }}
+          {...dragProps(l.id)}
+          onClick={openRowOnClick}
+          className={cx(
+            'group flex cursor-pointer items-center gap-3 px-4 py-2',
+            (isOver(l.id) || focusedRow?.id === l.id) && 'ring-2 ring-accent ring-inset',
+          )}
+        >
+          <Grip />
+          <EditList
+            items={[l]}
+            itemKey={(x) => x.id}
+            text={(x) => x.label}
+            label="Contact label"
+            placeholder="Untitled"
+            maxLength={100}
+            textClass={ROW_TEXT}
+            className="min-w-0 flex-1"
+            detail={{ text: (x) => x.url, label: 'Address', maxLength: 2048 }}
+            onSave={async (_, label, address = '') => {
+              const problem = missing(label, address)
+              if (problem) return { error: problem }
+              return onSave(l, { label, url: contactUrl(address) })
+            }}
+            onRemove={() => void remove(l)}
+            removeLabel={(x) => `Delete ${x.label.trim() || 'this contact'}`}
+            extra={(x) => <SelectToggle selected={x.onSite} onSite={x.onSite} onToggle={() => onToggleOnSite(x)} label={x.label.trim() || 'Contact'} />}
+          />
+        </FocusScroll>
+      ))}
 
-            {isOpen && (
-              // Condensed box (Sam, 2026-08-12): bare inputs, no per-field icon/label
-              // chrome, a tight toggle + remove line. A contact keeps its manager-chosen
-              // name, so it has a Label field.
-              <div className="space-y-1.5 bg-surface px-4 pb-2.5 pt-1.5">
-                <input
-                  aria-label={`Contact link ${i + 1} label`}
-                  aria-invalid={(rowInvalid && labelBlank) || undefined}
-                  value={v.label}
-                  onChange={(e) => edit(l.id, { label: e.target.value })}
-                  placeholder="Label"
-                  className={cx(FIELD_ON_TINT, rowInvalid && labelBlank && INVALID_FIELD)}
-                />
-                <input
-                  aria-label={`Contact link ${i + 1} URL`}
-                  aria-invalid={(rowInvalid && urlBlank) || undefined}
-                  type="url"
-                  value={v.url}
-                  onChange={(e) => edit(l.id, { url: e.target.value })}
-                  placeholder="https://…"
-                  className={cx(FIELD_ON_TINT, rowInvalid && urlBlank && INVALID_FIELD)}
-                />
-                <div className="flex items-center justify-between pt-0.5">
-                  <OnSiteToggle on={l.onSite} onToggle={() => onToggleOnSite(l)} />
-                  <button
-                    type="button"
-                    aria-label={`Remove contact link ${i + 1}`}
-                    onClick={() => void remove(l, v.label.trim())}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-faint hover:text-accent-red ${ICON_BOLD}`}
-                  >
-                    <Icon name="trash" size={15} />
-                    <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">Remove</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </FocusScroll>
-        )
-      })}
-
-      {offSite.length > 0 && (
-        <>
+      <PlusRow>
+        <EditList
+          items={[] as EditorLink[]}
+          text={(x) => x.label}
+          label="Contact label"
+          addLabel="Add contact"
+          addFieldLabel="New contact label"
+          placeholder="Label"
+          maxLength={100}
+          textClass={ROW_TEXT}
+          addFieldClass="w-[10ch] min-w-0"
+          detail={{ text: (x) => x.url, label: 'Address', maxLength: 2048 }}
+          onSave={() => undefined}
+          onAdd={async (label, address = '') => {
+            const problem = missing(label, address)
+            if (problem) return { error: problem }
+            return onAdd(label, contactUrl(address))
+          }}
+        />
+        {offSite.length > 0 && (
+          <RowIcon
+            icon="eye"
+            label="Contacts off the site"
+            variant="bare"
+            glyphSize={16}
+            onClick={() => setShowingOff((s) => !s)}
+          />
+        )}
+      </PlusRow>
+      {showingOff &&
+        offSite.map((l) => (
           <button
+            key={l.id}
             type="button"
-            aria-expanded={adding}
-            onClick={() => setAdding((a) => !a)}
-            className="flex w-full items-center gap-2.5 px-5 py-2.5 text-left text-accent hover:bg-surface-hover"
+            aria-label={`Put ${l.label.trim() || 'this contact'} on the site`}
+            onClick={() => {
+              setShowingOff(false)
+              onToggleOnSite(l)
+            }}
+            className="flex w-full items-center gap-3 px-4 py-1.5 text-left text-[13px] text-ink-faint transition-colors hover:text-ink"
           >
-            <Icon name="plus" size={16} />
-            <span className="text-[13px]">Add contact</span>
+            <span className="w-4 flex-none" aria-hidden />
+            <span className="truncate">{l.label.trim() || 'Untitled'}</span>
           </button>
-          {adding &&
-            offSite.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                aria-label={`Put ${l.label.trim() || 'this contact'} on the site`}
-                onClick={() => {
-                  setAdding(false)
-                  onToggleOnSite(l)
-                }}
-                className="flex w-full items-center gap-3 px-5 py-2 text-left hover:bg-surface"
-              >
-                <span className="flex-none text-[13px] text-ink">{l.label.trim() || 'Untitled link'}</span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{displayAddress(l.url)}</span>
-              </button>
-            ))}
-        </>
-      )}
-
-      <SaveLine status={status} />
+        ))}
     </div>
   )
 }
+

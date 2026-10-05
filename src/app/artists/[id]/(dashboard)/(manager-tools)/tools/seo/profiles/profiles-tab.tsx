@@ -8,7 +8,11 @@ import { dayLabel } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { FieldError } from '../../../_ui/field-error'
-import { MONO_META } from '../../../_ui/styles'
+import { MONO_META, REVEAL_ON_HOVER } from '../../../_ui/styles'
+import { EDIT_TRIGGER } from '../../../_ui/edit-row'
+import { HoverLabel } from '../../../_ui/row-icon'
+import { Icon } from '@/components/ui/icons'
+import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
 import { useNow } from '../_ui/clock'
 import { CardAction, CardActions, CardField, DisclosureGroup, RowMark } from '../../../_ui/disclosure'
 import { ProfileCard, ProfileRow, QuietRow } from './_ui/profile-row'
@@ -225,8 +229,19 @@ function BioCard({
             <div className="font-space text-[12px] leading-[1.6] text-ink-muted">
               <div>{[photo.type, dims ? `${dims.width} × ${dims.height}` : ''].filter(Boolean).join(' · ')}</div>
               {photos.length > 1 ? (
-                <button type="button" aria-expanded={picking} onClick={() => setPicking((p) => !p)} className={cx('border-b border-hairline text-ink hover:text-accent', FOCUS_RING)}>
-                  change
+                // The hover pencil, not the word "change" (Sam, 2026-10-02: glyphs, not words; a
+                // pencil shows only while its line is hovered). A button of its own, for aria-expanded.
+                // A click anywhere on the PHOTO line opens it too (EDIT_TRIGGER, _ui/edit-row.tsx).
+                <button
+                  type="button"
+                  aria-label="Change photo"
+                  aria-expanded={picking}
+                  {...EDIT_TRIGGER}
+                  onClick={() => setPicking((p) => !p)}
+                  className={cx('relative mt-1 inline-flex rounded text-ink transition-[opacity,color]', ICON_BOLD, REVEAL_ON_HOVER, FOCUS_RING)}
+                >
+                  <Icon name="edit" size={EDIT_GLYPH} />
+                  <HoverLabel label="Change photo" align="start" />
                 </button>
               ) : null}
             </div>

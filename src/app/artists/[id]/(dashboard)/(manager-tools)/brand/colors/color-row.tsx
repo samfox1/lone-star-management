@@ -29,7 +29,7 @@ export type ColorItem = {
   hex: string
   /** Added this visit: its note takes focus on mount (the add flow's third step). */
   fresh?: boolean
-  /** A built-in (Primary, Secondary): fixed title, guide text, no note, no trash, and
+  /** A built-in (Primary, Secondary): fixed title, no guide, no note, no trash, and
    *  every save is by slot. Absent on an added colour. */
   slot?: ColorSlot
 }
@@ -56,12 +56,11 @@ const SAVE_DELAY_MS = 300
  *
  * A BUILT-IN (Primary, Secondary) saves BY SLOT, first pick and every pick after — one
  * upsert that makes the row or changes it — so it never needs to know its id, and two tabs
- * picking Primary can never make two. Its title and guide are fixed; it has no note or trash.
+ * picking Primary can never make two. Its title is fixed; it has no guide, note or trash.
  */
 export function ColorRow({
   artistId,
   item,
-  guide,
   swatches,
   onPatch,
   onRemove,
@@ -69,8 +68,6 @@ export function ColorRow({
 }: {
   artistId: string
   item: ColorItem
-  /** A built-in's fixed grey guide text. */
-  guide?: string
   /** The site's colours, for the panel's "On the site" grid. */
   swatches: string[]
   /** Record a change on the page's copy of this row. */
@@ -212,9 +209,10 @@ export function ColorRow({
     onPatch(item.key, { note: next })
   }
 
-  // A built-in: fixed title and guide. An added colour: renamable, with its note.
+  // A built-in: a fixed title and nothing under it (Sam, 2026-10-05: "Your main color." was
+  // filler). An added colour: renamable, with its note.
   const words = item.slot
-    ? { guide }
+    ? {}
     : {
         onRename: rename,
         note: { value: item.note, onSave: saveNote, primaryRef: item.hex ? undefined : plusRef, autoFocus: item.fresh },
@@ -226,6 +224,7 @@ export function ColorRow({
       icon="trash"
       label="Remove"
       tone="danger"
+      reveal
       onClick={() =>
         onRemove(item, {
           abandon: () => {

@@ -16,7 +16,8 @@ import { ringsOf } from '@/lib/analytics-sources'
  * Up to eight rings show, four to a row, ranked. Past eight, the eighth slot is
  * a "See all" tile and seven rings show (Sam, 2026-09-14: "only show the see
  * all button when capping it at 8"); expanded, everything shows with a "Show
- * fewer" tile at the end.
+ * fewer" tile at the end. The tile is its ring alone, +N or −, with its name on hover:
+ * no word under it (Sam, 2026-10-02: glyphs, not words).
  * The rings themselves — the two folds (Web search, Other) and the ranking —
  * come from `ringsOf` in lib/analytics-sources.ts, where they are pure and pinned.
  *
@@ -97,6 +98,8 @@ export function SourceRings({
             <button
               type="button"
               aria-expanded={expanded}
+              aria-label={expanded ? 'Show fewer' : 'See all'}
+              title={expanded ? 'Show fewer' : 'See all'}
               onClick={() => setExpanded((e) => !e)}
               className="group flex w-full flex-col items-center gap-2.5 rounded-xl py-2 outline-none"
             >
@@ -108,7 +111,6 @@ export function SourceRings({
                   {expanded ? '−' : `+${hidden}`}
                 </span>
               </span>
-              <span className="font-space text-[11px] font-bold text-ink">{expanded ? 'Show fewer' : 'See all'}</span>
             </button>
           </li>
         )}

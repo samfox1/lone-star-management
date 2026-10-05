@@ -60,7 +60,7 @@ describe('the token field', () => {
   it('CRITICAL: starts empty and type=password — the real token never reaches the browser', async () => {
     const { dialog } = mount()
     await waitFor(() => expect(getShopifyDomainAction).toHaveBeenCalled())
-    const token = within(dialog).getByLabelText(/token/i)
+    const token = within(dialog).getByLabelText('New storefront token')
     expect(token).toHaveAttribute('type', 'password')
     expect(token).toHaveValue('')
   })
@@ -68,13 +68,13 @@ describe('the token field', () => {
   it('CRITICAL: the token is never rendered back, even after a successful save', async () => {
     const { dialog } = mount()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
-    const token = within(dialog).getByLabelText(/token/i)
+    const token = within(dialog).getByLabelText('New storefront token')
     fireEvent.change(token, { target: { value: 'shpat_supersecret' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /change token/i }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledTimes(1))
     // The field clears once the save RESOLVES, a tick after the action is called — wait for
     // it (a full, loaded run once checked in between and read the typed value).
-    await waitFor(() => expect(within(dialog).getByLabelText(/token/i)).toHaveValue(''))
+    await waitFor(() => expect(within(dialog).getByLabelText('New storefront token')).toHaveValue(''))
     expect(dialog).not.toHaveTextContent('shpat_supersecret')
   })
 })
@@ -83,7 +83,7 @@ describe('saving', () => {
   it('CRITICAL: runs the same connect path as a first connect, with the shown domain and the new token', async () => {
     const { dialog } = mount()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
-    fireEvent.change(within(dialog).getByLabelText(/token/i), { target: { value: 'shpat_new_token' } })
+    fireEvent.change(within(dialog).getByLabelText('New storefront token'), { target: { value: 'shpat_new_token' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /change token/i }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledWith('a1', 'shopify', { domain: 'skeen-store.myshopify.com', token: 'shpat_new_token' }))
     await waitFor(() => expect(dialog).toHaveTextContent('12 products found'))
@@ -93,7 +93,7 @@ describe('saving', () => {
     const { dialog } = mount()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
     fireEvent.change(within(dialog).getByLabelText(/domain/i), { target: { value: 'new-store.myshopify.com' } })
-    fireEvent.change(within(dialog).getByLabelText(/token/i), { target: { value: 'shpat_new_token' } })
+    fireEvent.change(within(dialog).getByLabelText('New storefront token'), { target: { value: 'shpat_new_token' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /change token/i }))
     await waitFor(() => expect(connectOneAction).toHaveBeenCalledWith('a1', 'shopify', { domain: 'new-store.myshopify.com', token: 'shpat_new_token' }))
   })
@@ -102,7 +102,7 @@ describe('saving', () => {
     vi.mocked(connectOneAction).mockResolvedValueOnce({ ok: false, error: 'Shopify says the token is wrong.', detail: 'Check it was copied in full.' })
     const { dialog } = mount()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
-    fireEvent.change(within(dialog).getByLabelText(/token/i), { target: { value: 'bad-token' } })
+    fireEvent.change(within(dialog).getByLabelText('New storefront token'), { target: { value: 'bad-token' } })
     fireEvent.click(within(dialog).getByRole('button', { name: /change token/i }))
     await waitFor(() => expect(dialog).toHaveTextContent('Shopify says the token is wrong.'))
     expect(dialog).toHaveTextContent('Check it was copied in full.')
@@ -116,7 +116,7 @@ describe('saving', () => {
     vi.mocked(connectOneAction).mockImplementationOnce(() => new Promise((res) => { release = res }))
     const { dialog } = mount()
     await waitFor(() => expect(within(dialog).getByDisplayValue('skeen-store.myshopify.com')).toBeInTheDocument())
-    fireEvent.change(within(dialog).getByLabelText(/token/i), { target: { value: 'shpat_new_token' } })
+    fireEvent.change(within(dialog).getByLabelText('New storefront token'), { target: { value: 'shpat_new_token' } })
     const btn = within(dialog).getByRole('button', { name: /change token/i })
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))

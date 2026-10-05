@@ -12,8 +12,9 @@
  *           to their fact keys, the bio to artists.bio through the editor's gate and never over
  *           its cap. LIGHT for the rest (the visual-artist note, the nudge line).
  * Covers:   • who: the name (saved; a blank one refused, unsent), the year (four digits only),
- *             the visual-artist note, other names (never the artist's own), a genre chip, the
- *             type, and a stored value the gate would now refuse
+ *             the visual-artist note, other names (never the artist's own; added, edited and
+ *             removed as one list), genres (the same), the type, and a stored value the gate
+ *             would now refuse
  *           • where: the city and region save to their places; a refused value shows the
  *             validator's words and is never sent; the country is a pick from exactly the table
  *             the gate accepts; a country with regions turns Region into its list, saved AFTER
@@ -40,6 +41,7 @@ import { artistNameError } from '@/lib/manager-tools/profile/profile'
 import { seoTabSeg } from '@/lib/manager-tools/seo/sections'
 import { SEO_EDIT_TARGETS } from '@/lib/manager-tools/seo/sections'
 import { saveArtistFactAction, saveEditorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
+import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({
   saveSeoFieldAction: vi.fn(async () => ({ ok: true })),
@@ -50,6 +52,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/actions', () => 
   saveArtistNameAction: vi.fn(async () => ({})),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
 const seoMock = vi.mocked(saveSeoFieldAction)
 const factMock = vi.mocked(saveArtistFactAction)
@@ -209,22 +212,50 @@ describe('who', () => {
     show()
     expect(screen.queryByText('Not shown to search engines for a visual artist')).toBeNull()
   })
-  // Other names: the artist's own name is refused in the validator's words, unsent.
-  it('CRITICAL: another name that is the artist’s own is refused in the validator’s words', () => {
+  // Other names: the artist's own name is refused in the validator's words, unsent, and the
+  // field keeps it (EditList: a refusal never wipes the draft).
+  it('CRITICAL: another name that is the artist’s own is refused in the validator’s words', async () => {
+    vi.useFakeTimers()
     show()
-    fireEvent.click(screen.getByRole('button', { name: 'Add a name' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Add a name' }), { target: { value: 'skeen' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Add a name' }), { key: 'Enter' })
-    expect(screen.getByRole('alert').textContent).toBe(refusal(FACT_CONTENT_KEYS.aliases, 'skeen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add name' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'New other name' }), { target: { value: 'skeen' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New other name' }), { key: 'Enter' })
+    await act(async () => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(toast).toHaveBeenCalledWith(refusal(FACT_CONTENT_KEYS.aliases, 'skeen'), 'error')
+    expect((screen.getByRole('textbox', { name: 'New other name' }) as HTMLInputElement).value).toBe('skeen')
     expect(seoMock).not.toHaveBeenCalled()
   })
-  // A genre chip is added and saved to the artist row as one list.
-  it('a genre chip is added and saved to artists.genre as one list', async () => {
+  // Other names, the main path: add, edit and remove each save the whole list to its fact key.
+  it('other names: add, edit and remove save the whole list to fact_aliases', async () => {
+    show({ facts: { ...EMPTY_FACTS, [FACT_CONTENT_KEYS.aliases]: 'Skeen Music' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add name' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'New other name' }), { target: { value: 'DJ Skeen' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New other name' }), { key: 'Enter' })
+    await vi.waitFor(() => expect(seoMock).toHaveBeenLastCalledWith('a1', FACT_CONTENT_KEYS.aliases, 'Skeen Music\nDJ Skeen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Skeen Music' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Other name' }), { target: { value: 'Skeen Sounds' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Other name' }), { key: 'Enter' })
+    await vi.waitFor(() => expect(seoMock).toHaveBeenLastCalledWith('a1', FACT_CONTENT_KEYS.aliases, 'Skeen Sounds\nDJ Skeen'))
+    fireEvent.click(screen.getByRole('button', { name: 'DJ Skeen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove DJ Skeen' }))
+    await vi.waitFor(() => expect(seoMock).toHaveBeenLastCalledWith('a1', FACT_CONTENT_KEYS.aliases, 'Skeen Sounds'))
+  })
+  // Genres, the main path: add, edit and remove each save artists.genre as one list.
+  it('genres: add, edit and remove save artists.genre as one list', async () => {
     show()
-    fireEvent.click(screen.getByRole('button', { name: 'Add a genre' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Add a genre' }), { target: { value: 'Techno' } })
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Add a genre' }), { key: 'Enter' })
-    await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('a1', 'genre', 'House, Tech House, Techno'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add genre' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'New genre' }), { target: { value: 'Techno' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New genre' }), { key: 'Enter' })
+    await vi.waitFor(() => expect(factMock).toHaveBeenLastCalledWith('a1', 'genre', 'House, Tech House, Techno'))
+    fireEvent.click(screen.getByRole('button', { name: 'House' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Genre' }), { target: { value: 'Deep House' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Genre' }), { key: 'Enter' })
+    await vi.waitFor(() => expect(factMock).toHaveBeenLastCalledWith('a1', 'genre', 'Deep House, Tech House, Techno'))
+    fireEvent.click(screen.getByRole('button', { name: 'Tech House' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Tech House' }))
+    await vi.waitFor(() => expect(factMock).toHaveBeenLastCalledWith('a1', 'genre', 'Deep House, Techno'))
   })
   // A stored value the gate would now refuse is flagged on arrival.
   it('a stored value the gate would refuse today is flagged on arrival', () => {

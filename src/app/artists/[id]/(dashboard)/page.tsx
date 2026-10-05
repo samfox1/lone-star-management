@@ -188,9 +188,6 @@ export default async function OverviewPage({
               )
             })}
           </div>
-          <p className="mt-2.5 font-space text-xs text-ink-faint">
-            Use a section&apos;s Publish button, or Publish all above.
-          </p>
         </section>
 
         <section>

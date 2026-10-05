@@ -135,10 +135,10 @@ describe('built-in rows', () => {
     expect(BUILT_IN_LOGOS.map((b) => b.title)).toEqual(['Primary logo', 'Secondary logo'])
   })
 
-  it('an empty built-in: the tile says "Add" and the icon is a full-ink + (Add logo), not a pencil', () => {
+  it('an empty built-in: an empty tile (no word, no glyph) and a full-ink + (Add logo), not a pencil', () => {
     mount({ secondary: null })
     const r = row('Secondary logo')
-    expect(r.querySelector('[data-logo-tile]')?.textContent).toBe('Add')
+    expect(r.querySelector('[data-logo-tile="empty"]')?.textContent).toBe('')
     expect(within(r).queryByRole('button', { name: 'Edit' })).toBeNull()
     fireEvent.click(within(r).getByRole('button', { name: 'Add logo' }))
     expect(screen.getByRole('dialog', { name: 'Secondary logo' })).toBeTruthy()

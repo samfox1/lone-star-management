@@ -12,7 +12,7 @@
  *   - a refused add shows the error and keeps the card open.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { TourAddButton } from '@/app/artists/[id]/(dashboard)/tour/tour-add'
 import { addContentAction, setSupportActsAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
@@ -63,11 +63,12 @@ describe('add a tour date', () => {
     const dialog = openAdd()
     fireEvent.change(within(dialog).getByLabelText('Venue'), { target: { value: 'Scoot Inn' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add act' }))
-    const pop = screen.getByRole('dialog', { name: /act/i })
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Jigitz' } })
-    fireEvent.change(within(pop).getByLabelText('Website'), { target: { value: 'https://www.jigitz.online/' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
-    expect(within(dialog).getByRole('button', { name: 'Jigitz, linked' })).toBeInTheDocument()
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'New act' }), { target: { value: 'Jigitz' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Website' }), { target: { value: 'https://www.jigitz.online/' } })
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    })
+    expect(within(dialog).getByRole('button', { name: 'Jigitz' })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add date' }))
     await waitFor(() => expect(setSupportActsAction).toHaveBeenCalledWith(ARTIST, 'td-new', [{ name: 'Jigitz', url: 'https://www.jigitz.online/' }]))
     // The names ride the create too, so a row is never born with an empty bill.

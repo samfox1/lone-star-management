@@ -8,7 +8,6 @@ import {
   MAX_ADDED_COLORS,
   nextColorName,
   type BrandColor,
-  type ColorSlot,
 } from '@/lib/manager-tools/brand/brand-colors'
 import { useConfirm } from '../../../confirm-dialog'
 import { toast } from '../../../toast'
@@ -17,14 +16,6 @@ import { AddRow } from '../../_ui/add-row'
 import { useOnBrandRevert } from '../_ui/brand-events'
 import { ColorRow, type ColorItem } from './color-row'
 import { ColorPlayground } from './playground'
-
-/** The built-in rows' fixed guide text (Brand's approved exception to the no-instruction-
- *  copy rule). Keyed by every colour slot, so a third slot is a compile error here until
- *  it has its words. */
-const GUIDE: Record<ColorSlot, string> = {
-  primary: 'Your main color.',
-  secondary: 'Your second color.',
-}
 
 /** The page's rows, from the server's palette: Primary and Secondary ALWAYS — from the slot
  *  list, not from the rows, so an unpicked one (no row at all) is still there — then the
@@ -48,7 +39,7 @@ function seedRows(colors: BrandColor[]): ColorItem[] {
  * layout's Publish bar rises for a colour change like any other brand change, and the site
  * reads each published colour as `--brand-<key>`.
  *
- * A BUILT-IN has a fixed title, grey guide text, no note and no trash. It is "No color yet"
+ * A BUILT-IN has a fixed title and no guide text (Sam, 2026-10-05: filler), note or trash. It is "No color yet"
  * and a + until picked; the pick saves it (one upsert by slot, color-row.tsx), and so does
  * every pick after.
  *
@@ -132,7 +123,6 @@ export function ColorsLedger({
           key={`${generation}:${item.key}`}
           artistId={artistId}
           item={item}
-          guide={item.slot ? GUIDE[item.slot] : undefined}
           swatches={siteSwatches}
           onPatch={patch}
           onRemove={remove}

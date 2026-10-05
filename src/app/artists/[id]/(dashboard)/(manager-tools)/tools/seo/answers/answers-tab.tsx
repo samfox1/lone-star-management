@@ -41,7 +41,12 @@ type Row =
  * Every row is the ledger's (LedgerRow), centred like every other (Sam, 2026-10-02: "answers to
  * questions centered"); a question wraps.
  *
- * An answer edits in place and autosaves to the draft; the layout's Publish bar ships it.
+ * CLICK TO EDIT (Sam, 2026-10-05, prototypes/lists_before_after_20261002.html): at rest a row is
+ * its question and its answer as text, no pencil and no trash. A click on the answer opens it
+ * in place with ✓ beside it, and the row's own trash (your questions) or replay (a written
+ * answer going back to the automatic one), which exist only while it is open. The answer
+ * autosaves to the draft as it is written; ✓, Escape or a click away closes it. The layout's
+ * Publish bar ships it.
  */
 export function AnswersTab({ artistId, name, schemaType, initial, auto }: { artistId: string; name: string; schemaType: string; initial: Record<string, string>; auto: string[] }) {
   const [values, setValues] = useState(initial)
@@ -158,6 +163,18 @@ function AnswerRow({
   }
 
   if (editing && !from) {
+    // The row's own actions exist only while it is open (Sam, 2026-10-05: the trash and the
+    // replay show once a row is opened). Each closes the row first, then asks.
+    const closeThenClear = () => {
+      onDone()
+      onClear()
+    }
+    const clearIcon =
+      row.kind === 'extra' ? (
+        <RowIcon icon="trash" label={`Remove: ${row.question}`} variant="bare" tone="danger" glyphSize={14} onClick={closeThenClear} />
+      ) : row.written.trim() ? (
+        <RowIcon icon="replay" label="Use the automatic answer" variant="bare" glyphSize={14} onClick={closeThenClear} />
+      ) : null
     return (
       <div
         ref={box}
@@ -178,45 +195,49 @@ function AnswerRow({
         )}
         <div className="flex min-w-0 items-center gap-2.5">
           <AnswerDraft label={`Answer: ${row.question}`} start={row.written || (row.kind === 'fixed' ? row.auto : '')} onAnswer={onAnswer} />
-          <EndSlot>
-            <RowIcon icon="check" label="Done" variant="primary" tone="accent" onClick={onDone} />
-          </EndSlot>
+          {/* ✓ beside the field, not in the end column (prototypes/lists_before_after_20261002.html). */}
+          <span className="inline-flex flex-none items-center gap-1.5">
+            <RowIcon icon="check" label="Done" variant="bare" tone="accent" glyphSize={14} onClick={onDone} />
+            {clearIcon}
+          </span>
+          <EndSlot />
         </div>
       </div>
     )
   }
 
+  // At rest the answer is its text, and the text is the way in (no pencil, no trash).
   return (
-    <LedgerRow
-      title={row.question}
-      wrap
-      end={from ? undefined : <RowIcon icon="edit" label={`Edit: ${row.question}`} onClick={onEdit} />}
-    >
-      {/* An automatic-only answer has no editor to open, so it is never cut short. `mr-auto`
-          keeps the answer at its column's left edge however wide the column grows. */}
-      <span className={cx('mr-auto min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', !from && 'line-clamp-3', answer ? 'text-ink-muted' : 'text-ink-faint')}>
-        {answer || 'No answer yet'}
-      </span>
+    <LedgerRow title={row.question} wrap>
       {from ? (
-        // r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow means
-        // "leaves Tapir" elsewhere on these tabs).
-        <Link
-          href={`/artists/${artistId}/${from.seg}`}
-          className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
+        <>
+          {/* An automatic-only answer has no editor to open, so it is never cut short. `mr-auto`
+              keeps the answer at its column's left edge however wide the column grows. */}
+          <span className={cx('mr-auto min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
+          {/* r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow
+              means "leaves Tapir" elsewhere on these tabs). */}
+          <Link
+            href={`/artists/${artistId}/${from.seg}`}
+            className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
+          >
+            <Icon name={from.icon} size={14} aria-hidden="true" />
+            {`comes from ${from.label}`}
+          </Link>
+        </>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Edit: ${row.question}`}
+          onClick={onEdit}
+          className={cx(
+            'mr-auto min-w-0 max-w-[60ch] flex-1 cursor-text rounded text-left text-[14px] leading-[1.5] transition-colors hover:text-ink',
+            answer ? 'text-ink-muted' : 'text-ink-faint',
+            FOCUS_RING,
+          )}
         >
-          <Icon name={from.icon} size={14} aria-hidden="true" />
-          {`comes from ${from.label}`}
-        </Link>
-      ) : row.written.trim() ? (
-        <RowIcon
-          icon={row.kind === 'extra' ? 'trash' : 'replay'}
-          label={row.kind === 'extra' ? `Remove: ${row.question}` : 'Use the automatic answer'}
-          tone={row.kind === 'extra' ? 'danger' : 'default'}
-          onClick={onClear}
-        />
-      ) : row.kind === 'extra' ? (
-        <RowIcon icon="trash" label={`Remove: ${row.question}`} tone="danger" onClick={onClear} />
-      ) : null}
+          <span className="line-clamp-3">{answer || 'No answer yet'}</span>
+        </button>
+      )}
     </LedgerRow>
   )
 }

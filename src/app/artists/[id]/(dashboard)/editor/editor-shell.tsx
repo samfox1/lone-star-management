@@ -14,6 +14,10 @@ import { CURSOR_KEYS, SEO_FIELDS } from '@/lib/site-content-schema'
 import type { FrameMode } from '@samfox1/site-bridge/protocol'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
+import { DeviceGlyph } from '@/components/ui/device-glyphs'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
+import { HoverLabel } from '../(manager-tools)/_ui/row-icon'
+import { FOCUS_RING_OFFSET } from '../(manager-tools)/_ui/styles'
 import { BrandSwatchProvider, type NamedSwatch } from './color-picker'
 import { EditorPublish } from './editor-publish'
 import { RestoreVersionMenu } from './restore-version'
@@ -173,6 +177,16 @@ export function withSlotTitles<F extends { family: string; label: string }>(
 /** Stable empties, so an omitted prop is not a new array (and a new provider value, and a
  *  re-render of every swatch row) on each render. */
 const NO_SLOT_TITLES: { family: string; title: string }[] = []
+
+/** A top-bar control: a bare glyph (Sam, 2026-10-02: no boxes, icons over words). Ink and
+ *  bolder on hover, never a tinted box; a 24px target around a 15-18px glyph. */
+const TOP_GLYPH = cx('relative flex h-6 w-6 items-center justify-center rounded transition-colors', ICON_HOVER, FOCUS_RING_OFFSET)
+
+/** EDIT vs BROWSE, as glyphs: the pencil edits, the eye looks at the site as a visitor. */
+const FRAME_MODES: readonly { mode: FrameMode; label: string; icon: 'edit' | 'eye' }[] = [
+  { mode: 'edit', label: 'Edit', icon: 'edit' },
+  { mode: 'browse', label: 'Browse', icon: 'eye' },
+]
 const NO_BRAND_COLORS: NamedSwatch[] = []
 
 /**
@@ -426,39 +440,40 @@ export function EditorShell({
         <div className="flex h-full w-full flex-col gap-2.5">
           {/* Floating controls: device, status, Publish — no toolbar bar. */}
           <div className="flex items-center gap-3 px-0.5">
-            <label className="sr-only" htmlFor="editor-device">
-              Preview device
-            </label>
-            <select
-              id="editor-device"
-              value={device}
-              onChange={(e) => setDevice(e.target.value as Device)}
-              className="rounded-lg border border-hairline bg-paper px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-ink-faint outline-none hover:text-ink focus:border-ink-faint"
-            >
+            {/* The preview's device, as GLYPHS (Sam, 2026-10-02: icons, not words; no boxes):
+                the one in use is ink, the other faint; the name is the hover label. */}
+            <div role="group" aria-label="Preview device" className="flex items-center gap-2.5">
               {DEVICE_OPTIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
+                <button
+                  key={d.value}
+                  type="button"
+                  aria-label={d.label}
+                  aria-pressed={device === d.value}
+                  onClick={() => setDevice(d.value)}
+                  className={cx(TOP_GLYPH, device === d.value ? 'text-ink' : 'text-ink-faint')}
+                >
+                  <DeviceGlyph device={d.value} size={18} />
+                  <HoverLabel label={d.label} />
+                </button>
               ))}
-            </select>
+            </div>
 
             {/* EDIT vs BROWSE. Every click on a marked region is swallowed in edit mode so
                 selecting never also fires the app underneath — which left a site with
                 NAVIGATION unbrowsable: on a tabbed site each click just selected the tab
                 button (Sam, 2026-08-10). Browse hands the site back its own clicks. */}
-            <div className="flex overflow-hidden rounded-lg border border-hairline">
-              {(['edit', 'browse'] as const).map((m) => (
+            <div role="group" aria-label="Preview mode" className="flex items-center gap-2.5">
+              {FRAME_MODES.map((m) => (
                 <button
-                  key={m}
+                  key={m.mode}
                   type="button"
-                  onClick={() => setFrameMode(m)}
-                  aria-pressed={frameMode === m}
-                  className={cx(
-                    'px-2.5 py-1.5 font-space text-[10px] font-bold uppercase tracking-[0.08em]',
-                    frameMode === m ? 'bg-ink text-paper' : 'bg-paper text-ink-faint hover:text-ink',
-                  )}
+                  onClick={() => setFrameMode(m.mode)}
+                  aria-label={m.label}
+                  aria-pressed={frameMode === m.mode}
+                  className={cx(TOP_GLYPH, frameMode === m.mode ? 'text-ink' : 'text-ink-faint')}
                 >
-                  {m}
+                  <Icon name={m.icon} size={16} />
+                  <HoverLabel label={m.label} />
                 </button>
               ))}
             </div>
@@ -476,15 +491,15 @@ export function EditorShell({
               type="button"
               aria-pressed={!mediaPlaying}
               aria-label={mediaPlaying ? 'Pause all videos' : 'Play all videos'}
-              title={mediaPlaying ? 'Pause all videos' : 'Play all videos'}
               onClick={() => {
                 const next = !mediaPlaying
                 setMediaPlaying(next)
                 setPlayback(next)
               }}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-hairline bg-paper text-ink-faint hover:text-ink"
+              className={cx(TOP_GLYPH, 'text-ink-faint')}
             >
-              <Icon name={mediaPlaying ? 'pause' : 'play'} size={13} />
+              <Icon name={mediaPlaying ? 'pause' : 'play'} size={15} />
+              <HoverLabel label={mediaPlaying ? 'Pause all videos' : 'Play all videos'} />
             </button>
 
             {/* The canvas is a real 1440px desktop window drawn smaller, so say so —

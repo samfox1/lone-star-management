@@ -17,6 +17,8 @@ import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from '../toast'
 import { CANCEL_WORD } from '../confirm-dialog'
 import { AddTrigger } from '../create-modal'
+import { AddPlus } from '../(manager-tools)/_ui/add-row'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /** "A, B feat. C" → ['A', 'B feat. C'] — comma-separated collaborators. */
 export function parseContributors(raw: string): string[] {
@@ -60,7 +62,8 @@ const STREAMING_TYPE_LABEL: Record<StreamingType, string> = {
  * THE add-music flow (the Music page's single + button). Two ways in:
  *   - **Add Manually** — first pick the format (single / EP / album). A single
  *     is one song; an EP/album is a manual RELEASE with song rows (title,
- *     contributors, audio each — "+ Add song" appends one). Cover art sits at
+ *     contributors, audio each; a bare + appends one, a trash takes one away). No
+ *     boxes round the rows and no how-to lines (Sam, 2026-10-05). Cover art sits at
  *     the top and a REQUIRED released/unreleased choice closes the form: a
  *     hand-added song or record can be public with no platform link (the
  *     stored `released` flags; songs inherit their release's).
@@ -373,9 +376,10 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   )
 
   // A SWITCH, off by default — not a question. Released is assumed; this is the exception
-  // (Sam, 2026-09-10). Offered on every manual upload and on a SoundCloud-only link.
+  // (Sam, 2026-09-10). Offered on every manual upload and on a SoundCloud-only link. A plain
+  // row, no box round it (Sam, 2026-10-02: no bordered containers).
   const unreleasedToggle = (
-    <label className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2">
+    <label className="flex items-center justify-between gap-3 py-2">
       <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Unreleased</span>
       <button
         type="button"
@@ -404,18 +408,20 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   )
 
   const songRow = (r: SongRow, i: number) => (
-    <div key={r.id} className="space-y-2 rounded-xl border border-hairline p-3">
+    <div key={r.id} className="space-y-2">
       {grouped && (
-        <div className="flex items-center justify-between">
+        <div className="flex h-6 items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-ink-faint">Song {i + 1}</span>
           {rows.length > 1 && (
-            <button
-              type="button"
+            <RowIcon
+              icon="trash"
+              label={`Remove song ${i + 1}`}
+              variant="bare"
+              tone="danger"
+              labelAlign="end"
+              glyphSize={14}
               onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-              className="text-xs text-accent-red hover:underline"
-            >
-              remove
-            </button>
+            />
           )}
         </div>
       )}
@@ -508,15 +514,11 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     className={`${inputClass} w-full`}
                   />
                 )}
-                <div className="space-y-2.5">{rows.map(songRow)}</div>
+                <div className="space-y-6">{rows.map(songRow)}</div>
                 {grouped && (
-                  <button
-                    type="button"
-                    onClick={() => setRows((prev) => [...prev, newRow()])}
-                    className={buttonClass('ghost')}
-                  >
-                    + Add song
-                  </button>
+                  <div>
+                    <AddPlus label="Add song" onClick={() => setRows((prev) => [...prev, newRow()])} />
+                  </div>
                 )}
                 {unreleasedToggle}
               </div>
@@ -524,10 +526,6 @@ export function SongAddButton({ artistId }: { artistId: string }) {
 
             {step === 'streaming' && (
               <div className="mt-4 space-y-3">
-                <p className="text-xs text-ink-muted">
-                  Paste the song&apos;s link on each service it lives on — the title, cover art, and
-                  contributors come from the service, and the song counts as released.
-                </p>
                 <div className="space-y-2">
                   {STREAMING_SERVICES.map((s) => (
                     <div key={s.key} className="flex items-center gap-2">
@@ -549,9 +547,6 @@ export function SongAddButton({ artistId }: { artistId: string }) {
 
             {step === 'streaming-review' && (
               <div className="mt-4 space-y-3">
-                <p className="text-xs text-ink-muted">
-                  Here&apos;s what we pulled from the link. Fill in anything it couldn&apos;t detect before adding.
-                </p>
                 {/* FIRST, and required. What kind of song this is decides which shelf it
                     sits on, here and on the public site, and it is the one thing the
                     service cannot tell us. It used to sit last, pre-filled from a title

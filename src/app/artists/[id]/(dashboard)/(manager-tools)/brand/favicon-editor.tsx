@@ -24,7 +24,6 @@ import {
   performUpload,
 } from '@/lib/upload'
 import { createClient } from '@/lib/supabase/client'
-import { buttonClass } from '@/components/ui/ui'
 import { SelectMenu } from '../../modal-kit'
 import { toast } from '../../toast'
 import { UploadField } from '../../upload-field'
@@ -461,9 +460,9 @@ export function IconEditor({
           label={`${label} preview`}
           className={cx('absolute inset-0 h-full w-full', ed.saving && 'opacity-60')}
         />
-        {empty ? (
-          <span className="relative rounded-lg bg-paper px-3 py-1.5 text-[14px] text-ink-muted">No logo yet</span>
-        ) : ed.loading ? (
+        {/* Empty: the board stays empty (no "No logo yet" filler, Sam 2026-10-05); the + beside
+            it and "Select a logo…" are the way in. */}
+        {empty ? null : ed.loading ? (
           <span
             role="status"
             aria-label={`Loading ${sourceName}`}
@@ -491,15 +490,17 @@ export function IconEditor({
       }}
       board={board}
       controlsAlign="start"
+      // A bare glyph named on hover (Sam, 2026-10-02: icons, not bordered word buttons).
       beforeSave={
-        <button
-          type="button"
+        <RowIcon
+          icon="replay"
+          label="Reset"
+          variant="bare"
+          glyphSize={18}
+          labelSide="top"
           disabled={!ed.image}
           onClick={() => ed.change(DEFAULT_FRAMING)}
-          className={buttonClass('ghost')}
-        >
-          Reset
-        </button>
+        />
       }
     >
       <div className="flex items-center gap-3.5">
@@ -522,7 +523,8 @@ export function IconEditor({
             <RowIcon icon="plus" label="Upload new" variant="boxed" onClick={open} disabled={busy} />
           )}
         />
-        <div className="flex h-11 min-w-0 flex-1 items-center rounded-xl border border-hairline px-3">
+        {/* A line, not a box (Sam, 2026-10-02: no boxed fields). */}
+        <div className="flex h-11 min-w-0 flex-1 items-center border-b border-hairline">
           <SelectMenu
             label="Select a logo"
             value={selected}

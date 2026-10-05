@@ -307,10 +307,10 @@ describe('FontsLedger — the font on the row', () => {
     expect(within(rowOf('Primary')).queryByText(/Regular|Medium|Bold/)).toBeNull()
   })
 
-  it('an empty built-in row says "No font yet" with a +, and has no eye', () => {
+  it('an empty built-in row is only a + (no "No font yet" filler), and has no eye', () => {
     show(data({ secondary: null }))
     const row = rowOf('Secondary')
-    expect(within(row).getByText('No font yet')).toBeInTheDocument()
+    expect(within(row).queryByText('No font yet')).toBeNull()
     expect(within(row).getByRole('button', { name: 'Add font' })).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Change font' })).toBeNull()
     expect(within(row).queryByRole('button', { name: 'Preview' })).toBeNull()
@@ -642,7 +642,7 @@ describe('FontsLedger — adding a font row', () => {
     const plus = within(row).getByRole('button', { name: 'Add font' })
     expect(document.activeElement).toBe(plus) // Enter hands focus to the row's +
 
-    expect(within(row).getByText('No font yet')).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Change font' })).toBeNull() // still empty: only the +
     expect(mSlot).not.toHaveBeenCalled()
     expect(mMeta).not.toHaveBeenCalled()
     expect(mAdd).not.toHaveBeenCalled()

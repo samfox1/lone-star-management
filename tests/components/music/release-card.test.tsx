@@ -171,9 +171,9 @@ describe('the release modal', () => {
     const dialog = openRelease(release({ release_type: 'single', songs: [song('s1', 'Alpha', { featured_artists: ['Arlo'] })] }))
     expect(within(dialog).getByRole('button', { name: 'Arlo' })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add collaborator' }))
-    const pop = screen.getByRole('dialog', { name: 'Collaborator' })
-    fireEvent.change(within(pop).getByLabelText('Name'), { target: { value: 'Bo Reed' } })
-    fireEvent.click(within(pop).getByRole('button', { name: 'Save' }))
+    const field = within(dialog).getByRole('textbox', { name: 'New collaborator' })
+    fireEvent.change(field, { target: { value: 'Bo Reed' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
     await waitFor(() => expect(setTrackFeaturedAction).toHaveBeenCalledWith('s1', 'a1', ['Arlo', 'Bo Reed']))
   })
 

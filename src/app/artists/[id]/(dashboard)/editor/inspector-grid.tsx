@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
@@ -7,6 +6,7 @@ import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
+import { HoverLabel, RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /**
  * The inspector's ON-SITE PLACEMENT family — the pieces every collection panel (Images,
@@ -17,8 +17,8 @@ import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
  *
  * The vocabulary:
  *  • thumbnails (PhotoThumb / CardThumb / SongThumb) — one item's face at its aspect;
- *  • EmptySlot — the dashed Add/pick tile that opens a picker;
- *  • AddFirstLink — the "add your first item" link when the library is empty;
+ *  • EmptySlot — the dashed + tile that opens a picker;
+ *  • AddFirstLink — the + to the library page when the library is empty;
  *  • LibraryPicker<T> — the modal grid of candidates to place;
  *  • MediaGrid<T> — an open collection as on-site cards + an Add tile, wired to the
  *    picker and the edit menu, funnelling every change through one `onSetOnSite`.
@@ -97,8 +97,9 @@ export function SongThumb({ coverUrl }: { coverUrl: string | null }) {
   )
 }
 
-/** The dashed "add / pick" tile that opens a picker. `aspect` matches the cards it
- *  sits beside (16:9 videos, 4:3 photos, square songs). */
+/** The dashed + tile that opens a picker. `aspect` matches the cards it sits beside (16:9
+ *  videos, 4:3 photos, square songs). A bare + and no words (Sam, 2026-10-02: "Dont say add
+ *  email. Have it be a plus"): `label` is its hover label and, without `ariaLabel`, its name. */
 export function EmptySlot({
   label,
   onClick,
@@ -137,7 +138,7 @@ export function EmptySlot({
       aria-current={focused ? 'true' : undefined}
       title={title}
       className={cx(
-        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border-[1.5px] border-dashed px-2 text-center hover:border-accent hover:text-accent',
+        'relative flex w-full flex-col items-center justify-center rounded-lg border-[1.5px] border-dashed px-2 text-center hover:border-accent hover:text-accent',
         // Dashed stays: it still reads as EMPTY. The ring is what says "this one".
         focused ? 'border-accent text-accent ring-2 ring-accent' : 'border-hairline text-ink-muted',
         stretch && 'h-full',
@@ -145,12 +146,13 @@ export function EmptySlot({
       )}
     >
       <Icon name="plus" size={18} />
-      <span className="font-space text-[10px] font-bold uppercase leading-tight tracking-[0.08em]">{label}</span>
+      <HoverLabel label={label} />
     </button>
   )
 }
 
-/** A Replace / Remove menu that COVERS the thumbnail — two stacked, full-height rows,
+/** A Replace / Remove menu that COVERS the thumbnail — two stacked, full-height rows, each
+ *  a glyph (↻ replace, trash remove) with its name on hover, no words (Sam, 2026-10-02),
  *  opened by a tile's edit button. For tiles that are just an image with no caption row to
  *  hold a side-by-side menu (the image slots, gallery cards, image fields). Sits over a
  *  `relative` thumbnail wrapper; tag `data-edit-menu` so an outside-click can dismiss it.
@@ -170,20 +172,22 @@ export function CoverEditMenu({
     <div data-edit-menu className="absolute inset-0 z-10 flex flex-col overflow-hidden">
       <button
         type="button"
-        aria-label={replaceAria}
+        aria-label={replaceAria ?? 'Replace'}
         onClick={onReplace}
-        className="flex flex-1 items-center justify-center gap-1.5 bg-black/70 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-white transition-colors hover:bg-black/80"
+        className={`relative flex flex-1 items-center justify-center bg-black/70 text-white transition-colors hover:bg-black/80 ${ICON_BOLD}`}
       >
-        <Icon name="edit" size={12} /> Replace
+        <Icon name="refresh" size={16} />
+        <HoverLabel label="Replace" />
       </button>
       <span className="h-px bg-white/20" />
       <button
         type="button"
-        aria-label={removeAria}
+        aria-label={removeAria ?? 'Remove'}
         onClick={onRemove}
-        className="flex flex-1 items-center justify-center gap-1.5 bg-black/70 font-space text-[10px] font-bold uppercase tracking-[0.08em] text-red-300 transition-colors hover:bg-black/80 hover:text-red-200"
+        className={`relative flex flex-1 items-center justify-center bg-black/70 text-red-300 transition-colors hover:bg-black/80 hover:text-red-200 ${ICON_BOLD}`}
       >
-        <Icon name="trash" size={12} /> Remove
+        <Icon name="trash" size={16} />
+        <HoverLabel label="Remove" />
       </button>
     </div>
   )
@@ -239,6 +243,7 @@ export function SelectableTile({
   label,
   focused,
   onSelect,
+  onEdit,
   title,
   rounded = 'rounded-md',
   thumb,
@@ -248,6 +253,9 @@ export function SelectableTile({
   label: string
   focused: boolean
   onSelect: () => void
+  /** What the tile's pencil opens. A click on the tile's face opens it too, after selecting
+   *  (Sam, 2026-10-05: "clicking anywhere on that row should open the editing"). */
+  onEdit?: () => void
   /** Hover text on the wrapper (e.g. the stored file's name). */
   title?: string
   rounded?: string
@@ -268,7 +276,16 @@ export function SelectableTile({
         focused ? 'border-accent ring-2 ring-accent' : 'border-hairline',
       )}
     >
-      <button type="button" onClick={onSelect} aria-label={`Select ${label}`} aria-pressed={focused} className="block w-full text-left">
+      <button
+        type="button"
+        onClick={() => {
+          onSelect()
+          onEdit?.()
+        }}
+        aria-label={`Select ${label}`}
+        aria-pressed={focused}
+        className="block w-full text-left"
+      >
         {thumb}
       </button>
       {children}
@@ -291,34 +308,26 @@ export function useDismiss(open: boolean, onClose: () => void) {
   }, [open, onClose])
 }
 
-/** The dashed "add your first item" link shown in a picker with no candidates left —
- *  points at the collection's own page (Videos / Music) to add one. Taller (`py-6`) than
- *  AddLink because it fills an empty picker-modal grid, not a panel footer. */
+/** The + shown in a picker with no candidates left — points at the collection's own page
+ *  (Videos / Music) to add one. A bare + (Sam, 2026-10-02): `label` is its name and hover
+ *  label, never words on the screen. Centred in the empty picker, where the grid would be. */
 export function AddFirstLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-6 text-ink-muted hover:border-accent hover:text-accent"
-    >
-      <Icon name="plus" size={16} />
-      <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
-    </Link>
+    <div className="flex justify-center py-6">
+      <RowIcon icon="plus" label={label} variant="bare" glyphSize={20} href={href} link="app" className="-m-1.5 p-1.5" />
+    </div>
   )
 }
 
-/** THE panel-footer "add another" button, ONE shared size for Music / Tour / Merch so the
- *  three read identically (Sam, 2026-08-13). Points at the collection's own page, where
- *  items are actually created — the editor only arranges what already exists. Distinct
- *  from AddFirstLink (taller, for an empty picker grid). */
+/** THE panel-footer "add another" control, ONE for Music / Tour / Merch so the three read
+ *  identically (Sam, 2026-08-13): a bare + where the list starts (Sam, 2026-10-02: no words).
+ *  Points at the collection's own page, where items are actually created — the editor only
+ *  arranges what already exists. */
 export function AddLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-hairline px-3 py-2.5 text-ink-muted hover:border-accent hover:text-accent"
-    >
-      <Icon name="plus" size={16} />
-      <span className="font-space text-[10px] font-bold uppercase tracking-[0.08em]">{label}</span>
-    </Link>
+    <div className="flex">
+      <RowIcon icon="plus" label={label} variant="bare" labelAlign="start" glyphSize={16} href={href} link="app" className="-m-1.5 p-1.5" />
+    </div>
   )
 }
 
@@ -478,6 +487,7 @@ export function MediaGrid<T>({
               label={`${noun} ${i + 1}`}
               focused={select.isFocused(item)}
               onSelect={() => select.onSelect(item)}
+              onEdit={() => select.action.onEdit(item, i)}
               rounded="rounded-lg"
               thumb={
                 <>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Editor → Socials: the site's BUTTONS, each made from a connection; Add button picks one, never types a URL.
+// Editor → Socials: the site's BUTTONS, each made from a connection; the + picks one, a click edits its handle.
 /**
  * Sam, 2026-09-28: "when the connection is added, and I travel to the socials list in the
  * site editor, I can add a new button based on one of the existing connections that I
@@ -8,8 +8,10 @@
  * And Shopify and the other services are not social buttons.
  *
  * What has to hold:
- *   - the list is the ON-SITE social links only, each as mark · name · handle, with no URL
- *     box: the link is edited in Connections, and the button IS that link;
+ *   - the list is the ON-SITE social links only, each as mark · name · handle, plain text at
+ *     rest; a click on the handle opens it as a line (Sam, 2026-10-05), and what is typed
+ *     saves as the connection's own link, by the rule Connections saves it — the button IS
+ *     that link;
  *   - "Add button" opens a picker of the connections with a profile link that are not
  *     buttons yet — never a service, never a contact or role-bound row, never an identity
  *     connection (MusicBrainz, Discogs, Wikidata: they feed the fact card, not the page);
@@ -32,6 +34,7 @@ import {
 } from '@/app/artists/[id]/(dashboard)/actions'
 import { connectOneAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions'
 import { CONNECTIONS } from '@/lib/connections'
+import { CONNECT_METHODS, parseHandle, type HandleMethod } from '@/lib/connect-methods'
 
 const refresh = vi.hoisted(() => vi.fn())
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))
@@ -120,7 +123,7 @@ describe('Socials — the buttons on the site', () => {
     expect(x.querySelector(`svg path[d="${socialIcon('x')!.path}"]`)).not.toBeNull()
     // A link platform has no handle: its address, as a person says it.
     expect(buttonRows()[0]).toHaveTextContent('open.spotify.com/artist/26K')
-    // Nothing here edits the link: that is Connections' job, and the button IS that link.
+    // Plain text at rest: no box, no pencil (click to edit, Sam 2026-10-05).
     for (const r of buttonRows()) {
       expect(within(r).queryAllByRole('textbox')).toHaveLength(0)
       expect(within(r).queryByRole('button', { name: /^Edit/ })).toBeNull()
@@ -130,12 +133,50 @@ describe('Socials — the buttons on the site', () => {
 
   it('CRITICAL: taking a button off sets on_site false through the live toggle — the connection is not deleted', async () => {
     openLinks()
+    // The trash is the OPEN row's (click the handle first), and it means "off the site".
+    fireEvent.click(within(buttonRows()[1]).getByRole('button', { name: 'skeenmusic' }))
     fireEvent.click(within(buttonRows()[1]).getByRole('button', { name: 'Remove the X button' }))
     expect(setOnSiteAction).toHaveBeenCalledWith('link', 'l-x', 'artist-1', false)
     expect(deleteContentAction).not.toHaveBeenCalled()
     expect(buttonNames()).toEqual(['Spotify'])
     // …and it is a choice again.
     expect(cardNames(openPicker())).toContain('X')
+  })
+
+  it('CRITICAL: a handle typed on the open line saves as the connection’s link, built the way Connections builds it', async () => {
+    openLinks()
+    fireEvent.click(within(buttonRows()[1]).getByRole('button', { name: 'skeenmusic' }))
+    fireEvent.change(screen.getByLabelText('X link'), { target: { value: '@skeen_live' } })
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText('X link'), { key: 'Enter' })
+    })
+    // The expected link is the lib's own (rule 4: derived, never hand-written).
+    const built = parseHandle(CONNECT_METHODS.x as HandleMethod, '@skeen_live')
+    if ('error' in built) throw new Error(built.error)
+    expect(updateContentAction).toHaveBeenCalledTimes(1)
+    const [type, id, artistId, fd] = vi.mocked(updateContentAction).mock.calls[0]
+    expect([type, id, artistId]).toEqual(['link', 'l-x', 'artist-1'])
+    expect((fd as FormData).get('url')).toBe(built.url)
+    expect(buttonRows()[1]).toHaveTextContent('skeen_live')
+  })
+
+  it('CRITICAL: a handle the platform would refuse never reaches the door, and the line keeps it', async () => {
+    openLinks()
+    fireEvent.click(within(buttonRows()[1]).getByRole('button', { name: 'skeenmusic' }))
+    fireEvent.change(screen.getByLabelText('X link'), { target: { value: 'not a handle!' } })
+    expect('error' in parseHandle(CONNECT_METHODS.x as HandleMethod, 'not a handle!')).toBe(true) // the witness
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText('X link'), { key: 'Enter' })
+    })
+    expect(updateContentAction).not.toHaveBeenCalled()
+    expect((screen.getByLabelText('X link') as HTMLInputElement).value).toBe('not a handle!')
+  })
+
+  it('a click anywhere on a button’s row opens its handle, as a click on the handle does', () => {
+    // (Sam, 2026-10-05: "clicking anywhere on that row should open the editing")
+    openLinks()
+    fireEvent.click(within(buttonRows()[1]).getByText('X'))
+    expect((screen.getByLabelText('X link') as HTMLInputElement).value).toBe('skeenmusic')
   })
 
   it('drags to reorder, renumbering the WHOLE list so the links not shown keep their place', () => {

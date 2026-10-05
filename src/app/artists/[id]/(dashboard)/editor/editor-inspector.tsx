@@ -45,7 +45,9 @@ import {
   SiteTools,
 } from './panels'
 import type { CursorSettings } from '@samfox1/site-bridge/cursor'
+import { useRouter } from 'next/navigation'
 import {
+  addContentAction,
   assignComponentSlotAction,
   setSongsOnSiteAction,
   assignHeroSlotAction,
@@ -59,6 +61,7 @@ import {
   saveArtistFactAction,
   saveSeoFieldAction,
   setOnSiteAction,
+  updateContentAction,
 } from '../actions'
 import { useOptimisticRunner } from './use-optimistic'
 import { useSessionRevert } from './use-session-revert'
@@ -348,6 +351,7 @@ export function EditorInspector({
   // The optimistic apply→persist→rollback rule, ONE home (use-optimistic.ts). Guarded
   // ops share isPending; the on/off toggles pass guard:false (see the hook's docblock).
   const { isPending, run } = useOptimisticRunner()
+  const router = useRouter()
 
   // Clicking a styled region in the site opens the Style tools on it. This is the
   // whole point of the embedded-frame model (SITE_EDITOR_PLAN.md): click the thing,
@@ -881,13 +885,60 @@ export function EditorInspector({
     })
   }
 
-  function removeTour(t: EditorTour) {
-    const prev = tours
-    run({
-      apply: () => setTours((list) => list.filter((x) => x.id !== t.id)),
-      persist: () => deleteContentAction('tour_date', t.id, artistId),
-      rollback: () => setTours(prev),
-    })
+  /**
+   * A date's VENUE, typed in the Tour panel (Sam, 2026-10-05). Through the SAME tour-date
+   * door the Tour page saves by (`updateContentAction`), so it is a draft until Publish.
+   * Shown at once; a refusal puts the old name back and comes back to the line, which keeps
+   * what was typed (edit-list.tsx). The refresh re-sends the draft to the frame, as the
+   * show's own editor does (tour-date-editor.tsx).
+   */
+  async function saveTourVenue(t: EditorTour, venue: string): Promise<{ error?: string } | void> {
+    const put = (v: string | null) => setTours((list) => list.map((x) => (x.id === t.id ? { ...x, venue: v } : x)))
+    const fd = new FormData()
+    fd.set('venue', venue)
+    put(venue)
+    try {
+      const res = await updateContentAction('tour_date', t.id, artistId, fd)
+      if (res?.error) put(t.venue)
+      else router.refresh()
+      return res
+    } catch (e) {
+      put(t.venue)
+      throw e
+    }
+  }
+
+  /**
+   * A link row's new label and/or address — a social's handle (its connection's own row) or
+   * a contact — through the row's CRUD door, the one Connections' window saves by. Shown at
+   * once; a refusal puts the row back and comes back to the line, which keeps the draft.
+   */
+  async function saveLink(l: EditorLink, patch: Partial<Pick<EditorLink, 'label' | 'url'>>): Promise<{ error?: string } | void> {
+    const put = (p: Partial<EditorLink>) => setLinks((list) => list.map((x) => (x.id === l.id ? { ...x, ...p } : x)))
+    const fd = new FormData()
+    if (patch.label !== undefined) fd.set('label', patch.label)
+    if (patch.url !== undefined) fd.set('url', patch.url)
+    put(patch)
+    try {
+      const res = await updateContentAction('link', l.id, artistId, fd)
+      if (res?.error) put({ label: l.label, url: l.url })
+      return res
+    } catch (e) {
+      put({ label: l.label, url: l.url })
+      throw e
+    }
+  }
+
+  /** A new contact, typed in the Links panel's Contact list: on the site (a link's default). */
+  async function addContact(label: string, url: string): Promise<{ error?: string }> {
+    const fd = new FormData()
+    fd.set('label', label)
+    fd.set('url', url)
+    const res = await addContentAction('link', artistId, fd)
+    if (res?.error || !res?.id) return { error: res?.error ?? 'Couldn’t add that contact.' }
+    const id = res.id
+    setLinks((list) => [...list, { id, label, url, onSite: true }])
+    return {}
   }
 
   /**
@@ -1104,6 +1155,7 @@ export function EditorInspector({
           artistId={artistId}
           onReorder={reorderLinks}
           onToggleOnSite={toggleLinkOnSite}
+          onSaveUrl={(l, url) => saveLink(l, { url })}
           focusedKey={focusedKey}
         />
         {/* A booking address is a contact route, not a profile to follow — its own
@@ -1114,10 +1166,11 @@ export function EditorInspector({
             <ContactLinkTools
               links={links.filter((l) => isContactish(l.url))}
               collapseAt={deselectedAt}
-              artistId={artistId}
               onRemove={removeLink}
               onReorder={reorderLinks}
               onToggleOnSite={toggleLinkOnSite}
+              onSave={saveLink}
+              onAdd={addContact}
               focusedKey={focusedKey}
             />
           </>
@@ -1158,9 +1211,9 @@ export function EditorInspector({
       <TourTools
         tours={tours}
         artistId={artistId}
-        onRemove={removeTour}
         onReorder={reorderTours}
         onToggleOnSite={toggleTourOnSite}
+        onSaveVenue={saveTourVenue}
         onEditTour={(t, label) => {
           closeEditors() // one editor in the panel at a time
           setEditingTour({ tour: t, label })

@@ -79,7 +79,10 @@ describe('SourceRings', () => {
     render(<SourceRings sources={nine} />)
     const list = screen.getByRole('list', { name: 'Sources' })
     expect(within(list).getAllByRole('img')).toHaveLength(7)
-    fireEvent.click(within(list).getByRole('button', { name: /\+2see all/i }))
+    // The tile is its ring alone (+2, the count behind it); its name is on hover, not under it.
+    const seeAll = within(list).getByRole('button', { name: 'See all' })
+    expect(seeAll.textContent).toBe('+2')
+    fireEvent.click(seeAll)
     expect(within(list).getAllByRole('img')).toHaveLength(9)
     expect(within(list).getByRole('button', { name: /show fewer/i })).toBeTruthy()
   })

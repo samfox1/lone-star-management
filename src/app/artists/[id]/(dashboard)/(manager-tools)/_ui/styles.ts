@@ -32,6 +32,9 @@ export const FOCUS_RING_OFFSET = cx(FOCUS_RING, 'focus-visible:outline-offset-2'
  * RowIcon applies it to every `edit` glyph by default (`reveal`). Only pencils: +, ✓, ↗ and ×
  * keep their own look.
  *
+ * A ROW WITH A HOVER PENCIL OPENS ON A CLICK ANYWHERE ON IT (Sam, 2026-10-05): LedgerRow, KvRow
+ * and CardField are EditRows (edit-row.tsx), which hand such a click to the pencil.
+ *
  * Targets must not nest: `group-hover/edit` fires for ANY hovered ancestor target, so a pencil
  * inside a popover inside a ledger row would light with the whole row. The Brand font menu,
  * which opens inside its row, keys its rename pencil on its own item instead (font-menu.tsx).

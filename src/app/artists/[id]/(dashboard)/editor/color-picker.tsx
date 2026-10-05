@@ -41,11 +41,13 @@ const KEY_STEP = 0.02
  * Deliberately NARROW (320px): the manager is judging a colour against the site behind
  * it, so the dialog covers as little of the frame as it can while still giving the square
  * enough room to aim in. Edits apply live through the same `onChange` as everything else,
- * so there is nothing to confirm — closing is the only action, by Escape, the backdrop, or
- * Save.
+ * so there is nothing to confirm — closing is the only action, by Escape or the backdrop.
+ * The Save button that only closed it went (2026-10-05): it said a save was waiting when
+ * every pick had already applied.
  *
  * No header (Sam, 2026-10-02: "Remove it if its not needed"): it opens from the colour's own
- * swatch, under its own label, so a chip · name · hex line over the square said it twice.
+ * swatch, under its own label, so a chip · name · hex line over the square said it twice; the
+ * "On site" word over the swatches went with the Save (2026-10-05).
  */
 function ColorModal({
   aria,
@@ -75,13 +77,6 @@ function ColorModal({
           rule order, not on the order written here. */}
       <div className="flex max-h-[88vh] w-[320px] max-w-full flex-col gap-3 overflow-auto rounded-2xl bg-paper p-5 shadow-2xl">
         {children}
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-1 w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink transition-colors hover:border-accent hover:text-accent"
-        >
-          Save
-        </button>
       </div>
     </div>
   )
@@ -697,8 +692,7 @@ export function ColorPalette({
               when there are none, since an empty row is worse than no row. */}
           {swatches.length > 0 && (
             <div className="mt-1">
-              <span className={CONTROL_LABEL}>On site</span>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {swatches.map((s) => {
                   const active = activeHex === s.hex
                   return (

@@ -282,7 +282,9 @@ describe('a routed select is VISIBLE where it lands', () => {
   it('CRITICAL: clicking a tour row posts its item highlight', () => {
     const { onHighlight } = renderInspector()
     fireEvent.click(screen.getByRole('button', { name: /Tour/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Select Mohawk/ }))
+    // The row selects (2026-10-05): its venue is click-to-edit now, and a click on it
+    // outlines the date on the site on its way to opening the line.
+    fireEvent.click(screen.getByText('Mohawk'))
     expect(onHighlight).toHaveBeenCalledWith({ kind: 'item', assetType: 'tour_date', id: 'td1' })
   })
 

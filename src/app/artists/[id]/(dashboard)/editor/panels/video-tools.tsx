@@ -12,21 +12,36 @@ import { CardThumb, EmptySlot, AddFirstLink, LibraryPicker, useScrollIntoFocus }
  * The Videos panel had no focus affordance at all — a routed select opened the panel
  * and visibly selected nothing (Sam, 2026-08-06).
  */
-function FocusableCard({ focused, label, children }: { focused: boolean; label: string; children: React.ReactNode }) {
+function FocusableCard({
+  focused,
+  label,
+  onEdit,
+  children,
+}: {
+  focused: boolean
+  label: string
+  /** What its pencil opens. A click anywhere on the card opens it too (Sam, 2026-10-05: the
+   *  row is the target), except on a control of its own (the title field, the pencil). */
+  onEdit: () => void
+  children: React.ReactNode
+}) {
   const ref = useScrollIntoFocus<HTMLDivElement>(focused)
   return (
     <div
       ref={ref}
       aria-current={focused ? 'true' : undefined}
       aria-label={label}
+      onClick={(e) => {
+        if (!clickedAControl(e)) onEdit()
+      }}
       // The card is its pencil's EDIT_TARGET (_ui/styles.ts): the pencil shows while it is hovered.
-      className={cx(EDIT_TARGET, 'overflow-hidden rounded-lg border', focused ? 'border-accent ring-2 ring-accent' : 'border-hairline')}
+      className={cx(EDIT_TARGET, 'cursor-pointer overflow-hidden rounded-lg border', focused ? 'border-accent ring-2 ring-accent' : 'border-hairline')}
     >
       {children}
     </div>
   )
 }
-import { SlotGroupLabel, SaveLine, NoSlots } from '../inspector-shared'
+import { SlotGroupLabel, SaveLine, NoSlots, clickedAControl } from '../inspector-shared'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { renameVideoAction } from '../../actions'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../../(manager-tools)/_ui/styles'
@@ -104,7 +119,7 @@ export function VideoTools({
       <div key={role} className="space-y-1">
         <span className="font-space text-[10px] font-medium uppercase tracking-[0.06em] text-ink-faint">{label}</span>
         {placed ? (
-          <FocusableCard focused={placed.id === focusedVideoId} label={label}>
+          <FocusableCard focused={placed.id === focusedVideoId} label={label} onEdit={() => onEditItem({ type: 'videoSlot', role, label })}>
             <CardThumb poster={placed.poster} previewUrl={placed.previewUrl} />
             <div className="px-2 py-1.5">
               <div className="flex items-center gap-1">
@@ -141,7 +156,12 @@ export function VideoTools({
     const v = bandSlots[i]
     if (!v) return <EmptySlot key={`band-empty-${i}`} label="Pick a YouTube video" onClick={() => setPicking('band')} />
     return (
-      <FocusableCard key={v.id} focused={v.id === focusedVideoId} label={`Video slot ${i + 1}`}>
+      <FocusableCard
+        key={v.id}
+        focused={v.id === focusedVideoId}
+        label={`Video slot ${i + 1}`}
+        onEdit={() => onEditItem({ type: 'bandVideo', id: v.id, label: `Video slot ${i + 1}` })}
+      >
         <CardThumb poster={v.poster} previewUrl={v.previewUrl} />
         <div className="px-1.5 py-1">
           <div className="flex items-center gap-0.5">

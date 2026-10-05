@@ -118,9 +118,9 @@ describe('tour date modal', () => {
     expect((vi.mocked(updateContentAction).mock.calls[1][3] as FormData).get('state')).toBe('IL')
   })
 
-  it('the lineup row shows the acts as chips', () => {
+  it('the lineup row shows the acts by name, and a bare + to add one', () => {
     const dialog = openModal()
-    expect(within(dialog).getByRole('button', { name: 'Jigitz, linked' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Jigitz' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Add act' })).toBeInTheDocument()
   })
 

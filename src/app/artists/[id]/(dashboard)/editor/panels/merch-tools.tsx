@@ -53,10 +53,15 @@ export function MerchTools({
                 isOver(m.id) && 'ring-2 ring-accent',
               )}
             >
+              {/* The card's face SELECTS (outlines the product on the site) and opens it, as
+                  its pencil does (Sam, 2026-10-05: a click anywhere on the row opens the editing). */}
               <button
                 type="button"
                 aria-label={`Select ${m.title || 'product'}`}
-                onClick={() => onFocus?.({ kind: 'item', assetType: 'merch', id: m.id })}
+                onClick={() => {
+                  onFocus?.({ kind: 'item', assetType: 'merch', id: m.id })
+                  onEdit(m)
+                }}
                 className="block w-full text-left"
               >
                 <div className={cx('relative', !m.inStock && 'opacity-55')}>

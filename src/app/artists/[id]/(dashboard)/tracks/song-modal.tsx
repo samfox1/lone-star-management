@@ -294,8 +294,8 @@ export function SongModal({
               />
             )}
             <KvField label="Date" value={date} type="date" mono onSave={saveField('release_date')} onError={fail} />
-            {/* Collaborators (Sam, 2026-09-11): chips, edited one at a time, printed as
-                "feat. …" on the site. */}
+            {/* Collaborators (Sam, 2026-09-11): a click-to-edit list (2026-10-05), printed
+                as "feat. …" on the site. */}
             <KvRow label="Featuring">
               <FeaturedChips artistId={artistId} trackId={track.id} names={track.featured_artists ?? []} />
             </KvRow>

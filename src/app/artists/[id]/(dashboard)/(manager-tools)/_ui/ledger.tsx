@@ -1,5 +1,6 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
+import { EditRow } from './edit-row'
 import { NoteField, RowTitle } from './inline-text'
 import { CAPS_SECTION, EDIT_TARGET, MONO_META } from './styles'
 
@@ -79,9 +80,10 @@ export const LEDGER_ROW_GRID = cx(
 
 export function LedgerRow({ title, onRename, guide, note, meta, children, remove, end, wrap = false }: LedgerRowProps) {
   return (
-    <div
+    <EditRow
       data-ledger-row=""
       // `group/ledger`: a faint RowIcon (row-icon.tsx) lights up while its row is hovered.
+      // An EditRow: a click anywhere on it opens its pencil, when it has one (edit-row.tsx).
       className={LEDGER_ROW_GRID}
     >
       <div className="min-w-0">
@@ -111,6 +113,6 @@ export function LedgerRow({ title, onRename, guide, note, meta, children, remove
           />
         )}
       </div>
-    </div>
+    </EditRow>
   )
 }

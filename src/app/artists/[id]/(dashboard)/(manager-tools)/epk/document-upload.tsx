@@ -85,8 +85,9 @@ export function DocumentUpload({
             </button>
           ) : (
             <>
-              {/* Empty: a mouse shortcut only. The + beside it is the keyboard's and the screen
-                  reader's way in, so the tile is out of the tab order (logo-tile.tsx's rule). */}
+              {/* Empty: a mouse shortcut only, and an empty dashed box (no word, no second +). The
+                  + beside it is the keyboard's and the screen reader's way in, so the tile is out
+                  of the tab order (logo-tile.tsx's rule). */}
               <button
                 type="button"
                 tabIndex={-1}
@@ -96,7 +97,7 @@ export function DocumentUpload({
                 data-document-tile="empty"
                 className={cx(TILE, 'cursor-pointer border-dashed text-[12px] text-ink-faint transition-colors hover:border-ink-faint hover:text-ink disabled:cursor-wait')}
               >
-                {busy ? '…' : 'Add'}
+                {busy ? '…' : null}
               </button>
               <RowIcon icon="plus" label="Upload PDF" variant="primary" onClick={open} disabled={busy} />
             </>
