@@ -14,7 +14,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildConfirmHtml,
-  buildConfirmSubject,
+  CONFIRM_SUBJECT,
+  FROM_NAME,
   buildConfirmText,
   confirmLink,
   escapeHtml,
@@ -22,7 +23,6 @@ import {
   kindsToWords,
   parseConfirmRequest,
   replyStatus,
-  SUBJECT_NAME_MAX,
 } from '../../../supabase/functions/email-confirm/build'
 
 const TOKEN = 'Zm9vYmFyYmF6cXV4LXF1dXgtY29yZ2UtZ3JhdWx0LWdhcnBseQ'
@@ -58,27 +58,12 @@ describe('kindsToWords', () => {
   })
 })
 
-describe('buildConfirmSubject', () => {
-  it("is Confirm <Artist>'s enquiries", () => {
-    expect(buildConfirmSubject('Skeen')).toBe("Confirm Skeen's enquiries")
-  })
-
-  it('a line break in the artist name cannot start a new mail header', () => {
-    // The subject is a mail HEADER; CR/LF is how a Bcc: gets smuggled in.
-    const s = buildConfirmSubject('Skeen\r\nBcc: someone@evil.test')
-    expect(s).not.toMatch(/[\r\n]/)
-    expect(s).toBe("Confirm Skeen Bcc: someone@evil.test's enquiries")
-  })
-
-  it('with no artist name it still reads as a sentence', () => {
-    expect(buildConfirmSubject('  ')).toBe('Confirm your enquiries address')
-  })
-
-  it('a long artist name is cut short, so a manager cannot write the subject line', () => {
-    const s = buildConfirmSubject(`${'A'.repeat(SUBJECT_NAME_MAX)}B and claim your prize now`)
-    expect(s).toBe(`Confirm ${'A'.repeat(SUBJECT_NAME_MAX - 1)}…'s enquiries`)
-    // Exactly the limit is kept whole.
-    expect(buildConfirmSubject('A'.repeat(SUBJECT_NAME_MAX))).toBe(`Confirm ${'A'.repeat(SUBJECT_NAME_MAX)}'s enquiries`)
+describe('the subject and the sender', () => {
+  // Sam, 2026-10-05: "it can just say Confirm Email … for subject", and "its called Digital
+  // Tapir. Not just Tapir". Fixed words: no manager's text reaches a mail header.
+  it('the subject is Confirm Email, and the sender is Digital Tapir', () => {
+    expect(CONFIRM_SUBJECT).toBe('Confirm Email')
+    expect(FROM_NAME).toBe('Digital Tapir')
   })
 })
 
@@ -121,6 +106,7 @@ describe('buildConfirmText', () => {
       "Skeen's team wants to send booking and contact enquiries from skeen.com to this address.",
     )
     expect(t).toContain('482 913')
+    expect(t).toContain('The code works for 15 minutes.')
     expect(t).toContain(`https://app.tapirwebsites.com/confirm-email/${TOKEN}`)
     expect(t).toContain('Not you? Ignore this email and nothing is sent.')
   })
@@ -133,7 +119,7 @@ describe('buildConfirmText', () => {
 
   it('with no artist name the sentence still has a subject', () => {
     expect(buildConfirmText({ ...base, artistName: '' })).toContain(
-      'A team on Tapir wants to send booking and contact enquiries from skeen.com to this address.',
+      'A team on Digital Tapir wants to send booking and contact enquiries from skeen.com to this address.',
     )
   })
 
@@ -168,10 +154,8 @@ describe('buildConfirmText', () => {
 describe('buildConfirmHtml', () => {
   it('carries the same sentence, code, link and opt-out as the text', () => {
     const h = buildConfirmHtml(base)
-    expect(h).toContain(
-      'Skeen&#39;s team wants to send booking and contact enquiries from skeen.com to this address.',
-    )
-    expect(h).toContain('>482 913<')
+    expect(h).toContain('Skeen&#39;s team wants to send booking and contact enquiries from <a href="https://skeen.com"')
+    expect(h).toContain('>skeen.com</a> to this address.')
     expect(h).toContain(`href="https://app.tapirwebsites.com/confirm-email/${TOKEN}"`)
     expect(h).toContain('Not you? Ignore this email and nothing is sent.')
   })
@@ -184,9 +168,16 @@ describe('buildConfirmHtml', () => {
         .map((s) => s.trim())
         .filter(Boolean)
     expect(visible(buildConfirmHtml(base))).toEqual([
-      'Skeen&#39;s team wants to send booking and contact enquiries from skeen.com to this address.',
-      '482 913',
-      'The code works for 15 minutes.',
+      // The hidden preheader: the inbox preview, and the code whole for a phone to copy.
+      'Your code is 482 913',
+      'Digital Tapir',
+      'Confirm email',
+      'Skeen&#39;s team wants to send booking and contact enquiries from',
+      'skeen.com',
+      'to this address.',
+      // The six lines, one digit each (with the gaps between them).
+      '4', '&nbsp;', '8', '&nbsp;', '2', '&nbsp;', '9', '&nbsp;', '1', '&nbsp;', '3',
+      'Works for 15 minutes',
       'Confirm',
       'Not you? Ignore this email and nothing is sent.',
     ])
@@ -194,12 +185,23 @@ describe('buildConfirmHtml', () => {
 
   it('shows the code in a monospace font', () => {
     const h = buildConfirmHtml(base)
-    expect(h).toMatch(/<[^>]*font-family:[^"]*monospace[^>]*>482 913</)
+    for (const d of '482913') expect(h).toMatch(new RegExp(`<td[^>]*font-family:[^"]*monospace[^>]*>${d}</td>`))
+  })
+
+  it('the site is a quiet black link without "www."; a host that is not one stays text', () => {
+    const h = buildConfirmHtml({ ...base, siteHost: 'www.skeenmusic.com' })
+    expect(h).toContain('<a href="https://www.skeenmusic.com" style="color:#111111;text-decoration:underline;">skeenmusic.com</a>')
+    // Not a host: shown escaped, never put in an href.
+    const odd = buildConfirmHtml({ ...base, siteHost: 'javascript:alert(1)' })
+    expect(odd).toContain('from javascript:alert(1) to this address.')
+    expect(odd).not.toContain('href="https://javascript')
   })
 
   it('has no button and no token without APP_URL, and says who the code is for', () => {
     const h = buildConfirmHtml({ ...base, appUrl: '' })
-    expect(h).not.toContain('<a ')
+    // The site's link stays; no OTHER link, and no token anywhere.
+    expect(h.match(/<a /g)).toHaveLength(1)
+    expect(h).not.toContain('confirm-email')
     expect(h).not.toContain(TOKEN)
     expect(h).toContain('To confirm, give this code to Skeen&#39;s team.')
   })

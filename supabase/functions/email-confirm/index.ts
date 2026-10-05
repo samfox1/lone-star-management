@@ -2,7 +2,7 @@
  * POST /functions/v1/email-confirm: send a manager's newly listed address its confirmation code.
  *
  * Sam, 2026-09-30: "there should be a confirmation email sent with a code for us to make sure
- * the email is legit" … "this should be required before deploying". An address Tapir sends
+ * the email is legit" … "this should be required before deploying". An address Digital Tapir sends
  * enquiries to is used only once confirmed (resolve_enquiry_recipients filters on it); this
  * function is how the code reaches the address. Plan of record: EMAIL_CONFIRM_PLAN.md, piece 2.
  *
@@ -30,7 +30,8 @@
 import { formatFrom } from '../contact/validate.ts'
 import {
   buildConfirmHtml,
-  buildConfirmSubject,
+  CONFIRM_SUBJECT,
+  FROM_NAME,
   buildConfirmText,
   firstRow,
   parseConfirmRequest,
@@ -53,9 +54,8 @@ const APP_URL = Deno.env.get('EMAIL_CONFIRM_APP_URL') ?? null
  *  The SQL still runs, so a dry run DOES use a send slot and replace any earlier code. */
 const DRY_RUN = Deno.env.get('EMAIL_CONFIRM_DRY_RUN') === 'true'
 
-/** The confirmation comes from Tapir, not the artist: the address belongs to someone the
- *  artist's team named, and they have never heard from the artist's site before. */
-const FROM_NAME = 'Tapir'
+// FROM_NAME (build.ts): the confirmation comes from Digital Tapir, not the artist: the address
+// belongs to someone the artist's team named, and they have never heard from the artist's site.
 
 function reply(http: number, status: string): Response {
   return new Response(JSON.stringify({ status }), {
@@ -122,7 +122,7 @@ async function userFromToken(jwt: string): Promise<string | null> {
 /**
  * The house sender: `from_local_part@sending_domain` from the mail_settings row, the same
  * verified domain contact sends from. Null when the row is missing. Per-artist sending
- * domains (artist_mail_settings) are NOT used: this email is Tapir's, not the artist's.
+ * domains (artist_mail_settings) are NOT used: this email is Digital Tapir's, not the artist's.
  */
 async function houseSender(): Promise<string | null> {
   const rows = (await serviceFetch(
@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           from: formatFrom(FROM_NAME, from),
           to: [body.email],
-          subject: buildConfirmSubject(email.artistName),
+          subject: CONFIRM_SUBJECT,
           text: buildConfirmText(email),
           html: buildConfirmHtml(email),
         }),

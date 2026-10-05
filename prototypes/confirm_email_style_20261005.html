@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirm Email Style</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* The confirmation email, styled (Sam, 2026-10-05, on the first real one: "I would like to add
+   some style to this email template. Also, its called Digital Tapir. Not just Tapir", and the
+   subject "can just say Confirm Email"). TODAY is what arrived (screenshot 4.03.58 PM). A and B
+   are built the way an email must be: tables and inline styles only, no classes, so the build
+   can copy them. Fonts: Instrument Sans / Space Mono where the mail app loads them (Apple Mail,
+   iOS), Helvetica / Menlo where it does not (Gmail). */
+:root{--paper:#fff;--surface:#fafafa;--ink:#111;--muted:#6b7280;--faint:#9aa0a6;--hair:#ececec}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--paper:#111;--surface:#171717;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a}}
+:root[data-theme=dark]{color-scheme:dark;--paper:#111;--surface:#171717;--ink:#f2f2f2;--muted:#a3a7ad;--faint:#6f7378;--hair:#2a2a2a}
+*{box-sizing:border-box}
+html{overflow-x:clip}
+body{margin:0;background:var(--surface);color:var(--ink);font:14px/1.45 "Instrument Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.proto{position:sticky;top:0;z-index:5;min-height:44px;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--hair)}
+.proto .t{font:10px "Space Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.board{max-width:1500px;margin:0 auto;padding:28px 24px 56px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:start}
+@media (max-width:1200px){.board{grid-template-columns:1fr;max-width:720px}}
+.col h2{margin:0 0 4px;font-size:15px;font-weight:600}
+.col .k{font:10px "Space Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.col p.why{margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--muted);min-height:40px}
+/* a mail app's reading pane: the header lines, then the message on white */
+.client{border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:#fff;color:#111}
+.client .hd{padding:12px 16px;border-bottom:1px solid #ececec;font:12.5px/1.7 "Instrument Sans",system-ui,sans-serif;color:#6b7280;background:#fff}
+.client .hd b{font-weight:600;color:#111}
+.client .body{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="proto"><span class="t">Confirm email · style · mock</span><span class="t">Subject: Confirm Email · From: Digital Tapir</span></div>
+
+<main class="board">
+
+  <!-- TODAY -->
+  <section class="col">
+    <span class="k">Today</span>
+    <h2>What arrived</h2>
+    <p class="why">Plain. Gmail turned the site into a blue link. Says "Tapir".</p>
+    <div class="client">
+      <div class="hd"><b>Tapir</b><br>Confirm Skeen's enquiries</div>
+      <div class="body">
+        <div style="padding:32px 24px;background:#fff;">
+          <p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#000;">Skeen's team wants to send demo enquiries from <a href="#" style="color:#1a56db;">www.skeenmusic.com</a> to this address.</p>
+          <p style="margin:0 0 8px;font-family:Menlo,monospace;font-size:28px;letter-spacing:4px;color:#000;">603 956</p>
+          <p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#555;">The code works for 15 minutes.</p>
+          <p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;color:#000;">To confirm, give this code to Skeen's team.</p>
+          <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:#555;">Not you? Ignore this email and nothing is sent.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- A: CARD -->
+  <section class="col">
+    <span class="k">A</span>
+    <h2>A white card</h2>
+    <p class="why">A card on light grey, the name small at the top, the code big in mono under a label.</p>
+    <div class="client">
+      <div class="hd"><b>Digital Tapir</b><br>Confirm Email</div>
+      <div class="body">
+<!-- ═══ A, as the email ═══ -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f5;">
+  <tr><td align="center" style="padding:36px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background:#ffffff;border:1px solid #e6e6e8;border-radius:14px;">
+      <tr><td style="padding:28px 32px 0;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#111111;">Digital Tapir</td></tr>
+      <tr><td style="padding:28px 32px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:22px;font-weight:600;letter-spacing:-0.2px;color:#111111;">Confirm email</td></tr>
+      <tr><td style="padding:10px 32px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#3f3f46;">Skeen's team wants to send demo enquiries from <a href="https://www.skeenmusic.com" style="color:#111111;text-decoration:underline;">skeenmusic.com</a> to this address.</td></tr>
+      <tr><td style="padding:24px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f7f8;border-radius:10px;">
+          <tr><td align="center" style="padding:20px 16px 6px;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#9aa0a6;">Your code</td></tr>
+          <tr><td align="center" style="padding:0 16px 20px;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:8px;color:#111111;">603&nbsp;956</td></tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:16px 32px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#111111;">To confirm, give this code to Skeen's team. It works for 15 minutes.</td></tr>
+      <tr><td style="padding:28px 32px 28px;"><div style="border-top:1px solid #ececec;padding-top:16px;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#9aa0a6;">Not you? Ignore this email and nothing is sent.</div></td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+      <tr><td align="center" style="padding:18px 0 0;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#9aa0a6;">Digital Tapir · tapirwebsites.com</td></tr>
+    </table>
+  </td></tr>
+</table>
+<!-- ═══ end A ═══ -->
+      </div>
+    </div>
+  </section>
+
+  <!-- B: BLACK BAND + THE SIX LINES -->
+  <section class="col">
+    <span class="k">B</span>
+    <h2>A black band, the six lines</h2>
+    <p class="why">A black bar with the name, then the code on six lines, like the window you type it into.</p>
+    <div class="client">
+      <div class="hd"><b>Digital Tapir</b><br>Confirm Email</div>
+      <div class="body">
+<!-- ═══ B, as the email ═══ -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
+  <tr><td align="center" style="padding:28px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;border:1px solid #111111;">
+      <tr><td style="background:#111111;padding:14px 28px;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;">Digital Tapir</td></tr>
+      <tr><td style="padding:32px 28px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:22px;font-weight:600;letter-spacing:-0.2px;color:#111111;">Confirm email</td></tr>
+      <tr><td style="padding:10px 28px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#3f3f46;">Skeen's team wants to send demo enquiries from <a href="https://www.skeenmusic.com" style="color:#111111;text-decoration:underline;">skeenmusic.com</a> to this address.</td></tr>
+      <tr><td style="padding:30px 28px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">6</td><td style="width:8px;"></td>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">0</td><td style="width:8px;"></td>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">3</td><td style="width:22px;"></td>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">9</td><td style="width:8px;"></td>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">5</td><td style="width:8px;"></td>
+            <td style="width:34px;padding:0 4px 6px;border-bottom:2px solid #111111;text-align:center;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:30px;font-weight:700;color:#111111;">6</td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:12px 28px 0;font-family:'Space Mono',Menlo,Consolas,monospace;font-size:11px;letter-spacing:0.5px;color:#9aa0a6;">Works for 15 minutes</td></tr>
+      <tr><td style="padding:26px 28px 0;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#111111;">To confirm, give this code to Skeen's team.</td></tr>
+      <tr><td style="padding:28px 28px 28px;"><div style="border-top:1px solid #ececec;padding-top:16px;font-family:'Instrument Sans',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#9aa0a6;">Not you? Ignore this email and nothing is sent.</div></td></tr>
+    </table>
+  </td></tr>
+</table>
+<!-- ═══ end B ═══ -->
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>
