@@ -99,6 +99,47 @@ describe('adding an address', () => {
     expect(within(row()).getByRole('button', { name: 'jo@northbooking.com' })).toBeTruthy()
   })
 
+  // Sam, 2026-10-05: clicking a blue address sends its code, "and then the modal opens after".
+  // Not while a code is still live: that would replace the one being read out.
+  it('a click on a blue address sends its code and opens the window; with a live code it only opens', async () => {
+    const kinds = [
+      {
+        id: 'k-booking',
+        slug: 'booking',
+        label: 'Booking',
+        description: null,
+        sortOrder: 0,
+        recipients: [
+          { id: 'r1', email: 'ross@x.com', label: null },
+          { id: 'r2', email: 'skeen@x.com', label: null },
+        ],
+      },
+    ]
+    render(<KindRows artistId="a1" confirm={{ confirmed: [], liveCodes: { 'skeen@x.com': Date.now() - 60_000 } }} kinds={kinds} />)
+
+    await act(async () => {
+      fireEvent.click(within(row()).getByRole('button', { name: 'ross@x.com: enter the code' }))
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith('a1', 'ross@x.com')
+    expect(screen.getByRole('dialog', { name: 'Enter the code' }).textContent).toContain('Sent to ross@x.com')
+
+    // The same address again: its code is live now, so nothing more is sent.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await act(async () => {
+      fireEvent.click(within(row()).getByRole('button', { name: 'ross@x.com: enter the code' }))
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+
+    // skeen@ had a live code from before this visit: it opens on it, sends nothing.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await act(async () => {
+      fireEvent.click(within(row()).getByRole('button', { name: 'skeen@x.com: enter the code' }))
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('dialog', { name: 'Enter the code' }).textContent).toContain('skeen@x.com')
+  })
+
   // Sam, 2026-10-05: "forget it on removal". Taken off its only list, a confirmed address is
   // forgotten here as in the database: added again, it waits and its code goes.
   it('a confirmed address removed and added again asks for a new code', async () => {

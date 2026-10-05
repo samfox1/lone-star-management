@@ -76,7 +76,7 @@ type Row = {
   sent_at: string[]
   wrong_at: string[]
 }
-type Status = { email: string; confirmed: boolean; waiting: boolean }
+type Status = { email: string; confirmed: boolean; waiting: boolean; live_code_sent_at: string | null }
 
 describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
   const svc = serviceClient()
@@ -358,13 +358,13 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       await list(a.id, 'booking', email)
 
       expect(await routed(a.id, 'booking')).not.toContain(email)
-      expect(await status(asA, a.id)).toContainEqual({ email, confirmed: false, waiting: true })
+      expect(await status(asA, a.id)).toContainEqual(expect.objectContaining({ email, confirmed: false, waiting: true }))
 
       const { code } = await send(a.id, email)
       expect((await confirmCode(asA, a.id, email.toUpperCase(), code)).verdict).toBe('confirmed')
 
       expect(await routed(a.id, 'booking')).toContain(email)
-      expect(await status(asA, a.id)).toContainEqual({ email, confirmed: true, waiting: false })
+      expect(await status(asA, a.id)).toContainEqual(expect.objectContaining({ email, confirmed: true, waiting: false }))
       const r = await row(a.id, email)
       expect(r).toMatchObject({ code_hash: null, code_expires_at: null, token_hash: null, token_expires_at: null })
     })
@@ -380,7 +380,7 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
 
       expect(await routed(a.id, 'demo')).toContain(email)
       // Still blue with the key: grace is not confirmation.
-      expect(await status(asA, a.id)).toContainEqual({ email, confirmed: false, waiting: true })
+      expect(await status(asA, a.id)).toContainEqual(expect.objectContaining({ email, confirmed: false, waiting: true }))
 
       await svc.from('artist_email_confirmations').update({ grace_until: ago(MIN) }).eq('artist_id', a.id).eq('email', email)
 
@@ -430,7 +430,7 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
 
       expect(await routed(a.id, 'booking')).toContain(email)
       expect(await routed(b.id, 'booking')).not.toContain(email)
-      expect(await status(asB, b.id)).toContainEqual({ email, confirmed: false, waiting: true })
+      expect(await status(asB, b.id)).toContainEqual(expect.objectContaining({ email, confirmed: false, waiting: true }))
     })
   })
 
@@ -730,6 +730,36 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
 
       expect(await confirmToken(token)).toEqual({ status: 'invalid', email: null, artist_name: null, kinds: null })
       expect((await row(a.id, email))!.confirmed_at).toBeNull()
+    })
+  })
+
+  // Sam, 2026-10-05: clicking a blue address sends its code, then the window opens. Unless a
+  // code is still live: a second send would replace the one Ross is reading out, and his would
+  // stop working. So the status says when the live code went out, and only while it is live.
+  describe('the live code, in the status', () => {
+    const live = async (email: string) => (await status(asA, a.id)).find((s) => s.email === email)?.live_code_sent_at ?? null
+
+    it('none before a send; the send time while the code lives; none once it expires or confirms', async () => {
+      const email = fresh('live')
+      await list(a.id, 'booking', email)
+      expect(await live(email)).toBeNull()
+
+      const before = Date.now()
+      const { code } = await send(a.id, email)
+      const at = await live(email)
+      expect(at).not.toBeNull()
+      expect(Date.parse(at!)).toBeGreaterThan(before - MIN)
+      expect(Date.parse(at!)).toBeLessThan(Date.now() + MIN)
+
+      // Expired: no live code, so a click sends a new one.
+      await svc.from('artist_email_confirmations').update({ code_expires_at: ago(1000) }).eq('artist_id', a.id).eq('email', email)
+      expect(await live(email)).toBeNull()
+
+      // Live again, then confirmed: none (confirming clears the code).
+      await svc.from('artist_email_confirmations').update({ code_expires_at: new Date(Date.now() + 10 * MIN).toISOString() }).eq('artist_id', a.id).eq('email', email)
+      expect(await live(email)).not.toBeNull()
+      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('confirmed')
+      expect(await live(email)).toBeNull()
     })
   })
 

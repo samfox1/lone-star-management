@@ -135,9 +135,11 @@ export function countdown(seconds: number): string {
 // ---------------------------------------------------------------------------
 /**
  * Which addresses show as confirmed. DEFAULT DENY, like the SQL: an address not listed as
- * confirmed is waiting (blue, with the key).
+ * confirmed is waiting (blue, with the key). `liveCodes`: for a waiting address whose code can
+ * still be typed, when it went out (ms), so a click opens the window on THAT code instead of
+ * sending a new one over it (20261006140000).
  */
-export type ConfirmState = { confirmed: string[] }
+export type ConfirmState = { confirmed: string[]; liveCodes?: Record<string, number> }
 
 /**
  * `email_confirmation_status(p_artist_id)` as a ConfirmState.
@@ -147,12 +149,22 @@ export type ConfirmState = { confirmed: string[] }
  * missing function switched the feature off; that branch failed OPEN and went with the push.)
  */
 export function confirmStateFrom(res: { data: unknown; error: { code?: string } | null }): ConfirmState {
-  if (res.error) return { confirmed: [] }
-  const rows = Array.isArray(res.data) ? (res.data as { email?: unknown; confirmed?: unknown }[]) : []
+  if (res.error) return { confirmed: [], liveCodes: {} }
+  const rows = Array.isArray(res.data) ? (res.data as { email?: unknown; confirmed?: unknown; live_code_sent_at?: unknown }[]) : []
+  const liveCodes: Record<string, number> = {}
+  for (const r of rows) {
+    const at = typeof r.live_code_sent_at === 'string' ? Date.parse(r.live_code_sent_at) : NaN
+    if (typeof r.email === 'string' && r.confirmed !== true && Number.isFinite(at)) liveCodes[emailKey(r.email)] = at
+  }
   return {
     confirmed: rows.filter((r) => r.confirmed === true && typeof r.email === 'string').map((r) => emailKey(r.email as string)),
+    liveCodes,
   }
 }
+
+/** How long a code can be typed (the SQL's 15 minutes). A code sent on this visit counts as
+ *  live until then, so a second click does not send over it. */
+export const CODE_LIFE_MS = 15 * 60 * 1000
 
 // ---------------------------------------------------------------------------
 // The link page (/confirm-email/[token])

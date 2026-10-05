@@ -156,9 +156,21 @@ describe('the loader’s status call (STRICT: a failed read must never look conf
   // the pre-push switch that turned the feature off failed OPEN, and went with the push.
   it('any error shows every address waiting', () => {
     for (const code of ['PGRST202', '42883', '42501', undefined])
-      expect(confirmStateFrom({ data: null, error: { code } })).toEqual({ confirmed: [] })
+      expect(confirmStateFrom({ data: null, error: { code } })).toEqual({ confirmed: [], liveCodes: {} })
     // No rows and no error: nothing is confirmed (default deny).
-    expect(confirmStateFrom({ data: null, error: null })).toEqual({ confirmed: [] })
+    expect(confirmStateFrom({ data: null, error: null })).toEqual({ confirmed: [], liveCodes: {} })
+  })
+
+  // A waiting address with a code still out: its send time, so a click does not send over it.
+  it('live codes: the send time of a waiting address, by lower-case key; nothing else', () => {
+    const at = '2026-10-05T22:00:00.000Z'
+    const data = [
+      { email: 'Ross@X.com', confirmed: false, waiting: true, live_code_sent_at: at },
+      { email: 'new@x.com', confirmed: false, waiting: true, live_code_sent_at: null },
+      { email: 'odd@x.com', confirmed: false, waiting: true, live_code_sent_at: 'not a time' },
+      { email: 'done@x.com', confirmed: true, waiting: false, live_code_sent_at: at },
+    ]
+    expect(confirmStateFrom({ data, error: null }).liveCodes).toEqual({ 'ross@x.com': Date.parse(at) })
   })
 
   // Rows: only the confirmed ones, as one lower-case key each.
@@ -169,6 +181,6 @@ describe('the loader’s status call (STRICT: a failed read must never look conf
       { email: 'odd@x.com', confirmed: 'true', waiting: false },
       { email: null, confirmed: true, waiting: false },
     ]
-    expect(confirmStateFrom({ data, error: null })).toEqual({ confirmed: ['agent@x.com'] })
+    expect(confirmStateFrom({ data, error: null })).toEqual({ confirmed: ['agent@x.com'], liveCodes: {} })
   })
 })
