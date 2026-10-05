@@ -73,9 +73,10 @@ export function ProfilesTab({ artistId, input, photos, sentAt: initialSent, mark
   const now = useNow(false)
 
   return (
-    // pt-3.5 + the group's own 26px: the title sits where it did (40px down). No width of its
-    // own: the tools shell's one frame (TOOL_FRAME, Batch 3) sets it, as for every tool.
-    <div className="pt-3.5">
+    // pt-3.5 + the group's own 26px: the title sits where it did (40px down). A reading page, so
+    // a narrower column centred in the tools frame, the 800px it had before Batch 3 (Sam,
+    // 2026-10-05: "Same with the profiles page", after "the AI test list is too wide").
+    <div className="mx-auto w-full max-w-[800px] pt-3.5">
       <DisclosureGroup title="Outside profiles">
         <ProfileRow
           id={id}

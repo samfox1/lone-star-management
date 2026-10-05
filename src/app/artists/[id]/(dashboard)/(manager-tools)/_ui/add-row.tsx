@@ -13,17 +13,27 @@ import { RowIcon } from './row-icon'
  * margin) makes it a 28px target without moving it. AddRow's closed state, the press kit's
  * quotes, Connections' Connect (which opens a picker instead of a name field), and EditList's +
  * (edit-list.tsx).
+ *
+ * `size="lg"`: a 20px glyph in a 36px target, where the + is the page's one way to grow a list
+ * (the SEO Answers tab's questions; Sam, 2026-10-05: "the plus button should be bigger").
  */
+const PLUS_SIZE = {
+  md: { glyph: 16, pad: '-m-1.5 p-1.5' },
+  lg: { glyph: 20, pad: '-m-2 p-2' },
+} as const
+
 export function AddPlus({
   label,
   onClick,
   ref,
   className,
+  size = 'md',
 }: {
   label: string
   onClick: () => void
   ref?: Ref<HTMLButtonElement>
   className?: string
+  size?: keyof typeof PLUS_SIZE
 }) {
   return (
     <RowIcon
@@ -32,9 +42,9 @@ export function AddPlus({
       label={label}
       variant="bare"
       labelAlign="start"
-      glyphSize={16}
+      glyphSize={PLUS_SIZE[size].glyph}
       onClick={onClick}
-      className={className ?? '-m-1.5 p-1.5'}
+      className={className ?? PLUS_SIZE[size].pad}
     />
   )
 }
@@ -68,6 +78,7 @@ export function AddRow({
   placeholder,
   maxLength = 40,
   label = 'Name',
+  size = 'md',
 }: {
   /** "logo" → the +'s name and hover label, "Add logo". */
   noun: string
@@ -83,6 +94,8 @@ export function AddRow({
   maxLength?: number
   /** The field's accessible name: "Name", or "New question" on the SEO Answers tab. */
   label?: string
+  /** The closed +'s size (AddPlus). */
+  size?: keyof typeof PLUS_SIZE
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -141,7 +154,7 @@ export function AddRow({
       // h-9: as tall as the open field (36px), so opening it moves nothing below.
       <div data-ledger-add="" className="pt-2.5">
         <div className="flex h-9 items-center">
-          <AddPlus ref={addButton} label={`Add ${noun}`} onClick={start} />
+          <AddPlus ref={addButton} label={`Add ${noun}`} onClick={start} size={size} />
         </div>
       </div>
     )

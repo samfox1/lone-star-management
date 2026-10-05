@@ -35,8 +35,9 @@ type Row =
  * automatic until written; "Use the automatic answer" clears a written one. The next show and
  * the latest releases are AUTOMATIC ONLY (the bridge's FAQ_AUTO_ONLY): read-only rows that say
  * where the answer comes from, with the way to that tool, because a written one went stale the
- * day after the show and the site ignores it. Up to five questions of the manager's own sit
- * under them ("Add question", the Brand lists' AddRow).
+ * day after the show and the site ignores it; that source is a quiet line under the question.
+ * Up to five questions of the manager's own sit under them ("Add question", the Brand lists'
+ * AddRow, its + a size up: Sam, 2026-10-05).
  *
  * Every row is the ledger's (LedgerRow), centred like every other (Sam, 2026-10-02: "answers to
  * questions centered"); a question wraps.
@@ -118,6 +119,7 @@ export function AnswersTab({ artistId, name, schemaType, initial, auto }: { arti
           <AddRow
             noun="question"
             label="New question"
+            size="lg"
             placeholder="A question people ask"
             maxLength={FAQ_QUESTION_MAX}
             onAdd={(q) => {
@@ -207,23 +209,24 @@ function AnswerRow({
   }
 
   // At rest the answer is its text, and the text is the way in (no pencil, no trash).
+  // An automatic-only answer's source is a quiet line UNDER its question, never beside the
+  // answer (Sam, 2026-10-05: "be under the question or something. Some other spot"). The tag IS
+  // the way there: the tool's own icon, no arrow (an arrow means "leaves Tapir" on these tabs).
+  const source = from ? (
+    <Link
+      href={`/artists/${artistId}/${from.seg}`}
+      className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded transition-colors hover:text-accent', FOCUS_RING)}
+    >
+      <Icon name={from.icon} size={12} aria-hidden="true" />
+      {`comes from ${from.label}`}
+    </Link>
+  ) : undefined
   return (
-    <LedgerRow title={row.question} wrap>
+    <LedgerRow title={row.question} wrap meta={source}>
       {from ? (
-        <>
-          {/* An automatic-only answer has no editor to open, so it is never cut short. `mr-auto`
-              keeps the answer at its column's left edge however wide the column grows. */}
-          <span className={cx('mr-auto min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
-          {/* r2's tag, and the tag IS the way there: the tool's own icon, no arrow (an arrow
-              means "leaves Tapir" elsewhere on these tabs). */}
-          <Link
-            href={`/artists/${artistId}/${from.seg}`}
-            className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded font-space text-[12px] text-ink-faint transition-colors hover:text-accent', FOCUS_RING)}
-          >
-            <Icon name={from.icon} size={14} aria-hidden="true" />
-            {`comes from ${from.label}`}
-          </Link>
-        </>
+        // An automatic-only answer has no editor to open, so it is never cut short. `mr-auto`
+        // keeps the answer at its column's left edge however wide the column grows.
+        <span className={cx('mr-auto min-w-0 max-w-[60ch] flex-1 text-[14px] leading-[1.5]', answer ? 'text-ink-muted' : 'text-ink-faint')}>{answer || 'No answer yet'}</span>
       ) : (
         <button
           type="button"

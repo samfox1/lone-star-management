@@ -269,7 +269,8 @@ function SubTabStrip({ artistId, tool, activeSeg }: { artistId: string; tool: To
  * left-aligned beside the rail, and `pb-28` of room under the last row (a page's rising Publish
  * bar adds its own measured height on top, publish-riser.tsx). Six widths before this (768
  * centred, 800, 1000, 660, none…), each page carrying its own. Pages set no width of their own
- * now; one narrower only where reading is the job (the AI test's start, centred in this frame).
+ * now; one narrower only where reading is the job, centred in this frame: the AI test (660px)
+ * and SEO › Profiles (800px), Sam 2026-10-05.
  *
  * On the page's own column, not a wrapper inside it: flex-1 grows to the cap and stops, so
  * the frame sits left with no extra element between the shell and the page.

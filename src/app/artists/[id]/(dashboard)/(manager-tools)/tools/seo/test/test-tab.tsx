@@ -101,12 +101,11 @@ const POP: Keyframe[] = [
 /** How far apart the rows rise in, one after another. */
 const STAGGER_MS = 45
 
-/** The start, a run and a refusal: a narrow column centred in the tools frame (Sam, 2026-10-02:
- *  "Keep the AI test start centered"). Reading one block is the job there. */
+/** EVERY step, the results too: one narrow column centred in the tools frame. Sam, 2026-10-02:
+ *  "Keep the AI test start centered"; 2026-10-05: "the AI test list is too wide. I wanted it more
+ *  narrow", so the results went back to the 660px they had before the shared frame (Batch 3,
+ *  TOOL_FRAME in _shell/tools-rail.tsx). This is a reading page, like SEO › Profiles. */
 const COLUMN = 'mx-auto w-full max-w-[660px] pt-7'
-/** The results: the tools frame's own width, like every tool's list (Batch 3, one page width,
- *  TOOL_FRAME in _shell/tools-rail.tsx). The header above them stays centred. */
-const RESULTS = 'w-full pt-7'
 /** Before and during a run, the block sits in the middle of the screen. */
 const MIDDLE = 'flex min-h-[max(420px,calc(100vh-260px))] flex-col items-center justify-center text-center'
 const HEADLINE = 'mt-2.5 text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-ink max-[560px]:text-[26px]'
@@ -385,7 +384,7 @@ export function TestTab({
 
   const groups = showRows ? groupsFor(results, 'all') : []
   return (
-    <div className={RESULTS}>
+    <div className={COLUMN}>
       <header ref={topRef} className="flex min-h-[200px] flex-col items-center justify-center text-center">
         <div className={EYEBROW}>{COPY.title}</div>
         <h2 className={HEADLINE}>{title}</h2>
