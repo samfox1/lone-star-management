@@ -56,6 +56,12 @@ decisions behind them (esp. ADR-0002).
   our verified sending domain. Reads WORKING rows, so correcting a dead address takes
   effect immediately without publishing unrelated edits; `enquiries.to_email` freezes
   what was resolved per row.
+- **Retention** — an enquiry is deleted 30 days after it arrives if it was emailed
+  (status `sent`), 90 if not; its attachments go with it. Nightly pg_cron job
+  `enquiries-prune` → `prune_enquiries()`; the audio files are queued in
+  `enquiry_file_purges` and deleted through the Storage API by the contact Edge Function
+  (SQL cannot delete storage files safely). The inbox shows "deleted in N days" from the
+  same rule (`src/lib/enquiries/retention.ts`; SQL twin `enquiry_delete_at`).
 - **Attempt ledger** — `contact_attempts`, admin-only: every attempt including honeypot
   hits and rejections, keyed by a salted IP hash. It is the rate limiter's counter
   (5/hour, 20/day per IP), kept separate from `enquiries` so a dropped attempt costs the

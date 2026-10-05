@@ -360,8 +360,9 @@ export function sanitiseFilename(name: string): string {
 
 /* ── Attachment retention ───────────────────────────────────────────────────────── */
 
-/** Files only. The ENQUIRY is kept forever: the message is small and it is the manager's
- *  record of who got in touch. Only the audio expires. */
+/** Files only. The ENQUIRY has its own, shorter clock since 2026-10-05: prune_enquiries()
+ *  deletes it 30 days after arrival if emailed, 90 if not, and its files with it
+ *  (src/lib/enquiries/retention.ts). This 90-day file sweep is the backstop under that. */
 const RETENTION_DAYS = 90
 
 /** Roughly one request in a hundred does the sweep. There is no pg_cron here, so the

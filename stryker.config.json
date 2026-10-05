@@ -91,6 +91,7 @@
     "src/lib/enquiries/attachments.ts",
     "src/lib/enquiries/inbox.ts",
     "src/lib/enquiries/kinds.ts",
+    "src/lib/enquiries/retention.ts",
     "src/lib/manager-tools/epk/epk-pdf.ts",
     "src/lib/manager-tools/seo/profiles/bio-pack.ts",
     "src/lib/eventbrite.ts",

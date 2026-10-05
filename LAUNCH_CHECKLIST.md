@@ -41,6 +41,11 @@ Add to it whenever something is "for later, when we ship". Day-to-day work stays
       `noreply@tapirwebsites.com` (verified, working today; `mail_settings` is data, see
       RENAME_CHECKLIST.md §0). Keep tapirwebsites.com redirecting.
 - [ ] Stage 3 (bridge/site) of enquiry forwarding.
+- [ ] Enquiry audio of deleted enquiries (`enquiry_file_purges`) is drained only when a contact
+      form is submitted (the contact Edge Function). Once the dashboard is online, add a nightly
+      runner (Vercel Cron route with the service client, or pg_cron + pg_net calling a function)
+      that drains the same queue, so files go on a quiet week too
+      (`20261005120000_enquiry_retention.sql`).
 
 ## 5. Search and AI visibility (per artist site)
 

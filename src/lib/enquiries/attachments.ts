@@ -5,8 +5,10 @@
  * minted at view time and valid for minutes — never a permanent public URL, because these
  * are unsolicited files from strangers sent to one person.
  *
- * Files are deleted after 90 days; the enquiry is kept. So a row whose object is gone is
- * the NORMAL end state, not an error, and the UI has to say "expired" rather than break.
+ * Files are deleted after 90 days at the latest. The enquiry goes too since 2026-10-05
+ * (30 days if emailed, 90 if not: src/lib/enquiries/retention.ts), taking its files with it,
+ * but a row whose object is gone is still a NORMAL state, not an error, and the UI has to say
+ * "expired" rather than break.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 

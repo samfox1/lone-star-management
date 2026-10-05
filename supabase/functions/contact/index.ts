@@ -156,7 +156,10 @@ async function signUpload(path: string): Promise<{ signedUrl: string; token: str
 }
 
 /**
- * Delete expired attachment OBJECTS and their rows. Files only — the enquiry is kept.
+ * Delete expired attachment OBJECTS and tombstone their rows. Files only — the enquiry itself
+ * is deleted on its own schedule by the nightly prune_enquiries() (30 days if emailed, 90 if
+ * not, 20261005120000), which hands its files to drainFilePurges below. Since then this sweep
+ * is a backstop: no enquiry, and so no attachment, lives much past 90 days.
  *
  * Runs here rather than in SQL for a reason that is easy to get wrong: deleting a row
  * from `storage.objects` does NOT delete the underlying file. A SQL-side prune would
@@ -199,6 +202,47 @@ async function sweepExpiredAttachments(): Promise<void> {
     })
   } catch (e) {
     console.error('contact: attachment sweep failed', e)
+  }
+}
+
+/**
+ * Delete the audio of enquiries the nightly `prune_enquiries()` removed
+ * (20261005120000_enquiry_retention.sql).
+ *
+ * That job deletes the enquiry and its attachment rows, but it cannot delete the FILES from
+ * SQL (see sweepExpiredAttachments), so it leaves their paths in `enquiry_file_purges`. This
+ * finishes the job through the Storage API. Same order as the sweep: objects FIRST, and a
+ * queue row goes only once its object is gone, so a failed delete is retried next time and
+ * never forgotten. A path whose upload never completed deletes as a no-op.
+ *
+ * Runs after EVERY stored enquiry, not one in a hundred: the queue is empty almost always, so
+ * it costs one small read, and a contact form's traffic is the only clock this has. Entirely
+ * best-effort, like the sweep: a failure here must never affect the enquiry being handled.
+ */
+async function drainFilePurges(): Promise<void> {
+  try {
+    const rows = await rest<{ id: number; storage_path: string }[]>(
+      'enquiry_file_purges?select=id,storage_path&order=id&limit=100',
+    )
+    if (!rows?.length) return
+
+    const del = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATTACHMENT_BUCKET}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: rows.map((r) => r.storage_path) }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!del.ok) return
+
+    // By id, never by path: ids are integers, so nothing a sender named their file can reach
+    // into this filter.
+    await rest(`enquiry_file_purges?id=in.(${rows.map((r) => Number(r.id)).join(',')})`, { method: 'DELETE' })
+  } catch (e) {
+    console.error('contact: file purge failed', e)
   }
 }
 
@@ -462,6 +506,7 @@ Deno.serve(async (req: Request) => {
         purpose: body.purpose,
         ipHash,
       })
+      await drainFilePurges()
       return json(
         200,
         { ok: true, uploads: issued.tickets, skipped: [...skipped, ...issued.skipped] },
@@ -579,6 +624,7 @@ Deno.serve(async (req: Request) => {
     // Opportunistic retention sweep, AFTER the response work is done, so a slow delete
     // never delays the visitor's confirmation. Best-effort by design.
     if (shouldSweep(Math.random())) await sweepExpiredAttachments()
+    await drainFilePurges()
 
     return json(200, { ok: true, uploads, skipped }, origin)
   } catch (e) {

@@ -286,6 +286,28 @@ describe('EnquiryTable — delivery state', () => {
   })
 })
 
+describe('EnquiryTable — how long each one is kept', () => {
+  // LIGHT (AGENTS.md "Test depth"): the rule itself is pinned in enquiry-retention.test.ts;
+  // this only checks each row shows it, from its OWN status.
+  afterEach(() => vi.useRealTimers())
+
+  it('each row says when it is deleted: emailed 30 days, not emailed 90', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'))
+    render(
+      <EnquiryTable
+        rows={[
+          row({ id: 's', name: 'Emailed One', status: 'sent', created_at: '2026-09-25T12:00:00Z' }),
+          row({ id: 'u', name: 'Unrouted One', status: 'unroutable', created_at: '2026-09-25T12:00:00Z' }),
+        ]}
+      />,
+    )
+    const rowOf = (name: string) => screen.getByText(name).closest('tr')!
+    expect(within(rowOf('Emailed One')).getByText('deleted in 20 days')).toBeInTheDocument()
+    expect(within(rowOf('Unrouted One')).getByText('deleted in 80 days')).toBeInTheDocument()
+  })
+})
+
 describe('EnquiryTable — the artist selector', () => {
   const two = [
     row({ id: 'a', name: 'From Pine', artistId: 'a1', artistName: 'Lone Pine' }),

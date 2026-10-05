@@ -236,6 +236,12 @@ next person reading it doesn't think the ticket is a violation someone missed.
 
 ## Retention: files expire, messages don't
 
+> **Superseded 2026-10-05:** messages expire too. An enquiry is deleted 30 days after it
+> arrives if it was emailed, 90 days if it was not (failed, unroutable, queued), and its
+> attachments go with it (`20261005120000_enquiry_retention.sql`, `src/lib/enquiries/retention.ts`).
+> The 90-day file sweep below is now a backstop. Nothing changes for the site: the contract
+> above is untouched.
+
 Attachment **objects are deleted after 90 days; the row is kept as a tombstone** (path
 nulled, `expired_at` stamped). The enquiry itself is kept too — the message is small and it
 is the manager's record of who got in touch.

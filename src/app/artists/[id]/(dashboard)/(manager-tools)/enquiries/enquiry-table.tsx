@@ -14,6 +14,7 @@ import {
   type InboxRow,
   type KindOption,
 } from '@/lib/enquiries/inbox'
+import { deletionNote } from '@/lib/enquiries/retention'
 import { safeHref } from '@/lib/url'
 import { clockTime, shortDay } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
@@ -70,6 +71,8 @@ export function EnquiryTable({
   )
   const [audio, setAudio] = useState<{ id: string; items: PlayableAttachment[] } | null>(null)
   const [, startTransition] = useTransition()
+  // One clock for every row's "deleted in N days", read once per mount so the notes agree.
+  const [now] = useState(() => Date.now())
 
   const visible = filterByArtist(
     filterRows(
@@ -221,6 +224,7 @@ export function EnquiryTable({
                     showArtist={showArtist}
                     colSpan={colSpan}
                     audio={audio?.id === r.id ? audio.items : null}
+                    note={deletionNote(r.status, r.created_at, now)}
                     onToggle={() => toggle(r)}
                     onMarkUnread={() => markUnread(r)}
                     onDelete={() => void remove(r)}
@@ -253,6 +257,7 @@ function FragmentRow({
   showArtist,
   colSpan,
   audio,
+  note,
   onToggle,
   onMarkUnread,
   onDelete,
@@ -263,6 +268,8 @@ function FragmentRow({
   showArtist: boolean
   colSpan: number
   audio: PlayableAttachment[] | null
+  /** "deleted in 12 days": when the nightly job removes it (src/lib/enquiries/retention.ts). */
+  note: string | null
   onToggle: () => void
   onMarkUnread: () => void
   onDelete: () => void
@@ -296,6 +303,13 @@ function FragmentRow({
         </td>
         <td className={cx('whitespace-nowrap px-4 py-2.5 text-right', MONO_META)}>
           {received(row.created_at)}
+          {/* Under the time it arrived, in the same quiet mono. suppressHydrationWarning: the
+              server and the browser each read the clock, and a day can tick over between them. */}
+          {note && (
+            <span className="block" suppressHydrationWarning>
+              {note}
+            </span>
+          )}
         </td>
         <td className={cx('whitespace-nowrap px-4 py-2.5 text-right', MONO_META)}>
           {row.attachmentCount > 0 ? row.attachmentCount : ''}
