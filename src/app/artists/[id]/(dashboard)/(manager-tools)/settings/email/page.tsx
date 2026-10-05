@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { toKindRows, type RawKindRow } from '@/lib/enquiries/kinds'
+import { confirmStateFrom } from '@/lib/enquiries/confirm'
 import { requireArtist } from '../../../_data'
 import { KindRows } from '../../enquiries/kind-rows'
 
@@ -26,14 +27,17 @@ export default async function EmailSettingsPage({ params }: { params: Promise<{ 
   // this artist's managers (20260921120000). Ordered as the manager arranged them, and each
   // list as the resolver addresses it. Each kind's OWN list is everyone it goes to
   // (20261002210000): no booking address or site contact is added, so none is read here.
-  const { data: kindRows } = await supabase
-    .from('enquiry_kinds')
-    .select(KIND_SELECT)
-    .eq('artist_id', id)
-    .order('sort_order')
-    .order('created_at')
+  //
+  // Beside it, which addresses have confirmed (EMAIL_CONFIRM_PLAN.md §3): every address on the
+  // lists, once, confirmed or waiting. confirmStateFrom reads a failure: before 20261006120000
+  // is pushed the function is missing and the page works as it did (TODO there: remove that
+  // fallback after the push); any other failure shows every address waiting, never confirmed.
+  const [{ data: kindRows }, status] = await Promise.all([
+    supabase.from('enquiry_kinds').select(KIND_SELECT).eq('artist_id', id).order('sort_order').order('created_at'),
+    supabase.rpc('email_confirmation_status', { p_artist_id: id }),
+  ])
   const kinds = toKindRows(kindRows as unknown as RawKindRow[] | null)
 
   // No width of its own: ToolsShell sets one for every tool (Batch 3, 2026-10-02).
-  return <KindRows artistId={id} kinds={kinds} />
+  return <KindRows artistId={id} kinds={kinds} confirm={confirmStateFrom(status)} />
 }

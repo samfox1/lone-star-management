@@ -89,6 +89,7 @@
     "src/lib/font-weight.ts",
     "src/lib/manager-tools/brand/image-checks.ts",
     "src/lib/enquiries/attachments.ts",
+    "src/lib/enquiries/confirm.ts",
     "src/lib/enquiries/inbox.ts",
     "src/lib/enquiries/kinds.ts",
     "src/lib/enquiries/retention.ts",

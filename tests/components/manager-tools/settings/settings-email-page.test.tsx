@@ -5,7 +5,7 @@
  * same discipline enquiries-page.test.tsx exists for: a server page with no render test is
  * a page whose data-order bugs only the browser finds.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import EmailSettingsPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/page'
 
@@ -17,6 +17,8 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () =
   saveEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(),
   setEnquiryRecipientsAction: vi.fn(),
+  sendEmailCodeAction: vi.fn(),
+  confirmEmailCodeAction: vi.fn(),
 }))
 
 const kinds = [
@@ -51,9 +53,22 @@ function queryStub(answer: () => { data: unknown[] | null }) {
   )
   return stub
 }
+/** What email_confirmation_status answers: every address confirmed unless a test says not. */
+let statusAnswer: { data: unknown; error: { code: string } | null }
+beforeEach(() => {
+  statusAnswer = {
+    data: [
+      { email: 'agent@example.com', confirmed: true, waiting: false },
+      { email: 'ar@example.com', confirmed: true, waiting: false },
+    ],
+    error: null,
+  }
+})
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (table: string) => queryStub(() => ({ data: table === 'enquiry_kinds' ? kinds : [] })),
+    rpc: (fn: string) => queryStub(() => (fn === 'email_confirmation_status' ? statusAnswer : { data: null, error: null }) as { data: unknown[] | null }),
   }),
 }))
 
@@ -85,6 +100,14 @@ describe('/artists/[id]/settings/email', () => {
     await renderPage()
     expect(document.querySelector('[data-kind="booking"]')!.textContent).toContain('Booking line')
     expect(document.querySelector('[data-kind="other"]')!.textContent).not.toContain('For everything else')
+  })
+
+  it('an address the status call says is waiting shows as waiting (blue, the code window), the rest as before', async () => {
+    statusAnswer = { data: [{ email: 'agent@example.com', confirmed: true, waiting: false }, { email: 'ar@example.com', confirmed: false, waiting: true }], error: null }
+    await renderPage()
+    const row = (slug: string) => document.querySelector<HTMLElement>(`[data-kind="${slug}"]`)!
+    expect(within(row('demo')).getByRole('button', { name: 'ar@example.com: enter the code' })).toBeTruthy()
+    expect(within(row('booking')).getByRole('button', { name: 'agent@example.com' })).toBeTruthy()
   })
 
   it('offers a + on every kind', async () => {

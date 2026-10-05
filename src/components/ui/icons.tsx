@@ -67,6 +67,7 @@ export type IconName =
   | 'merge'
   | 'undo'
   | 'reply'
+  | 'key'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -205,6 +206,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3.5 6.5l8.5 6 8.5-6" />
+    </>
+  ),
+  /** A key: an address waiting for its code (Settings › Email; Sam, 2026-10-05: "Lets do key"). */
+  key: (
+    <>
+      <circle cx="8" cy="15.5" r="4" />
+      <path d="M10.8 12.7L19.5 4M16 7.5l2.2 2.2M18.3 5.2l2.2 2.2" />
     </>
   ),
   refresh: (

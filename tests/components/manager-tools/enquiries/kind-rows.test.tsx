@@ -54,8 +54,10 @@ const demo = (recipients: EnquiryKindRow['recipients'] = []) =>
 const contact = () => kind({ id: 'k-other', slug: 'other', label: 'Contact', description: 'For everything else', sortOrder: 2 })
 const press = () => kind({ id: 'k-press', slug: 'press', label: 'Press', description: null, sortOrder: 3 })
 
+/** Confirmation off (`live: false`): the list behaves as it did before codes, every address
+ *  click-to-edit. The waiting/confirmed path has its own file, email-confirm.test.tsx. */
 function renderRows(kinds: EnquiryKindRow[]) {
-  return render(<KindRows artistId="a1" kinds={kinds} />)
+  return render(<KindRows artistId="a1" kinds={kinds} confirm={{ live: false }} />)
 }
 const row = (slug: string) => document.querySelector<HTMLElement>(`[data-kind="${slug}"]`)!
 

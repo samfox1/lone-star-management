@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type Key, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { Fragment, useEffect, useRef, useState, type Key, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { cx } from '@/lib/cx'
 import { toast } from '../../toast'
 import { AddPlus } from './add-row'
@@ -25,6 +25,9 @@ import { RowIcon } from './row-icon'
  *   `detail`       a SECOND line the open item (and the + field) edits beside its text, such
  *                  as a lineup act's website (Sam, 2026-10-05). Never shown at rest; Enter in
  *                  either line or ✓ saves both
+ *   `atRest`       an item drawn some other way, which does NOT open its field: the caller's
+ *                  node stands in its place (Settings › Email: an address waiting for its code
+ *                  is blue with a key and opens the code window, 2026-10-05)
  *
  * A REFUSAL KEEPS THE DRAFT. `validate` runs first; then the save's own `{ error }`. Either way
  * the reason is a toast and the field stays open with what was typed in it: a refused entry is
@@ -91,6 +94,9 @@ export type EditListProps<T> = {
   removeLabel?: (item: T) => string
   /** More controls for the OPEN item only, after ✓ and the trash (an on/off-site switch). */
   extra?: (item: T, index: number) => ReactNode
+  /** An item drawn by the caller instead, which is not click-to-edit: return its node, or
+   *  nothing for the usual text. */
+  atRest?: (item: T, index: number) => ReactNode | undefined
   /** The row's layout (justify, gaps); it is a wrapping flex row. */
   className?: string
 }
@@ -101,6 +107,12 @@ const DEFAULT_TEXT = 'text-[15px] leading-6 text-ink'
 
 /** The second line's shape inside an item or the + field. */
 type Line = { label: string; maxLength: number; inputMode?: InputMode; textClass: string }
+
+/** Nothing holds focus (the closed field took it with it), so handing it back takes it from no
+ *  one. A window that opened on the save (the code window, after an address is added) keeps it. */
+function focusIsFree(): boolean {
+  return !document.activeElement || document.activeElement === document.body
+}
 
 /** The way a save says no: a returned `{ error }`, or a throw. */
 async function attempt(run: () => MaybeAsync<EditListResult>, fallback: string): Promise<string | null> {
@@ -132,6 +144,7 @@ export function EditList<T>({
   onRemove,
   removeLabel,
   extra,
+  atRest,
   className,
 }: EditListProps<T>) {
   const plus = useRef<HTMLButtonElement>(null)
@@ -141,33 +154,38 @@ export function EditList<T>({
     : undefined
   return (
     <div className={cx('flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1', className)}>
-      {items.map((item, i) => (
-        <EditItem
-          key={itemKey ? itemKey(item, i) : i}
-          value={text(item)}
-          title={title?.(item)}
-          label={label}
-          placeholder={placeholder}
-          textClass={textClass}
-          inputMode={inputMode}
-          maxLength={maxLength}
-          refuse={validate ? (v) => validate(v, i) : undefined}
-          detail={detail && line ? { ...line, value: detail.text(item) } : undefined}
-          onSave={(v, d) => (detail ? onSave(i, v, d) : onSave(i, v))}
-          onRemove={
-            onRemove
-              ? () => {
-                  // Focus to the + first: the item is about to go, and a question asked before
-                  // it goes (the last address) hands focus back to whoever had it.
-                  plus.current?.focus()
-                  onRemove(i)
-                }
-              : undefined
-          }
-          removeLabel={removeLabel?.(item) ?? 'Delete'}
-          extra={extra?.(item, i)}
-        />
-      ))}
+      {items.map((item, i) => {
+        const key = itemKey ? itemKey(item, i) : i
+        const own = atRest?.(item, i)
+        if (own != null) return <Fragment key={key}>{own}</Fragment>
+        return (
+          <EditItem
+            key={key}
+            value={text(item)}
+            title={title?.(item)}
+            label={label}
+            placeholder={placeholder}
+            textClass={textClass}
+            inputMode={inputMode}
+            maxLength={maxLength}
+            refuse={validate ? (v) => validate(v, i) : undefined}
+            detail={detail && line ? { ...line, value: detail.text(item) } : undefined}
+            onSave={(v, d) => (detail ? onSave(i, v, d) : onSave(i, v))}
+            onRemove={
+              onRemove
+                ? () => {
+                    // Focus to the + first: the item is about to go, and a question asked before
+                    // it goes (the last address) hands focus back to whoever had it.
+                    plus.current?.focus()
+                    onRemove(i)
+                  }
+                : undefined
+            }
+            removeLabel={removeLabel?.(item) ?? 'Delete'}
+            extra={extra?.(item, i)}
+          />
+        )
+      })}
       {onAdd ? (
         <AddField
           plusRef={plus}
@@ -228,7 +246,7 @@ function EditItem({
     if (editing) input.current?.focus()
     else if (refocus.current) {
       refocus.current = false
-      button.current?.focus()
+      if (focusIsFree()) button.current?.focus()
     }
   }, [editing])
 
@@ -380,7 +398,7 @@ function AddField({
     if (open) field.current?.focus()
     else if (refocus.current) {
       refocus.current = false
-      plusRef.current?.focus()
+      if (focusIsFree()) plusRef.current?.focus()
     }
   }, [open, plusRef])
 

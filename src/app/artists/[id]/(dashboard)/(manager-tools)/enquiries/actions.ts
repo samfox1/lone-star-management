@@ -15,6 +15,7 @@ import { ATTACHMENT_BUCKET, toPlayable, type AttachmentRow, type PlayableAttachm
 import { createClient } from '@/lib/supabase/server'
 import { LABEL_MAX, slugFromLabel, uniqueSlug, type EnquiryKindRow, type KindDetails } from '@/lib/enquiries/kinds'
 import { KIND_GONE, saveEnquiryKind } from '@/lib/enquiries/kind-save'
+import { codeStatus, emailKey, sendStatus, type CodeStatus, type SendStatus } from '@/lib/enquiries/confirm'
 import { requireOwnedArtist } from '../../_owns'
 
 /**
@@ -285,4 +286,73 @@ function friendlyRecipientError(code: string | undefined, message: string): stri
   if (code === '23514' && /cap reached/.test(message)) return 'A list holds at most 10 people.'
   if (code === '23514') return 'That does not look like an email address.'
   return message
+}
+
+// ---------------------------------------------------------------------------
+// Confirming an address (EMAIL_CONFIRM_PLAN.md §3, 20261006120000)
+// ---------------------------------------------------------------------------
+/**
+ * Send (or send again) the 6-digit code that confirms one address on this artist's lists.
+ *
+ * The email-confirm Edge Function does the work: it verifies the manager's JWT, asks
+ * begin_email_confirmation (service key) for a code, and mails it. So this sends the SESSION's
+ * access token as the bearer, and nothing else that could vouch for anyone; the function checks
+ * again that this user manages this artist and that the address is on one of its lists.
+ *
+ * Returns `{ status }` only, from a fixed set (sendStatus): never the function's body, so a code
+ * or token could never ride back to the browser even if the function ever answered one.
+ * Nothing here logs.
+ */
+export async function sendEmailCodeAction(artistId: string, email: string): Promise<{ status: SendStatus | 'error' }> {
+  const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { status: 'error' }
+
+  // The session from the cookie; requireOwnedArtist's getUser() has just verified it with the
+  // auth server, and the function verifies the token again.
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) return { status: 'error' }
+
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/email-confirm`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artistId, email: emailKey(email) }),
+      cache: 'no-store',
+    })
+    const body = (await res.json().catch(() => null)) as { status?: unknown } | null
+    return { status: sendStatus(body?.status) }
+  } catch {
+    return { status: 'error' }
+  }
+}
+
+/**
+ * Check the six digits typed into the code window (confirm_email_code: the row is locked, five
+ * wrong tries kill the code, the right one confirms the address for EVERY list of this artist).
+ * Manager-facing in SQL; RLS-free there, so the function checks is_manager_of itself.
+ */
+export async function confirmEmailCodeAction(
+  artistId: string,
+  email: string,
+  code: string,
+): Promise<{ status: CodeStatus | 'error' }> {
+  // The window only sends six digits; anything else never costs one of the five tries.
+  if (!/^\d{6}$/.test(code)) return { status: 'error' }
+  const supabase = await createClient()
+  const owned = await requireOwnedArtist(supabase, artistId)
+  if (!owned.ok) return { status: 'error' }
+
+  const { data, error } = await supabase.rpc('confirm_email_code', {
+    p_artist_id: artistId,
+    p_email: emailKey(email),
+    p_code: code,
+  })
+  if (error) return { status: 'error' }
+  const status = codeStatus(data)
+  if (status === 'confirmed') revalidatePath(`/artists/${artistId}`, 'layout')
+  return { status }
 }

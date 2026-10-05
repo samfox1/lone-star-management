@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icons'
 import { ICON_HOVER } from '@/components/ui/icon-hover'
-import { buttonClass, modalOverlayClass, modalCardClass, modalCardWideClass, modalTitleClass } from '@/components/ui/ui'
+import { buttonClass, modalOverlayClass, modalCardClass, modalCardNarrowClass, modalCardWideClass, modalTitleClass } from '@/components/ui/ui'
 import { useConfirm } from './confirm-dialog'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { toast } from './toast'
@@ -38,6 +38,7 @@ export function CardModal({
   deleteNoun = 'Item',
   confirmText,
   wide = false,
+  narrow = false,
   footer,
   footerLeft,
   footerFill,
@@ -56,6 +57,8 @@ export function CardModal({
   confirmText?: string
   /** Wide, two-column card that sizes to its content instead of scrolling. */
   wide?: boolean
+  /** A small card for one short task (the code window). Ignored with `wide`. */
+  narrow?: boolean
   /** Replaces the default Delete / Save footer row (e.g. a single Add button). Pass `null`
    *  to render NO footer at all — for modals that carry their own action inside the body. */
   footer?: ReactNode | null
@@ -133,7 +136,7 @@ export function CardModal({
       className={modalOverlayClass}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className={wide ? modalCardWideClass : modalCardClass}>
+      <div className={wide ? modalCardWideClass : narrow ? modalCardNarrowClass : modalCardClass}>
         {/* The top bar is IN FLOW (it used to float over the body), so a modal with no title
             can start its content right under the × without the two colliding. The negative
             margins keep the icons where they always sat, 16px in from the corner. */}
