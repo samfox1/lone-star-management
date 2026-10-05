@@ -108,14 +108,16 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
   /** Put an address on a kind's list, and prove it is there: the witness every "receives nothing" needs. */
   async function list(artistId: string, slug: string, email: string, createdAt?: string): Promise<void> {
     planted.push({ artistId, email })
+    const kind = await kindId(artistId, slug)
     const { error } = await svc.from('enquiry_recipients').insert({
       artist_id: artistId,
-      kind_id: await kindId(artistId, slug),
+      kind_id: kind,
       email,
       ...(createdAt ? { created_at: createdAt } : {}),
     })
     if (error) throw new Error(`list ${email}: ${error.message}`)
-    const { data } = await svc.from('enquiry_recipients').select('id').eq('artist_id', artistId).eq('email', email)
+    // On THIS kind: one address can be on several lists.
+    const { data } = await svc.from('enquiry_recipients').select('id').eq('kind_id', kind).eq('email', email)
     expect(data, `${email} was not planted on ${slug}`).toHaveLength(1)
   }
 
@@ -728,6 +730,81 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
 
       expect(await confirmToken(token)).toEqual({ status: 'invalid', email: null, artist_name: null, kinds: null })
       expect((await row(a.id, email))!.confirmed_at).toBeNull()
+    })
+  })
+
+  // Sam, 2026-10-05, after re-adding his own address turned it black at once: "forget it on
+  // removal". An address taken off EVERY list of the artist is forgotten, so adding it again
+  // asks for a new code. Checked at COMMIT (a deferred trigger), because set_enquiry_recipients
+  // deletes a kind's whole list and inserts it again in one call: a check at the delete would
+  // forget every address a plain re-save keeps.
+  describe('removal forgets', () => {
+    /** The manager's own door, the way the dashboard saves a kind's list. */
+    async function saveList(slug: string, emails: string[]): Promise<void> {
+      const { error } = await asA.rpc('set_enquiry_recipients', {
+        p_artist_id: a.id,
+        p_kind_id: await kindId(a.id, slug),
+        p_recipients: emails.map((email) => ({ email, label: null })),
+      })
+      if (error) throw new Error(`set_enquiry_recipients: ${error.message}`)
+    }
+
+    async function confirmed(email: string): Promise<void> {
+      const { code } = await send(a.id, email)
+      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('confirmed')
+      // Planted witness: it IS confirmed before the removal under test.
+      expect((await row(a.id, email))?.confirmed_at).not.toBeNull()
+    }
+
+    it('CRITICAL: taken off every list, it is forgotten; added again, it needs a new code', async () => {
+      const email = fresh('forget')
+      await list(a.id, 'booking', email)
+      await confirmed(email)
+
+      await saveList('booking', [])
+      expect(await row(a.id, email)).toBeNull()
+
+      await list(a.id, 'booking', email)
+      expect(await routed(a.id, 'booking')).not.toContain(email)
+      expect((await begin(userA, a.id, email)).status).toBe('sent')
+    })
+
+    it('still on another list, it stays confirmed', async () => {
+      const email = fresh('kept')
+      await list(a.id, 'booking', email)
+      await list(a.id, 'demo', email)
+      await confirmed(email)
+
+      await saveList('booking', [])
+      expect((await row(a.id, email))?.confirmed_at).not.toBeNull()
+      expect(await routed(a.id, 'demo')).toContain(email)
+    })
+
+    it('CRITICAL: saving a list that still holds it keeps it confirmed (delete + insert in one call)', async () => {
+      const email = fresh('resave')
+      await list(a.id, 'booking', email)
+      await confirmed(email)
+
+      // The door deletes the kind's whole list and inserts it again.
+      await saveList('booking', [email.toUpperCase()])
+      expect((await row(a.id, email))?.confirmed_at).not.toBeNull()
+      expect(await routed(a.id, 'booking')).toContain(email)
+    })
+
+    it('a kind deleted takes the addresses only it held with it', async () => {
+      const email = fresh('kind-gone')
+      const { data: k, error } = await svc
+        .from('enquiry_kinds')
+        .insert({ artist_id: a.id, slug: `gone-${randomUUID().slice(0, 8)}`, label: 'Gone' })
+        .select('id, slug')
+        .single()
+      if (error) throw new Error(`kind: ${error.message}`)
+      await list(a.id, (k as { slug: string }).slug, email)
+      await confirmed(email)
+
+      const { error: del } = await svc.from('enquiry_kinds').delete().eq('id', (k as { id: string }).id)
+      if (del) throw new Error(`delete kind: ${del.message}`)
+      expect(await row(a.id, email)).toBeNull()
     })
   })
 

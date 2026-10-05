@@ -98,4 +98,44 @@ describe('adding an address', () => {
     expect(within(row()).queryByRole('button', { name: 'jo@northbooking.com: enter the code' })).toBeNull()
     expect(within(row()).getByRole('button', { name: 'jo@northbooking.com' })).toBeTruthy()
   })
+
+  // Sam, 2026-10-05: "forget it on removal". Taken off its only list, a confirmed address is
+  // forgotten here as in the database: added again, it waits and its code goes.
+  it('a confirmed address removed and added again asks for a new code', async () => {
+    render(
+      <KindRows
+        artistId="a1"
+        confirm={{ confirmed: ['agent@x.com', 'jo@x.com'] }}
+        kinds={[
+          {
+            id: 'k-booking',
+            slug: 'booking',
+            label: 'Booking',
+            description: null,
+            sortOrder: 0,
+            recipients: [
+              { id: 'r1', email: 'agent@x.com', label: null },
+              { id: 'r2', email: 'jo@x.com', label: null },
+            ],
+          },
+        ]}
+      />,
+    )
+
+    fireEvent.click(within(row()).getByRole('button', { name: 'jo@x.com' }))
+    await act(async () => {
+      fireEvent.click(within(row()).getByRole('button', { name: 'Remove jo@x.com' }))
+    })
+    expect(setList).toHaveBeenLastCalledWith('a1', 'k-booking', [{ id: 'r1', email: 'agent@x.com', label: null }])
+
+    fireEvent.click(within(row()).getByRole('button', { name: 'Add email to Booking' }))
+    const field = screen.getByLabelText('New email for Booking')
+    fireEvent.change(field, { target: { value: 'jo@x.com' } })
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' })
+    })
+
+    expect(send).toHaveBeenCalledWith('a1', 'jo@x.com')
+    expect(within(row()).getByRole('button', { name: 'jo@x.com: enter the code' })).toBeTruthy()
+  })
 })

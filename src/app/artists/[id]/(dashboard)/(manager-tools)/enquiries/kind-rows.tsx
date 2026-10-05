@@ -91,6 +91,13 @@ export function KindRows({
   const patch = (id: string, next: Partial<EnquiryKindRow>) =>
     setKinds((ks) => ks.map((k) => (k.id === id ? { ...k, ...next } : k)))
 
+  /** An address off every list is forgotten, as the database does at commit (20261006130000;
+   *  Sam, 2026-10-05: "forget it on removal"): added again, it waits for a new code. */
+  function forgetUnlisted(stillListed: { email: string }[]) {
+    const keep = new Set(stillListed.map((r) => emailKey(r.email)))
+    setConfirmed((s) => new Set([...s].filter((e) => keep.has(e))))
+  }
+
   /**
    * ONE SAVE PER KIND AT A TIME, whoever starts it (a row's edit or remove, or the +). Each save
    * sends the whole list, so two in flight for one kind would interleave and the second would
@@ -112,6 +119,7 @@ export function KindRows({
       }
       // Server ids and order replace the optimistic ones.
       patch(kind.id, { recipients: res.rows })
+      forgetUnlisted([...kinds.filter((k) => k.id !== kind.id).flatMap((k) => k.recipients), ...res.rows])
       return {}
     } finally {
       saving.current.delete(kind.id)
@@ -158,7 +166,10 @@ export function KindRows({
             onCode={(email, opts) => openCode(k.id, email, opts)}
             onSave={(next) => save(k, next)}
             onSaved={(saved) => patch(k.id, saved)}
-            onDeleted={() => setKinds((ks) => ks.filter((x) => x.id !== k.id))}
+            onDeleted={() => {
+              setKinds((ks) => ks.filter((x) => x.id !== k.id))
+              forgetUnlisted(kinds.filter((x) => x.id !== k.id).flatMap((x) => x.recipients))
+            }}
           />
         ))}
       </LedgerSection>
