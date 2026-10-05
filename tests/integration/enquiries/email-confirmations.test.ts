@@ -75,6 +75,7 @@ type Row = {
   token_expires_at: string | null
   sent_at: string[]
   wrong_at: string[]
+  prev_code_hash: string | null
 }
 type Status = { email: string; confirmed: boolean; waiting: boolean; live_code_sent_at: string | null }
 
@@ -467,7 +468,8 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       const second = await send(a.id, email)
       const verdicts: (string | null)[] = []
       for (let i = 0; i < 5; i++) verdicts.push((await confirmCode(asA, a.id, email, wrongFor(second.code))).verdict)
-      expect(verdicts).toEqual(['wrong', 'wrong', 'wrong', 'wrong', 'locked'])
+      // The tenth wrong try of the day: the day's lock, the longer of the two, is the one named.
+      expect(verdicts).toEqual(['wrong', 'wrong', 'wrong', 'wrong', 'locked_today'])
 
       await forgetSends(a.id)
       const third = await send(a.id, email)
@@ -475,7 +477,7 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       expect(await row(a.id, email)).toMatchObject({ code_attempts: 0 })
       expect((await row(a.id, email))!.wrong_at).toHaveLength(10)
 
-      expect((await confirmCode(asA, a.id, email, third.code)).verdict).toBe('locked')
+      expect((await confirmCode(asA, a.id, email, third.code)).verdict).toBe('locked_today')
       expect((await row(a.id, email))!.confirmed_at).toBeNull()
       expect(await routed(a.id, 'booking')).not.toContain(email)
 
@@ -499,10 +501,29 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
         .update({ wrong_at: Array.from({ length: 10 }, () => ago(HOUR)) })
         .eq('artist_id', a.id)
         .eq('email', email)
-      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('locked')
+      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('locked_today')
 
       expect((await confirmToken(token)).status).toBe('confirmed')
       expect(await routed(a.id, 'booking')).toContain(email)
+    })
+
+    // Sam, 2026-10-05: Ross read out the code from the FIRST email after a second had replaced it,
+    // and all he heard back was "didn't match". The code from the email just before is told
+    // apart, and not counted as a guess: knowing it proves the inbox, it just isn't current.
+    it('the code from the email before the newest says so, and costs no try', async () => {
+      const email = fresh('replaced')
+      await list(a.id, 'booking', email)
+      const first = await send(a.id, email)
+      await forgetSends(a.id)
+      const second = await send(a.id, email)
+      // Planted witness: two different codes went out.
+      expect(second.code).not.toBe(first.code)
+
+      expect((await confirmCode(asA, a.id, email, first.code)).verdict).toBe('replaced')
+      expect(await row(a.id, email)).toMatchObject({ code_attempts: 0, wrong_at: [], confirmed_at: null })
+
+      expect((await confirmCode(asA, a.id, email, second.code)).verdict).toBe('confirmed')
+      expect((await row(a.id, email))!.prev_code_hash).toBeNull()
     })
 
     // Guesses fired all at once still count one by one.

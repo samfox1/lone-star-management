@@ -37,6 +37,7 @@ import {
   sendMessage,
   sendStatus,
   codeStatus,
+  clockTime,
   kindWords,
   type CodeStatus,
   type SendStatus,
@@ -91,19 +92,22 @@ describe('the six slots', () => {
 
 describe('what the server said', () => {
   // Each answer is one quiet line; a confirmed code says nothing (the window closes).
-  it('each code status has its line; locked and expired are dead', () => {
+  // The wording is still moving (AGENTS.md: copy is not pinned); what is pinned is that each
+  // refusal says WHY, distinctly (Sam, 2026-10-05: "clear error messaging to help me understand
+  // why"), that an expired code says when it ran out, and which refusals end the code.
+  it('each code status says why; the dead ones end the code', () => {
     expect(codeMessage('confirmed')).toBeNull()
-    expect(codeMessage('wrong')).toBe('That code didn’t match.')
-    expect(codeMessage('locked')).toBe('Too many tries.')
-    expect(codeMessage('expired')).toBe('That code expired.')
-    expect(codeIsDead('locked') && codeIsDead('expired')).toBe(true)
-    expect(codeIsDead('wrong')).toBe(false)
+    const sentAt = Date.parse('2026-10-05T22:23:42Z')
+    expect(codeMessage('expired', sentAt)).toContain(clockTime(sentAt + 15 * 60 * 1000))
+    expect(codeMessage('replaced')).toMatch(/earlier email/)
+    for (const s of ['locked', 'locked_today', 'expired'] as const) expect(codeIsDead(s), s).toBe(true)
+    for (const s of ['wrong', 'replaced', 'error'] as const) expect(codeIsDead(s), s).toBe(false)
   })
 
   // Every status the SQL and the function answer is known as itself (EMAIL_CONFIRM_PLAN.md §1-2):
   // one dropped from the list would read as an error.
   it('knows every status the server answers', () => {
-    const code: CodeStatus[] = ['confirmed', 'wrong', 'locked', 'expired']
+    const code: CodeStatus[] = ['confirmed', 'wrong', 'replaced', 'locked', 'locked_today', 'expired']
     const send: SendStatus[] = ['sent', 'confirmed', 'too_soon', 'too_many', 'send_failed', 'not_allowed', 'not_listed']
     for (const s of code) expect(codeStatus(s)).toBe(s)
     for (const s of send) expect(sendStatus(s)).toBe(s)
@@ -112,11 +116,11 @@ describe('what the server said', () => {
   // Each failure says something, and something of its own (a status falling through to the
   // generic line would read the same as an error).
   it('each failure has its own line', () => {
-    const lines = (['too_soon', 'too_many', 'send_failed', 'error'] as const).map(sendMessage)
+    const lines = (['too_soon', 'too_many', 'send_failed', 'not_listed', 'not_allowed', 'error'] as const).map(sendMessage)
     expect(lines.every(Boolean)).toBe(true)
     expect(new Set(lines).size).toBe(lines.length)
     expect(sendMessage('confirmed')).toBeNull()
-    const codeLines = (['wrong', 'locked', 'expired', 'error'] as const).map(codeMessage)
+    const codeLines = (['wrong', 'replaced', 'locked', 'locked_today', 'expired', 'error'] as const).map((st) => codeMessage(st))
     expect(codeLines.every(Boolean)).toBe(true)
     expect(new Set(codeLines).size).toBe(codeLines.length)
   })

@@ -64,12 +64,12 @@ export function codeFrom(slots: readonly string[]): string | null {
 // ---------------------------------------------------------------------------
 // What the server said, as words
 // ---------------------------------------------------------------------------
-/** confirm_email_code's answers. */
-export type CodeStatus = 'confirmed' | 'wrong' | 'locked' | 'expired'
+/** confirm_email_code's answers ('replaced' and 'locked_today' since 20261006150000). */
+export type CodeStatus = 'confirmed' | 'wrong' | 'replaced' | 'locked' | 'locked_today' | 'expired'
 /** The email-confirm function's answers (begin_email_confirmation's, plus the send). */
 export type SendStatus = 'sent' | 'confirmed' | 'too_soon' | 'too_many' | 'send_failed' | 'not_allowed' | 'not_listed'
 
-const CODE_STATUSES: readonly CodeStatus[] = ['confirmed', 'wrong', 'locked', 'expired']
+const CODE_STATUSES: readonly CodeStatus[] = ['confirmed', 'wrong', 'replaced', 'locked', 'locked_today', 'expired']
 const SEND_STATUSES: readonly SendStatus[] = ['sent', 'confirmed', 'too_soon', 'too_many', 'send_failed', 'not_allowed', 'not_listed']
 
 /** An answer this build knows, or 'error' (a network failure, a 401, a status added later). */
@@ -80,25 +80,42 @@ export function sendStatus(value: unknown): SendStatus | 'error' {
   return SEND_STATUSES.find((s) => s === value) ?? 'error'
 }
 
-/** The window's one quiet line after a code is checked; nothing when it confirmed. */
-export function codeMessage(status: CodeStatus | 'error'): string | null {
+/** "5:38 PM": a time a person can match to an email's timestamp. */
+export function clockTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+/**
+ * The window's quiet line after a code is checked: WHY it was refused and what to do next (Sam,
+ * 2026-10-05: "Please provide clear error messaging to help me understand why", after Ross's code
+ * from an earlier email was refused as "didn't match" and the right one had run out). Nothing
+ * when it confirmed. `sentAt`: when the current code went out, to say when it ran out.
+ */
+export function codeMessage(status: CodeStatus | 'error', sentAt?: number): string | null {
   switch (status) {
     case 'confirmed':
       return null
     case 'wrong':
-      return 'That code didn’t match.'
+      return 'That code didn’t match. Check it against the newest email.'
+    case 'replaced':
+      return 'That’s the code from an earlier email. A newer one replaced it: use the newest email.'
     case 'locked':
-      return 'Too many tries.'
+      return 'Five wrong tries used up this code. Send a new one with the arrow below.'
+    case 'locked_today':
+      return 'Too many wrong tries today for this address. Try again tomorrow.'
     case 'expired':
-      return 'That code expired.'
+      return sentAt === undefined
+        ? 'This code ran out (codes last 15 minutes). Send a new one with the arrow below.'
+        : `This code ran out at ${clockTime(sentAt + CODE_LIFE_MS)} (codes last 15 minutes). Send a new one with the arrow below.`
     default:
-      return 'Couldn’t check that code.'
+      return 'Couldn’t check that code. Try again.'
   }
 }
 
-/** A code that cannot be tried again: only a new send brings the slots back. */
+/** A code that cannot be tried again: only a new send (or, for the day's lock, tomorrow) brings
+ *  the slots back. */
 export function codeIsDead(status: CodeStatus | 'error'): boolean {
-  return status === 'locked' || status === 'expired'
+  return status === 'locked' || status === 'locked_today' || status === 'expired'
 }
 
 /** The window's one quiet line after a send; nothing when it went (or was already confirmed). */
@@ -108,13 +125,17 @@ export function sendMessage(status: SendStatus | 'error'): string | null {
     case 'confirmed':
       return null
     case 'too_soon':
-      return 'Wait a minute, then send again.'
+      return 'A code just went out. You can send another in a minute.'
     case 'too_many':
-      return 'Too many codes sent. Try again later.'
+      return 'That’s the limit for now: 5 codes an hour and 10 a day for one address. Try again later.'
     case 'send_failed':
-      return 'The email didn’t send.'
+      return 'The email didn’t send. Try again in a minute.'
+    case 'not_listed':
+      return 'This address isn’t on any list now, so no code was sent.'
+    case 'not_allowed':
+      return 'You can’t send codes for this artist.'
     default:
-      return 'Couldn’t send the code.'
+      return 'Couldn’t send the code. Try again.'
   }
 }
 

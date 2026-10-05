@@ -10,6 +10,7 @@ import {
   codeFrom,
   codeIsDead,
   codeMessage,
+  clockTime,
   countdown,
   enterDigits,
   secondsLeft,
@@ -160,7 +161,7 @@ export function ConfirmWindow({
       const { status } = await confirmEmailCodeAction(artistId, email, code)
       if (status === 'confirmed') return onConfirmed()
       setSlots(EMPTY_SLOTS)
-      setNote(codeMessage(status))
+      setNote(codeMessage(status, sentAt))
       if (codeIsDead(status)) setDead(true)
       else focusSlot(0)
     } catch {
@@ -208,6 +209,8 @@ export function ConfirmWindow({
         <p className="text-[15px] font-medium leading-6 text-ink">Enter the 6-digit code</p>
         <p className="mt-0.5 text-[13px] leading-5 text-ink-muted">
           Sent to <span className="break-all font-space text-[12.5px] text-ink">{email}</span>
+          {/* When, so the newest email is the one to read from: each send replaces the code. */}
+          {sentAt !== undefined ? ` at ${clockTime(sentAt)}` : null}
         </p>
       </div>
 
@@ -237,7 +240,8 @@ export function ConfirmWindow({
         ))}
       </div>
 
-      <p aria-live="polite" className="mt-2.5 h-5 text-center text-[13px] leading-5 text-ink-muted">
+      {/* min-h, not h: a message that says why can take two lines. */}
+      <p aria-live="polite" className="mx-auto mt-2.5 min-h-5 max-w-[40ch] text-center text-[13px] leading-5 text-ink-muted">
         {note}
       </p>
 
