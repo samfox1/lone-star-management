@@ -278,7 +278,9 @@ describe('run', () => {
     expect(second.onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('the door is shut while connecting — Escape and the × do nothing until it settles', async () => {
+  // The × is on the pick step only (Sam, 2026-10-05: "remove the x here", on the Discogs step),
+  // so while connecting there is none to press, and Escape does nothing until it settles.
+  it('the door is shut while connecting — no ×, and Escape does nothing until it settles', async () => {
     let release!: (v: { ok: boolean }) => void
     vi.mocked(connectOneAction).mockImplementationOnce(() => new Promise((r) => (release = r)))
     const { dialog, onClose } = open()
@@ -286,7 +288,7 @@ describe('run', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Connect' }))
     await waitFor(() => expect(within(dialog).getByLabelText('connecting')).toBeInTheDocument())
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(within(dialog).getByRole('button', { name: 'Close' })).toBeDisabled()
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).toBeNull()
     expect(onClose).not.toHaveBeenCalled()
     await act(async () => release({ ok: true }))
   })

@@ -200,18 +200,24 @@ export function ConnectModal({
     <div role="dialog" aria-modal="true" aria-label="Connect" className={modalOverlayClass} onMouseDown={(e) => e.target === e.currentTarget && leave()}>
       <div className={cx(modalCardClass, 'gap-0')}>
         {/* The × 16px in from the corner, as on every card (card-modal.tsx); above the body so
-            the search line pulled up beside it never takes its clicks. */}
-        <div className="relative z-10 -mr-3 -mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={leave}
-            disabled={running}
-            aria-label="Close"
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors disabled:opacity-30 ${ICON_HOVER}`}
-          >
-            <Icon name="close" size={16} />
-          </button>
-        </div>
+            the search line pulled up beside it never takes its clicks. On the PICK step only
+            (Sam, 2026-10-05, on the Discogs step: "remove some of the gap at the top of these
+            modals. Also remove the x here"): the later steps have Back and Save to leave by,
+            and without the ×'s bar they start at the card's own padding. Escape and a click
+            outside still close every step. */}
+        {step === 'pick' ? (
+          <div className="relative z-10 -mr-3 -mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={leave}
+              disabled={running}
+              aria-label="Close"
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors disabled:opacity-30 ${ICON_HOVER}`}
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        ) : null}
 
         {step === 'pick' && (
           <>
