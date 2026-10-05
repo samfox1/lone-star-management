@@ -89,8 +89,11 @@ export function TourAddButton({ artistId }: { artistId: string }) {
           </div>
         }
       >
-        <div className="mt-2">
-          <KvRow label="Date">
+        {/* No title, so the first row sits level with the × (Sam, 2026-10-05: "Tighten
+            more", on the enquiry modal, then "Yes" to the same in every untitled modal). Its
+            right padding keeps the field clear of the ×. */}
+        <div className="-mt-[38px]">
+          <KvRow label="Date" className="pr-10">
             <input aria-label="Date" type="date" value={v.date} onChange={set('date')} className={`${rowInput} font-space text-[13px]`} />
           </KvRow>
           <KvRow label="Venue">

@@ -381,7 +381,7 @@ export function LibraryPicker<T>({
     >
       <div className={cx(modalCardClass, 'no-scrollbar w-[720px] gap-4')}>
         {/* A picker opens straight to its choices (Sam, 2026-10-01/02): just the ×. */}
-        <div className="-mr-3 -mt-3 flex justify-end">
+        <div className="-mb-3 -mr-3 -mt-3 flex justify-end">
           <button
             type="button"
             onClick={onCancel}

@@ -199,7 +199,9 @@ export function ConnectModal({
   return (
     <div role="dialog" aria-modal="true" aria-label="Connect" className={modalOverlayClass} onMouseDown={(e) => e.target === e.currentTarget && leave()}>
       <div className={cx(modalCardClass, 'gap-0')}>
-        <div className="flex justify-end">
+        {/* The × 16px in from the corner, as on every card (card-modal.tsx); above the body so
+            the search line pulled up beside it never takes its clicks. */}
+        <div className="relative z-10 -mr-3 -mt-3 flex justify-end">
           <button
             type="button"
             onClick={leave}
@@ -213,7 +215,9 @@ export function ConnectModal({
 
         {step === 'pick' && (
           <>
-            <label className="mt-1 flex items-center gap-2.5 border-b border-hairline px-0.5 pb-2.5 text-ink-faint">
+            {/* Level with the × (Sam, 2026-10-05: no gap above the first line of an untitled
+                modal); the right padding keeps the field clear of it. */}
+            <label className="-mt-[26px] flex items-center gap-2.5 border-b border-hairline pb-2.5 pl-0.5 pr-10 text-ink-faint">
               <Icon name="search" size={15} />
               <input
                 autoFocus

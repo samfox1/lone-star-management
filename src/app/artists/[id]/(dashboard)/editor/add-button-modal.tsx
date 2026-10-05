@@ -95,7 +95,9 @@ function ButtonPicker({
       onMouseDown={(e) => e.target === e.currentTarget && onCancel()}
     >
       <div className={cx(modalCardClass, 'gap-0')}>
-        <div className="flex justify-end">
+        {/* The × 16px in from the corner, as on every card (card-modal.tsx), so the tiles
+            start right under it. */}
+        <div className="-mr-3 -mt-3 flex justify-end">
           <button
             type="button"
             onClick={onCancel}
