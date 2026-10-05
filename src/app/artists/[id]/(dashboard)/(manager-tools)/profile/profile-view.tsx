@@ -16,7 +16,7 @@ import { EditList } from '../_ui/edit-list'
 import { FieldError } from '../_ui/field-error'
 import { saveArtistNameAction } from './actions'
 import { BioRow } from './bio-row'
-import { ChoiceMenu } from './choice-menu'
+import { ChoiceMenu } from '../_ui/choice-menu'
 
 export type ProfileViewProps = {
   artistId: string

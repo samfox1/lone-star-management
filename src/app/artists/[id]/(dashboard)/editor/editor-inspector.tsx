@@ -73,6 +73,7 @@ import { TextFieldEditor } from './text-field-editor'
 import { TourDateEditor } from './tour-date-editor'
 import { MerchEditor } from './merch-editor'
 import { useConfirm } from '../confirm-dialog'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /**
  * The visual editor's LEFT inspector (SITE_EDITOR_PLAN.md phase 2 — panel redesign).
@@ -1332,16 +1333,11 @@ function SessionActions({
     onRemove()
   }
   return (
-    <div className="border-t border-hairline px-4 py-2.5">
+    // The revert glyph, named on hover, not a boxed word (Sam, 2026-10-05: icons, not words,
+    // lines, not boxes). Still asks first, through the shared Cancel / Confirm dialog.
+    <div className="flex justify-end border-t border-hairline px-3 py-1.5">
       {dialog}
-      <button
-        type="button"
-        onClick={revert}
-        disabled={busy}
-        className="w-full rounded-lg border border-hairline px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
-      >
-        {busy ? 'Reverting…' : 'Revert changes'}
-      </button>
+      <RowIcon icon="undo" label="Revert changes" variant="boxed" size="sm" labelSide="top" labelAlign="end" onClick={() => void revert()} disabled={busy} />
     </div>
   )
 }

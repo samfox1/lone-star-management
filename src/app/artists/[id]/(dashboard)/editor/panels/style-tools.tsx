@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { cx } from '@/lib/cx'
 import { ColorPalette } from '../color-picker'
 import { Icon } from '@/components/ui/icons'
+import { RowIcon } from '../../(manager-tools)/_ui/row-icon'
 import { groupByPrefix, sectionRowLabel, visibleStyleRegions, type ManifestStyleRegion } from '@/lib/site-editor/manifest'
 import { mergeStyle } from '@samfox1/site-bridge'
 import type { RegionMeasurements } from '@samfox1/site-bridge/protocol'
@@ -112,14 +113,9 @@ export function StyleControlRow({
           </span>
           <span className="flex items-center gap-2">
             <span className="font-space text-[11px] text-ink-muted">{label}</span>
+            {/* The reset glyph, named on hover, not the underlined word (Sam, 2026-10-05). */}
             {canReset && exact && (
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="font-space text-[11px] text-ink-muted underline underline-offset-2 hover:text-ink"
-              >
-                Reset
-              </button>
+              <RowIcon icon="replay" label="Reset" variant="bare" glyphSize={13} labelAlign="end" onClick={() => onChange('')} />
             )}
           </span>
         </div>

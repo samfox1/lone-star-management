@@ -15,6 +15,7 @@ import { mergeTwins } from '@/lib/song-merge'
 import { wrongPlatformError } from '@/lib/song-links'
 import { FeaturedChips } from './featured-chips'
 import { TrackAudio } from '../track-audio'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 import { toast } from '../toast'
 import { deleteContentAction, setTrackReleasedAction, setTrackReleaseAction, setTrackTypeAction, updateContentAction } from '../actions'
 
@@ -246,15 +247,9 @@ export function SongModal({
                 unreleased
               </button>
             )}
+            {/* The merge glyph, named on hover, not the word on a grey box (Sam, 2026-10-05). */}
             {twins.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setMergeOpen(true)}
-                title="Another song has this title — fold this one into it"
-                className="rounded-md px-1.5 py-1 font-space text-[11px] uppercase tracking-[0.06em] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-              >
-                Merge duplicate…
-              </button>
+              <RowIcon icon="merge" label="Merge duplicate…" variant="boxed" size="sm" labelSide="top" labelAlign="start" onClick={() => setMergeOpen(true)} />
             )}
           </>
         }

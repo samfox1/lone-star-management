@@ -8,6 +8,8 @@ import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { SECTION_SERVICE_NOUN, type SyncRunResult, type SyncSection, type SyncSource } from './sync-sections'
 import { ToolbarGlyph } from './create-modal'
+import { Icon } from '@/components/ui/icons'
+import { ICON_HOVER } from '@/components/ui/icon-hover'
 
 // The types and the section vocabulary live in sync-sections, and the arrow points ONE
 // way: that module has no React and no 'use client', so this can read it while the pages
@@ -95,6 +97,16 @@ export function SyncDialog({
           onClick={(e) => e.target === e.currentTarget && setOpen(false)}
         >
           <div className={modalCardClass}>
+            {/* The × every card closes with, not a "Close" word in the footer (Sam,
+                2026-10-05: icons, not words). Escape and the backdrop close it too. */}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+            >
+              <Icon name="close" size={16} />
+            </button>
             {connected.length === 0 ? (
               /* NOTHING CONNECTED. It used to list the section's services with a "not
                  connected" tag beside each and a dead Sync now underneath — a dialog
@@ -172,13 +184,6 @@ export function SyncDialog({
                 {connected.length === 0 ? 'Connect a service' : 'Sync other platforms'}
               </Link>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2 font-space text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted hover:text-ink"
-                >
-                  Close
-                </button>
                 {/* No Sync now with nothing connected: a control that provably cannot work
                     reads as the dialog being broken rather than the store being unlinked. */}
                 {connected.length > 0 && (

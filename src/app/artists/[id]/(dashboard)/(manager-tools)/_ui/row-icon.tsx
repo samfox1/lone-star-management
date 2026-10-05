@@ -70,6 +70,8 @@ export type RowIconProps = {
   /** A plain link's file name: the browser saves it rather than opening it. */
   download?: string
   onClick?: MouseEventHandler<HTMLButtonElement>
+  /** `submit`: the ✓ that sends its form (the Connect page's id fields). Default `button`. */
+  type?: 'button' | 'submit'
   disabled?: boolean
   /** The button, so a NoteField's Enter can move focus here. */
   ref?: Ref<HTMLButtonElement>
@@ -275,6 +277,7 @@ export function RowIcon({
   link,
   download,
   onClick,
+  type = 'button',
   disabled = false,
   ref,
   className,
@@ -328,7 +331,7 @@ export function RowIcon({
     )
   }
   return (
-    <button ref={ref} type="button" aria-label={label} onClick={onClick} disabled={disabled} {...trigger} className={cls}>
+    <button ref={ref} type={type} aria-label={label} onClick={onClick} disabled={disabled} {...trigger} className={cls}>
       {inner}
     </button>
   )

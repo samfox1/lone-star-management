@@ -264,14 +264,14 @@ describe('TextFieldEditor — one field, full panel', () => {
     // the harness propagates staged state back into `current`.
     editor(styled, { hero_title: '' })
     const unset = screen.getByLabelText('Hero title Size') as HTMLInputElement
-    expect(within(unset.parentElement!).queryByText('Reset')).toBeNull()
+    expect(within(unset.parentElement!).queryByRole('button', { name: 'Reset' })).toBeNull()
     cleanup()
 
     const steps = sliderSteps(buildTextItemStyleControls(OPTIONS).find((c) => c.id === 'size')!)
     const mid = Math.floor(steps.length / 2)
     editor(styled, { hero_title: steps[mid].value })
     const set = screen.getByLabelText('Hero title Size') as HTMLInputElement
-    expect(within(set.parentElement!).getByText('Reset')).toBeTruthy()
+    expect(within(set.parentElement!).getByRole('button', { name: 'Reset' })).toBeTruthy()
     // And the handle sits ON that value, not at an end.
     expect(set.value).toBe(String(mid))
   })
@@ -563,7 +563,7 @@ describe('Reset on a section region restores the SITE’S value, not nothing', (
       />,
     )
     const size = screen.getByLabelText('Hero wordmark Size') as HTMLInputElement
-    fireEvent.click(within(size.parentElement!).getByText('Reset'))
+    fireEvent.click(within(size.parentElement!).getByRole('button', { name: 'Reset' }))
 
     // Reset rebuilds the base exactly, so the override is DELETED ('') and the site's
     // own classes apply — size included. The failure this pins is the other outcome:

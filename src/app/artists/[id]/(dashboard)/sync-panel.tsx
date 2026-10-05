@@ -7,6 +7,7 @@
 import { buttonClass, inputClass } from '@/components/ui/ui'
 import { SaveForm } from './save-form'
 import { ActionButton } from './action-button'
+import { RowIcon } from './(manager-tools)/_ui/row-icon'
 
 type SaveAction = (formData: FormData) => Promise<{ error?: string }>
 type PullAction = () => Promise<{ ok: boolean; error?: string }>
@@ -51,12 +52,9 @@ export function SyncPanel({
           placeholder={placeholder}
           className={`${inputClass} flex-1`}
         />
-        <button
-          type="submit"
-          className="rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-        >
-          Save
-        </button>
+        {/* A bare ✓, not the word on a grey hover box (Sam, 2026-10-05: icons, not words):
+            grey at rest, black and bolder on hover; "Save" is its name and hover label. */}
+        <RowIcon icon="check" label="Save" type="submit" variant="boxed" size="sm" labelAlign="end" />
       </SaveForm>
       <p className="mt-2 font-space text-xs text-ink-faint">
         Pulls into draft rows. Your manual edits are never overwritten. Requires API

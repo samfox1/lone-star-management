@@ -64,6 +64,8 @@ export type IconName =
   | 'brush'
   | 'copy'
   | 'mail'
+  | 'merge'
+  | 'undo'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -369,6 +371,22 @@ const PATHS: Record<IconName, React.ReactNode> = {
   /** Change font: two chevrons, up and down — "pick another from a list". Drawn on the
    *  24 grid to match the prototype's glyph (prototypes/brand_variants_20260923.html). */
   chevronsUpDown: <path d="M7 9l5-5 5 5M7 15l5 5 5-5" />,
+  /** Merge duplicate (the song modal) · Lucide `merge` (ISC): two lines becoming one. */
+  merge: (
+    <>
+      <path d="m8 6 4-4 4 4" />
+      <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" />
+      <path d="m20 22-5-5" />
+    </>
+  ),
+  /** Revert changes (the editor) · Lucide `undo-2` (ISC): back to the last publish. Not `replay`,
+   *  which is Reset (a slider, an icon's framing): put ONE value back. */
+  undo: (
+    <>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+    </>
+  ),
   /** Remove background · Lucide `eraser` (ISC) */
   eraser: (
     <>

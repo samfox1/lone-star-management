@@ -91,6 +91,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
   // is absent because that is an upload of multiple songs, not one link.
   const [streamingType, setStreamingType] = useState<StreamingType | null>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
   // The streaming REVIEW step: what the service resolved (or blanks it couldn't), which the
   // manager confirms/fills before the row is written. reviewCoverUrl is the detected cover;
   // coverFile overrides it (or supplies one when nothing was detected).
@@ -600,12 +601,34 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                       <RowIcon icon="refresh" label="Replace cover" variant="bare" glyphSize={16} labelAlign="start" onClick={() => setReviewCoverUrl(null)} />
                     </div>
                   ) : (
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
-                      className="text-xs text-ink-muted file:mr-2 file:rounded-md file:border file:border-hairline file:bg-paper file:px-2 file:py-1 file:text-ink-muted"
-                    />
+                    // The upload glyph over a hidden input, not the browser's "Choose File"
+                    // (Sam, 2026-10-05: icons, not words), as every other uploader does. A file
+                    // dropped on the row still lands, as it did on the native input.
+                    <div
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const file = e.dataTransfer.files?.[0]
+                        if (file) setCoverFile(file)
+                      }}
+                      className="flex items-center gap-2.5"
+                    >
+                      <input
+                        ref={coverInputRef}
+                        type="file"
+                        accept="image/*"
+                        aria-label="Upload cover"
+                        tabIndex={-1}
+                        onChange={(e) => {
+                          setCoverFile(e.target.files?.[0] ?? null)
+                          e.target.value = ''
+                        }}
+                        // sr-only, not `hidden`: Safari will not open a display:none file input.
+                        className="sr-only"
+                      />
+                      <RowIcon icon="upload" label="Upload cover" variant="bare" glyphSize={16} labelAlign="start" onClick={() => coverInputRef.current?.click()} />
+                      {coverFile ? <span className="min-w-0 truncate text-xs text-ink-muted">{coverFile.name}</span> : null}
+                    </div>
                   )}
                 </div>
               </div>

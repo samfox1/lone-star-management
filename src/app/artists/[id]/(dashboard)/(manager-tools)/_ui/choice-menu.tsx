@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { FOCUS_RING_OFFSET } from '../_ui/styles'
+import { FOCUS_RING_OFFSET } from './styles'
 
 /** The site's own drop-down (the Type select's look): the value in plain ink and the up-down
  *  glyph that says it's a choice. The empty choice reads as its own label ("Site default",
@@ -23,8 +23,9 @@ export function ChoiceMenu({
   options: readonly { value: string; label: string }[]
   onChange: (v: string) => void
   align?: 'start' | 'end'
-  /** `cell`: the 15px value of a small labelled cell (city · region · country). */
-  size?: 'row' | 'cell'
+  /** `cell`: the 15px value of a small labelled cell (city · region · country). `panel`: the
+   *  site editor's 13px side-panel rows (the Site panel's About and Type). */
+  size?: 'row' | 'cell' | 'panel'
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -88,14 +89,14 @@ export function ChoiceMenu({
         aria-controls={listId}
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          'flex max-w-full items-center rounded-md text-[15px]',
-          size === 'cell' ? 'gap-1.5 leading-6' : 'gap-2.5',
+          'flex max-w-full items-center rounded-md',
+          size === 'panel' ? 'gap-1.5 text-[13px]' : size === 'cell' ? 'gap-1.5 text-[15px] leading-6' : 'gap-2.5 text-[15px]',
           faint ? 'text-ink-faint' : 'text-ink',
           FOCUS_RING_OFFSET,
         )}
       >
         <span className="min-w-0 truncate">{shown}</span>
-        <Icon name="chevronsUpDown" size={size === 'cell' ? 15 : 18} className="flex-none text-ink-faint" />
+        <Icon name="chevronsUpDown" size={size === 'panel' ? 14 : size === 'cell' ? 15 : 18} className="flex-none text-ink-faint" />
       </button>
       {open ? (
         <div

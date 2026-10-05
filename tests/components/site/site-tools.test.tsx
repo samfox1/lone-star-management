@@ -106,6 +106,20 @@ describe('SiteTools — the save loop', () => {
   })
 })
 
+/** Open a ChoiceMenu by its name and pick the option labelled `option`. */
+function pick(menu: string, option: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: menu }))
+  fireEvent.click(screen.getByRole('option', { name: option }))
+}
+
+/** The About menu's choices, as the manager reads them. */
+function aboutChoices() {
+  fireEvent.click(screen.getByRole('combobox', { name: 'About placement' }))
+  const labels = screen.getAllByRole('option').map((o) => o.textContent)
+  fireEvent.click(screen.getByRole('combobox', { name: 'About placement' }))
+  return labels
+}
+
 describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
   const seoMock = vi.mocked(saveSeoFieldAction)
   const factMock = vi.mocked(saveArtistFactAction)
@@ -113,8 +127,9 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
   it('the type select still saves inline — a select has nothing to open', async () => {
     // The text rows moved to a full-panel editor (below); the two SELECTS did not. There
     // is no hidden text in a dropdown, so an extra screen to reach it would be friction.
+    // The dashboard's own menu since 2026-10-05 (no boxed native select): pick an option.
     render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} />)
-    fireEvent.change(screen.getByRole('combobox', { name: 'Artist type' }), { target: { value: 'Person' } })
+    pick('Artist type', 'Visual artist')
     await vi.waitFor(() => expect(factMock).toHaveBeenCalledWith('artist-1', 'schema_type', 'Person'))
   })
 
@@ -216,17 +231,14 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
 
   it("CRITICAL: About offers only what the site declares, plus hidden — and 'Site default' names the site's default", async () => {
     render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} about={{ placements: ['page'], default: 'page' }} />)
-    const select = screen.getByRole('combobox', { name: 'About placement' }) as HTMLSelectElement
-    expect([...select.options].map((o) => o.value)).toEqual(['', 'page', 'hidden'])
-    expect(select.options[0].textContent).toContain('Its own page')
-    fireEvent.change(select, { target: { value: 'hidden' } })
+    expect(aboutChoices()).toEqual(['Site default (Its own page)', 'Its own page', 'Hidden'])
+    pick('About placement', 'Hidden')
     await vi.waitFor(() => expect(seoMock).toHaveBeenCalledWith('artist-1', 'about_placement', 'hidden'))
   })
 
   it('a site that declares nothing about its bio offers hidden only', () => {
     render(<SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} about={null} />)
-    const select = screen.getByRole('combobox', { name: 'About placement' }) as HTMLSelectElement
-    expect([...select.options].map((o) => o.value).filter(Boolean)).toEqual(['hidden'])
+    expect(aboutChoices()).toEqual(['Site default', 'Hidden'])
     // Registry-derived: every placement is either offered or explicitly gated.
     expect(ABOUT_PLACEMENTS).toContain('hidden')
   })

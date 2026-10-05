@@ -22,6 +22,8 @@ import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
 import { clickedAControl, ControlRow, EditRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
 import { RowIcon } from '../../(manager-tools)/_ui/row-icon'
+import { ChoiceMenu } from '../../(manager-tools)/_ui/choice-menu'
+import { SCHEMA_TYPES } from '@/lib/manager-tools/profile/profile'
 import { EDIT_TARGET } from '../../(manager-tools)/_ui/styles'
 import { useDebouncedFieldSave } from '../use-debounced-field-save'
 import { fileNameOf, LibraryPicker, PhotoThumb } from '../inspector-grid'
@@ -180,20 +182,19 @@ export function SiteTools({
             <RowIcon icon="edit" label="Edit bio" variant="bare" labelAlign="end" onClick={onEditBio} />
           </ControlRow>
         </div>
+        {/* The dashboard's own drop-down, not a boxed native select (Sam, 2026-10-05: lines,
+            not boxes): the value in ink and the up-down glyph, the menu Profile's Type uses. */}
         <ControlRow label="About">
-          <select
-            aria-label="About placement"
+          <ChoiceMenu
+            label="About placement"
+            size="panel"
             value={placements.includes(seo.about_placement as AboutPlacement) ? seo.about_placement : ''}
-            onChange={(e) => setSeoKey('about_placement', e.target.value)}
-            className={SELECT}
-          >
-            <option value="">{about?.default ? `Site default (${placementLabel[about.default]})` : 'Site default'}</option>
-            {placements.map((p) => (
-              <option key={p} value={p}>
-                {placementLabel[p]}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: about?.default ? `Site default (${placementLabel[about.default]})` : 'Site default' },
+              ...placements.map((p) => ({ value: p, label: placementLabel[p] })),
+            ]}
+            onChange={(v) => setSeoKey('about_placement', v)}
+          />
         </ControlRow>
         {/* The words over the bio (site_content.about_heading, the key the Profile bio window
             saved until 2026-10-05), through the same SEO gate and its 60-character cap. No
@@ -203,10 +204,7 @@ export function SiteTools({
         <SeoEditRow store="fact" fieldKey="genre" label="Genre" value={facts.genre} onEdit={onEditText} />
         <SeoEditRow store="fact" fieldKey="location" label="Location" value={facts.location} onEdit={onEditText} />
         <ControlRow label="Type">
-          <select aria-label="Artist type" value={facts.schema_type || 'MusicGroup'} onChange={(e) => setFact('schema_type', e.target.value)} className={SELECT}>
-            <option value="MusicGroup">Musician</option>
-            <option value="Person">Visual artist</option>
-          </select>
+          <ChoiceMenu label="Artist type" size="panel" value={facts.schema_type || 'MusicGroup'} options={SCHEMA_TYPES} onChange={(v) => setFact('schema_type', v)} />
         </ControlRow>
       </div>
 
@@ -284,7 +282,6 @@ export function SiteTools({
  *  The picker's footer is the same uploader the image slots use, so a cursor PNG that
  *  isn't in the library yet is one drop away — and it lands in the Images library too,
  *  which is where Sam said cursor files should live. */
-const SELECT = 'w-[168px] rounded-md border border-hairline bg-paper px-2 py-1 font-space text-[11px] outline-none focus:border-accent'
 
 /**
  * [label] [snippet] [pencil] — the row every other panel uses (EditRow), so "Edit" is one

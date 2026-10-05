@@ -5,6 +5,7 @@ import { INTEGRATIONS, type ArtistIdField } from '../integrations'
 import { SyncPanel } from '../sync-panel'
 import { SaveForm } from '../save-form'
 import { saveSoundcloudUrlAction } from '../actions'
+import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 
 /**
  * "Connect your platforms" — the music-connect step. Links an artist's streaming profiles so
@@ -61,12 +62,9 @@ export default async function ConnectPage({ params }: { params: Promise<{ id: st
               placeholder="https://soundcloud.com/your-profile"
               className={`${inputClass} flex-1`}
             />
-            <button
-              type="submit"
-              className="rounded-md px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              Save
-            </button>
+            {/* A bare ✓, not the word on a grey hover box (Sam, 2026-10-05: icons, not words):
+                grey at rest, black and bolder on hover; "Save" is its name and hover label. */}
+            <RowIcon icon="check" label="Save" type="submit" variant="boxed" size="sm" labelAlign="end" />
           </SaveForm>
           <p className="mt-2 font-space text-xs text-ink-faint">
             Profile link only — SoundCloud has no catalog API, so it can&apos;t auto-sync. Add
