@@ -66,6 +66,7 @@ export type IconName =
   | 'mail'
   | 'merge'
   | 'undo'
+  | 'reply'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2.2 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />,
@@ -385,6 +386,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M9 14 4 9l5-5" />
       <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+    </>
+  ),
+  /** Reply to an enquiry's sender (a mailto:) · Lucide `reply` (ISC). Not `undo`, which is
+   *  Revert; the envelope (`mail`) is Mark unread there, as in most mail apps. */
+  reply: (
+    <>
+      <path d="m9 17-5-5 5-5" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
     </>
   ),
   /** Remove background · Lucide `eraser` (ISC) */

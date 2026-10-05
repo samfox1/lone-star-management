@@ -15,14 +15,11 @@
  * calls without this mock having to know.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import EnquiriesPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/page'
 
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
   requireArtist: vi.fn(async () => ({ id: 'a1', name: 'Lone Pine' })),
-}))
-vi.mock('@/app/artists/[id]/(dashboard)/section-shell', () => ({
-  SectionShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
   setEnquiryReadAction: vi.fn(async () => ({ ok: true })),
@@ -98,8 +95,8 @@ describe('/artists/[id]/enquiries', () => {
 
   it("labels the inbox row with the kind's LABEL from the table, not the slug", async () => {
     await renderPage()
-    // The Type CELL: the label is also a filter button now.
-    expect(screen.getByRole('cell', { name: 'Sync licensing' })).toBeTruthy()
+    // Inside the ROW: the label is also a filter word.
+    expect(within(screen.getByText('Jamie Rowe').closest('li')!).getByText('Sync licensing')).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 

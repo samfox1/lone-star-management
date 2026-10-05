@@ -1,15 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiries/inbox'
 import { attachmentCounts } from '@/lib/enquiries/inbox-server'
-import { SectionShell } from '../../section-shell'
 import { requireArtist } from '../../_data'
-import { EnquiryTable } from './enquiry-table'
+import { EnquiriesLedger } from './enquiries-ledger'
 import { kindLabeller } from '@/lib/enquiries/kinds'
 
 export const metadata = { title: 'Enquiries — Lone Star Management' }
 
-/** The Enquiries tool: the inbox, the whole page (Sam, 2026-09-22). Who receives each kind
- *  is edited under Settings → Email. */
+/** The Enquiries tool: the inbox, the whole page (Sam, 2026-09-22), on the Subscribers
+ *  page's layout since 2026-10-05 (enquiries-ledger.tsx). Who receives each kind is edited
+ *  under Settings → Email. */
 export default async function EnquiriesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -23,8 +23,8 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     .order('created_at', { ascending: false })
   const enquiries = (data ?? []) as Omit<InboxRow, 'attachmentCount' | 'artistId' | 'artistName'>[]
 
-  // The kinds: their LABELS for each row, and the list itself for the filter bar, in the
-  // artist's order. The table used to carry its own three-entry map and a hard-coded
+  // The kinds: their LABELS for each row, and the list itself for the filter words, in the
+  // artist's order. The list used to carry its own three-entry map and a hard-coded
   // "Demos" filter, both stale the moment a manager renamed or invented a kind. RLS scopes
   // this to the artist.
   const { data: kindRows } = await supabase
@@ -47,9 +47,7 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     artistName: artist.name as string,
   }))
 
-  return (
-    <SectionShell title="Enquiries" artistId={id}>
-      <EnquiryTable rows={rows} kinds={kinds} />
-    </SectionShell>
-  )
+  // No SectionShell: it only added a spacer above the list, and Subscribers, whose layout this
+  // page follows, has none.
+  return <EnquiriesLedger rows={rows} kinds={kinds} />
 }

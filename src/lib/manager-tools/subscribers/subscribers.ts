@@ -16,6 +16,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { shortDay } from '../format'
 
+// The highlight and the mailto: link live in the shared formats since Enquiries uses them too
+// (2026-10-05); re-exported so this tool's callers and tests keep one import.
+export { highlightSegments, mailtoHref, type Segment } from '../format'
+
 export type Subscriber = { id: string; email: string; created_at: string }
 
 export type SubscriberSort = 'new' | 'old' | 'az'
@@ -26,9 +30,6 @@ export const SUBSCRIBER_SORTS: readonly { key: SubscriberSort; label: string }[]
   { key: 'old', label: 'Oldest' },
   { key: 'az', label: 'A–Z' },
 ]
-
-/** One run of an email's text: `hit` runs are the part that matches the search. */
-export type Segment = { text: string; hit: boolean }
 
 const needleOf = (query: string) => query.trim().toLowerCase()
 
@@ -60,33 +61,6 @@ const ORDER: Record<SubscriberSort, (a: Subscriber, b: Subscriber) => number> = 
 /** A sorted COPY; the array given is left as it was. */
 export function sortSubscribers<T extends Subscriber>(rows: readonly T[], sort: SubscriberSort): T[] {
   return [...rows].sort(ORDER[sort])
-}
-
-/**
- * The email split into plain and matching runs, every non-overlapping occurrence, in the
- * email's own case. The segments are RAW text that joins back to the email exactly: the
- * component renders them as React text and <mark> children, which escapes them, so nothing
- * here (or there) ever builds HTML from the query.
- */
-export function highlightSegments(text: string, query: string): Segment[] {
-  const needle = needleOf(query)
-  const n = needle.length
-  if (!n) return [{ text, hit: false }]
-  const out: Segment[] = []
-  let plainFrom = 0
-  let i = 0
-  while (i + n <= text.length) {
-    if (text.slice(i, i + n).toLowerCase() === needle) {
-      if (i > plainFrom) out.push({ text: text.slice(plainFrom, i), hit: false })
-      out.push({ text: text.slice(i, i + n), hit: true })
-      i += n
-      plainFrom = i
-    } else {
-      i += 1
-    }
-  }
-  if (plainFrom < text.length) out.push({ text: text.slice(plainFrom), hit: false })
-  return out
 }
 
 /** "Sep 22, 2026", in UTC. */
@@ -131,17 +105,6 @@ export function exportFilename(slug: string, now: number): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
   return `${safe || 'artist'}-subscribers-${new Date(now).toISOString().slice(0, 10)}.csv`
-}
-
-/**
- * A mailto: link to one subscriber. `subscribe()` allows any non-space, non-@ characters, so
- * "?", "&" and "#" can reach here; each side of the @ is URL-encoded so an address can never
- * add a cc, a subject or a body. The @ itself stays literal, as mail clients expect.
- */
-export function mailtoHref(email: string): string {
-  const at = email.lastIndexOf('@')
-  if (at < 0) return `mailto:${encodeURIComponent(email)}`
-  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`
 }
 
 /** The shown emails as one line for a BCC field: "a@x.com, b@y.com". */

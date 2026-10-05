@@ -7,7 +7,7 @@
  * scannable archive with no row open by default.
  */
 import { describe, expect, it } from 'vitest'
-import { artistsIn, filterByArtist, filterRows, kindFilter, kindOptions, snippet, type InboxRow } from '@/lib/enquiries/inbox'
+import { artistsIn, filterByArtist, filterRows, kindFilter, kindOptions, searchRows, snippet, type InboxRow } from '@/lib/enquiries/inbox'
 
 const row = (over: Partial<InboxRow> = {}): InboxRow => ({
   id: 'e1',
@@ -183,5 +183,35 @@ describe('filterByArtist', () => {
 
   it('narrows to one artist', () => {
     expect(filterByArtist([a, b], 'a2').map((r) => r.id)).toEqual(['b'])
+  })
+})
+
+describe('searchRows — the toolbar search (Sam, 2026-10-05: Enquiries on the Subscribers layout)', () => {
+  const rows = [
+    row({ id: 'a', name: 'Jamie Rowe', email: 'jamie@example.com', message: 'Can you play Mohawk?', purposeLabel: 'Booking' }),
+    row({ id: 'b', name: 'Nia Patel', email: 'nia@label.co', message: 'Demo attached.', purposeLabel: 'Demo' }),
+    row({ id: 'c', name: 'Press Desk', email: 'desk@paper.com', message: 'Interview request', purposeLabel: 'Sync licensing' }),
+  ]
+  const ids = (q: string) => searchRows(rows, q).map((r) => r.id)
+
+  it('an empty or blank query keeps every row, in order', () => {
+    expect(ids('')).toEqual(['a', 'b', 'c'])
+    expect(ids('   ')).toEqual(['a', 'b', 'c'])
+  })
+
+  it('matches the sender, the address, the message and the kind, ignoring case and outer spaces', () => {
+    expect(ids('  PATEL ')).toEqual(['b'])
+    expect(ids('label.co')).toEqual(['b'])
+    expect(ids('mohawk')).toEqual(['a'])
+    expect(ids('sync')).toEqual(['c'])
+  })
+
+  it('is plain text, not a pattern: "." is a dot', () => {
+    expect(ids('.')).toEqual(['a', 'b', 'c'])
+    expect(ids('a.t')).toEqual([])
+  })
+
+  it('a query nothing contains keeps nothing', () => {
+    expect(ids('zzz')).toEqual([])
   })
 })

@@ -1,10 +1,11 @@
 /**
- * The enquiries table's pure rules.
+ * The enquiries list's pure rules (enquiries-ledger.tsx).
  *
- * A TABLE, not a mail client. These messages are a record kept in case something is lost
- * — nobody replies to a booking from in here, they reply from their own mail. So the job
- * is dense, scannable, filterable storage, and the rules worth stating are what a row
- * says and what each filter means.
+ * Not a mail client. These messages are a record kept in case something is lost — nobody
+ * replies to a booking from in here, they reply from their own mail. So the job is dense,
+ * scannable, searchable, filterable storage, and the rules worth stating are what a row
+ * says, what the search matches and what each filter means. Since 2026-10-05 the list wears
+ * the Subscribers page's layout (Sam: "I want it to be closer to that set up"), not a table.
  *
  * (There is no `initialSelection` any more. An inbox opens something for you because you
  * came to read; an archive opens nothing, because you came to look something up.)
@@ -115,4 +116,15 @@ export function artistsIn(rows: InboxRow[]): { id: string; name: string }[] {
 /** `'all'` means no filtering, so the caller can hold one string for both states. */
 export function filterByArtist(rows: InboxRow[], artistId: string): InboxRow[] {
   return artistId === 'all' ? rows : rows.filter((r) => r.artistId === artistId)
+}
+
+/**
+ * The toolbar's search: the rows whose sender, address, message or kind contains the query,
+ * ignoring case and surrounding spaces, in the order given. Plain text matching (`includes`),
+ * never a RegExp built from input, so "." is a dot. The same rule as Subscribers' search.
+ */
+export function searchRows<T extends InboxRow>(rows: T[], query: string): T[] {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return rows
+  return rows.filter((r) => [r.name, r.email, r.message, r.purposeLabel].some((f) => (f ?? '').toLowerCase().includes(needle)))
 }

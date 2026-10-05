@@ -1,7 +1,6 @@
 'use client'
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Icon } from '@/components/ui/icons'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { plural } from '@/lib/manager-tools/format'
 import {
@@ -10,7 +9,6 @@ import {
   exportHref,
   filterSubscribers,
   formatSubscribedDate,
-  highlightSegments,
   mailtoHref,
   sortSubscribers,
   type Subscriber,
@@ -19,8 +17,10 @@ import {
 import { useConfirm } from '../../confirm-dialog'
 import { toast } from '../../toast'
 import { removeSubscriberAction } from './actions'
-import { FOCUS_RING } from '../_ui/focus-ring'
-import { HoverLabel, RowIcon } from '../_ui/row-icon'
+import { copyText, useFlash } from '../_ui/copy'
+import { Highlight } from '../_ui/highlight'
+import { ListToolbar, QUIET, SearchLine, TOUCH_VISIBLE, WordChoice } from '../_ui/list-toolbar'
+import { RowIcon } from '../_ui/row-icon'
 
 /**
  * SUBSCRIBERS (Sam, 2026-09-24; prototypes/subscribers_ledger_20260924.html). The emails the
@@ -33,89 +33,15 @@ import { HoverLabel, RowIcon } from '../_ui/row-icon'
  * every ledger uses (`useConfirm` asks first, `removeSubscriberAction`, the RLS delete
  * policy is `subscribers_delete`, 20260928140500). `subscribe()` is still the only INSERT.
  *
-
- * THE TOOLBAR STAYS, THE PAGE SCROLLS (Sam, 2026-09-24). The toolbar is `sticky` just under
- * the dashboard header and the rows scroll beneath it with the page. Not a scroll box of its
- * own: the page keeps its one native scrollbar, a phone's browser bars still collapse, and
- * Space / Page Down / find-in-page work as on any page. Anything between the toolbar and the
- * page that clips or scrolls (an `overflow-*`) would silently un-stick it; the component test
- * walks the ancestors for exactly that.
+ * THE TOOLBAR STAYS, THE PAGE SCROLLS (Sam, 2026-09-24): the toolbar, its search and its words
+ * are _ui/list-toolbar.tsx since Enquiries took the same layout (2026-10-05), which says why.
  */
-
-/** Under the dashboard header (layout.tsx): 59px tall below md, where its section nav is
- *  hidden, and 71px from md up; plus the notch inset, which is 0 unless the viewport is
- *  ever set to `viewport-fit=cover`. Measured in the browser, 2026-09-24. */
-export const STICKY_TOP = ['top-[calc(59px+env(safe-area-inset-top,0px))]', 'md:top-[calc(71px+env(safe-area-inset-top,0px))]']
-
-/** How long a copy's check stays up. */
-const FLASH_MS = 1400
-
-/** Row icons are faint until their row is hovered — with a MOUSE. A touch screen has no
- *  hover, so there they are always fully visible. */
-const TOUCH_VISIBLE = 'pointer-coarse:opacity-100'
-
-
-const QUIET = 'py-7 text-[14px] text-ink-faint'
-
-/**
- * Copy text: the async clipboard first, and when a browser refuses it (permissions, an
- * insecure origin) or has none, a hidden textarea selected and copied the old way. Focus goes
- * back where it was, so a keyboard user is not dropped on <body>. False only if both failed.
- */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch {
-    // Refused: fall back below.
-  }
-  const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.setAttribute('readonly', '')
-  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none'
-  document.body.appendChild(ta)
-  ta.select()
-  let ok = false
-  try {
-    ok = document.execCommand('copy')
-  } catch {
-    ok = false
-  }
-  ta.remove()
-  prev?.focus()
-  return ok
-}
-
-/** A value that shows for FLASH_MS, then clears. A second flash restarts the clock. */
-function useFlash<T>(): [T | null, (v: T) => void] {
-  const [value, setValue] = useState<T | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current)
-    },
-    [],
-  )
-  const flash = useCallback((v: T) => {
-    if (timer.current) clearTimeout(timer.current)
-    setValue(v)
-    timer.current = setTimeout(() => {
-      timer.current = null
-      setValue(null)
-    }, FLASH_MS)
-  }, [])
-  return [value, flash]
-}
 
 export function SubscribersLedger({ artistId, subscribers }: { artistId: string; subscribers: Subscriber[] }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SubscriberSort>('new')
   const [copiedAll, flashCopiedAll] = useFlash<number>()
   const [said, setSaid] = useState('')
-  const searchRef = useRef<HTMLInputElement>(null)
   const { ask, dialog } = useConfirm()
   // Seeded ONCE from the server, then this component's own truth: a successful Remove drops
   // the row locally (the same "seed once" rule Brand's ledgers use — a revalidated page's
@@ -158,63 +84,9 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
             <p className={QUIET}>No subscribers yet.</p>
           ) : (
             <>
-              <div
-                data-subscribers-toolbar=""
-                // -mt-4 pt-4: at rest the search sits where it would without the padding; once
-                // stuck, that padding is the breathing room under the header's hairline.
-                className={cx('sticky z-20 -mt-4 flex flex-wrap items-center gap-2.5 border-b border-hairline bg-paper pb-3.5 pt-4', ...STICKY_TOP)}
-              >
-                {/* A line, not a box (Sam, 2026-10-02: no bordered fields). */}
-                <div className="relative min-w-0 flex-1 basis-full sm:max-w-[420px] sm:basis-auto">
-                  <Icon name="search" size={16} className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-ink-faint" />
-                  <input
-                    ref={searchRef}
-                    type="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search emails"
-                    aria-label="Search emails"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="w-full border-b border-hairline bg-transparent py-[9px] pl-[26px] pr-8 text-[14px] text-ink outline-hidden transition-colors placeholder:text-ink-faint focus:border-ink [&::-webkit-search-cancel-button]:appearance-none"
-                  />
-                  {query ? (
-                    <button
-                      type="button"
-                      aria-label="Clear search"
-                      onClick={() => {
-                        setQuery('')
-                        searchRef.current?.focus()
-                      }}
-                      className={cx('absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-md text-ink-faint transition-colors hover:text-ink', FOCUS_RING)}
-                    >
-                      <Icon name="close" size={14} />
-                      <HoverLabel label="Clear search" align="end" />
-                    </button>
-                  ) : null}
-                </div>
-
-                {/* Plain words, the chosen one bold ink: no box, no pill (Sam, 2026-10-02). */}
-                <div role="group" aria-label="Sort" className="flex flex-none gap-1 sm:ml-auto">
-                  {SUBSCRIBER_SORTS.map((s) => {
-                    const on = s.key === sort
-                    return (
-                      <button
-                        key={s.key}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => setSort(s.key)}
-                        className={cx(
-                          'whitespace-nowrap rounded-[7px] px-2 py-1.5 text-[12px] transition-colors focus-visible:outline-offset-1',
-                          FOCUS_RING,
-                          on ? 'font-semibold text-ink' : 'font-medium text-ink-muted hover:text-ink',
-                        )}
-                      >
-                        {s.label}
-                      </button>
-                    )
-                  })}
-                </div>
+              <ListToolbar data-subscribers-toolbar="">
+                <SearchLine value={query} onChange={setQuery} label="Search emails" />
+                <WordChoice label="Sort" words={SUBSCRIBER_SORTS} value={sort} onChange={setSort} />
 
                 <RowIcon
                   variant="boxed"
@@ -228,7 +100,7 @@ export function SubscribersLedger({ artistId, subscribers }: { artistId: string;
                   className={copiedAll !== null ? 'text-accent!' : undefined}
                 />
                 <RowIcon variant="boxed" size="sm" tone="accent" labelAlign="end" icon="download" label="Download CSV" href={exportHref(artistId, query)} />
-              </div>
+              </ListToolbar>
 
               {shown.length ? (
                 <ul aria-label="Emails">
@@ -280,15 +152,7 @@ const Row = memo(function Row({
   return (
     <li className="group/ledger grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-hairline-soft py-[13px] last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-x-6">
       <span data-email="" title={email} className="min-w-0 truncate text-[15px] text-ink">
-        {highlightSegments(email, needle).map((seg, i) =>
-          seg.hit ? (
-            <mark key={i} className="rounded-[2px] bg-[#fff3a3] text-inherit">
-              {seg.text}
-            </mark>
-          ) : (
-            <Fragment key={i}>{seg.text}</Fragment>
-          ),
-        )}
+        <Highlight text={email} needle={needle} />
       </span>
       <span className="row-start-2 whitespace-nowrap font-space text-[12px] text-ink-muted sm:row-start-auto">{formatSubscribedDate(createdAt)}</span>
       <span className="row-span-2 flex gap-1 sm:row-span-1">

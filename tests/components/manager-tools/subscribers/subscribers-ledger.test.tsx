@@ -25,7 +25,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { SubscribersLedger, STICKY_TOP } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/subscribers-ledger'
+import { SubscribersLedger } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/subscribers-ledger'
+import { STICKY_TOP } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/list-toolbar'
 import { removeSubscriberAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/subscribers/actions'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 import { SUBSCRIBER_SORTS, type Subscriber, type SubscriberSort } from '@/lib/manager-tools/subscribers/subscribers'

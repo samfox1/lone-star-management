@@ -58,3 +58,45 @@ export function shortLink(url: string | null | undefined): string {
 
 /** What every tool says when a save fails and the server gave no reason. */
 export const SAVE_FAILED = 'Couldn’t save that.'
+
+/** One run of a text: `hit` runs are the part that matches the search. */
+export type Segment = { text: string; hit: boolean }
+
+/**
+ * A text split into plain and matching runs, every non-overlapping occurrence, in the text's
+ * own case: the search highlight of Subscribers and Enquiries (moved here 2026-10-05). The
+ * segments are RAW text that joins back to the text exactly: _ui/highlight.tsx renders them as
+ * React text and <mark> children, which escapes them, so nothing here (or there) ever builds
+ * HTML from the query.
+ */
+export function highlightSegments(text: string, query: string): Segment[] {
+  const needle = query.trim().toLowerCase()
+  const n = needle.length
+  if (!n) return [{ text, hit: false }]
+  const out: Segment[] = []
+  let plainFrom = 0
+  let i = 0
+  while (i + n <= text.length) {
+    if (text.slice(i, i + n).toLowerCase() === needle) {
+      if (i > plainFrom) out.push({ text: text.slice(plainFrom, i), hit: false })
+      out.push({ text: text.slice(i, i + n), hit: true })
+      i += n
+      plainFrom = i
+    } else {
+      i += 1
+    }
+  }
+  if (plainFrom < text.length) out.push({ text: text.slice(plainFrom), hit: false })
+  return out
+}
+
+/**
+ * A mailto: link to one address (a subscriber, an enquiry's sender). `subscribe()` allows any
+ * non-space, non-@ characters, so "?", "&" and "#" can reach here; each side of the @ is URL-encoded so an address can never
+ * add a cc, a subject or a body. The @ itself stays literal, as mail clients expect.
+ */
+export function mailtoHref(email: string): string {
+  const at = email.lastIndexOf('@')
+  if (at < 0) return `mailto:${encodeURIComponent(email)}`
+  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`
+}

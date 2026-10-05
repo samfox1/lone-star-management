@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
-// The enquiries table. It is a record store, not a mail client, so it must never hide a row.
+// The Enquiries list, on the Subscribers layout: rows, search, filters, open, read state, delete.
 /**
- * The enquiries table.
+ * The enquiries list (Sam, 2026-10-05: restyled onto the Subscribers page's layout, replacing
+ * the table).
  *
- * It is a record store, not a mail client: nobody answers a booking from here, and right
- * now — with sending not switched on — this IS the delivery mechanism. So the behaviours
- * that matter are about never hiding anything and always telling the manager what lands
- * here, including when nothing has yet.
+ * It is a record store, not a mail client: nobody answers a booking from here, and right now —
+ * with sending not switched on — this IS the delivery mechanism. So the behaviours that matter
+ * are about never hiding anything: every row shows who, what kind and when; search and the
+ * filters narrow without losing anything; opening shows the whole message; delete asks first.
+ * LIGHT for the layout (AGENTS.md "Test depth"); strict only where a URL is rendered.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { EnquiryTable } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/enquiry-table'
+import { EnquiriesLedger } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/enquiries-ledger'
 import {
   deleteEnquiryAction,
   setEnquiryReadAction,
@@ -66,27 +68,22 @@ const openRow = async (name: string) => {
     fireEvent.click(screen.getByText(name))
   })
 }
+/** The row (`li`) a sender's name sits in. */
+const rowOf = (name: string) => screen.getByText(name).closest('li')!
+const detail = () => document.querySelector('[data-enquiry-detail]')
 
-describe('EnquiryTable — the empty case', () => {
-  it('CRITICAL: renders the table and its filters with NO enquiries at all', async () => {
-    // The screenshot that prompted this: an empty page showed one dashed box and nothing
-    // else — no columns, no filters, no clue what would ever appear or how to find it.
-    render(<EnquiryTable rows={[]} kinds={SEEDED} />)
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'From' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'Received' })).toBeInTheDocument()
-    for (const f of ['All', 'Unread', 'Booking', 'Demo', 'Contact']) {
-      expect(screen.getByRole('button', { name: f })).toBeInTheDocument()
-    }
-  })
-
-  it('says what will land here, not just that nothing has', () => {
-    render(<EnquiryTable rows={[]} />)
-    expect(screen.getByText(/Booking and demo messages from the site/)).toBeInTheDocument()
+describe('EnquiriesLedger — the empty case', () => {
+  it('no enquiries at all: one quiet line, and nothing to search or filter (as Subscribers)', () => {
+    // Sam, 2026-10-05: follow the Subscribers page, which shows one line and no toolbar when
+    // the list is empty. (The table used to render its columns and filters regardless.)
+    render(<EnquiriesLedger rows={[]} kinds={SEEDED} />)
+    expect(screen.getByText('No enquiries yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(screen.queryByRole('list')).toBeNull()
   })
 
   it('distinguishes "no enquiries" from "none match this filter"', async () => {
-    render(<EnquiryTable rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} />)
+    render(<EnquiriesLedger rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} />)
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Unread' }))
     })
@@ -95,19 +92,29 @@ describe('EnquiryTable — the empty case', () => {
   })
 })
 
-describe('EnquiryTable — rows', () => {
-  it('shows the sender, type, snippet and time without opening anything', async () => {
-    render(<EnquiryTable rows={[row()]} />)
-    expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
-    // The Type CELL: the same label is also a filter button now.
-    expect(screen.getByRole('cell', { name: 'Booking' })).toBeInTheDocument()
-    expect(screen.getByText(/Can you play/)).toBeInTheDocument()
+describe('EnquiriesLedger — rows', () => {
+  it('each row shows who, their address, the kind, a snippet and the day, without opening anything', () => {
+    render(<EnquiriesLedger rows={[row()]} />)
+    const r = within(rowOf('Jamie Rowe'))
+    expect(r.getByText('jamie@example.com')).toBeInTheDocument()
+    // The kind inside the ROW: the same label is also a filter word.
+    expect(r.getByText('Booking')).toBeInTheDocument()
+    expect(r.getByText(/Can you play/)).toBeInTheDocument()
+    expect(r.getByText('Aug 4, 2026')).toBeInTheDocument()
   })
 
-  it('CRITICAL: nothing is expanded on arrival — you came to look something up', async () => {
-    render(<EnquiryTable rows={[row()]} />)
+  it('CRITICAL: nothing is expanded on arrival — you came to look something up', () => {
+    render(<EnquiriesLedger rows={[row()]} />)
     expect(setRead).not.toHaveBeenCalled()
-    expect(screen.getAllByRole('row')).toHaveLength(2) // header + one row, no detail row
+    expect(detail()).toBeNull()
+  })
+
+  it('unread rows say so; read rows do not', () => {
+    render(<EnquiriesLedger rows={[row({ id: 'u', name: 'New One' }), row({ id: 'r', name: 'Old One', read_at: '2026-08-04T11:00:00Z' })]} />)
+    expect(within(rowOf('New One')).getByText('unread')).toBeInTheDocument()
+    expect(within(rowOf('Old One')).getByText('read')).toBeInTheDocument()
+    // The unread count rides on the Unread word.
+    expect(screen.getByRole('button', { name: 'Unread 1' })).toBeInTheDocument()
   })
 
   it('opens a row in place, marks it read, and shows the FULL message', async () => {
@@ -115,21 +122,30 @@ describe('EnquiryTable — rows', () => {
     // text proves the detail row is rendering the message rather than the preview again.
     const long =
       'Can you play the Aug 14 show at Mohawk? We can cover travel and provide backline, and we would want a 45 minute set.'
-    render(<EnquiryTable rows={[row({ id: 'x', message: long })]} />)
+    render(<EnquiriesLedger rows={[row({ id: 'x', message: long })]} />)
     await openRow('Jamie Rowe')
     expect(setRead).toHaveBeenCalledWith('a1', 'x', true)
     expect(screen.getByText(long)).toBeInTheDocument()
   })
 
   it('closes again on a second click', async () => {
-    render(<EnquiryTable rows={[row()]} />)
+    render(<EnquiriesLedger rows={[row()]} />)
     await openRow('Jamie Rowe')
+    expect(detail()).not.toBeNull()
     await openRow('Jamie Rowe')
-    expect(screen.getAllByRole('row')).toHaveLength(2)
+    expect(detail()).toBeNull()
+  })
+
+  it('Reply is a mailto: to the sender, address encoded, with a subject', () => {
+    render(<EnquiriesLedger rows={[row({ email: 'a+b?cc=x@example.com' })]} />)
+    expect(screen.getByRole('link', { name: 'Reply' })).toHaveAttribute(
+      'href',
+      'mailto:a%2Bb%3Fcc%3Dx@example.com?subject=Re%3A%20your%20enquiry',
+    )
   })
 
   it('offers Mark unread once read, so glancing does not destroy the signal', async () => {
-    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
     await openRow('Jamie Rowe')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
@@ -137,17 +153,38 @@ describe('EnquiryTable — rows', () => {
     expect(setRead).toHaveBeenCalledWith('a1', 'x', false)
   })
 
-  it('shows the artist column only when asked', () => {
-    const { rerender } = render(<EnquiryTable rows={[row()]} />)
-    expect(screen.queryByRole('columnheader', { name: 'Artist' })).toBeNull()
-    rerender(<EnquiryTable rows={[row()]} showArtist />)
-    expect(screen.getByRole('columnheader', { name: 'Artist' })).toBeInTheDocument()
-    expect(screen.getAllByText('Lone Pine').length).toBeGreaterThan(0)
+  it('names the artist on each row only when asked', () => {
+    const { rerender } = render(<EnquiriesLedger rows={[row()]} />)
+    expect(screen.queryByText('Lone Pine')).toBeNull()
+    rerender(<EnquiriesLedger rows={[row()]} showArtist />)
+    expect(within(rowOf('Jamie Rowe')).getByText('Lone Pine')).toBeInTheDocument()
   })
 
 })
 
-describe("EnquiryTable — filters are the ARTIST'S kinds", () => {
+describe('EnquiriesLedger — search', () => {
+  const rows = [
+    row({ id: 'a', name: 'Jamie Rowe', email: 'jamie@example.com', message: 'Can you play Mohawk?' }),
+    row({ id: 'b', name: 'Nia Patel', email: 'nia@label.co', message: 'Demo attached.', purpose: 'demo', purposeLabel: 'Demo' }),
+  ]
+  const search = () => screen.getByRole('searchbox', { name: 'Search enquiries' })
+
+  it('narrows the rows as you type (sender or message), names a miss, and × brings them back', () => {
+    render(<EnquiriesLedger rows={rows} />)
+    fireEvent.change(search(), { target: { value: 'PATEL' } })
+    expect(screen.queryByText('Jamie Rowe')).toBeNull()
+    expect(screen.getByText('Patel')).toBeInTheDocument() // marked inside "Nia Patel"
+    fireEvent.change(search(), { target: { value: 'mohawk' } })
+    expect(screen.getByText('Jamie Rowe')).toBeInTheDocument()
+    expect(screen.queryByText(/Nia/)).toBeNull()
+    fireEvent.change(search(), { target: { value: 'zzz' } })
+    expect(screen.getByText('No enquiries match “zzz”.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  })
+})
+
+describe("EnquiriesLedger — filters are the ARTIST'S kinds", () => {
   // The bar used to be All · Unread · Demos, with "Demos" hard-coded. Kinds are the
   // artist's to invent since 2026-09-21, so the bar offers theirs.
   const kinds = [
@@ -156,8 +193,10 @@ describe("EnquiryTable — filters are the ARTIST'S kinds", () => {
   ]
 
   it('offers All, Unread, then each of the artist’s kinds — and no hard-coded Demos', () => {
-    render(<EnquiryTable rows={[]} kinds={kinds} />)
-    const labels = screen.getAllByRole('button').map((b) => b.textContent)
+    render(<EnquiriesLedger rows={[row({ read_at: '2026-08-04T11:00:00Z' })]} kinds={kinds} />)
+    const labels = within(screen.getByRole('group', { name: 'Filter' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent)
     expect(labels).toEqual(['All', 'Unread', 'Booking', 'Press'])
   })
 
@@ -166,7 +205,7 @@ describe("EnquiryTable — filters are the ARTIST'S kinds", () => {
       row({ id: 'b', name: 'Booker', purpose: 'booking' }),
       row({ id: 'p', name: 'Journalist', purpose: 'press', purposeLabel: 'Press', read_at: '2026-08-04T11:00:00Z' }),
     ]
-    render(<EnquiryTable rows={rows} kinds={kinds} />)
+    render(<EnquiriesLedger rows={rows} kinds={kinds} />)
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Press' }))
     })
@@ -175,26 +214,26 @@ describe("EnquiryTable — filters are the ARTIST'S kinds", () => {
   })
 
   it('says the kind is empty, not that the inbox is', async () => {
-    render(<EnquiryTable rows={[row({ purpose: 'booking' })]} kinds={kinds} />)
+    render(<EnquiriesLedger rows={[row({ purpose: 'booking' })]} kinds={kinds} />)
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Press' }))
     })
-    expect(screen.getByRole('cell', { name: /Press/ })).toBeInTheDocument()
+    expect(screen.getByText('Nothing in Press yet.')).toBeInTheDocument()
     expect(screen.queryByText(/No enquiries yet/)).toBeNull()
   })
 
   it('with no kind list (the roster inbox), offers the kinds the rows carry', () => {
-    render(<EnquiryTable rows={[row({ purpose: 'demo', purposeLabel: 'Demo' })]} showArtist />)
+    render(<EnquiriesLedger rows={[row({ purpose: 'demo', purposeLabel: 'Demo' })]} showArtist />)
     expect(screen.getByRole('button', { name: 'Demo' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Demos' })).toBeNull()
   })
 })
 
-describe('EnquiryTable — deleting an enquiry', () => {
+describe('EnquiriesLedger — deleting an enquiry', () => {
   // Sam, 2026-09-28: "a manager can delete an inquiry" (spam). Irreversible, so it asks
   // first, in the app's own confirm dialog.
+  // From the row's own glyph, as on Subscribers: no need to open it first.
   const openAndAskToDelete = async () => {
-    await openRow('Jamie Rowe')
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     })
@@ -202,7 +241,7 @@ describe('EnquiryTable — deleting an enquiry', () => {
   }
 
   it('deletes after the manager confirms, and the row leaves the table', async () => {
-    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
     const dialog = await openAndAskToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
@@ -212,7 +251,7 @@ describe('EnquiryTable — deleting an enquiry', () => {
   })
 
   it('CRITICAL: Cancel deletes nothing', async () => {
-    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
     const dialog = await openAndAskToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
@@ -223,7 +262,7 @@ describe('EnquiryTable — deleting an enquiry', () => {
 
   it('keeps the row when the server refuses', async () => {
     del.mockResolvedValue({ ok: false, error: 'That enquiry is no longer there — refresh the page.' })
-    render(<EnquiryTable rows={[row({ id: 'x' })]} />)
+    render(<EnquiriesLedger rows={[row({ id: 'x' })]} />)
     const dialog = await openAndAskToDelete()
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
@@ -233,9 +272,9 @@ describe('EnquiryTable — deleting an enquiry', () => {
   })
 })
 
-describe('EnquiryTable — attachments', () => {
+describe('EnquiriesLedger — attachments', () => {
   it('CRITICAL: signs only when a row is opened', async () => {
-    render(<EnquiryTable rows={[row({ attachmentCount: 2 })]} />)
+    render(<EnquiriesLedger rows={[row({ attachmentCount: 2 })]} />)
     expect(sign).not.toHaveBeenCalled()
     await openRow('Jamie Rowe')
     expect(sign).toHaveBeenCalledWith('e1')
@@ -245,48 +284,48 @@ describe('EnquiryTable — attachments', () => {
     sign.mockResolvedValue([
       { id: 'f1', filename: 'demo.mp3', mime_type: 'audio/mpeg', bytes: null, url: null, expired: true, neverUploaded: false },
     ])
-    render(<EnquiryTable rows={[row({ attachmentCount: 1 })]} />)
+    render(<EnquiriesLedger rows={[row({ attachmentCount: 1 })]} />)
     await openRow('Jamie Rowe')
     expect(await screen.findByText(/Attachment expired/)).toBeInTheDocument()
   })
 
   it('CRITICAL: a javascript: demo link is never rendered as a link', async () => {
-    render(<EnquiryTable rows={[row({ demo_url: 'javascript:alert(1)' })]} />)
+    render(<EnquiriesLedger rows={[row({ demo_url: 'javascript:alert(1)' })]} />)
     await openRow('Jamie Rowe')
     expect(screen.queryByText(/javascript:/)).toBeNull()
   })
 
   it('renders an https demo link with noopener', async () => {
-    render(<EnquiryTable rows={[row({ demo_url: 'https://soundcloud.com/x' })]} />)
+    render(<EnquiriesLedger rows={[row({ demo_url: 'https://soundcloud.com/x' })]} />)
     await openRow('Jamie Rowe')
     const link = screen.getByRole('link', { name: 'https://soundcloud.com/x' })
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 })
 
-describe('EnquiryTable — delivery state', () => {
+describe('EnquiriesLedger — delivery state', () => {
   it('CRITICAL: says when a message was never emailed', async () => {
     // Without this the table reads as a record of messages DELIVERED. With mail not yet
     // configured, none of them are, and a manager assuming otherwise is the failure.
-    render(<EnquiryTable rows={[row({ status: 'unroutable' })]} />)
+    render(<EnquiriesLedger rows={[row({ status: 'unroutable' })]} />)
     await openRow('Jamie Rowe')
     expect(screen.getByText(/Not emailed/)).toBeInTheDocument()
   })
 
   it('distinguishes a failed send from an unconfigured one — different fixes', async () => {
-    render(<EnquiryTable rows={[row({ status: 'failed' })]} />)
+    render(<EnquiriesLedger rows={[row({ status: 'failed' })]} />)
     await openRow('Jamie Rowe')
     expect(screen.getByText(/failed to send/)).toBeInTheDocument()
   })
 
   it('says nothing for a delivered message', async () => {
-    render(<EnquiryTable rows={[row({ status: 'sent' })]} />)
+    render(<EnquiriesLedger rows={[row({ status: 'sent' })]} />)
     await openRow('Jamie Rowe')
     expect(screen.queryByText(/Not emailed/)).toBeNull()
   })
 })
 
-describe('EnquiryTable — how long each one is kept', () => {
+describe('EnquiriesLedger — how long each one is kept', () => {
   // LIGHT (AGENTS.md "Test depth"): the rule itself is pinned in enquiry-retention.test.ts;
   // this only checks each row shows it, from its OWN status.
   afterEach(() => vi.useRealTimers())
@@ -295,27 +334,27 @@ describe('EnquiryTable — how long each one is kept', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-05T12:00:00Z'))
     render(
-      <EnquiryTable
+      <EnquiriesLedger
         rows={[
           row({ id: 's', name: 'Emailed One', status: 'sent', created_at: '2026-09-25T12:00:00Z' }),
           row({ id: 'u', name: 'Unrouted One', status: 'unroutable', created_at: '2026-09-25T12:00:00Z' }),
         ]}
       />,
     )
-    const rowOf = (name: string) => screen.getByText(name).closest('tr')!
     expect(within(rowOf('Emailed One')).getByText('deleted in 20 days')).toBeInTheDocument()
-    expect(within(rowOf('Unrouted One')).getByText('deleted in 80 days')).toBeInTheDocument()
+    // Not emailed, said quietly on the row itself, beside the longer keep it earns.
+    expect(within(rowOf('Unrouted One')).getByText('not emailed · deleted in 80 days')).toBeInTheDocument()
   })
 })
 
-describe('EnquiryTable — the artist selector', () => {
+describe('EnquiriesLedger — the artist selector', () => {
   const two = [
     row({ id: 'a', name: 'From Pine', artistId: 'a1', artistName: 'Lone Pine' }),
     row({ id: 'b', name: 'From Gulf', artistId: 'a2', artistName: 'Gulf Static' }),
   ]
 
   it('CRITICAL: narrows the table to one artist', async () => {
-    render(<EnquiryTable rows={two} showArtist />)
+    render(<EnquiriesLedger rows={two} showArtist />)
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Filter by artist'), { target: { value: 'a2' } })
     })
@@ -324,25 +363,25 @@ describe('EnquiryTable — the artist selector', () => {
   })
 
   it('offers only artists that actually have enquiries here', () => {
-    render(<EnquiryTable rows={two} showArtist />)
+    render(<EnquiriesLedger rows={two} showArtist />)
     const options = within(screen.getByLabelText('Filter by artist')).getAllByRole('option')
     expect(options.map((o) => o.textContent)).toEqual(['All artists', 'Gulf Static', 'Lone Pine'])
   })
 
   it('is hidden on a single artist’s page', () => {
-    render(<EnquiryTable rows={two} />)
+    render(<EnquiriesLedger rows={two} />)
     expect(screen.queryByLabelText('Filter by artist')).toBeNull()
   })
 
   it('is hidden when every enquiry belongs to the same artist', () => {
     // A selector with one real choice is a control that cannot do anything.
-    render(<EnquiryTable rows={[two[0]]} showArtist />)
+    render(<EnquiriesLedger rows={[two[0]]} showArtist />)
     expect(screen.queryByLabelText('Filter by artist')).toBeNull()
   })
 
   it('CRITICAL: names the artist, not the filter, when the artist is the reason', async () => {
     render(
-      <EnquiryTable
+      <EnquiriesLedger
         rows={[...two, row({ id: 'c', purpose: 'demo', purposeLabel: 'Demo', artistId: 'a3', artistName: 'Third' })]}
         showArtist
       />,
@@ -355,14 +394,14 @@ describe('EnquiryTable — the artist selector', () => {
   })
 })
 
-describe('the Type column reads the kind\'s label from the row', () => {
+describe('the row reads the kind\'s label from the row data', () => {
   it('shows an artist-invented kind by its label, not its slug', () => {
     // The table used to hold a three-entry map and fall back to the raw slug. Labels are
     // resolved server-side from enquiry_kinds now, so a custom kind and a renamed one both
     // read as the manager named them.
-    render(<EnquiryTable rows={[row({ purpose: 'sync-licensing', purposeLabel: 'Sync licensing' })]} />)
+    render(<EnquiriesLedger rows={[row({ purpose: 'sync-licensing', purposeLabel: 'Sync licensing' })]} />)
 
-    expect(screen.getByRole('cell', { name: 'Sync licensing' })).toBeTruthy()
+    expect(within(rowOf('Jamie Rowe')).getByText('Sync licensing')).toBeTruthy()
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 })

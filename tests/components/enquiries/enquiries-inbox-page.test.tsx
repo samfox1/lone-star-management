@@ -8,7 +8,7 @@
  * a name cannot be resolved.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import EnquiriesInboxPage from '@/app/artists/page'
 import { setEnquiryReadAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
 import { ownedArtists } from '@/app/roster-data'
@@ -89,9 +89,9 @@ describe('/artists — the roster-wide inbox', () => {
     // you cannot tell whose booking you are reading.
     enquiries = [enquiry({ id: 'e1', artist_id: 'a1' }), enquiry({ id: 'e2', artist_id: 'a2', name: 'Nia Patel' })]
     await renderPage()
-    // An artist's name legitimately renders twice: the row label and its filter <option>.
-    expect(screen.getAllByText('Lone Pine').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Gulf Static').length).toBeGreaterThan(0)
+    // On the ROW: the same names are also the artist selector's options.
+    expect(within(screen.getByText('Jamie Rowe').closest('li')!).getByText('Lone Pine')).toBeInTheDocument()
+    expect(within(screen.getByText('Nia Patel').closest('li')!).getByText('Gulf Static')).toBeInTheDocument()
   })
 
   it('shows messages from every artist in one list', async () => {
@@ -116,11 +116,10 @@ describe('/artists — the roster-wide inbox', () => {
     expect(screen.getByText('No artists yet')).toBeInTheDocument()
   })
 
-  it('renders a table of messages, not of per-artist counts', async () => {
+  it('renders a list of messages, not of per-artist counts', async () => {
     enquiries = [enquiry()]
     await renderPage()
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    expect(screen.getByText(/1 enquiry/)).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Enquiries' })).getAllByRole('listitem')).toHaveLength(1)
   })
 })
 

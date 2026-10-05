@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { InboxRow } from '@/lib/enquiries/inbox'
 import { attachmentCounts } from '@/lib/enquiries/inbox-server'
 import { labelFromSlug } from '@/lib/enquiries/kinds'
-import { EnquiryTable } from './[id]/(dashboard)/(manager-tools)/enquiries/enquiry-table'
+import { EnquiriesLedger } from './[id]/(dashboard)/(manager-tools)/enquiries/enquiries-ledger'
 import { EmptyState, RosterShell } from '../roster-chrome'
 import { ownedArtists } from '../roster-data'
 
@@ -12,6 +12,8 @@ export const metadata = { title: 'Enquiries — Lone Star Management' }
  *  thousand rows nobody scrolls to. Older enquiries stay reachable on the artist's own
  *  page, which is scoped and therefore shorter. */
 const MAX_ROWS = 200
+
+const ROSTER_STICKY_TOP = ['top-0']
 
 /**
  * The roster-wide enquiries inbox.
@@ -76,7 +78,8 @@ export default async function EnquiriesInboxPage() {
         />
       ) : (
         <div className="px-7 pb-12 pt-6">
-          <EnquiryTable rows={rows} showArtist />
+          {/* This page's header does not stick, so the toolbar sticks to the very top. */}
+          <EnquiriesLedger rows={rows} showArtist stickyTop={ROSTER_STICKY_TOP} />
         </div>
       )}
     </RosterShell>
