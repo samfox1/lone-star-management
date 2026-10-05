@@ -15,7 +15,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const EMAIL_CONFIRMATIONS_PUSHED = false
+export const EMAIL_CONFIRMATIONS_PUSHED = true
 
 /**
  * Mark addresses confirmed for one artist, the state a finished code or link leaves, without

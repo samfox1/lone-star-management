@@ -152,24 +152,13 @@ describe('what the server said', () => {
 })
 
 describe('the loader’s status call (STRICT: a failed read must never look confirmed)', () => {
-  // Before the migration is pushed the function is missing: the feature is off and the page
-  // works as it did.
-  it('a missing function switches confirmation off', () => {
-    expect(confirmStateFrom({ data: null, error: { code: 'PGRST202' } })).toEqual({ live: false })
-  })
-
-  // Postgres's own "no such function" is NOT the switch: after the push it would mean a rename
-  // or a broken call, and failing open there shows waiting addresses as confirmed.
-  it('42883 is not the switch: addresses show waiting', () => {
-    expect(confirmStateFrom({ data: null, error: { code: '42883' } })).toEqual({ live: true, confirmed: [] })
-  })
-
-  // Any OTHER failure is not "everything confirmed": every address shows waiting.
-  it('any other error shows every address waiting', () => {
-    expect(confirmStateFrom({ data: null, error: { code: '42501' } })).toEqual({ live: true, confirmed: [] })
-    expect(confirmStateFrom({ data: null, error: {} })).toEqual({ live: true, confirmed: [] })
-    // No rows and no error: nothing is confirmed (default deny), not "off".
-    expect(confirmStateFrom({ data: null, error: null })).toEqual({ live: true, confirmed: [] })
+  // Every failure shows every address waiting, never confirmed. A missing function included:
+  // the pre-push switch that turned the feature off failed OPEN, and went with the push.
+  it('any error shows every address waiting', () => {
+    for (const code of ['PGRST202', '42883', '42501', undefined])
+      expect(confirmStateFrom({ data: null, error: { code } })).toEqual({ confirmed: [] })
+    // No rows and no error: nothing is confirmed (default deny).
+    expect(confirmStateFrom({ data: null, error: null })).toEqual({ confirmed: [] })
   })
 
   // Rows: only the confirmed ones, as one lower-case key each.
@@ -180,6 +169,6 @@ describe('the loader’s status call (STRICT: a failed read must never look conf
       { email: 'odd@x.com', confirmed: 'true', waiting: false },
       { email: null, confirmed: true, waiting: false },
     ]
-    expect(confirmStateFrom({ data, error: null })).toEqual({ live: true, confirmed: ['agent@x.com'] })
+    expect(confirmStateFrom({ data, error: null })).toEqual({ confirmed: ['agent@x.com'] })
   })
 })

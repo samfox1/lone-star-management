@@ -34,6 +34,9 @@ vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () =
   deleteEnquiryKindAction: vi.fn(async () => ({})),
   saveEnquiryKindAction: vi.fn(),
   setEnquiryRecipientsAction: vi.fn(),
+  // An added address is waiting, so the row asks for its code: answered, never sent.
+  sendEmailCodeAction: vi.fn(async () => ({ status: 'sent' })),
+  confirmEmailCodeAction: vi.fn(),
 }))
 
 const setList = vi.mocked(setEnquiryRecipientsAction)
@@ -54,10 +57,12 @@ const demo = (recipients: EnquiryKindRow['recipients'] = []) =>
 const contact = () => kind({ id: 'k-other', slug: 'other', label: 'Contact', description: 'For everything else', sortOrder: 2 })
 const press = () => kind({ id: 'k-press', slug: 'press', label: 'Press', description: null, sortOrder: 3 })
 
-/** Confirmation off (`live: false`): the list behaves as it did before codes, every address
- *  click-to-edit. The waiting/confirmed path has its own file, email-confirm.test.tsx. */
+/** Every address on the page confirmed, so each is click-to-edit as these list tests expect.
+ *  The waiting/confirmed path (the key, the code window) has its own file,
+ *  email-confirm.test.tsx. */
 function renderRows(kinds: EnquiryKindRow[]) {
-  return render(<KindRows artistId="a1" kinds={kinds} confirm={{ live: false }} />)
+  const confirmed = kinds.flatMap((k) => k.recipients.map((r) => r.email.trim().toLowerCase()))
+  return render(<KindRows artistId="a1" kinds={kinds} confirm={{ confirmed }} />)
 }
 const row = (slug: string) => document.querySelector<HTMLElement>(`[data-kind="${slug}"]`)!
 
@@ -119,7 +124,9 @@ describe('click an address', () => {
     expect(setList).not.toHaveBeenCalled()
   })
 
-  it('Enter saves the WHOLE list with that one address changed', async () => {
+  // A confirmed address is changed by ADDING the new one (it waits for its code) and keeping the
+  // old until the new one confirms (EMAIL_CONFIRM_PLAN.md), so enquiries never stop between.
+  it('Enter saves the WHOLE list: the old address kept, the new one added', async () => {
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: 'A&R' }, { id: 'r2', email: 'b@x.com', label: null }])])
 
     open('demo', 'a@x.com')
@@ -130,8 +137,9 @@ describe('click an address', () => {
     })
 
     expect(setList).toHaveBeenCalledWith('a1', 'k-demo', [
-      { email: 'a2@x.com', label: 'A&R' },
+      { id: 'r1', email: 'a@x.com', label: 'A&R' },
       { id: 'r2', email: 'b@x.com', label: null },
+      { email: 'a2@x.com', label: 'A&R' },
     ])
   })
 
@@ -280,7 +288,8 @@ describe('the row’s +', () => {
       { id: 'r1', email: 'a@x.com', label: null },
       { email: 'new@x.com', label: null },
     ])
-    expect(within(row('demo')).getByRole('button', { name: 'new@x.com' })).toBeTruthy()
+    // New, so it waits for its code (blue, with the key).
+    expect(within(row('demo')).getByRole('button', { name: 'new@x.com: enter the code' })).toBeTruthy()
   })
 
   it('a refused address is not sent and stays typed; Escape then writes nothing', async () => {

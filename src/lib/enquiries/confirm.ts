@@ -134,30 +134,22 @@ export function countdown(seconds: number): string {
 // What the Settings › Email loader read
 // ---------------------------------------------------------------------------
 /**
- * Which addresses show as confirmed. `live: false` is the feature switched off: every address
- * looks and behaves as it did before (no window, no send). Otherwise DEFAULT DENY, like the SQL:
- * an address not listed as confirmed is waiting (blue, with the key).
+ * Which addresses show as confirmed. DEFAULT DENY, like the SQL: an address not listed as
+ * confirmed is waiting (blue, with the key).
  */
-export type ConfirmState = { live: false } | { live: true; confirmed: string[] }
-
-/** The function is not there yet: PostgREST's "not in the schema cache". ONLY that code: this
- *  branch fails OPEN (addresses look confirmed), so it must not catch a later rename or a
- *  stale cache after the push, which a broader set (42883) would. */
-const MISSING_FUNCTION = 'PGRST202'
+export type ConfirmState = { confirmed: string[] }
 
 /**
  * `email_confirmation_status(p_artist_id)` as a ConfirmState.
  *
- * TODO(email-confirm): remove the missing-function branch once 20261006120000 is pushed. Until
- * then the call fails with PGRST202 and the page must work as it did. ANY OTHER error is not
- * that: it shows every address waiting, never confirmed, because a manager reading ink would
- * believe enquiries reach someone the database may be refusing.
+ * ANY error shows every address waiting, never confirmed: a manager reading ink would believe
+ * enquiries reach someone the database may be refusing. (Until 20261006120000 was pushed a
+ * missing function switched the feature off; that branch failed OPEN and went with the push.)
  */
 export function confirmStateFrom(res: { data: unknown; error: { code?: string } | null }): ConfirmState {
-  if (res.error) return res.error.code === MISSING_FUNCTION ? { live: false } : { live: true, confirmed: [] }
+  if (res.error) return { confirmed: [] }
   const rows = Array.isArray(res.data) ? (res.data as { email?: unknown; confirmed?: unknown }[]) : []
   return {
-    live: true,
     confirmed: rows.filter((r) => r.confirmed === true && typeof r.email === 'string').map((r) => emailKey(r.email as string)),
   }
 }

@@ -55,7 +55,7 @@ describe('adding an address', () => {
     render(
       <KindRows
         artistId="a1"
-        confirm={{ live: true, confirmed: ['agent@x.com'] }}
+        confirm={{ confirmed: ['agent@x.com'] }}
         kinds={[
           {
             id: 'k-booking',

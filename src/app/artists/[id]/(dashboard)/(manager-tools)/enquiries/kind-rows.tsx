@@ -76,10 +76,9 @@ export function KindRows({
   confirm: ConfirmState
 }) {
   const [kinds, setKinds] = useState(initial)
-  const live = confirm.live
   /** Confirmed addresses (emailKey). Anything else is waiting: default deny, as in the SQL. */
-  const [confirmed, setConfirmed] = useState(() => new Set(confirm.live ? confirm.confirmed : []))
-  const waiting = (email: string) => live && !confirmed.has(emailKey(email))
+  const [confirmed, setConfirmed] = useState(() => new Set(confirm.confirmed))
+  const waiting = (email: string) => !confirmed.has(emailKey(email))
   /** The code window: which address, on which kind's row, and whether opening it sends. */
   const [codeFor, setCodeFor] = useState<{ kindId: string; email: string; send: boolean; sentAt?: number } | null>(null)
   /** When the last code went to each address on this visit, for the window's countdown. */

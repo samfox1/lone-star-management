@@ -42,7 +42,7 @@
  *           artists dropped by this file (their confirmations, kinds and lists cascade).
  */
 import { createHash, randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { EMAIL_CONFIRMATIONS_PUSHED, confirmForRouting } from '@tests/helpers/email-confirmations'
@@ -101,8 +101,13 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
     return (data as { id: string }).id
   }
 
+  /** Every address a test put on a list, taken off again after it: a kind holds at most 10, and
+   *  27 tests share two artists. Scoped to exactly these rows (AGENTS.md rule 6). */
+  const planted: { artistId: string; email: string }[] = []
+
   /** Put an address on a kind's list, and prove it is there: the witness every "receives nothing" needs. */
   async function list(artistId: string, slug: string, email: string, createdAt?: string): Promise<void> {
+    planted.push({ artistId, email })
     const { error } = await svc.from('enquiry_recipients').insert({
       artist_id: artistId,
       kind_id: await kindId(artistId, slug),
@@ -194,6 +199,13 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
   beforeEach(async () => {
     if (a) await forgetSends(a.id)
     if (b) await forgetSends(b.id)
+  })
+
+  afterEach(async () => {
+    for (const { artistId, email } of planted.splice(0)) {
+      const { error } = await svc.from('enquiry_recipients').delete().eq('artist_id', artistId).eq('email', email)
+      if (error) throw new Error(`unlist ${email}: ${error.message}`)
+    }
   })
 
   afterAll(async () => {
