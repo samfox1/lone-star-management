@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { RAIL_LANE } from './(manager-tools)/_shell/tools-rail'
+import { RAIL_LANE } from './rail'
 import { NAV_HOVER } from './nav-hover'
 
 type AssetKind = 'music' | 'photos' | 'videos'

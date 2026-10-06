@@ -13,6 +13,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { TOOLS, tabFor, toolFor, toolsFor, type Tool } from './tools-registry'
 import { NAV_HOVER } from '../../nav-hover'
+import { RAIL_LANE } from '../../rail'
 
 export { TOOLS, tabFor, toolFor, toolsFor }
 
@@ -37,8 +38,8 @@ export { TOOLS, tabFor, toolFor, toolsFor }
 // the fixed one did.
 //
 // A sticky box can only stick inside its parent, and the in-flow slot starts below the
-// header and <main>'s padding. So each panel sits in a LANE (RAIL_LANE) that is absolute
-// against the dashboard root (`relative`, layout.tsx): it starts at the top of the page,
+// header and <main>'s padding. So each panel sits in a LANE (RAIL_LANE, ../../rail.ts) that is
+// absolute against the dashboard root (`relative`, layout.tsx): it starts at the top of the page,
 // ends at the bottom, and the sticky panel inside it can stay at the window top for the
 // whole scroll. Being absolute, the lane is out of the flow, so it pushes nothing: the
 // in-flow slot still holds the page's left edge, and the thin rail still widens OVER the
@@ -48,20 +49,6 @@ export { TOOLS, tabFor, toolFor, toolsFor }
 // Headless Chromium does not bounce, so the bounce itself can only be checked by hand on
 // a trackpad. What was measured (2026-10-01) is that nothing else moved: every panel's box
 // at every scroll offset, before and after, on a tabbed tool, a plain one and an assets page.
-/**
- * The lane each side panel rides in (the tools rail, the second panel, the assets rail).
- *
- * `round(100%, 1px)`, not `bottom-0`: the root's height is often fractional (829.875px on
- * SEO/GEO), and Chrome rounds the page's scroll height to the NEAREST whole pixel (830).
- * A lane ending at 829.875 is then short by the difference, and at the very bottom of
- * the scroll the sticky panel was pushed up by it (measured: up to half a pixel). Rounded
- * the same way, the lane ends exactly where the page does, and never past it, so it adds
- * no scroll of its own.
- *
- * `bottom-0` stays as the FALLBACK: a browser without CSS round() drops that height as
- * invalid, and top + bottom size the lane. Where round() works, the height wins over bottom.
- */
-export const RAIL_LANE = 'absolute top-0 bottom-0 h-[round(100%,1px)]'
 /**
  * The rail is thin on EVERY tool page and widens on hover (Sam, 2026-10-05: "When a manager
  * tools page is open, I would like the left panel to always be the thinner icon only look with
