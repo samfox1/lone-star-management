@@ -126,7 +126,7 @@ ones pulled from Bandsintown, once the manager publishes them on.
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions.ts` —
   `connectOneAction`, `pullConnectionAction` (shared across every connection).
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/connect-modal.tsx`,
-  `connection-modal.tsx`, `connection-list.tsx`, `connection-mark.tsx` — the Connections UI.
+  `connection-modal.tsx`, `connection-list.tsx`, `../_ui/connection-mark.tsx` — the Connections UI.
 - `.env.example` — documents `TICKETMASTER_API_KEY`.
 
 ## Tests

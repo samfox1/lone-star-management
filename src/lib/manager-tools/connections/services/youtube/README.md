@@ -169,7 +169,7 @@ placed — YouTube has no hosted audio/video of its own on this platform.
   `connectOneAction`, `syncProfileAction`, `pullConnectionAction` (shared across every
   connection, including YouTube).
 - `src/app/artists/[id]/(dashboard)/(manager-tools)/connections/connect-modal.tsx`,
-  `connection-modal.tsx`, `connection-list.tsx`, `connection-mark.tsx` — the Connections UI.
+  `connection-modal.tsx`, `connection-list.tsx`, `../_ui/connection-mark.tsx` — the Connections UI.
 - `packages/site-bridge/src/social.ts` — the `youtube` `SOCIAL_PLATFORMS` entry (urlHint).
 - `packages/site-bridge/src/social-icons.ts` — `socialIcon('youtube')`, the site's own mark.
 - `.env.example` — documents `YOUTUBE_API_KEY`.

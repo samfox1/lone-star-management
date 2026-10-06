@@ -35,7 +35,7 @@ Mark: `social-icons.ts`, from simple-icons (CC0, `kofi`, brand colour `#FF6433`)
 - `.../connections/connect-modal.tsx` — the handle field: `ko-fi.com/` shown in grey, paste-tidies-on-paste-and-blur.
 - `.../connections/actions.ts` — `connectOneAction` turns the handle into the link and inserts the `links` row off-site (`addContentAction(..., { offSite: true })`).
 - `.../connections/connection-modal.tsx` — editing the stored handle afterwards (`KvField` + `saveHandle`), labelled "Page name".
-- `.../connections/connection-mark.tsx` — the dashboard's monochrome mark, from `socialIcon('ko-fi')`.
+- `.../_ui/connection-mark.tsx` — the dashboard's monochrome mark, from `socialIcon('ko-fi')`.
 - `packages/site-bridge/src/social.ts` / `social-icons.ts` — the bridge's slug, label and icon.
 - `.../editor/panels/link-tools.tsx` (`SocialButtons`) — the site editor's Socials list, where the connection becomes a button.
 - `.../editor/add-button-modal.tsx` — "Add button" offers this connection when it has a profile link and isn't on the site yet.

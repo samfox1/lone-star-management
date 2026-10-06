@@ -9,7 +9,7 @@ import { buttonClass, modalCardClass, modalOverlayClass } from '@/components/ui/
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { CONNECTIONS, buttonChoices, connectionHandle, connectionOfLink } from '@/lib/connections'
 import { ConnectModal } from '../(manager-tools)/connections/connect-modal'
-import { ConnectionMark } from '../(manager-tools)/connections/connection-mark'
+import { ConnectionMark } from '../(manager-tools)/_ui/connection-mark'
 import type { EditorLink } from './inspector-types'
 
 /** What Connect offers from here: the socials that can be a button. A service is never a

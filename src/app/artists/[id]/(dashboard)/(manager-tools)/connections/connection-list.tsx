@@ -13,7 +13,7 @@ import { FOCUS_RING } from '../_ui/focus-ring'
 import { LedgerSection } from '../_ui/ledger'
 import { useSeeded } from '../_ui/use-seeded'
 import { ConnectModal } from './connect-modal'
-import { ConnectionMark } from './connection-mark'
+import { ConnectionMark } from '../_ui/connection-mark'
 import { ConnectionModal } from './connection-modal'
 import { pullConnectionAction, syncProfileAction } from './actions'
 

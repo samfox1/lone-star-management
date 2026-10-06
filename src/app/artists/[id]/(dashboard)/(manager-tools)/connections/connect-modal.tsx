@@ -21,7 +21,7 @@ import { youtubeStartPath } from '@/lib/manager-tools/connections/services/youtu
 import { EVENTBRITE_KEY, eventbriteStartPath } from '@/lib/manager-tools/connections/services/eventbrite'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { CANCEL_WORD } from '../../confirm-dialog'
-import { ConnectionMark } from './connection-mark'
+import { ConnectionMark } from '../_ui/connection-mark'
 import { connectOneAction, type ConnectResult } from './actions'
 
 /**

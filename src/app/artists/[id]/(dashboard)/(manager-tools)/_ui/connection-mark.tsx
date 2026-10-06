@@ -11,6 +11,9 @@ import type { ConnectionDef } from '@/lib/connections'
  * dashboard's (lib/service-icons, generated from simple-icons like the bridge's). The
  * dashboard's generic link glyph is only a fallback for a connection added without one —
  * and service-icons.test.ts makes that a failing test, not a quiet gap.
+ *
+ * Shared since 2026-10-05: Connections, the SEO Profiles tab and the editor's links all draw it,
+ * so it moved here from connections/.
  */
 export function ConnectionMark({ def, size = 16, className }: { def: ConnectionDef; size?: number; className?: string }) {
   const path = def.social ? socialIcon(def.social)?.path : SERVICE_ICONS[def.key]?.path
