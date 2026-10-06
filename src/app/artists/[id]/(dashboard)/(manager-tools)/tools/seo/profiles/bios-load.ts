@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ContentRow } from '@/lib/content'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
 import { readProfileMarks, type ProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
 import {
@@ -83,25 +84,35 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
  * THROWS: a read that fails leaves its part null, and the rows say "couldn't check" (bioRows); a
  * run that can't be read is no read, and the rows keep their manual state.
  *
- * `artist` is the gate's row (requireArtist), which carries the source id columns. `marks`: the
- * page's own read of profile_marks, when it makes one (the Profiles page), so it is read once.
+ * `artist` is the gate's row (requireArtist), which carries the source id columns. `shared`: the
+ * page's own reads, when it makes them (the Profiles page), so each table is read once: `marks`
+ * (profile_marks) and `links` (listContent). Absent, this reads its own.
+ *
+ * Also hands back the run's raw `results` it read, so the Profiles page's Discogs / Wikidata
+ * check (outside-load.ts) reads the run's `mb` result from it instead of reading the run again.
  */
 export async function loadOutsideBios(
   supabase: SupabaseClient,
   artist: IntegrationArtist & { id: string },
-  marksRead?: Promise<ProfileMarks | null>,
-): Promise<BiosInput> {
+  shared: { marks?: Promise<ProfileMarks | null>; links?: Promise<readonly ContentRow[]> } = {},
+): Promise<BiosInput & { results?: unknown }> {
   const id = artist.id
+  type LinkRow = { id: string; label: string | null; url: string | null; role: string | null }
   const [links, marks, revisions, photos, results] = await Promise.all([
-    supabase
-      .from('links')
-      .select('id, label, url, role')
-      .eq('artist_id', id)
-      .then(
-        (r) => (r.error ? null : ((r.data ?? []) as { id: string; label: string | null; url: string | null; role: string | null }[])),
-        () => null,
-      ),
-    marksRead ?? readProfileMarks(supabase, id).catch(() => null),
+    shared.links
+      ? shared.links.then(
+          (rows): LinkRow[] => rows.map((l) => ({ id: l.id, label: (l.label as string | null) ?? null, url: (l.url as string | null) ?? null, role: (l.role as string | null) ?? null })),
+          () => null,
+        )
+      : supabase
+          .from('links')
+          .select('id, label, url, role')
+          .eq('artist_id', id)
+          .then(
+            (r) => (r.error ? null : ((r.data ?? []) as LinkRow[])),
+            () => null,
+          ),
+    shared.marks ?? readProfileMarks(supabase, id).catch(() => null),
     supabase
       .from('revisions')
       // `name:data->name::text, …`: the facts only, never the whole snapshot (the press kit rides
@@ -142,5 +153,6 @@ export async function loadOutsideBios(
       ? mergeChanges(factChanges(rows, { complete: rows.length < REVISION_CAP }), photoChanges(photos.rows, { complete: photos.complete }))
       : [],
     reads: bioReads(results),
+    results,
   }
 }

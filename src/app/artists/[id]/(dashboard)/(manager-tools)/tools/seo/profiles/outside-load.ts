@@ -40,25 +40,13 @@ const cachedDiscogs = unstable_cache(
  * manager connected, the MusicBrainz id the AI test found, and the artist's custom site, asked of
  * each service. Never throws: anything that fails is "couldn't check".
  *
- * The one read here (the newest AI test run's `mb` result) is RLS-scoped and runs after
- * loadSeoBase's ownership gate. Only `results` is read, not the crawl.
+ * `results`: the newest done AI test run's results, as loadOutsideBios already read them on the
+ * same page (null when there is no run or it couldn't be read), so the run is read once. This
+ * reads nothing from the database itself.
  */
-export async function loadOutsideChecks(b: Base, links: readonly { url?: string | null }[]): Promise<OutsideChecks> {
-  const id = b.artist.id as string
-  const run = await b.supabase
-    .from('seo_test_runs')
-    .select('results')
-    .eq('artist_id', id)
-    .eq('status', 'done')
-    .order('ran_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-    .then(
-      (r) => r,
-      () => null,
-    )
-  const results = Array.isArray(run?.data?.results) ? (run.data.results as { id?: unknown; status?: unknown; evidence?: unknown }[]) : []
-  const mb = results.find((r) => r?.id === 'mb')
+export async function loadOutsideChecks(b: Base, links: readonly { url?: string | null }[], results: unknown): Promise<OutsideChecks> {
+  const rows = Array.isArray(results) ? (results as { id?: unknown; status?: unknown; evidence?: unknown }[]) : []
+  const mb = rows.find((r) => r?.id === 'mb')
   const mbResult = mb && typeof mb.status === 'string' ? { status: mb.status, evidence: Array.isArray(mb.evidence) ? (mb.evidence as { value: string }[]) : [] } : null
 
   const ids = connectedIds(links)

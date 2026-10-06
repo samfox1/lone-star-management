@@ -1,5 +1,5 @@
 import { FACT_CONTENT_KEYS } from '@samfox1/site-bridge/seo'
-import { listContent } from '@/lib/content'
+import type { ContentRow } from '@/lib/content'
 import { mediaThumbUrl, mediaUrl } from '@/lib/storage-url'
 import { packPhotoRows, photoTypeOf, type BioPackInput, type BioPackRelease } from '@/lib/manager-tools/seo/profiles/bio-pack'
 import type { loadSeoBase } from '../load'
@@ -18,12 +18,14 @@ const MAX_PHOTOS = 12
  * the bio, genre, city, the Facts tab's region and country, the links. The releases are the
  * PUBLISHED ones (`get_public_releases`), so nothing still being drafted goes out to Xperi.
  *
- * Every read is RLS-scoped and runs after loadSeoBase's ownership gate.
+ * Every read is RLS-scoped and runs after loadSeoBase's ownership gate. `linksRead`: the page's
+ * one read of the artist's links (listContent), shared with the Connected rows and the Outside
+ * bios so the table is read once; a failed read fails the tab, as this loader's own read did.
  */
-export async function loadBioPack(b: Base): Promise<{ input: Omit<BioPackInput, 'photo'>; photos: PackPhoto[] }> {
+export async function loadBioPack(b: Base, linksRead: Promise<ContentRow[]>): Promise<{ input: Omit<BioPackInput, 'photo'>; photos: PackPhoto[] }> {
   const id = b.artist.id as string
   const [links, releases, media, user] = await Promise.all([
-    listContent(b.supabase, 'link', id),
+    linksRead,
     b.supabase.rpc('get_public_releases', { p_slug: b.artist.slug }),
     b.supabase
       .from('media')

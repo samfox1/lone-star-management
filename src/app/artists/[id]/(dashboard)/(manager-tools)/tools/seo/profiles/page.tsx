@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { listContent } from '@/lib/content'
 import { bioRows } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { readProfileMarks } from '@/lib/manager-tools/seo/profiles/marks'
 import { loadSeoBase } from '../load'
@@ -23,14 +24,21 @@ type Base = Awaited<ReturnType<typeof loadSeoBase>>
  * Every read is RLS-scoped and runs after loadSeoBase's ownership gate. The marks are read
  * apart: if that read fails, the row says nothing rather than "not sent" (marks.ts). The two
  * checks ask outside services, so they stream in behind their own boundary and never hold up
- * the bio card.
+ * the bio card; the newest AI test run they need was already read for the Outside bios.
  */
 export default async function SeoProfilesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const base = await loadSeoBase(id)
-  // Read once: the AllMusic row and the Outside bios both use it.
+  // Each read once: the marks (the AllMusic row and the Outside bios) and the links (the bio
+  // email, the Connected rows and the Outside bios; it was three reads of one table).
   const marksRead = readProfileMarks(base.supabase, id).catch(() => null)
-  const [{ input, photos }, marks, bios, connected] = await Promise.all([loadBioPack(base), marksRead, loadOutsideBios(base.supabase, base.artist, marksRead), loadConnected(base)])
+  const linksRead = listContent(base.supabase, 'link', id)
+  const [{ input, photos }, marks, bios, connected] = await Promise.all([
+    loadBioPack(base, linksRead),
+    marksRead,
+    loadOutsideBios(base.supabase, base.artist, { marks: marksRead, links: linksRead }),
+    loadConnected(base, linksRead),
+  ])
   return (
     <ProfilesTab
       artistId={id}
@@ -43,7 +51,7 @@ export default async function SeoProfilesPage({ params }: { params: Promise<{ id
           <ConnectedRow artistId={id} profiles={connected.profiles} />
           <MusicBrainzRow artistId={id} page={connected.musicbrainz} create={connected.musicBrainzCreate} />
           <Suspense fallback={<OutsideRows artistId={id} checks={null} />}>
-            <OutsideLive base={base} links={input.links ?? []} />
+            <OutsideLive base={base} links={input.links ?? []} results={bios.results ?? null} />
           </Suspense>
         </>
       }
@@ -52,6 +60,6 @@ export default async function SeoProfilesPage({ params }: { params: Promise<{ id
   )
 }
 
-async function OutsideLive({ base, links }: { base: Base; links: readonly { url?: string | null }[] }) {
-  return <OutsideRows artistId={base.artist.id as string} checks={await loadOutsideChecks(base, links)} />
+async function OutsideLive({ base, links, results }: { base: Base; links: readonly { url?: string | null }[]; results: unknown }) {
+  return <OutsideRows artistId={base.artist.id as string} checks={await loadOutsideChecks(base, links, results)} />
 }
