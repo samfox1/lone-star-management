@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { CONNECTIONS, buildConnectionRows, isProfileLink, type ConnectionSection, type SourceCounts } from '@/lib/connections'
+import { CONNECTIONS, buildConnectionRows, linkRowsOf, type ConnectionSection, type SourceCounts } from '@/lib/connections'
 import { provenBy, type IntegrationKey, type IntegrationSection } from '@/lib/integrations-registry'
 import { listContent } from '@/lib/content'
 import { createClient } from '@/lib/supabase/server'
@@ -8,7 +8,7 @@ import { shopifyAppConfigured, shopifyReturnNotice } from '@/lib/merch/shopify-o
 import { youtubeOAuthConfigured, youtubeReturnNotice } from '@/lib/youtube-oauth'
 import { eventbriteOAuthConfigured, eventbriteReturnNotice, eventbriteSignedInState } from '@/lib/eventbrite-oauth'
 import { publicSiteOrigin } from '@/lib/custom-site'
-import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
+import { musicBrainzCreateFor } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
 import { getEventbriteSignedIn, getShopifyDomain, requireArtist } from '../../_data'
 import { SitePendingBar } from '../_ui/site-pending'
 import { ConnectionList } from './connection-list'
@@ -84,28 +84,20 @@ export default async function ConnectionsPage({
     // The SEO facts, for the MusicBrainz seed below (RLS-scoped like the rest).
     supabase.from('artists').select('location, schema_type').eq('id', id).single(),
   ])
-  // ContentRow is a bag of unknowns; name the four columns the model reads.
-  const linkRows = links.map((l) => ({
-    id: l.id,
-    label: (l.label as string | null) ?? null,
-    url: (l.url as string | null) ?? null,
-    on_site: (l.on_site as boolean | null) ?? null,
-    role: (l.role as string | null) ?? null,
-  }))
+  const linkRows = linkRowsOf(links)
   const rows = buildConnectionRows({ links: linkRows, artist, shopifyConnected: !!shopifyDomain, signedIn: { eventbrite: eventbriteSignedInState(eventbriteStored) }, counts })
 
   // No MusicBrainz page yet (AI_VISIBILITY_AUDIT.md 4.1): its Connect row offers MusicBrainz's
-  // own artist editor, filled from what we know. Only "Visual artist" says person; the
-  // default "Musician" says nothing about person vs group, so the artist picks it there.
+  // own artist editor, filled from what we know.
   const createPages: Partial<Record<string, string>> = rows.some((r) => r.key === 'musicbrainz')
     ? {}
     : {
-        musicbrainz: musicBrainzCreateUrl({
+        musicbrainz: musicBrainzCreateFor({
           name: artist.name,
-          type: facts?.schema_type === 'Person' ? 'person' : null,
-          area: (facts?.location as string | null) ?? null,
-          homepage: publicSiteOrigin(artist),
-          links: linkRows.filter(isProfileLink),
+          schemaType: facts?.schema_type,
+          location: (facts?.location as string | null) ?? null,
+          siteUrl: publicSiteOrigin(artist),
+          links: linkRows,
         }),
       }
 

@@ -22,9 +22,11 @@
  * the artist is (the same rule as the fact card's identity links). Artist types: `Constants.pm`
  * (`$ARTIST_TYPE_PERSON => 1`, `$ARTIST_TYPE_GROUP => 2`).
  *
- * Pure: it reaches the Connect window through the Connections page.
+ * Pure: it reaches the Connect window through the Connections page, and SEO › Profiles'
+ * MusicBrainz row (musicBrainzCreateFor, below).
  */
 import { platformFromUrl, socialSlug } from '@samfox1/site-bridge/social'
+import { isProfileLink, type LinkRowLike } from '@/lib/connections'
 
 const CREATE = 'https://musicbrainz.org/artist/create'
 
@@ -140,4 +142,21 @@ export function musicBrainzCreateUrl(seed: MusicBrainzSeed): string {
 
   const query = q.toString()
   return query ? `${CREATE}?${query}` : CREATE
+}
+
+/**
+ * The editor's address from what the dashboard reads: the artist's name, the SEO facts (schema
+ * type, location), the site's address and the artist's link rows (only the profile links go in).
+ * Only "Visual artist" (Person) says person; the default "Musician" says nothing about person vs
+ * group, so the artist picks it on MusicBrainz. The Connections page and SEO › Profiles each
+ * built this seed by hand until 2026-10-05.
+ */
+export function musicBrainzCreateFor(a: { name: string; schemaType: unknown; location: string | null; siteUrl: string | null; links: readonly LinkRowLike[] }): string {
+  return musicBrainzCreateUrl({
+    name: a.name,
+    type: a.schemaType === 'Person' ? 'person' : null,
+    area: a.location,
+    homepage: a.siteUrl,
+    links: a.links.filter(isProfileLink),
+  })
 }

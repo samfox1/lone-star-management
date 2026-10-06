@@ -32,6 +32,7 @@ import {
   connectionsAtoZ,
   idFromProfileUrl,
   isProfileLink,
+  linkRowsOf,
   searchConnections,
   type ConnectionRow,
   type LinkRowLike,
@@ -299,6 +300,18 @@ describe('isProfileLink — what belongs on the page', () => {
     expect(isProfileLink(link({ label: 'Spotify', url: 'https://open.spotify.com/playlist/x', role: 'usb' }))).toBe(false)
     expect(isProfileLink(link({ label: 'Instagram', url: 'mailto:bookings@example.com' }))).toBe(false)
     expect(isProfileLink(link({ label: 'Instagram', url: 'bookings@example.com' }))).toBe(false)
+  })
+})
+
+describe('linkRowsOf — the links as the model reads them', () => {
+  // The Connections page and SEO › Profiles both read the links through it. The role is what
+  // keeps a site-bound row (the USB button) off the page and out of the MusicBrainz seed, so it
+  // must come through; a column the read lacks is null, never undefined.
+  it('keeps the five columns the model reads; a missing one is null', () => {
+    expect(linkRowsOf([{ id: 'a', artist_id: 'x', label: 'Spotify', url: 'https://open.spotify.com/playlist/x', on_site: false, role: 'usb', sort_order: 3 }])).toEqual([
+      { id: 'a', label: 'Spotify', url: 'https://open.spotify.com/playlist/x', on_site: false, role: 'usb' },
+    ])
+    expect(linkRowsOf([{ id: 'b', artist_id: 'x' }])).toEqual([{ id: 'b', label: null, url: null, on_site: null, role: null }])
   })
 })
 

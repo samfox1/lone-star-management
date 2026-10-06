@@ -3,7 +3,7 @@
  * what we know, with every value safely encoded and only links MusicBrainz can label correctly.
  *
  * Code:     src/lib/manager-tools/connections/services/musicbrainz/seed.ts (musicBrainzCreateUrl,
- *           MB_LINK_TYPE, MB_LINK_TYPE_OF, MB_ARTIST_TYPE)
+ *           musicBrainzCreateFor, MB_LINK_TYPE, MB_LINK_TYPE_OF, MB_ARTIST_TYPE)
  * Feature:  Connections page: MusicBrainz (AI_VISIBILITY_AUDIT.md 4.1: Skeen is not in MusicBrainz,
  *           the source most cited for musicians); the artist signs in there and submits it
  * Tier:     STRICT (AGENTS.md "Test depth"): everything here ends up in a URL.
@@ -15,6 +15,8 @@
  *             platforms with a confirmed type, each once, numbered without gaps
  *           • the link type ids are MusicBrainz's own, and every mapped platform is one the
  *             bridge knows
+ *           • the dashboard's seed (Connections, SEO › Profiles): "Visual artist" says person,
+ *             nothing else says a type; only profile links go in, not contact or site-bound rows
  * Not here: accepting a MusicBrainz artist link as a connection (identity-only.test.ts).
  * Fixtures: MusicBrainz's documented editor seeding (wiki.musicbrainz.org/Development/Seeding/Artist_Editor);
  *           the link type ids were read off musicbrainz.org/relationship/<uuid> on 2026-09-28 and
@@ -22,7 +24,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { SOCIAL_PLATFORMS } from '@samfox1/site-bridge/social'
-import { MB_ARTIST_TYPE, MB_LINK_TYPE, MB_LINK_TYPE_OF, musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
+import { MB_ARTIST_TYPE, MB_LINK_TYPE, MB_LINK_TYPE_OF, musicBrainzCreateFor, musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
 
 const CREATE = 'https://musicbrainz.org/artist/create'
 const params = (url: string) => new URL(url).searchParams
@@ -179,5 +181,30 @@ describe('the link types are MusicBrainz’s own', () => {
       expect(slugs, slug).toContain(slug)
       expect(ids, slug).toContain(id)
     }
+  })
+})
+
+describe('the dashboard’s seed (musicBrainzCreateFor)', () => {
+  const rows = [
+    { id: '1', label: 'Instagram', url: 'https://instagram.com/skeenmusic', on_site: true, role: null },
+    { id: '2', label: 'Email', url: 'mailto:booking@skeenmusic.com', on_site: true, role: null },
+    { id: '3', label: 'Spotify', url: 'https://open.spotify.com/artist/26K', on_site: true, role: 'usb' },
+  ]
+  const seed = (schemaType: unknown) => musicBrainzCreateFor({ name: 'Skeen', schemaType, location: 'Chicago', siteUrl: 'https://skeenmusic.com', links: rows })
+
+  // Only "Visual artist" (Person) says person; "Musician" (the default) says nothing either way.
+  it('says person only for a Person; Musician and nothing say no type', () => {
+    expect(params(seed('Person')).get('edit-artist.type_id')).toBe(String(MB_ARTIST_TYPE.person))
+    for (const t of ['MusicGroup', null, undefined]) expect(params(seed(t)).has('edit-artist.type_id'), String(t)).toBe(false)
+  })
+
+  // A booking address and a row bound to a site element are not profiles: only Instagram goes in.
+  it('CRITICAL: carries the area, the site and only the profile links', () => {
+    const url = seed('MusicGroup')
+    expect(params(url).get('edit-artist.area.name')).toBe('Chicago')
+    expect(seededLinks(url)).toEqual([
+      ['https://skeenmusic.com', '183'],
+      ['https://instagram.com/skeenmusic', '192'],
+    ])
   })
 })

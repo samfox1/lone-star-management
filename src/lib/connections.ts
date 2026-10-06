@@ -25,6 +25,7 @@
  * Pure. No DB, no React. The page reads rows and passes them in; the modal reads defs.
  */
 import { SOCIAL_PLATFORMS, platformFromUrl, socialSlug } from '@samfox1/site-bridge/social'
+import type { ContentRow } from './content'
 import { isIdentityProfileUrl } from '@samfox1/site-bridge/seo'
 import {
   INTEGRATION_REGISTRY,
@@ -218,6 +219,18 @@ export function connectInputError(def: ConnectionDef, input: ConnectInput): stri
 
 /** A `links` row, as the page reads it. */
 export type LinkRowLike = { id: string; label: string | null; url: string | null; on_site?: boolean | null; role?: string | null }
+
+/** The links as listContent reads them (a ContentRow is a bag of unknowns), named as the five
+ *  columns the model reads. The Connections page and SEO › Profiles both start from it. */
+export function linkRowsOf(links: readonly ContentRow[]): LinkRowLike[] {
+  return links.map((l) => ({
+    id: l.id,
+    label: (l.label as string | null) ?? null,
+    url: (l.url as string | null) ?? null,
+    on_site: (l.on_site as boolean | null) ?? null,
+    role: (l.role as string | null) ?? null,
+  }))
+}
 
 /**
  * A link that belongs on the Connections page: a social profile. Booking addresses
