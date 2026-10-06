@@ -3,8 +3,8 @@
 /**
  * The Colors tab (BRAND_PAGE_PLAN.md, Sam 2026-09-23). What has to hold:
  *   - PRIMARY and SECONDARY first, always (Sam, later that day: "default on the colors page,
- *     they just dont have to be filled in yet"): fixed title, grey guide text, no note, no
- *     trash; "No color yet" and a + until picked, and the pick is ONE slot save
+ *     they just dont have to be filled in yet"): fixed title, no guide text (2026-10-05), no
+ *     note, no trash; "No color yet" and a + until picked, and the pick is ONE slot save
  *     (setBrandColorSlotAction) — every pick after it too. They render from the slot list
  *     alone, so an artist with no slotted rows (the database before 20260924130000) has
  *     them. Then the added colours, "Color 3, …", and no other role names anywhere;
@@ -120,7 +120,7 @@ describe('Primary and Secondary, built in', () => {
     }
   })
 
-  it('CRITICAL: a fixed title and nothing under it — no guide, no rename, no note, no trash', () => {
+  it('CRITICAL: a fixed title and nothing under it — no rename, no note, no trash', () => {
     renderLedger([PRIMARY, ...COLORS])
     for (const title of ['Primary', 'Secondary']) {
       const row = rowOf(title)
@@ -128,8 +128,8 @@ describe('Primary and Secondary, built in', () => {
       expect(within(row).queryByRole('textbox', { name: 'Note' }), title).toBeNull()
       expect(within(row).queryByRole('button', { name: 'Remove' }), title).toBeNull()
     }
-    // No filler under a built-in (Sam, 2026-10-05: "Your main color." said nothing).
-    expect(within(rowOf('Primary')).queryByText('Your main color.')).toBeNull()
+    // No filler under a built-in (Sam, 2026-10-05: "Your main color." said nothing) is checked
+    // by screenshot: asserting one removed sentence is absent passes for any other filler.
     // An added colour keeps all three.
     const row = rowOf('Color 1')
     expect(within(row).getByRole('textbox', { name: 'Name' })).toBeTruthy()

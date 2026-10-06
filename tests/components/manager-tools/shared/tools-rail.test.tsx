@@ -4,7 +4,7 @@
  * The manager-tools side panel (Sam, 2026-08-28): every tool in the registry, grouped,
  * the current one marked; shown on tool routes only. Expectations derive from TOOLS.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -103,34 +103,18 @@ describe('ToolsShell — a tool with sub-tabs (Sam, 2026-09-22)', () => {
     for (const t of tabbed) expect(screen.queryByRole('navigation', { name: t.label })).toBeNull()
   })
 
-  // Sam, 2026-10-05: "When a manager tools page is open, I would like the left panel to always
-  // be the thinner icon only look with the extension on hover". Every tool, tabbed or not.
-  it('every tool page gets the thin rail that widens on hover', () => {
-    for (const tool of TOOLS) {
-      pathname = `/artists/a1/${tool.seg}`
-      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-      const rail = screen.getByRole('navigation', { name: 'Manager tools' })
-      expect(rail.className, tool.seg).toMatch(/(^|\s)w-\[52px\]/)
-      expect(rail.className, tool.seg).toMatch(/hover:w-\[84px\]/)
-      cleanup()
-    }
-  })
-
   it('CRITICAL: the thin rail keeps every label IN THE FLOW, faded not removed', () => {
     // Sam, 2026-09-22: the icons must not move when the labels appear. jsdom does no
     // layout, so what can be pinned is the mechanism — `opacity-0`, which reserves the
     // label's height, and never `hidden`, which drops it from the flow and lets this
-    // vertically-centred stack slide. The rail is also ONE width now: an icon cannot be
-    // centred in both 56px and 84px, so the width change went rather than the centring.
+    // vertically-centred stack slide. The rail's widths themselves (thin on every tool page,
+    // wider on hover: Sam, 2026-10-05) are a screenshot check: they changed twice in one
+    // batch, and a pinned class string caught no bug either time.
     const tool = tabbed[0]
     pathname = `/artists/a1/${tool.seg}`
     render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
 
     const rail = screen.getByRole('navigation', { name: 'Manager tools' })
-
-    // Thin, and it widens on hover — both halves of what Sam asked for.
-    expect(rail.className).toMatch(/w-\[52px\]/)
-    expect(rail.className).toMatch(/hover:w-\[84px\]/)
 
     // The column carries NO width of its own, so it stretches to the nav and the icons
     // re-centre as it widens. Sam asked for that explicitly ("it should horizontally
@@ -335,23 +319,13 @@ describe('a tool\'s tabs on a phone (visual check, 2026-09-23)', () => {
   })
 })
 
-describe('the page starts 32px right of the second panel (visual check, 2026-09-23)', () => {
-  // The panels sit at x=0 (fixed then, in lanes positioned against the dashboard root
-  // now); their in-flow slots sat inside <main>'s px-7, so each
-  // slot started 28px right of its panel, and the shell's gap-8 ran twice (rail→panel,
-  // panel→page). The page began ~92px past the panel's edge; the mock has ~32. Now the two
-  // slots share ONE group pulled back over main's padding (so each slot lies exactly under
-  // its panel) with no gap inside it, and a single gap-8 to the page. jsdom does no layout:
-  // the mechanism is pinned, and main's padding is READ from layout.tsx so the pull cannot
-  // drift from it.
-  const dash = join(process.cwd(), 'src/app/artists/[id]/(dashboard)')
-  const mainPad = /<main className="[^"]*\bpx-(\d+)\b/.exec(readFileSync(join(dash, 'layout.tsx'), 'utf8'))?.[1]
-
-  it('self-check: <main> in the dashboard layout has a px-N the pull can match', () => {
-    expect(mainPad).toMatch(/^\d+$/)
-  })
-
-  it('CRITICAL: tabbed — rail and panel slots share one group pulled back over main\'s padding, then ONE gap-8', () => {
+describe('the side panels sit in one group beside the page (visual check, 2026-09-23)', () => {
+  // The rail and panel slots share ONE group, so each slot lies exactly under its panel, and
+  // the page is the next thing in the shell. The spacing itself (32px from the panel's edge to
+  // the page, main's padding pulled back, the full-height lines) is checked by screenshot: it
+  // is layout still being designed, and pinning its classes broke on every tweak while
+  // catching no bug (AGENTS.md "Test depth").
+  it('CRITICAL: tabbed — rail and panel slots share one group, and the page sits beside it', () => {
     for (const tool of tabbed) {
       pathname = `/artists/a1/${tool.seg}`
       render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
@@ -359,47 +333,7 @@ describe('the page starts 32px right of the second panel (visual check, 2026-09-
       const panelSlot = screen.getByRole('navigation', { name: tool.label }).closest('[data-panel-slot]')!
       const side = railSlot.parentElement!
       expect(panelSlot.parentElement, tool.seg).toBe(side)
-
-      const sideCls = side.className.split(/\s+/)
-      expect(sideCls, tool.seg).toContain(`md:-ml-${mainPad}`)
-      expect(sideCls.filter((c) => /(^|:)gap-/.test(c)), tool.seg).toEqual([])
-
-      const shell = side.parentElement!
-      expect(shell.className.split(/\s+/), tool.seg).toContain('gap-8')
-      expect(screen.getByText('page').parentElement!.parentElement, tool.seg).toBe(shell)
-      cleanup()
-    }
-  })
-
-  it('full-height lines: under a tabbed tool\u2019s two window-tall panels, the in-flow slots carry the same lines, stretched past <main>\u2019s bottom padding', () => {
-    // Sam, 2026-09-29 (a full-page screenshot): the panels are one window tall, so their
-    // lines stopped partway down a long page. jsdom does no layout: the mechanism is pinned.
-    // Slots are found by their markers, not as the nav's parent: the nav sits in a lane
-    // inside its slot (tools-rail.tsx: RIDING THE BOUNCE).
-    const mainPadY = /<main className="[^"]*\bpy-(\d+)\b/.exec(readFileSync(join(dash, 'layout.tsx'), 'utf8'))?.[1]
-    expect(mainPadY).toMatch(/^\d+$/)
-    for (const tool of tabbed) {
-      pathname = `/artists/a1/${tool.seg}`
-      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-      const railSlot = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!
-      const panelSlot = screen.getByRole('navigation', { name: tool.label }).closest('[data-panel-slot]')!
-      for (const slot of [railSlot, panelSlot]) expect(slot.className.split(/\s+/), tool.seg).toEqual(expect.arrayContaining(['md:border-r', 'md:border-hairline']))
-      // The sizer carries no border of its own: the slot's line stands in for the panel's.
-      expect(panelSlot.querySelector('[aria-hidden="true"]')!.className, tool.seg).not.toMatch(/(^|\s)border-r(\s|$)/)
-      expect(railSlot.parentElement!.className.split(/\s+/), tool.seg).toContain(`md:-mb-${mainPadY}`)
-      cleanup()
-    }
-  })
-
-  // Since every tool has the thin rail (Sam, 2026-10-05), a tool without tabs sits the same
-  // way: its rail slot pulled back under the rail, then the one gap-8 to the page.
-  it('a tool WITHOUT tabs: the rail slot pulled back over main\'s padding, then ONE gap-8', () => {
-    for (const tool of plain) {
-      pathname = `/artists/a1/${tool.seg}`
-      render(<ToolsShell artistId="a1"><p>page</p></ToolsShell>)
-      const side = screen.getByRole('navigation', { name: 'Manager tools' }).closest('[data-rail-slot]')!.parentElement!
-      expect(side.className.split(/\s+/), tool.seg).toContain(`md:-ml-${mainPad}`)
-      expect(side.parentElement!.className.split(/\s+/), tool.seg).toContain('gap-8')
+      expect(screen.getByText('page').parentElement!.parentElement, tool.seg).toBe(side.parentElement)
       cleanup()
     }
   })

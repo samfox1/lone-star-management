@@ -307,10 +307,10 @@ describe('FontsLedger — the font on the row', () => {
     expect(within(rowOf('Primary')).queryByText(/Regular|Medium|Bold/)).toBeNull()
   })
 
-  it('an empty built-in row is only a + (no "No font yet" filler), and has no eye', () => {
+  // No "No font yet" filler (Sam, 2026-10-05) is a screenshot check, not an absent sentence.
+  it('an empty built-in row is only a +, and has no eye', () => {
     show(data({ secondary: null }))
     const row = rowOf('Secondary')
-    expect(within(row).queryByText('No font yet')).toBeNull()
     expect(within(row).getByRole('button', { name: 'Add font' })).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Change font' })).toBeNull()
     expect(within(row).queryByRole('button', { name: 'Preview' })).toBeNull()

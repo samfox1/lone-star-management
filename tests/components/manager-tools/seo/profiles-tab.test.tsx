@@ -57,7 +57,7 @@ describe('the bio card', () => {
     const mail = screen.getByRole('link', { name: 'Open in Mail' })
     expect(mail.getAttribute('href')).toBe(mailtoHref(pack))
     // The CC check shows while the CC is empty; a valid address quiets it and joins the mailto.
-    expect(document.querySelector('[data-check="cc"]')?.textContent).toBe('Add Skeen’s email so Skeen gets a copy.')
+    expect(document.querySelector('[data-check="cc"]')?.textContent).toBe(pack.checks.find((c) => c.id === 'cc')!.text)
     fireEvent.change(screen.getByRole('textbox', { name: 'Cc' }), { target: { value: 'skeen@gmail.com' } })
     expect(document.querySelector('[data-check="cc"]')).toBeNull()
     expect(mail.getAttribute('href')).toBe(mailtoHref(pack, { cc: 'skeen@gmail.com' }))
