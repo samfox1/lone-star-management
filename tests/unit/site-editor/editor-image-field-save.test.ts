@@ -143,6 +143,18 @@ describe('setImageField', () => {
     expect(ops).toHaveLength(0)
   })
 
+  it('CRITICAL: hero_video, a media field that is not the profile photo, writes nothing', async () => {
+    // cinematic declares hero_video as type 'image' with a media target, and a manifest target
+    // is used as-is. The media branch once wrote the PROFILE PHOTO for any media target, so a
+    // direct setImageFieldAction(…, 'hero_video', path) replaced (or, with null, cleared) the
+    // artist's profile photo. Only the profile_photo purpose may reach setProfilePhoto.
+    for (const path of ['a1/profile/55555555-5555-4555-8555-555555555555.jpg', null]) {
+      const { client, ops } = fakeClient()
+      expect(await setImageField(client, 'a1', TEMPLATE, 'hero_video', path)).toEqual({ ok: false, error: 'That field is not an image.' })
+      expect(ops, String(path)).toHaveLength(0)
+    }
+  })
+
   it('a BUILT-IN template ignores a client-supplied target', async () => {
     // Belt: the manifest is authoritative where one exists, so a crafted target cannot
     // redirect a built-in template's write.
