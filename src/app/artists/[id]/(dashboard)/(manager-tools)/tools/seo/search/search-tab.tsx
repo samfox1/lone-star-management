@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { dayLabel } from '@/lib/chart'
@@ -10,9 +10,11 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
 import { ChartLegend, TimelineChart, type ChartPin, type Series } from '@/components/ui/timeline-chart'
 import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
+import { PortalModal } from '@/components/ui/portal-modal'
+import { modalCardClass } from '@/components/ui/ui'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_SHOWN, bareNameWords, countWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_SHOWN, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
@@ -186,7 +188,12 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
   const initial = name.trim().charAt(0).toUpperCase() || '·'
   return (
     <section aria-label="Your spot" className="mt-5">
-      <ChartLegend series={seriesOf(board.lines)} />
+      <div className="flex items-center gap-2.5">
+        <ChartLegend series={seriesOf(board.lines)} />
+        <InfoButton label="What this ranking is built from">
+          <NameSearches view={view} stats={stats} engines={board.lines.map((l) => l.engine)} name={name} />
+        </InfoButton>
+      </div>
       <div className="mt-1 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart
           points={points(board.days)} height={CHART_H} series={seriesOf(board.lines)} scale="rank" dots
@@ -194,16 +201,37 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
           endMark={<span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-[0_0_0_5px_rgba(17,17,17,0.08)]">{initial}</span>}
         />
         <FactsColumn facts={facts} label="Your spot, in numbers" />
-        <NameSearches view={view} stats={stats} engines={board.lines.map((l) => l.engine)} name={name} />
       </div>
     </section>
   )
 }
 
-/** BASED ON THESE SEARCHES: what the ranking line is made of, under it, so the number is never
- *  taken on trust (Sam, 2026-10-06: "allow user to see the searches that the chart is using.
- *  Maybe the top 5"): each search naming the artist, how often the site was seen for it and its
- *  spot; and, when the bare name is not one of them, a plain line saying so. */
+/**
+ * The info button beside a chart's legend: tap it and a window says what the chart is made of
+ * (Sam, 2026-10-06: "i dont want more tables. i want like an info button that when tapping it, a
+ * modal shows up wit this info"). The glyph alone, faint until hovered, no box behind it.
+ */
+function InfoButton({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" aria-label={label} onClick={() => setOpen(true)} className={cx('relative inline-flex text-ink-faint transition-colors hover:text-ink', FOCUS_RING_OFFSET)}>
+        <Icon name="info" size={16} />
+        <HoverLabel label={label} />
+      </button>
+      {open && (
+        <PortalModal ariaLabel={label} cardClass={modalCardClass} onClose={() => setOpen(false)}>
+          <div className="mt-5">{children}</div>
+        </PortalModal>
+      )}
+    </>
+  )
+}
+
+/** BASED ON THESE SEARCHES: what the ranking line is made of, behind its info button, so the
+ *  number is never taken on trust (Sam, 2026-10-06: "allow user to see the searches that the
+ *  chart is using. Maybe the top 5"): each search naming the artist, how often the site was seen
+ *  for it and its spot; and, when the bare name is not one of them, a plain line saying so. */
 function NameSearches({ view, stats, engines, name }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; engines: SearchEngineId[]; name: string }) {
   const both = engines.length > 1
   const rows = engines
@@ -214,7 +242,7 @@ function NameSearches({ view, stats, engines, name }: { view: EngineView; stats:
   const bare = rows.some((r) => isBareName(r.key, name))
   const cols = both ? 'grid-cols-[16px_minmax(0,1fr)_52px_52px]' : 'grid-cols-[minmax(0,1fr)_52px_52px]'
   return (
-    <div data-name-searches className="max-w-[560px] lg:col-start-1">
+    <div data-name-searches>
       <div role="table" aria-label="Based on these searches">
         <div role="row" className={cx('grid items-center gap-x-3.5 border-b border-hairline pb-2', cols)}>
           {both ? <span role="columnheader"><span className="sr-only">Engine</span></span> : null}
@@ -293,14 +321,64 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
       <div className="mt-4 flex items-center">
         <SquareCheck label={clicksLabel} on={clicks} onToggle={() => setClicks((c) => !c)} />
       </div>
-      <div className="mt-4">
+      <div className="mt-4 flex items-center gap-2.5">
         <ChartLegend series={seriesOf(lines)} />
+        <InfoButton label="What these numbers are made of">
+          <ReachSearches answer={a} engines={on} />
+        </InfoButton>
       </div>
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart key={`${period}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
         <FactsColumn facts={facts} label="Seen and clicked, in numbers" />
       </div>
     </section>
+  )
+}
+
+/** MADE UP OF THESE SEARCHES: what the seen / clicked totals are built from, behind the chart's
+ *  info button (Sam, 2026-10-06: the same transparency as the ranking line): the most-seen
+ *  searches of the engines switched on, and what each engine keeps private, so the parts add up
+ *  to the numbers beside the chart. */
+function ReachSearches({ answer, engines }: { answer: SearchStatsAnswer; engines: SearchEngineId[] }) {
+  const ok = engines.filter((e) => answer[e].state === 'ok')
+  const statsOf = (e: SearchEngineId) => (answer[e] as { state: 'ok'; stats: SearchStats }).stats
+  const both = ok.length > 1
+  const rows = ok
+    .flatMap((e) => statsOf(e).queries.map((r) => ({ ...r, engine: e })))
+    .sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks || a.key.localeCompare(b.key))
+  if (!ok.length) return null
+  const shown = rows.slice(0, NAME_SEARCHES_SHOWN)
+  const more = rows.length - shown.length
+  const cols = both ? 'grid-cols-[16px_minmax(0,1fr)_52px_52px]' : 'grid-cols-[minmax(0,1fr)_52px_52px]'
+  return (
+    <div data-reach-searches>
+      <div role="table" aria-label="Made up of these searches">
+        <div role="row" className={cx('grid items-center gap-x-3.5 border-b border-hairline pb-2', cols)}>
+          {both ? <span role="columnheader"><span className="sr-only">Engine</span></span> : null}
+          <span role="columnheader" className={cx(CAPS_LABEL, 'font-bold text-ink-faint')}>Made up of these searches</span>
+          <span role="columnheader" className={HEAD}>Seen</span>
+          <span role="columnheader" className={HEAD}>Clicks</span>
+        </div>
+        {shown.map((r) => (
+          <div role="row" key={`${r.engine}:${r.key}`} data-row="reach-search" className={cx('grid items-center gap-x-3.5 border-b border-hairline-soft py-2', cols)}>
+            {both ? (
+              <span role="cell" className="flex text-ink-faint">
+                <SourceGlyph source={r.engine} size={13} />
+                <span className="sr-only">{ENGINE_NAME[r.engine]}</span>
+              </span>
+            ) : null}
+            <span role="rowheader" className="min-w-0 truncate text-[14px] text-ink">{r.key}</span>
+            <span role="cell" className={cx(NUM, 'text-ink-muted')}>{countWords(r.impressions)}</span>
+            <span role="cell" className={cx(NUM, 'font-bold text-ink')}>{countWords(r.clicks)}</span>
+          </div>
+        ))}
+      </div>
+      {more > 0 ? <p className={cx(MONO_META, 'mt-2')}>{`+ ${countWords(more)} more`}</p> : null}
+      {ok.map((e) => {
+        const words = privateWords(e, statsOf(e).unlisted)
+        return words ? <p key={e} data-private={e} className="mt-2.5 font-space text-[12px] text-ink-muted">{words}</p> : null
+      })}
+    </div>
   )
 }
 

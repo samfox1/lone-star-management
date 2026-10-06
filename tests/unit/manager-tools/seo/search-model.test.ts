@@ -16,6 +16,7 @@
  *           • no numbers: a new site within the engine's usual wait (Bing 2 weeks) says "usually";
  *             older, or no date, says none in the period; every couldn't-ask state has words
  *           • the engine switch reads ?e=
+ *           • the private-searches line under the seen / clicked chart: each side only above zero
  * Not here: the numbers' shape (search-stats.test.ts); the page's layout (tests/components/
  *           manager-tools/seo/search-tab.test.tsx).
  * Fixtures: small hand-made answers in search-stats.ts's own types.
@@ -26,6 +27,7 @@ import {
   alignDays,
   engineNote,
   engineViewOf,
+  privateWords,
   sideBySideRows,
   spotWords,
 } from '@/lib/manager-tools/seo/search-model'
@@ -145,5 +147,16 @@ describe('the switches', () => {
   it('reads ?e= as one of the three views, anything else as Both', () => {
     for (const v of ENGINE_VIEWS) expect(engineViewOf(v)).toBe(v)
     for (const junk of [null, undefined, '', 'yahoo', '__proto__', 'constructor']) expect(engineViewOf(junk)).toBe('both')
+  })
+})
+
+describe('the private-searches line', () => {
+  // Under the seen / clicked chart the named searches never add up to the totals: Google keeps
+  // rare searches private. The line says how much, so the parts add up (Sam: "be more transparent").
+  it('CRITICAL: names the engine and both sides, each only when above zero; nothing private says nothing', () => {
+    expect(privateWords('google', { clicks: 7, impressions: 54 })).toBe('Searches Google keeps private: 54 seen · 7 clicks')
+    expect(privateWords('bing', { clicks: 1, impressions: 0 })).toBe('Searches Bing keeps private: 1 click')
+    expect(privateWords('google', { clicks: 0, impressions: 1200 })).toBe('Searches Google keeps private: 1,200 seen')
+    expect(privateWords('google', { clicks: 0, impressions: 0 })).toBeNull()
   })
 })

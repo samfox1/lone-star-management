@@ -52,7 +52,7 @@ export function searchTitle(view: EngineView, name: string): string {
  *  about whats going on in these charts"). */
 export function searchIntro(view: EngineView, name: string): string {
   const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
-  return `Where your site ranks, day by day, when a search on ${where} includes “${name}” (those searches are listed under the chart). Only the times your site actually appeared count. #1 is the top result.`
+  return `Where your site ranks, day by day, when a search on ${where} includes “${name}” (the ⓘ beside the line shows which searches). Only the times your site actually appeared count. #1 is the top result.`
 }
 
 /** Said under the ranking chart when the bare name is not among its searches (Sam, 2026-10-06:
@@ -84,6 +84,16 @@ const PERIOD_WORDS: Readonly<Record<SearchPeriodKey, string>> = { '28d': '28 day
 /** A count with its thousands: 1,200. */
 export function countWords(n: number): string {
   return n.toLocaleString('en-US')
+}
+
+/** Under the seen / clicked chart: what the named searches leave out, because the engine keeps
+ *  rare searches private ("Searches Google keeps private: 54 seen · 7 clicks"), so the listed
+ *  parts and this add up to the chart's totals. A side at zero is left out; nothing, nothing said. */
+export function privateWords(engine: SearchEngineId, unlisted: { clicks: number; impressions: number }): string | null {
+  const parts: string[] = []
+  if (unlisted.impressions > 0) parts.push(`${countWords(unlisted.impressions)} seen`)
+  if (unlisted.clicks > 0) parts.push(`${countWords(unlisted.clicks)} ${unlisted.clicks === 1 ? 'click' : 'clicks'}`)
+  return parts.length ? `Searches ${ENGINE_NAME[engine]} keeps private: ${parts.join(' · ')}` : null
 }
 
 /** What the average spot means, under it. */

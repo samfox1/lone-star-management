@@ -56,6 +56,7 @@ export type IconName =
   | 'eraser'
   | 'panel'
   | 'robot'
+  | 'info'
   | 'note'
   | 'grip'
   | 'minus'
@@ -411,6 +412,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <path d="M14.5 4.5v15M17 9.5h1M17 12.5h1" />
+    </>
+  ),
+  // An i in a circle: "what is this made of?" (the Search charts' info buttons).
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.6h.01" />
     </>
   ),
   // A bot: the Analytics chart's "bot visits filtered" pin.
