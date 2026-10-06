@@ -1,18 +1,28 @@
 // @vitest-environment jsdom
-// The per-artist Enquiries page renders — kinds above, inbox below, labels from the table.
 /**
- * `/artists/[id]/enquiries` — one render, end to end through the page's own data plumbing.
+ * The per-artist Enquiries page renders end to end: the inbox alone, each enquiry named by its
+ * kind's label from the table.
  *
- * WHY THIS FILE EXISTS. On 2026-09-22 the page shipped with `labelFor` used inside a
- * `.map()` callback declared ABOVE the `const` that defined it. TypeScript only flags
- * use-before-declare for direct references — inside a closure it assumes the call may come
- * later — so `tsc` was clean, every component test was green (none rendered this page; the
- * roster inbox has one, this page did not), and the owner found it as a runtime error in the
- * browser. A single render of the real page is the test that would have gone red.
- *
- * The Supabase client is a query-builder stub (any chain resolves `{ data }` by table), the
- * same shape enquiries-inbox-page.test.tsx uses, so the page can add or reorder builder
- * calls without this mock having to know.
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/page.tsx
+ * Feature:  Enquiries (`/artists/[id]/enquiries`)
+ * Tier:     LIGHT (AGENTS.md "Test depth"): one render of the real page, through its own data
+ *           plumbing. WHY THIS FILE EXISTS: on 2026-09-22 the page shipped with `labelFor` used
+ *           inside a `.map()` callback declared ABOVE the `const` that defined it. TypeScript only
+ *           flags use-before-declare for direct references (inside a closure it assumes the call
+ *           may come later), so `tsc` was clean, every component test was green (none rendered
+ *           this page), and the owner found it as a runtime error in the browser. A single render
+ *           of the real page is the test that would have gone red.
+ * Covers:   • the page renders at all
+ *           • an enquiry's kind shows as its LABEL from the kinds table, never the slug
+ *           • the Type menu offers the artist's kinds in their order, one with no enquiries too
+ *           • it is the inbox and nothing else: no kind rows, no Add kind, no recipient address
+ *             (they moved to Settings › Email)
+ * Not here: the inbox's rows, menus and enquiry window (enquiries-ledger.test.tsx); the kinds and
+ *           their addresses (tests/components/manager-tools/settings/).
+ * Fixtures: the ownership gate and the inbox actions are mocked; the Supabase client is a
+ *           query-builder stub (any chain resolves `{ data }` by table), the same shape
+ *           enquiries-inbox-page.test.tsx uses, so the page can add or reorder builder calls
+ *           without this mock having to know.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -83,12 +93,14 @@ const renderPage = async () => {
 }
 
 describe('/artists/[id]/enquiries', () => {
+  // The page renders through its own reads: a throw in its data plumbing throws here.
   it('CRITICAL: renders at all', async () => {
     // The whole reason for the file. A page that throws in its data plumbing throws here.
     await renderPage()
     expect(screen.getByText('Jamie Rowe')).toBeTruthy()
   })
 
+  // The open enquiry names its kind by the table's label, never the slug.
   it("labels an enquiry with the kind's LABEL from the table, not the slug", async () => {
     await renderPage()
     // The kind is not on the row (Sam, 2026-10-05); the open enquiry names it.
@@ -99,6 +111,7 @@ describe('/artists/[id]/enquiries', () => {
     expect(screen.queryByText('sync-licensing')).toBeNull()
   })
 
+  // The Type menu lists what CAN land here, in the artist's order.
   it("offers the artist's kinds in the Type menu, from the kinds table, in the artist's order", async () => {
     // Booking has no enquiries yet and is still offered: the menu says what CAN land here.
     await renderPage()
@@ -108,6 +121,7 @@ describe('/artists/[id]/enquiries', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['All types', 'Booking', 'Sync licensing'])
   })
 
+  // The kinds and their addresses moved to Settings › Email; the inbox has the whole page.
   it('is the inbox and nothing else — no kind rows, no Add kind', async () => {
     // Sam, 2026-09-22: "I want the enquiries to take up the whole space". The kind rows
     // and their pop-up moved to Settings → Email. Only the labels still come from here.

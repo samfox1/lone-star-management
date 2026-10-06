@@ -1,20 +1,29 @@
-// The Brand page's Publish sends logos, icons, fonts, colours and the browser-bar colour to
-//   the site — and leaves every other photo's draft where it is.
 /**
- * `publishBrandWithPasswordAction`, end to end over a fake client (no database).
+ * The Brand page's Publish sends logos, icons, fonts, colours and the browser-bar colour to the
+ * site, and leaves every other photo's draft where it is.
  *
- * The Brand bar is brand-scoped (`brandPending`), so its Publish has to be too. It used to
- * run `publishContent('media')` whole: a manager publishing a new logo also pushed a
- * half-finished gallery (a photo ticked on the Images page, a hero swapped in the editor)
- * to the live site from a page that never showed it. This pins the slice from both sides:
- *
- *   • a brand draft IS published, and a deleted brand row IS tombstoned;
- *   • a gallery draft is NOT published, and a deleted gallery photo is NOT tombstoned —
- *     the second is the sharper edge: a tombstone takes a live photo OFF the site.
- *
- * The fonts half (`artist_font`) publishes whole, as before. `publishAll` and the
- * editor's publish are untouched; tests/unit/publish/publish-order.test.ts still pins them
- * against PUBLISHABLE.
+ * Code:     src/app/artists/[id]/(dashboard)/actions.ts (publishBrandWithPasswordAction,
+ *           publishSiteWithPasswordAction), src/lib/content.ts (publishContent)
+ * Feature:  Brand · Publish, and the site Publish bar beside it
+ * Tier:     STRICT (AGENTS.md "Test depth"): Publish is what the live site receives. The Brand
+ *           bar is brand-scoped (`brandPending`), so its Publish has to be too. It used to run
+ *           `publishContent('media')` whole: a manager publishing a new logo also pushed a
+ *           half-finished gallery (a photo ticked on the Images page, a hero swapped in the
+ *           editor) to the live site from a page that never showed it.
+ * Covers:   • a brand draft IS published, and a deleted brand row IS tombstoned
+ *           • a gallery draft is NOT published, and a deleted gallery photo is NOT tombstoned (the
+ *             sharper edge: a tombstone takes a live photo OFF the site)
+ *           • the fonts publish whole; the colours and the browser-bar colour ride along, without
+ *             the dashboard-only note
+ *           • no storage sweep runs on this path
+ *           • the other side: the Site / SEO Publish sends every media row EXCEPT Brand's
+ *           • publishContent with no slice still publishes the whole media table
+ * Not here: `publishAll` and the editor's publish, pinned against PUBLISHABLE in
+ *           tests/unit/publish/publish-order.test.ts.
+ * Fixtures: the publish world (tests/helpers/publish-world.ts) for the password gate and the
+ *           server client, over a fake client holding one of each case: a new logo, a new gallery
+ *           photo, an edited hero, a deleted logo and a deleted photo, a font, a brand colour with
+ *           a note, and the browser-bar colour. No database.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
@@ -85,6 +94,7 @@ beforeEach(() => {
 })
 
 describe('the Brand publish is brand-scoped', () => {
+  // Brand's own draft goes; a photo's draft from another page stays a draft.
   it('CRITICAL: a logo draft IS published; a gallery draft is NOT', async () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await publishBrandWithPasswordAction(A, 'pw')).toEqual({ ok: true })
@@ -94,6 +104,7 @@ describe('the Brand publish is brand-scoped', () => {
     expect(ids).not.toContain('hero-1') // an edited hero is a draft too, and not this page's
   })
 
+  // A tombstone takes a row off the site, so only Brand's own deletions get one here.
   it('CRITICAL: a deleted brand row IS tombstoned; a deleted gallery photo is NOT (it stays live)', async () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishBrandWithPasswordAction(A, 'pw')
@@ -101,12 +112,14 @@ describe('the Brand publish is brand-scoped', () => {
     expect(written().find(([, id]) => id === 'photo-gone')).toBeUndefined()
   })
 
+  // The fonts half is unchanged: every font publishes.
   it('the fonts still publish whole', async () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishBrandWithPasswordAction(A, 'pw')
     expect(written()).toContainEqual(['artist_font', 'f1', false])
   })
 
+  // The colours ship with Brand's Publish, and the manager's private note never does.
   it('CRITICAL: the colours and the browser-bar colour publish with it now (Sam, 2026-09-24) — the note never rides', async () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishBrandWithPasswordAction(A, 'pw')
@@ -121,6 +134,7 @@ describe('the Brand publish is brand-scoped', () => {
     expect(rows.find((r) => r.entity_type === 'theme_color')!.data).toEqual({ id: A, theme_color: '#0a0a0a' })
   })
 
+  // Publishing Brand removes no file from any bucket.
   it('no storage sweep runs on this path (nothing is removed from any bucket)', async () => {
     const { publishBrandWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     await publishBrandWithPasswordAction(A, 'pw')
@@ -135,6 +149,7 @@ describe('the Brand publish is brand-scoped', () => {
  * Brand bar still claiming them unpublished. It now sends every media row EXCEPT Brand's.
  */
 describe('the Site / SEO Publish leaves Brand’s media to Brand', () => {
+  // The site Publish sends photos and their deletions, never Brand's drafts or deletions.
   it('CRITICAL: the gallery draft, the hero and the deleted photo go; the logo draft and the deleted logo do not', async () => {
     const { publishSiteWithPasswordAction } = await import('@/app/artists/[id]/(dashboard)/actions')
     expect(await publishSiteWithPasswordAction(A, 'pw')).toEqual({ ok: true })
@@ -149,6 +164,7 @@ describe('the Site / SEO Publish leaves Brand’s media to Brand', () => {
 })
 
 describe('publishContent without a slice is exactly what it was', () => {
+  // With no slice, every draft and every tombstone in the media table publishes, as before.
   it('the whole media table publishes: every draft, every tombstone', async () => {
     const { publishContent } = await import('@/lib/content')
     await publishContent(fake.client, 'media', A, 'u1')

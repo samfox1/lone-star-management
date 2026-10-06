@@ -1,15 +1,23 @@
-// Every Publish button that sends several kinds sends them in ONE write, so one click is
-//   one version in the history.
 /**
- * The DB-free half of tests/integration/publish/publish-one-moment.test.ts: that file shows
- * the database turning one insert into one publish moment (and refusing all of it or none);
- * this pins that each multi-kind Publish ACTION really makes one insert, over a fake client.
- * A per-kind loop creeping back into an action (the way the Site and Music publishes were
- * written, one `publishContent` per kind) fails here without a network round trip.
+ * Every Publish button that sends several kinds sends them in ONE write, so one click is one
+ * version in the history.
  *
- * Every table holds one row, so every kind has something to send: an action that wrote in
- * several inserts could not hide behind a kind with nothing in it. The kinds each action
- * sends are its spec, except where a registry names them (PUBLISHABLE, BRAND_KINDS).
+ * Code:     src/app/artists/[id]/(dashboard)/actions.ts (every multi-kind `publish…Action`)
+ * Feature:  Publish: one click, one version
+ * Tier:     STRICT (AGENTS.md "Test depth"): Publish is what the live site receives, and a split
+ *           write is two versions where the manager made one.
+ * Covers:   • each multi-kind Publish action makes exactly one `revisions` insert
+ *           • it carries every kind that action sends, and only the media that Publish owns (the
+ *             Brand page the logo, the Site / SEO publish the photo, the whole-site ones both)
+ * Not here: the database turning one insert into one publish moment, and refusing all of it or
+ *           none (tests/integration/publish/publish-one-moment.test.ts, the live half of this).
+ * Fixtures: the publish world (tests/helpers/publish-world.ts): a PostgREST fake with one row per
+ *           table, so every kind has something to send and an action that wrote in several
+ *           inserts could not hide behind a kind with nothing in it; the password gate says yes.
+ *           The kinds each action sends are its spec, except where a registry names them
+ *           (PUBLISHABLE, BRAND_KINDS). A per-kind loop creeping back into an action (the way
+ *           the Site and Music publishes were written, one `publishContent` per kind) fails here
+ *           without a network round trip.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PUBLISHABLE } from '@/lib/content'
@@ -56,6 +64,7 @@ const SENDS: Partial<Record<PublishName, Sends>> = {
 const CASES = (Object.entries(SENDS) as [PublishName, Sends][]).map(([name, sends]) => ({ name, run: PUBLISH_ACTIONS[name].run, ...sends }))
 
 describe('one click, one insert', () => {
+  // One insert per click, with exactly the kinds and media that Publish sends.
   it.each(CASES)('CRITICAL: $name writes every kind it sends in ONE insert', async ({ run, kinds, media }) => {
     const actions = await import('@/app/artists/[id]/(dashboard)/actions')
     const res = await run(actions)
