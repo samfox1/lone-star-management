@@ -98,7 +98,9 @@ export function EnquiriesLedger({
   const [artistId, setArtistId] = useState<string>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set(rows.filter((r) => r.read_at).map((r) => r.id)))
-  const [audio, setAudio] = useState<{ id: string; items: PlayableAttachment[] } | null>(null)
+  /** Each opened enquiry's signed audio, by enquiry id. Filed by id, not "the last one", so an
+   *  answer that arrives after another enquiry was opened lands on its own enquiry. */
+  const [audio, setAudio] = useState<Record<string, PlayableAttachment[]>>({})
   const [said, setSaid] = useState('')
   const [, startTransition] = useTransition()
   // One clock for every "deleted in N days", read once per mount so they agree.
@@ -143,10 +145,13 @@ export function EnquiriesLedger({
   function openRow(row: InboxRow, el: HTMLElement) {
     opener.current = el
     setOpenId(row.id)
-    if (row.attachmentCount > 0 && audio?.id !== row.id) {
-      // Signed only when one is opened: a page of rows would otherwise mint URLs that
-      // mostly expire unread, and short-lived means short-lived.
-      signEnquiryAttachmentsAction(row.id).then((items) => setAudio({ id: row.id, items }))
+    if (row.attachmentCount > 0) {
+      // Signed only when one is opened, and again on every open: a page of rows would otherwise
+      // mint URLs that mostly expire unread, and short-lived means short-lived. A failed sign
+      // files an empty list, so "Loading audio…" never stays up for good.
+      signEnquiryAttachmentsAction(row.id)
+        .then((items) => setAudio((prev) => ({ ...prev, [row.id]: items })))
+        .catch(() => setAudio((prev) => ({ ...prev, [row.id]: prev[row.id] ?? [] })))
     }
     // Only an UNREAD one is written: opening a read one changes nothing anywhere.
     if (!readIds.has(row.id)) {
@@ -258,7 +263,7 @@ export function EnquiriesLedger({
           row={open}
           isRead={readIds.has(open.id)}
           showArtist={showArtist}
-          audio={audio?.id === open.id ? audio.items : null}
+          audio={audio[open.id] ?? null}
           note={deletionNote(open.status, open.created_at, now)}
           onClose={close}
           onCopy={copy}
