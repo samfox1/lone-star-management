@@ -12,8 +12,8 @@ import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, countWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
-import { nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
+import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_SHOWN, bareNameWords, countWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
 import { HoverLabel } from '../../../_ui/row-icon'
@@ -194,8 +194,51 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
           endMark={<span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-[0_0_0_5px_rgba(17,17,17,0.08)]">{initial}</span>}
         />
         <FactsColumn facts={facts} label="Your spot, in numbers" />
+        <NameSearches view={view} stats={stats} engines={board.lines.map((l) => l.engine)} name={name} />
       </div>
     </section>
+  )
+}
+
+/** BASED ON THESE SEARCHES: what the ranking line is made of, under it, so the number is never
+ *  taken on trust (Sam, 2026-10-06: "allow user to see the searches that the chart is using.
+ *  Maybe the top 5"): each search naming the artist, how often the site was seen for it and its
+ *  spot; and, when the bare name is not one of them, a plain line saying so. */
+function NameSearches({ view, stats, engines, name }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; engines: SearchEngineId[]; name: string }) {
+  const both = engines.length > 1
+  const rows = engines
+    .flatMap((e) => nameSearches(stats[e]!.searchDays, name).map((r) => ({ ...r, engine: e })))
+    .sort((a, b) => b.seen - a.seen || a.key.localeCompare(b.key))
+  const shown = rows.slice(0, NAME_SEARCHES_SHOWN)
+  const more = rows.length - shown.length
+  const bare = rows.some((r) => isBareName(r.key, name))
+  const cols = both ? 'grid-cols-[16px_minmax(0,1fr)_52px_52px]' : 'grid-cols-[minmax(0,1fr)_52px_52px]'
+  return (
+    <div data-name-searches className="max-w-[560px] lg:col-start-1">
+      <div role="table" aria-label="Based on these searches">
+        <div role="row" className={cx('grid items-center gap-x-3.5 border-b border-hairline pb-2', cols)}>
+          {both ? <span role="columnheader"><span className="sr-only">Engine</span></span> : null}
+          <span role="columnheader" className={cx(CAPS_LABEL, 'font-bold text-ink-faint')}>Based on these searches</span>
+          <span role="columnheader" className={HEAD}>Seen</span>
+          <span role="columnheader" className={HEAD}>Spot</span>
+        </div>
+        {shown.map((r) => (
+          <div role="row" key={`${r.engine}:${r.key}`} data-row="name-search" className={cx('grid items-center gap-x-3.5 border-b border-hairline-soft py-2', cols)}>
+            {both ? (
+              <span role="cell" className="flex text-ink-faint">
+                <SourceGlyph source={r.engine} size={13} />
+                <span className="sr-only">{ENGINE_NAME[r.engine]}</span>
+              </span>
+            ) : null}
+            <span role="rowheader" className="min-w-0 truncate text-[14px] text-ink">{r.key}</span>
+            <span role="cell" className={cx(NUM, 'text-ink-muted')}>{countWords(r.seen)}</span>
+            <span role="cell" className={cx(NUM, 'font-bold text-ink')}>{spot(r.spot)}</span>
+          </div>
+        ))}
+      </div>
+      {more > 0 ? <p className={cx(MONO_META, 'mt-2')}>{`+ ${countWords(more)} more`}</p> : null}
+      {!bare ? <p data-bare-name className="mt-2.5 font-space text-[12px] text-ink-muted">{bareNameWords(name, view)}</p> : null}
+    </div>
   )
 }
 

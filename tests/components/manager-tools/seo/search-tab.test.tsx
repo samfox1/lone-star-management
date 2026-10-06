@@ -138,6 +138,16 @@ describe('Both, side by side', () => {
     expect(screen.getByText('#1')).toBeTruthy()
   })
 
+  // Under the ranking chart: the searches it is built from, and a plain line when "Skeen" on its
+  // own is not one of them (Sam, 2026-10-06: "some way to be more transparent").
+  it('CRITICAL: lists the searches the ranking line uses, and says when the bare name is not among them', () => {
+    nav.params = new URLSearchParams('e=google')
+    show(answer(ok(GOOGLE), ok(BING)))
+    const list = document.querySelector('[data-name-searches]') as HTMLElement
+    expect([...list.querySelectorAll('[data-row="name-search"]')].map((r) => r.textContent)).toEqual(['skeen dj39#2.5', 'skeen music2#3'])
+    expect(list.querySelector('[data-bare-name]')?.textContent).toBe('“Skeen” on its own: not showing up on Google yet')
+  })
+
   // The AI list shows each assistant with its visits.
   it('fans sent by AI: each assistant and its visits', () => {
     show(answer(ok(GOOGLE), ok(BING)))

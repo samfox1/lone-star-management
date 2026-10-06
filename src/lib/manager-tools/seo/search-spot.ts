@@ -68,3 +68,29 @@ export function spotFacts(points: readonly SpotPoint[]): SpotFacts | null {
 export function searchTrend(rows: readonly SearchDayRow[], key: string): number[] {
   return rows.filter((r) => r.key === key).sort((a, b) => (a.date < b.date ? -1 : 1)).map((r) => r.position)
 }
+
+/** One search the line is made of, over the period: how often the site was seen for it and its
+ *  spot (weighted by the days it was seen). */
+export type NameSearch = { key: string; seen: number; spot: number }
+
+/** The searches the "your spot" line is built from, listed under the chart so nobody has to take
+ *  the number on trust (Sam, 2026-10-06: "some way to be more transparent about what we are
+ *  showing"): every search naming the artist, most seen first, ties by the words. */
+export function nameSearches(rows: readonly SearchDayRow[], name: string): NameSearch[] {
+  const by = new Map<string, { seen: number; weighted: number }>()
+  for (const r of rows) {
+    if (!namesArtist(r.key, name)) continue
+    const s = by.get(r.key) ?? { seen: 0, weighted: 0 }
+    by.set(r.key, { seen: s.seen + r.impressions, weighted: s.weighted + r.position * r.impressions })
+  }
+  return [...by]
+    .map(([key, s]) => ({ key, seen: s.seen, spot: s.weighted / s.seen }))
+    .sort((a, b) => b.seen - a.seen || a.key.localeCompare(b.key))
+}
+
+/** Whether a search is the name on its own ("Skeen", not "skeen dj"): the hardest one to win, and
+ *  the page says plainly when it isn't among the searches. */
+export function isBareName(search: string, name: string): boolean {
+  const n = words(name)
+  return n !== '' && words(search) === n
+}

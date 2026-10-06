@@ -7,6 +7,8 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): it parses outside search text and decides the one
  *           number that proves the SEO work is working.
  * Covers:   • which searches name the artist: whole words in order, accents and punctuation aside
+ *           • the searches the line is made of, shown under the chart (Sam, 2026-10-06: "some way
+ *             to be more transparent about what we are showing"), and whether the bare name is one
  *           • the spot per day over those searches, weighted by how often each was seen
  *           • now (the last week), the average, and the climb (two whole weeks or none)
  *           • one search's own trend
@@ -18,7 +20,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { nameSpot, namesArtist, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
+import { isBareName, nameSearches, nameSpot, namesArtist, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import type { SearchDayRow } from '@/lib/manager-tools/seo/search-stats'
 
 // Skeen's REAL searches by day (tests/fixtures/search-stats.json, google_query_date_all).
@@ -123,5 +125,34 @@ describe('searchTrend', () => {
   it('one search\'s spot, day by day, oldest first', () => {
     expect(searchTrend(SKEEN, 'skeen dj')).toEqual([2.1538461538461537, 2.3636363636363633, 2.9333333333333336, 2.6470588235294117])
     expect(searchTrend(SKEEN, 'nobody searched this')).toEqual([])
+  })
+})
+
+describe('nameSearches — the searches the line is made of', () => {
+  // Under the chart the page lists what the line is built from: only searches naming the artist,
+  // each with how often the site was seen and its spot over the period, most seen first.
+  it('CRITICAL: Skeen\'s real searches: each naming search, seen summed and spot weighted over the days — "music" is not one', () => {
+    expect(nameSearches([...SKEEN, { key: 'music', date: '2026-10-01', impressions: 1, position: 2 }], 'Skeen')).toEqual([
+      { key: 'skeen dj', seen: 56, spot: expect.closeTo((13 * 2.1538461538461537 + 11 * 2.3636363636363633 + 15 * 2.9333333333333336 + 17 * 2.6470588235294117) / 56, 10) },
+      { key: 'dj skeen', seen: 4, spot: expect.closeTo((2 * 2.5 + 1 * 3 + 1 * 2) / 4, 10) },
+      { key: 'skeen music', seen: 4, spot: expect.closeTo((2 * 3 + 2 * 1.5) / 4, 10) },
+    ])
+  })
+
+  // Ties in how often they were seen keep a fixed order: the words, A to Z.
+  it('a tie in how often each was seen goes by the words', () => {
+    const rows: SearchDayRow[] = [{ key: 'skeen b', date: '2026-10-01', impressions: 3, position: 2 }, { key: 'skeen a', date: '2026-10-01', impressions: 3, position: 1 }]
+    expect(nameSearches(rows, 'Skeen').map((r) => r.key)).toEqual(['skeen a', 'skeen b'])
+  })
+})
+
+describe('isBareName — the name on its own', () => {
+  // "Skeen" alone is the hardest search to win; the page says plainly when it is not among them.
+  it('CRITICAL: only the name itself, however it is written; the name inside a longer search is not bare', () => {
+    expect(isBareName('skeen', 'Skeen')).toBe(true)
+    expect(isBareName('  SKEEN!', 'Skeen')).toBe(true)
+    expect(isBareName('beyonce', 'Beyoncé')).toBe(true)
+    expect(isBareName('skeen dj', 'Skeen')).toBe(false)
+    expect(isBareName('', '  ')).toBe(false)
   })
 })
