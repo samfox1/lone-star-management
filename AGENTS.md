@@ -140,20 +140,34 @@ group, and its tests sit under one subject per tool:
 
     src/app/artists/[id]/(dashboard)/(manager-tools)/
       _shell/        the tools rail + registry (private folder: never a route)
-      _ui/           UI two or more tools share: ledger, row-icon (+ HoverLabel),
-                     label-placement, inline-text, add-row, publish-riser,
-                     focus-ring (FOCUS_RING), use-seeded (useSeeded)
-      brand/ subscribers/ settings/ enquiries/ connections/ epk/ site/ tools/ (overview + seo)
+      _ui/           UI two or more tools share: styles.ts (the CAPS_*/EYEBROW/MONO_META
+                     roles), ledger, row-icon (+ HoverLabel), edit-row, edit-list
+                     (+ useListSave), add-row, fields, inline-text, choice-menu, disclosure,
+                     list-toolbar, highlight, copy, connection-mark, publish-riser,
+                     site-pending + site-riser (the site Publish bar), focus-ring, use-seeded
+      profile/ brand/ connections/ epk/ subscribers/ enquiries/ settings/ site/
+      tools/ (overview + seo; seo has its own _ui/ and one folder per tab)
+        settings/email/  Settings › Email: kind-rows, the code window, their actions
+                         (moved from enquiries/ 2026-10-05: only this page renders them)
         <tool>/_ui/  UI only that tool uses (brand/_ui: brand-riser, brand-modal, modal-board)
     src/lib/manager-tools/<tool>/          pure modules only that tool uses
-    tests/<kind>/manager-tools/<tool>/     brand, subscribers, settings, enquiries,
-                                           connections, epk, seo, shared (the _ui/_shell pieces)
+    src/lib/manager-tools/format.ts        shared formats: shortDay, plural, shortLink,
+                                           displayAddress, listWords ("a, b and c"),
+                                           minutesSeconds (m:ss), SAVE_FAILED
+    src/lib/manager-tools/site-pending.ts  the site Publish bar's words (four tools share it)
+    tests/<kind>/manager-tools/<tool>/     profile, brand, connections, epk, subscribers,
+                                           enquiries, settings, overview, seo,
+                                           shared (the _ui/_shell pieces)
+    tests/helpers/                         support used by more than one subject
+                                           (publish-world, rls, artist, supabase…)
 
 `(manager-tools)` is a ROUTE GROUP: it is not in the URL, so `/artists/[id]/brand` still
 resolves. `_shell` and `_ui` are PRIVATE folders: nothing in them can become a route.
 Dashboard-wide pieces used outside the tools (card-modal, modal-kit, toast, publish-bar,
-upload-field, actions.ts, `_data`, `_owns`, sections, editor/, music, images…) stay in
-`(dashboard)/`. A lib another area imports (brand.ts, fonts.ts, color.ts, content.ts,
+upload-field, actions.ts, rail.ts (RAIL_LANE), share-link.ts, profile-photo-actions.ts,
+`_data`, `_owns`, sections, editor/, music, images…) stay in `(dashboard)/`. Icon and nav
+hovers (ICON_HOVER, NAV_HOVER, WORD_HOVER) live in `src/components/ui/icon-hover.ts`, and the
+modal corner/Back glyph classes beside `modalCardClass` in `src/components/ui/ui.tsx`. A lib another area imports (brand.ts, fonts.ts, color.ts, content.ts,
 storage-gc.ts, site*, seo*, settings.ts, epk.ts, enquiries/) stays in `src/lib/`. Put a
 new piece in `_ui/` only when a second tool really uses it; until then it belongs to its
 tool.
