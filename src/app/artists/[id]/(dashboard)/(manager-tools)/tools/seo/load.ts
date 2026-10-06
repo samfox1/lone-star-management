@@ -13,10 +13,11 @@ import type { AltPhoto } from './details/details-tab'
  * What the Details, Answers and Profiles tabs read, moved here from the old seven-section
  * `[section]/page.tsx` (2026-09-29) so each tab's page asks only for what it shows. Every query
  * is RLS-scoped and flies in ONE round beside the ownership gate (`requireArtist`): nothing
- * waits on the gate to be safe, only to render.
+ * waits on the gate to be safe, only to render. A tab's own reads that need only the id start
+ * in that same round too: pass the page's `client` here and to them (Details does).
  */
-export async function loadSeoBase(id: string) {
-  const supabase = await createClient()
+export async function loadSeoBase(id: string, client?: Supabase) {
+  const supabase = client ?? (await createClient())
   const [artist, { data: rows }, { data: facts }] = await Promise.all([
     requireArtist(id),
     supabase.from('site_content').select('key, value').eq('artist_id', id),
@@ -39,31 +40,46 @@ export async function loadSeoBase(id: string) {
   }
 }
 
+type Supabase = Awaited<ReturnType<typeof createClient>>
 type Base = Awaited<ReturnType<typeof loadSeoBase>>
+type MediaRow = Record<string, unknown>
 
 const SHARE_LABEL: Record<string, string> = { logo_primary: 'Primary logo', logo_secondary: 'Secondary logo', profile_photo: 'Profile photo' }
 const SHARE_ORDER = ['logo_primary', 'logo_secondary', 'profile_photo']
 
-/** The pictures the share image can be made from (Listing → Share). */
-export async function loadShareSources(b: Base): Promise<OgSource[]> {
-  const { data } = await b.supabase.from('media').select('purpose, storage_path').eq('artist_id', b.artist.id).in('purpose', SHARE_ORDER)
-  const sources: OgSource[] = (data ?? [])
+/** The logos and profile photo the share image can be made from. By id alone, so the Details
+ *  page starts it beside loadSeoBase rather than after it; `shareSources` shapes it. */
+export async function readShareMedia(supabase: Supabase, id: string): Promise<MediaRow[]> {
+  const { data } = await supabase.from('media').select('purpose, storage_path').eq('artist_id', id).in('purpose', SHARE_ORDER)
+  return data ?? []
+}
+
+/** The pictures the share image can be made from (Details → Share): the logos and profile photo
+ *  in SHARE_ORDER, then the hero image (an artists column, so it comes with the base). */
+export function shareSources(rows: MediaRow[], heroUrl: string | null): OgSource[] {
+  const sources: OgSource[] = [...rows]
     .sort((x, y) => SHARE_ORDER.indexOf(x.purpose as string) - SHARE_ORDER.indexOf(y.purpose as string))
     .map((m) => ({ url: mediaUrl(m.storage_path as string), label: SHARE_LABEL[m.purpose as string] ?? 'Image' }))
-  if (b.heroUrl) sources.push({ url: b.heroUrl, label: 'Hero image' })
+  if (heroUrl) sources.push({ url: heroUrl, label: 'Hero image' })
   return sources
 }
 
-/** The site's photos and their descriptions (Listing → Alt text). */
-export async function loadAltPhotos(b: Base): Promise<AltPhoto[]> {
-  const { data } = await b.supabase
+/** The site's photos, in site order. By id alone, like readShareMedia; `altPhotos` shapes it. */
+export async function readAltMedia(supabase: Supabase, id: string): Promise<MediaRow[]> {
+  const { data } = await supabase
     .from('media')
     .select('id, storage_path, alt, slug, site_role')
-    .eq('artist_id', b.artist.id)
+    .eq('artist_id', id)
     .eq('purpose', 'gallery_image')
     .eq('on_site', true)
     .order('sort_order')
-  return (data ?? []).map((m) => {
+  return data ?? []
+}
+
+/** The site's photos and their descriptions (Details → Alt text). A slot photo's caption comes
+ *  from the base's site_content. */
+export function altPhotos(rows: MediaRow[], content: Base['content']): AltPhoto[] {
+  return rows.map((m) => {
     const path = m.storage_path as string
     const role = (m.site_role as string | null) ?? null
     return {
@@ -72,7 +88,7 @@ export async function loadAltPhotos(b: Base): Promise<AltPhoto[]> {
       alt: (m.alt as string | null) ?? '',
       slug: (m.slug as string | null) ?? path.split('/').pop()!.replace(/\.[a-z0-9]+$/i, ''),
       // A slot photo's caption lives next to it in site_content (`polaroid_3_caption`).
-      caption: role ? b.content[role.replace(/_photo$/, '_caption')] ?? null : null,
+      caption: role ? content[role.replace(/_photo$/, '_caption')] ?? null : null,
     }
   })
 }
