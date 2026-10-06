@@ -55,6 +55,7 @@ export type IconName =
   | 'chevronsUpDown'
   | 'eraser'
   | 'panel'
+  | 'robot'
   | 'note'
   | 'grip'
   | 'minus'
@@ -410,6 +411,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <path d="M14.5 4.5v15M17 9.5h1M17 12.5h1" />
+    </>
+  ),
+  // A bot: the Analytics chart's "bot visits filtered" pin.
+  robot: (
+    <>
+      <rect x="5" y="8" width="14" height="11" rx="3" />
+      <path d="M12 4.5V8M9.5 13h.01M14.5 13h.01M9.5 16.2h5" />
+      <circle cx="12" cy="4" r="1" />
     </>
   ),
   /** Remove background · Lucide `eraser` (ISC) */

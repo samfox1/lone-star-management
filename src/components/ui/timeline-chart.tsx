@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { axisTicks, dayLabel, monotoneSegments, niceCeil, smoothPath, type Pt } from '@/lib/chart'
+import { Icon, type IconName } from './icons'
 
 /**
  * Up to five series over the window, on ONE scale that starts at zero.
@@ -29,12 +30,18 @@ import { axisTicks, dayLabel, monotoneSegments, niceCeil, smoothPath, type Pt } 
  * and a small readout above it names the day and every value (Sam: the old readout
  * was "too big").
  *
+ * `pins` mark moments above the lines (lib/analytics-pins.ts): a small round mark in a band
+ * over the plot, a dotted guide down to its day on its line, and a card naming it on hover or
+ * focus. A pin shows only while its line is drawn; marks that would touch step right.
+ *
  * The drawing is in the plot's own pixels (measured), so circles stay round and
  * text never stretches; until it is measured (and in jsdom, which lays nothing out)
  * it assumes 600 wide.
  */
 export type TimelinePoint = { day: string; views: number; visitors: number; bots?: number }
 export type SeriesColor = 'accent' | 'accent-red' | 'ink' | 'chart-4' | 'chart-5'
+/** A moment marked above the lines: its day, the line it sits on, its glyph and its words. */
+export type ChartPin = { day: string; series: string; icon: IconName; title: string; note?: string }
 export type Series = {
   key: string
   label: string
@@ -45,6 +52,12 @@ export type Series = {
 }
 
 const PAD_TOP = 8
+/** With pins, the plot starts lower: the marks sit in the band above it. */
+const PIN_BAND = 44
+const PIN_Y = 18
+const PIN_R = 13
+/** Marks closer than this step right, so neighbours never overlap. */
+const PIN_GAP = 30
 /** Fewer counted points than this and an overlay also marks each measured day
  *  with a dot, so two points at the end of a long window read as two readings
  *  joined, not as a streak (Sam, 2026-09-13: "the dots should be connected"). */
@@ -59,6 +72,7 @@ export function TimelineChart({
   series,
   partialLast = false,
   legendEnd,
+  pins,
   className,
 }: {
   points: TimelinePoint[]
@@ -69,11 +83,14 @@ export function TimelineChart({
   partialLast?: boolean
   /** Anything that belongs at the right end of the legend row (the "Every day" button). */
   legendEnd?: ReactNode
+  /** Moments marked above the lines; each sits on its `series` and shows only while it is drawn. */
+  pins?: ChartPin[]
   className?: string
 }) {
   const box = useRef<HTMLDivElement>(null)
   const gid = useId()
   const [at, setAt] = useState<number | null>(null)
+  const [pinOn, setPinOn] = useState<number | null>(null)
   const [w, setW] = useState(FALLBACK_W)
   // Measured before the first paint, then kept in step with the page.
   useLayoutEffect(() => {
@@ -101,12 +118,28 @@ export function TimelineChart({
   const finalTop = niceCeil(peak)
   const top = useTweened(finalTop)
   const x = (i: number) => (points.length < 2 ? w / 2 : (i / (points.length - 1)) * w)
-  const y = (v: number) => PAD_TOP + (1 - v / top) * (h - PAD_TOP)
+  const padTop = pins?.length ? PIN_BAND : PAD_TOP
+  const y = (v: number) => padTop + (1 - v / top) * (h - padTop)
   const ptsOf = (s: Series): Pt[] => points.map((_, i) => i).filter((i) => counted(s, i)).map((i) => [x(i), y(valueAt(s, i))])
   const tickEvery = points.length > 60 ? 7 : 1
   const ticks = points.map((_, i) => i).filter((i) => i % tickEvery === 0)
   const lastIdx = points.length - 1
   const dotted = partialLast && points.length >= 2
+
+  // The pins whose line is drawn and whose day is in view, left to right, each mark stepped
+  // clear of the one before it.
+  type Mark = { p: ChartPin; px: number; bx: number; py: number }
+  const marks = (pins ?? [])
+    .map((p) => ({ p, i: points.findIndex((pt) => pt.day === p.day), s: all.find((s) => s.key === p.series) }))
+    .filter((m): m is { p: ChartPin; i: number; s: Series } => m.i >= 0 && m.s !== undefined)
+    .sort((a, b) => a.i - b.i)
+    .reduce<Mark[]>((placed, { p, i, s }) => {
+      const px = x(i)
+      const prev = placed.length ? placed[placed.length - 1].bx : -Infinity
+      const bx = Math.min(Math.max(px, prev + PIN_GAP), w - PIN_R)
+      return [...placed, { p, px, bx, py: counted(s, i) ? y(valueAt(s, i)) : h }]
+    }, [])
+  const card = pinOn != null ? marks[pinOn] : null
 
   const shown = at != null ? points[at] : null
   const here = at == null ? [] : all.filter((s) => counted(s, at))
@@ -143,6 +176,8 @@ export function TimelineChart({
           style={{ height }}
           onPointerLeave={() => setAt(null)}
           onPointerMove={(e) => {
+            // Over a pin, the pin's card speaks; the day readout steps aside.
+            if ((e.target as Element).closest?.('[data-pin]')) { setAt(null); return }
             const r = box.current?.getBoundingClientRect()
             if (!r || r.width === 0 || points.length === 0) return
             const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
@@ -213,6 +248,13 @@ export function TimelineChart({
               })}
             </g>
 
+            {marks.map(({ p, px, bx, py }) => (
+              <g key={`${p.day}-${p.title}`} data-pin-guide className="chart-fade text-ink">
+                <line x1={bx} y1={PIN_Y + PIN_R} x2={px} y2={py - 6} stroke="currentColor" strokeOpacity={0.18} strokeDasharray="2 3" />
+                <circle cx={px} cy={py} r={4} fill="var(--color-paper)" stroke="currentColor" strokeWidth={1.5} />
+              </g>
+            ))}
+
             {at != null && (
               <g data-crosshair>
                 <line x1={x(at)} y1={yTop} x2={x(at)} y2={h} className="stroke-ink-faint" strokeWidth={1} />
@@ -222,6 +264,39 @@ export function TimelineChart({
               </g>
             )}
           </svg>
+
+          {marks.map(({ p, bx }, n) => (
+            <button
+              key={`${p.day}-${p.title}`}
+              type="button"
+              data-pin={p.day}
+              aria-label={p.title}
+              className="pin-pop absolute z-[5] flex items-center justify-center rounded-full bg-paper text-ink ring-[1.4px] ring-ink transition-transform duration-300 hover:scale-[1.14] focus-visible:scale-[1.14] focus-visible:outline-none"
+              style={{ left: (bx / w) * 100 + '%', top: PIN_Y - PIN_R, width: PIN_R * 2, height: PIN_R * 2, marginLeft: -PIN_R }}
+              onPointerEnter={() => setPinOn(n)}
+              onPointerLeave={() => setPinOn(null)}
+              onFocus={() => setPinOn(n)}
+              onBlur={() => setPinOn(null)}
+            >
+              <Icon name={p.icon} size={14} />
+            </button>
+          ))}
+          {card && (
+            <div
+              role="tooltip"
+              data-pin-card
+              className="pointer-events-none absolute z-20 w-[250px] rounded-xl bg-paper px-3.5 py-3 shadow-[0_8px_24px_rgba(17,17,17,0.12)]"
+              style={{ left: `clamp(125px, ${(card.bx / w) * 100}%, calc(100% - 125px))`, top: PIN_Y - PIN_R - 8, transform: 'translate(-50%, -100%)' }}
+            >
+              <div className="flex items-center gap-2.5 text-[13px] font-semibold text-ink">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-paper ring-[1.5px] ring-inset ring-ink"><Icon name={card.p.icon} size={12} /></span>
+                {card.p.title}
+              </div>
+              <div className="ml-[34px] mt-1.5 font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+                {dayLabel(card.p.day)}{card.p.note && <> · <span className="normal-case tracking-normal text-ink">{card.p.note}</span></>}
+              </div>
+            </div>
+          )}
 
           {at != null && shown && (
             <div

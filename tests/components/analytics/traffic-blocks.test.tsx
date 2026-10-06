@@ -249,4 +249,29 @@ describe('TimelineChart', () => {
       expect(container.querySelector('[data-series="views"] [data-line]')!.getAttribute('d')!.match(/C/g)).toHaveLength(3)
     })
   })
+
+  describe('pins', () => {
+    const four = [
+      { day: '2026-09-10', views: 10, visitors: 0 }, { day: '2026-09-11', views: 40, visitors: 0 },
+      { day: '2026-09-12', views: 20, visitors: 5 }, { day: '2026-09-13', views: 5, visitors: 4 },
+    ]
+    const pins = [
+      { day: '2026-09-11', series: 'views', icon: 'bolt' as const, title: 'Busiest day: 40 views' },
+      { day: '2026-09-12', series: 'visitors', icon: 'user' as const, title: 'Visitors counted from here', note: 'and bots filtered' },
+    ]
+    it('CRITICAL: a pin shows only while its line is drawn, and its card names it with its day on focus', () => {
+      const views = render(<TimelineChart points={four} height={100} pins={pins} />)
+      expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Busiest day: 40 views'])
+      views.unmount()
+      render(<TimelineChart points={four} height={100} pins={pins} series={[
+        S('views', four.map((p) => p.views)), S('visitors', four.map((p) => p.visitors), 'accent-red', '2026-09-12'),
+      ]} />)
+      const marks = screen.getAllByRole('button')
+      expect(marks.map((b) => b.getAttribute('aria-label'))).toEqual(['Busiest day: 40 views', 'Visitors counted from here'])
+      fireEvent.focus(marks[1])
+      expect(screen.getByRole('tooltip').textContent).toMatch(/visitors counted from here\s*sep 12 · and bots filtered/i)
+      fireEvent.blur(marks[1])
+      expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+  })
 })

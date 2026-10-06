@@ -62,6 +62,7 @@
     "src/lib/manager-tools/profile/profile.ts",
     "src/lib/brand.ts",
     "src/lib/brand-media.ts",
+    "src/lib/analytics-pins.ts",
     "src/lib/chart.ts",
     "src/lib/detail-table.ts",
     "src/lib/color.ts",

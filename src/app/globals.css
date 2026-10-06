@@ -151,6 +151,17 @@ body {
   .sheet-in, .sheet-out, .scrim-in, .scrim-out, .row-in { animation: none; }
 }
 
+/* A chart pin popping in once its line has drawn (TimelineChart). */
+@keyframes pin-pop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.pin-pop { animation: pin-pop .52s cubic-bezier(.3, 1.4, .5, 1) .85s both; }
+@media (prefers-reduced-motion: reduce) {
+  .pin-pop { animation: none; }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

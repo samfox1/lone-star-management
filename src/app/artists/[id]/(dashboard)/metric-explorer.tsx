@@ -5,7 +5,9 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { METRICS, OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, growthSize } from '@/lib/format'
-import { SWATCH, TimelineChart, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { SWATCH, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { analyticsPins, type PinKind } from '@/lib/analytics-pins'
+import type { IconName } from '@/components/ui/icons'
 import { EveryDay } from '@/components/ui/analytics-sheets'
 import { Segmented } from './segmented'
 
@@ -39,6 +41,8 @@ import { Segmented } from './segmented'
  */
 const COLOR: Record<string, SeriesColor> = { views: 'accent', visitors: 'accent-red', bots: 'ink', plays: 'chart-4', link_clicks: 'chart-5' }
 const META = Object.fromEntries(METRICS.map((m) => [m.key, m])) as Record<MetricKey, (typeof METRICS)[number]>
+/** Each kind of pin's glyph. */
+const PIN_ICON: Record<PinKind, IconName> = { counting: 'user', busiest: 'bolt', bots: 'robot' }
 /** The number's size for how many lines share the column: one or two big, five small. */
 const SIZE = [52, 52, 52, 40, 32, 26]
 
@@ -96,6 +100,10 @@ export function MetricExplorer({
       lines={[byKey.views, ...OVERLAYS.map((k) => byKey[k])].filter(Boolean).map((m) => ({ key: m.key, label: META[m.key].short, values: m.series, since: sinceOf(m.key) }))}
     />
   )
+  // The moments worth marking, from the window's own numbers (lib/analytics-pins.ts); the chart
+  // shows each only while its line is drawn.
+  const pins: ChartPin[] = analyticsPins({ days: days_, views: byKey.views?.series ?? [], bots: byKey.bots?.series ?? [], countedSince })
+    .map((p) => ({ day: p.day, series: p.series, icon: PIN_ICON[p.kind], title: p.title, note: p.note }))
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const tight = drawn.length >= 4
 
@@ -147,7 +155,7 @@ export function MetricExplorer({
           the column is laid absolutely in its cell, so however many lines are on it
           adds no height of its own. Keyed by the window, so a new window draws on. */}
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legendEnd={everyDay} className="min-w-0" />
+        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legendEnd={everyDay} pins={pins} className="min-w-0" />
 
         <div role="region" aria-label="Numbers" className="relative min-h-0">
           <dl className="flex flex-col text-right lg:absolute lg:inset-0">
