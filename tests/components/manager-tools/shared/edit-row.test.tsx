@@ -137,6 +137,26 @@ describe('a row with no pencil opens its + or upload glyph on a click anywhere o
     expect(add).toHaveBeenCalledTimes(1)
   })
 
+  // An inline panel's blank space is the panel's: a click there must not re-click the row's +.
+  it('a click on blank space inside an open inline panel (the Brand colour palette) is the panel’s own', () => {
+    // An empty colour row opens its palette inline, inside the row, with focus left on the +. A
+    // click on the panel's padding or its "On the site" caption clicked the + again, which closed
+    // the panel before a colour was picked.
+    const add = vi.fn()
+    render(
+      <LedgerRow title="Primary">
+        <RowIcon icon="plus" label="Add color" variant="primary" onClick={add} />
+        <div role="dialog" aria-label="Palette">
+          <p>On the site</p>
+        </div>
+      </LedgerRow>,
+    )
+    screen.getByRole('button', { name: 'Add color' }).focus()
+    fireEvent.mouseDown(screen.getByText('On the site'))
+    fireEvent.click(screen.getByText('On the site'))
+    expect(add).not.toHaveBeenCalled()
+  })
+
   it('the press kit: a click on an empty document row opens the file picker', () => {
     const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
     render(<DocumentUpload artistId="a1" kind="tech_rider" label="Tech rider" hint="" present={false} />)

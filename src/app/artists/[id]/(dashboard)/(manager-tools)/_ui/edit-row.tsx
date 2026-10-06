@@ -41,7 +41,9 @@ export const EDIT_TRIGGER = { 'data-edit-trigger': '' } as const
 /** On a + or upload glyph: what a click on a row WITHOUT a pencil stands for. */
 export const ADD_TRIGGER = { 'data-add-trigger': '' } as const
 
-/** Everything a click can land on that has its own job. */
+/** Everything a click can land on that has its own job. A `dialog` is a panel opened INSIDE the
+ *  row (the Brand colour palette): a click on its blank space is its own, or it re-clicked the
+ *  row's + and closed the panel before a colour was picked. */
 const CONTROL = [
   'a[href]',
   'button',
@@ -51,7 +53,7 @@ const CONTROL = [
   'label',
   'summary',
   '[contenteditable]:not([contenteditable="false"])',
-  ...['button', 'link', 'switch', 'checkbox', 'radio', 'combobox', 'listbox', 'menu', 'menuitem', 'menuitemradio', 'menuitemcheckbox', 'option', 'slider', 'tab', 'textbox'].map(
+  ...['button', 'link', 'switch', 'checkbox', 'radio', 'combobox', 'listbox', 'menu', 'menuitem', 'menuitemradio', 'menuitemcheckbox', 'option', 'slider', 'tab', 'textbox', 'dialog'].map(
     (r) => `[role="${r}"]`,
   ),
 ].join(',')
