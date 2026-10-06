@@ -11,11 +11,15 @@ import { SitePendingBar } from '../_ui/site-pending'
 import { DocumentUpload } from './document-upload'
 import { PressKitForm } from './press-kit-form'
 
-/** Where each requirement is fixed, and the word its row says on hover. */
+/**
+ * Where each requirement is fixed, and the word its row says on hover. The contact is the
+ * editor's Links › Contact list (Sam, 2026-10-05): the rule reads only a published mailto:
+ * link, and Settings can set none, so it was a dead end. The editor has no panel deep link.
+ */
 const FIX: Record<EpkRequirement['key'], { seg: string; label: string }> = {
   bio: { seg: PROFILE_SEG, label: 'Profile' },
   photo: { seg: PROFILE_SEG, label: 'Profile' },
-  contact: { seg: 'settings', label: 'Settings' },
+  contact: { seg: 'editor', label: 'Editor' },
   release: { seg: 'music', label: 'Music' },
 }
 

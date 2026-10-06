@@ -221,7 +221,8 @@ export type LinkRowLike = { id: string; label: string | null; url: string | null
 
 /**
  * A link that belongs on the Connections page: a social profile. Booking addresses
- * (mailto:, tel:, bare emails) are contact details and live in Settings; a row with a
+ * (mailto:, tel:, bare emails) are contact details and live in the editor's Links › Contact
+ * list (where the press kit sends a manager for one); a row with a
  * `role` is bound to a declared site element (the USB button) and is the editor's.
  */
 export function isProfileLink(link: LinkRowLike): boolean {

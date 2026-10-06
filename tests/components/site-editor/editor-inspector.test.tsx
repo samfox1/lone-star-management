@@ -872,9 +872,13 @@ describe('EditorInspector — Links panel groups (socials + tour support)', () =
     expect(screen.queryByLabelText(/^Spotify/)).toBeNull()
   })
 
-  it('shows NO Contact group when every link is a plain profile URL', () => {
+  it('shows the Contact group and its + with no contact yet: the first address is added here', () => {
+    // The press kit's missing "A contact email" row sends the manager to the editor (Sam,
+    // 2026-10-05), and a contact has no other place to be added. A group hidden until a
+    // contact exists could never get its first one.
     openLinks()
-    expect(screen.queryByText('Contact')).toBeNull()
+    expect(screen.getByText('Contact')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add contact' })).toBeTruthy()
   })
 
   it('reorders by ID, so a drag in one group cannot scramble the other', () => {

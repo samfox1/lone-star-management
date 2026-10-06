@@ -1160,22 +1160,20 @@ export function EditorInspector({
           focusedKey={focusedKey}
         />
         {/* A booking address is a contact route, not a profile to follow — its own
-            group, split by SCHEME (mailto:/tel:), never by label. */}
-        {links.some((l) => isContactish(l.url)) && (
-          <>
-            <GroupLabel>Contact</GroupLabel>
-            <ContactLinkTools
-              links={links.filter((l) => isContactish(l.url))}
-              collapseAt={deselectedAt}
-              onRemove={removeLink}
-              onReorder={reorderLinks}
-              onToggleOnSite={toggleLinkOnSite}
-              onSave={saveLink}
-              onAdd={addContact}
-              focusedKey={focusedKey}
-            />
-          </>
-        )}
+            group, split by SCHEME (mailto:/tel:), never by label. Shown with no contact
+            yet: its + is the only place a first address is added, and the press kit's
+            missing "A contact email" row sends the manager here for it (Sam, 2026-10-05). */}
+        <GroupLabel>Contact</GroupLabel>
+        <ContactLinkTools
+          links={links.filter((l) => isContactish(l.url))}
+          collapseAt={deselectedAt}
+          onRemove={removeLink}
+          onReorder={reorderLinks}
+          onToggleOnSite={toggleLinkOnSite}
+          onSave={saveLink}
+          onAdd={addContact}
+          focusedKey={focusedKey}
+        />
         <GroupLabel>Buttons</GroupLabel>
         <SiteLinkTools
           regions={linkRegions}

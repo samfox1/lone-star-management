@@ -100,6 +100,18 @@ describe('EPK page — the gate', () => {
     expect(screen.queryByRole('link', { name: /A bio/ })).toBeNull()
   })
 
+  // The contact rule reads only a published mailto: link (or a template site's booking_email),
+  // and the first one is typed in the editor's Links › Contact list. Settings once sat here and
+  // could set neither, so the red row was a dead end (Sam, 2026-10-05: "the editor's Contact links").
+  it('a missing contact email links to the editor, where a contact is added', async () => {
+    mockedSite.mockResolvedValue({ ...(fullSite as object), links: [] } as never)
+    releases = [{ title: 'First Light' }]
+    await renderPage()
+    const row = screen.getByRole('link', { name: /A contact email/ })
+    expect(row).toHaveAttribute('href', '/artists/a1/editor')
+    expect(row).toHaveTextContent(/editor.*then publish/)
+  })
+
   it('does not show hints for requirements already met', async () => {
     mockedSite.mockResolvedValue(fullSite)
     releases = [{ title: 'First Light' }]
