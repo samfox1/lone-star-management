@@ -135,22 +135,23 @@ describe('Both, side by side', () => {
 })
 
 describe('Bing with no numbers yet', () => {
-  // Skeen on 2026-10-02: Bing registered Sep 30 and answered with nothing. Beside Google's
-  // numbers in Both, and on its own in Bing, it says so; it is never a line of zeros.
-  it('says “usually within 2 weeks” for a new site, beside Google and on its own', () => {
+  // Skeen on 2026-10-02: Bing registered Sep 30 and answered with nothing. On its own it says
+  // so; beside Google it is a dot on its button; it is never a line of zeros.
+  it('says “usually within 2 weeks” for a new site on its own; beside Google, only a dot', () => {
     const a = answer(ok(GOOGLE), { engine: 'bing', state: 'no_data', period: PERIOD })
+    show(a)
+    // Beside Google's numbers: no note row (Sam, 2026-10-06), only the amber dot on Bing's button,
+    // and the page reads as Google alone: Google's lines only.
+    expect(document.querySelector('[data-note-engine="bing"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
+    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
+    cleanup()
+    // On its own, Bing says so in full.
+    nav.params = new URLSearchParams('e=bing')
     show(a)
     const bing = document.querySelector('[data-note-engine="bing"]') as HTMLElement
     expect(within(bing).getByText('No numbers yet')).toBeTruthy()
     expect(bing.textContent).toContain('New siteadded Sep 30usually within 2 weeks')
-    // Beside one engine with numbers, it reads as that engine alone: Google's lines only.
-    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
-    // The switch marks Bing with the amber dot.
-    expect(screen.getByRole('button', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
-    cleanup()
-    nav.params = new URLSearchParams('e=bing')
-    show(a)
-    expect(document.querySelector('[data-note-engine="bing"]')?.textContent).toContain('No numbers yet')
     expect(drawn()).toEqual([])
   })
 })

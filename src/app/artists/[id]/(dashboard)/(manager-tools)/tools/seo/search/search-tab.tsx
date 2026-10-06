@@ -12,7 +12,7 @@ import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, countWords, engineDot, engineNote, engineViewOf, enginesOf, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, countWords, engineDot, engineNote, engineViewOf, enginesOf, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
@@ -38,7 +38,8 @@ import { Segmented } from '../../../../segmented'
  *                 AI assistants sent.
  *   both          each engine its own line, never added together (Sam: "Lets do both side by
  *                 side too"): Google ink, Bing grey.
- *   no numbers    never a page of zeros: "No numbers yet" (a new site) or "Couldn't ask Bing".
+ *   no numbers    never a page of zeros: "No numbers yet" (a new site) or "Couldn't ask Bing" when
+ *                 the engine shown has none; beside an engine that answered, only its button's dot.
  *
  * Every word and line comes from lib/manager-tools/seo/ (search-model, search-board,
  * search-spot, ai-visits); this file only lays them out. Nothing here asks Google or Bing.
@@ -97,8 +98,11 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
 
   return (
     <div data-search-view={view}>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h1 className="font-space text-[15px] font-bold uppercase tracking-[0.12em] text-ink">{searchTitle(view, name)}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 max-w-[640px]">
+          <h1 className="font-space text-[15px] font-bold uppercase tracking-[0.12em] text-ink">{searchTitle(view, name)}</h1>
+          <p data-intro className="mt-2 text-[13px] leading-relaxed text-ink-muted">{searchIntro(view, name)}</p>
+        </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div role="group" aria-label="Engine" className="flex items-center gap-1">
             {ENGINE_VIEWS.map((e) => {
@@ -145,10 +149,8 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
           engines.map((e) => <NoteBlock key={e} engine={e} note={engineNote(answer[e], answer.added[e])!} onRetry={askAgain} busy={pending} />)
         ) : (
           <>
-            {/* An engine shown beside one that answered, which itself did not: said once, small. */}
-            {engines.filter((e) => !stats[e]).map((e) => (
-              <NoteBlock key={e} engine={e} note={engineNote(answer[e], answer.added[e])!} onRetry={askAgain} busy={pending} small />
-            ))}
+            {/* An engine beside one that answered, which itself has nothing, says so only by the
+                dot on its button (Sam, 2026-10-06: "I also dont want seeing this row"). */}
             <SpotSection key={`spot-${view}-${answer.period.key}`} view={view} stats={stats} name={name} added={answer.added} />
             <ReachSection key={`reach-${view}-${answer.period.key}`} view={view} stats={stats} />
             <div className="mt-14 grid gap-11 min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[1024px]:gap-x-12">
@@ -343,14 +345,14 @@ function SentByAi({ ai }: { ai: AiVisit[] }) {
 
 /* ── no numbers ─────────────────────────────────────────────────────────────────────── */
 
-function NoteBlock({ engine, note, onRetry, busy, small = false }: { engine: SearchEngineId; note: EngineNote; onRetry: () => void; busy: boolean; small?: boolean }) {
+function NoteBlock({ engine, note, onRetry, busy }: { engine: SearchEngineId; note: EngineNote; onRetry: () => void; busy: boolean }) {
   return (
-    <div data-note={note.kind} data-note-engine={engine} className={cx('flex max-w-[560px] items-start gap-4', small ? 'mt-6' : 'mt-12')}>
-      <span aria-hidden className={cx('grid flex-none place-items-center rounded-full border border-hairline text-ink-faint', small ? 'h-9 w-9' : 'h-11 w-11')}>
-        <SourceGlyph source={engine} size={small ? 16 : 20} />
+    <div data-note={note.kind} data-note-engine={engine} className="mt-12 flex max-w-[560px] items-start gap-4">
+      <span aria-hidden className="grid h-11 w-11 flex-none place-items-center rounded-full border border-hairline text-ink-faint">
+        <SourceGlyph source={engine} size={20} />
       </span>
       <div className="min-w-0">
-        <h3 className={cx('font-semibold leading-tight tracking-[-0.015em] text-ink', small ? 'mt-1 text-[17px]' : 'mt-0.5 text-[22px]')}>{note.title}</h3>
+        <h3 className="mt-0.5 text-[22px] font-semibold leading-tight tracking-[-0.015em] text-ink">{note.title}</h3>
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-space text-[12px] text-ink-muted">
           {note.bits.map((b, i) => (
             <span key={b} className="contents">

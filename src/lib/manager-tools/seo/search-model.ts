@@ -48,6 +48,13 @@ export function searchTitle(view: EngineView, name: string): string {
   return `How ${name} shows up ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`}`
 }
 
+/** What the charts below the title show, in a sentence (Sam, 2026-10-06: "add a little more
+ *  explanation about whats going on in these charts"). */
+export function searchIntro(view: EngineView, name: string): string {
+  const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
+  return `Your spot is where your site ranks when someone searches “${name}” on ${where} (#1 is the top result). Below it: how often your site was shown in search, and how often people clicked through.`
+}
+
 
 /** The period's words, for "None in these 28 days". A Record over the periods, so a new one is a
  *  compile error here. */
