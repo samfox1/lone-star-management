@@ -14,7 +14,7 @@ import { PortalModal } from '@/components/ui/portal-modal'
 import { modalCardNarrowClass } from '@/components/ui/ui'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_SHOWN, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
@@ -235,25 +235,23 @@ function InfoButton({ label, children }: { label: string; children: ReactNode })
 
 /** BASED ON THESE SEARCHES: what the ranking line is made of, behind its info button, so the
  *  number is never taken on trust (Sam, 2026-10-06: "allow user to see the searches that the
- *  chart is using. Maybe the top 5"): each search naming the artist, how often the site was seen
- *  for it and its spot; and, when the bare name is not one of them, a plain line saying so. */
+ *  chart is using"; then "show all of the searching that resulted in this site. Not just the
+ *  top"): every search naming the artist, how often the site was seen for it and its spot; and,
+ *  when the bare name is not one of them, a plain line saying so. The window scrolls. */
 function NameSearches({ view, stats, engines, name }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; engines: SearchEngineId[]; name: string }) {
   const both = engines.length > 1
   const rows = engines
     .flatMap((e) => nameSearches(stats[e]!.searchDays, name).map((r) => ({ ...r, engine: e })))
     .sort((a, b) => b.seen - a.seen || a.key.localeCompare(b.key))
-  const shown = rows.slice(0, NAME_SEARCHES_SHOWN)
-  const more = rows.length - shown.length
   const bare = rows.some((r) => isBareName(r.key, name))
   return (
     <div data-name-searches>
       <WindowHead words={NAME_SEARCHES_WORDS} />
       <ul aria-label={NAME_SEARCHES_WORDS.title} className="mt-5">
-        {shown.map((r) => (
+        {rows.map((r) => (
           <SearchRowItem key={`${r.engine}:${r.key}`} kind="name-search" engine={both ? r.engine : null} search={r.key} meta={`${countWords(r.seen)} seen`} badge={spot(r.spot)} />
         ))}
       </ul>
-      {more > 0 ? <p className={cx(MONO_META, 'mt-2 px-3')}>{`+ ${countWords(more)} more`}</p> : null}
       {!bare ? <WindowNote data="bare-name">{bareNameWords(name, view)}</WindowNote> : null}
     </div>
   )
@@ -327,9 +325,9 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
 }
 
 /** MADE UP OF THESE SEARCHES: what the seen / clicked totals are built from, behind the chart's
- *  info button (Sam, 2026-10-06: the same transparency as the ranking line): the most-seen
- *  searches of the engines switched on, and what each engine keeps private, so the parts add up
- *  to the numbers beside the chart. */
+ *  info button (Sam, 2026-10-06: the same transparency as the ranking line, every search, not
+ *  just the top): every search the engines switched on name, most seen first, and what each
+ *  engine keeps private, so the parts add up to the numbers beside the chart. */
 function ReachSearches({ answer, engines }: { answer: SearchStatsAnswer; engines: SearchEngineId[] }) {
   const ok = engines.filter((e) => answer[e].state === 'ok')
   const statsOf = (e: SearchEngineId) => (answer[e] as { state: 'ok'; stats: SearchStats }).stats
@@ -337,20 +335,17 @@ function ReachSearches({ answer, engines }: { answer: SearchStatsAnswer; engines
   const rows = ok
     .flatMap((e) => statsOf(e).queries.map((r) => ({ ...r, engine: e })))
     .sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks || a.key.localeCompare(b.key))
-  const shown = rows.slice(0, NAME_SEARCHES_SHOWN)
-  const more = rows.length - shown.length
   return (
     <div data-reach-searches>
       <WindowHead words={REACH_SEARCHES_WORDS} />
       <ul aria-label={REACH_SEARCHES_WORDS.title} className="mt-5">
-        {shown.map((r) => (
+        {rows.map((r) => (
           <SearchRowItem
             key={`${r.engine}:${r.key}`} kind="reach-search" engine={both ? r.engine : null} search={r.key}
             meta={`${countWords(r.impressions)} seen`} badge={`${countWords(r.clicks)} ${r.clicks === 1 ? 'click' : 'clicks'}`}
           />
         ))}
       </ul>
-      {more > 0 ? <p className={cx(MONO_META, 'mt-2 px-3')}>{`+ ${countWords(more)} more`}</p> : null}
       {ok.map((e) => {
         const words = privateWords(e, statsOf(e).unlisted)
         return words ? <WindowNote key={e} data={`private-${e}`}>{words}</WindowNote> : null

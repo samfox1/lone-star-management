@@ -74,8 +74,6 @@ export function bareNameWords(name: string, view: EngineView): string {
   return `“${name}” on its own: not showing up ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`} yet`
 }
 
-/** How many of the chart's searches are listed under it before "+ N more". */
-export const NAME_SEARCHES_SHOWN = 5
 
 /** The seen and clicked chart's own header and sentence (Sam, 2026-10-06: "Have a header and
  *  description for the chart below"). */
