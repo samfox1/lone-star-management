@@ -4,7 +4,7 @@ import { bioRows } from '@/lib/manager-tools/seo/profiles/bio-state'
 import { outsideBiosNudge } from '@/lib/manager-tools/profile/profile'
 import type { SchemaType } from '@/lib/manager-tools/profile/profile'
 import { requireArtist } from '../../_data'
-import { loadOutsideBios } from '../tools/seo/profiles/bios-load'
+import { loadOutsideBios } from '@/lib/manager-tools/seo/profiles/bios-load'
 
 /** The site_content keys Profile reads: the four facts. Where the bio shows and its heading
  *  moved to the editor's Site panel (2026-10-05). */

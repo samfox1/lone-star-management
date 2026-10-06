@@ -57,7 +57,7 @@ import { SearchChart } from './search-chart'
  *   no numbers     never a page of zeros: "No numbers yet" (a new site) or "Couldn't ask Bing".
  *
  * Every word comes from lib/manager-tools/seo/search-model.ts; this file only lays them out. The
- * numbers come from the page (search/page.tsx → search-stats-load.ts); nothing here asks Google
+ * numbers come from the page (search/page.tsx → search/load.ts); nothing here asks Google
  * or Bing. "Try again" re-renders the page, which asks again only after a refusal, an error or
  * a timeout (those are never cached).
  */

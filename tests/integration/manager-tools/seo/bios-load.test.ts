@@ -2,7 +2,7 @@
  * In the real database, the Outside bios loader tells a fact a snapshot doesn't CARRY from one it
  * carries as empty, so a fact joining the profile snapshot never marks every ticked bio stale.
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bios-load.ts
+ * Code:     src/lib/manager-tools/seo/profiles/bios-load.ts
  *           (`data->f::text`, factsOf), src/lib/manager-tools/seo/profiles/bio-state.ts (factChanges)
  * Feature:  SEO tool · Profiles tab · Outside bios, "may be out of date since"
  * Tier:     STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo, and
@@ -17,7 +17,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { loadOutsideBios } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bios-load'
+import { loadOutsideBios } from '@/lib/manager-tools/seo/profiles/bios-load'
 import { createThrowawayArtist, deleteThrowawayArtist, type ThrowawayArtist } from '@tests/helpers/artist'
 import { SEED, serviceClient, signInAs } from '@tests/helpers/supabase'
 

@@ -3,7 +3,7 @@ import { bioRows, biosToCheck } from '@/lib/manager-tools/seo/profiles/bio-state
 import { seoSiteOrigin } from '@/lib/seo-tests/known'
 import { SEO_TEST_IDS, type SeoTestId } from '@/lib/seo-tests/types'
 import { requireArtist } from '../../../../_data'
-import { loadOutsideBios } from '../profiles/bios-load'
+import { loadOutsideBios } from '@/lib/manager-tools/seo/profiles/bios-load'
 import { loadTestTab } from './load'
 import { TestTab } from './test-tab'
 

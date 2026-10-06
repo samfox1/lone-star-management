@@ -79,6 +79,9 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
  * AI test run's results, for the bios the test reads itself (bioReads: YouTube's description).
  * Only `results` is read from the run, never the crawl.
  *
+ * Here in lib, beside readProfileMarks (marks.ts), because three pages in two tools read it:
+ * Profile, SEO › Profiles and SEO › AI test. It sat in tools/seo/profiles/ until 2026-10-05.
+ *
  * Every read runs on the manager's own session after the page's ownership gate, so RLS decides
  * (`revisions_rw`, `links`, `profile_marks`, `seo_test_runs`: the artist's managers). NEVER
  * THROWS: a read that fails leaves its part null, and the rows say "couldn't check" (bioRows); a
@@ -89,7 +92,8 @@ function factsOf(row: Record<string, unknown>): Record<string, unknown> {
  * (profile_marks) and `links` (listContent). Absent, this reads its own.
  *
  * Also hands back the run's raw `results` it read, so the Profiles page's Discogs / Wikidata
- * check (outside-load.ts) reads the run's `mb` result from it instead of reading the run again.
+ * check (tools/seo/profiles/outside-load.ts) reads the run's `mb` result from it instead of
+ * reading the run again.
  */
 export async function loadOutsideBios(
   supabase: SupabaseClient,

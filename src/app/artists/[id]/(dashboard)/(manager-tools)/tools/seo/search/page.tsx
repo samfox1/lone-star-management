@@ -1,6 +1,6 @@
 import { isSearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
 import { requireArtist } from '../../../../_data'
-import { loadSearchStats } from '../search-stats-load'
+import { loadSearchStats } from './load'
 import { SearchTab } from './search-tab'
 
 /**
@@ -9,7 +9,7 @@ import { SearchTab } from './search-tab'
  * view, read by the tab itself (search-tab.tsx), so switching it asks nothing.
  *
  * The ownership gate (`requireArtist`, RLS) runs FIRST: the loader reads the registrations
- * through the service client. The loader keeps an answer six hours (search-stats-load.ts), so
+ * through the service client. The loader keeps an answer six hours (search/load.ts), so
  * opening the tab asks Google and Bing at most once per period in that time.
  */
 export default async function SeoSearchPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
