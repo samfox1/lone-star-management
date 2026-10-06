@@ -44,16 +44,17 @@ Add a row after each change that should move it.
 
 ## Fixed
 
-- **Bridge 0.46.0** (built 2026-10-05, NOT yet published): `landing()` waits until the page is
-  shown, and an automated browser reports nothing. Tests:
+- **Bridge 0.46.0** (published and LIVE on Skeen 2026-10-05, ~04:45 UTC Oct 6): `landing()`
+  waits until the page is shown, and an automated browser reports nothing. Tests:
   `tests/unit/analytics/site-bridge-pageviews.test.ts`. Expect Skeen's view count to drop a
-  few percent the day it ships. That is the fix.
+  few percent from 2026-10-06. That is the fix. **Re-measure on or after 2026-10-13** with
+  `npm run compare:posthog -- skeen --days 7` (only post-0.46 days), and add a row above.
 - **The comparison window** starts after PostHog's first day, so the plain command no longer
   prints a false FAIL from the nine days before PostHog existed.
 
 ## Next ideas, roughly by value
 
-1. **Ship 0.46 and re-measure.** Whatever gap remains should be fast bounces (PostHog's
+1. **Re-measure after 0.46 (from 2026-10-13).** Whatever gap remains should be fast bounces (PostHog's
    ~100 KB script loads after our beacon) and real blockers: PostHog's blind spots, not ours.
 2. **Repeat visits within a second.** 6 views where the same visitor landed twice inside 1s
    (likely a preload plus the real page). 0.46 should remove them; check after it ships.

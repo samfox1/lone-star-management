@@ -81,7 +81,7 @@ Nothing yet.
 
 ## 0.46.0 — a view is a page someone saw
 
-*Built 2026-10-05; not yet published. Each site redeploys WITHOUT build cache to pick it up.*
+*Published 2026-10-05. Skeen live on it the same day (verified in its deployed chunks).*
 
 **Site action: none.** `landing()` keeps its name and its call site. Two rules change what it
 counts, both taken from PostHog's own script after the cross-check (2026-10-05, Skeen, Sep 18
