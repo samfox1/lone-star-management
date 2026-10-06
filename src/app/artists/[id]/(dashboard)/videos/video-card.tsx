@@ -13,6 +13,7 @@ import { SelectToggle } from '../select-toggle'
 import { CardStat } from '../card-stat'
 import { deleteContentAction, renameVideoAction } from '../actions'
 import { toast } from '../toast'
+import { shareLink } from '../share-link'
 
 export type VideoItem = {
   id: string
@@ -99,22 +100,7 @@ export function VideoCard({
   }
 
   // Share the public video page — native sheet where available, clipboard otherwise.
-  async function share() {
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({ title, url })
-        return
-      } catch {
-        // cancelled or unsupported — fall through to copy
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url)
-      toast('Link copied')
-    } catch {
-      toast("Couldn't copy the link.", 'error')
-    }
-  }
+  const share = () => shareLink(title, url)
 
   const aspect = video.is_short ? 'aspect-[9/16]' : 'aspect-video'
   const poster = (size: number) =>

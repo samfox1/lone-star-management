@@ -17,6 +17,7 @@ import { FeaturedChips } from './featured-chips'
 import { TrackAudio } from '../track-audio'
 import { RowIcon } from '../(manager-tools)/_ui/row-icon'
 import { toast } from '../toast'
+import { shareLink } from '../share-link'
 import { deleteContentAction, setTrackReleasedAction, setTrackReleaseAction, setTrackTypeAction, updateContentAction } from '../actions'
 
 /** A release the track can be assigned to (id + title, for the selector). */
@@ -179,20 +180,7 @@ export function SongModal({
   })()
   async function share() {
     if (!shareUrl) return
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({ title: track.title, url: shareUrl })
-        return
-      } catch {
-        // cancelled or unsupported — fall through to copy
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      toast('Link copied')
-    } catch {
-      toast("Couldn't copy the link.", 'error')
-    }
+    await shareLink(track.title, shareUrl)
   }
 
   return (

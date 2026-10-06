@@ -13,6 +13,7 @@ import { STREAMING_PLATFORMS } from '../music/platforms'
 import { SongModal, type ReleaseOption, type Track } from '../tracks/song-modal'
 import { FeaturedChips } from '../tracks/featured-chips'
 import { toast } from '../toast'
+import { shareLink } from '../share-link'
 import { SelectToggle } from '../select-toggle'
 import { metricLabel } from '@/lib/analytics'
 import { CardStat } from '../card-stat'
@@ -125,21 +126,7 @@ export function ReleaseCard({
   // Share the public release page — native sheet where available, clipboard otherwise.
   async function share() {
     if (typeof window === 'undefined') return
-    const url = `${window.location.origin}/${artistSlug}/r/${release.slug}`
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, url })
-        return
-      } catch {
-        // cancelled or unsupported — fall through to copy
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url)
-      toast('Link copied')
-    } catch {
-      toast("Couldn't copy the link.", 'error')
-    }
+    await shareLink(title, `${window.location.origin}/${artistSlug}/r/${release.slug}`)
   }
 
   async function saveDetails(nextTitle: string, nextDate: string) {
