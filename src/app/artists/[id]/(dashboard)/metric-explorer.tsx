@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { METRICS, OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, growthSize } from '@/lib/format'
 import { SWATCH, TimelineChart, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { EveryDay } from '@/components/ui/analytics-sheets'
 import { Segmented } from './segmented'
 
 /**
@@ -49,7 +50,6 @@ export function MetricExplorer({
   windowKey,
   days,
   partialLast = false,
-  legendEnd,
   className,
 }: {
   metrics: Metric[]
@@ -61,8 +61,6 @@ export function MetricExplorer({
   days: number
   /** The window's last day is today, still being counted. */
   partialLast?: boolean
-  /** The right end of the chart's legend row (the "Every day" button). */
-  legendEnd?: ReactNode
   className?: string
 }) {
   const router = useRouter()
@@ -91,6 +89,13 @@ export function MetricExplorer({
     const f = metricFacts({ ...m, series: idx.map((i) => m.series[i]) }, idx.map((i) => days_[i]), comparable ? (prevTotals[m.key] ?? 0) : 0)
     return { ...f, delta: comparable ? f.delta : null }
   }
+  // Every day, every line the chart can draw, drawn or not: the table is the whole record.
+  const everyDay = (
+    <EveryDay
+      days={days_}
+      lines={[byKey.views, ...OVERLAYS.map((k) => byKey[k])].filter(Boolean).map((m) => ({ key: m.key, label: META[m.key].short, values: m.series, since: sinceOf(m.key) }))}
+    />
+  )
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const tight = drawn.length >= 4
 
@@ -142,7 +147,7 @@ export function MetricExplorer({
           the column is laid absolutely in its cell, so however many lines are on it
           adds no height of its own. Keyed by the window, so a new window draws on. */}
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legendEnd={legendEnd} className="min-w-0" />
+        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legendEnd={everyDay} className="min-w-0" />
 
         <div role="region" aria-label="Numbers" className="relative min-h-0">
           <dl className="flex flex-col text-right lg:absolute lg:inset-0">

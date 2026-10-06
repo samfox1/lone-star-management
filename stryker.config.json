@@ -63,6 +63,7 @@
     "src/lib/brand.ts",
     "src/lib/brand-media.ts",
     "src/lib/chart.ts",
+    "src/lib/detail-table.ts",
     "src/lib/color.ts",
     "src/lib/compare-posthog.ts",
     "src/lib/connections.ts",

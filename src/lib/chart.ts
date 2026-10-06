@@ -115,3 +115,12 @@ export function smoothPath(pts: readonly Pt[]): string {
   const start = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
   return [start, ...monotoneSegments(pts)].join(' ')
 }
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** `2026-09-07` → `Mon, Sep 7`: the day of the week too, for a table of days. Worked out in
+ *  UTC from the string, like `dayLabel`, so it is never the day before. */
+export function weekdayLabel(day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${dayLabel(day)}`
+}

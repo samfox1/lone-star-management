@@ -135,6 +135,22 @@ body {
   .chart-draw, .chart-fade { animation: none; stroke-dasharray: none; }
 }
 
+/* The Analytics side panel (SideSheet): slides in from the right over a light scrim, and
+   back out; its table's rows fade up one after another. Still under reduced motion. */
+@keyframes sheet-in { from { transform: translateX(100%); } }
+@keyframes sheet-out { to { transform: translateX(100%); } }
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes scrim-out { to { opacity: 0; } }
+@keyframes row-in { from { opacity: 0; transform: translateY(3px); } }
+.sheet-in { animation: sheet-in .45s cubic-bezier(.22, .8, .24, 1) both; }
+.sheet-out { animation: sheet-out .28s cubic-bezier(.4, 0, 1, 1) both; }
+.scrim-in { animation: scrim-in .25s ease-out both; }
+.scrim-out { animation: scrim-out .28s ease-in both; }
+.row-in { animation: row-in .3s cubic-bezier(.22, .8, .24, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in, .sheet-out, .scrim-in, .scrim-out, .row-in { animation: none; }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

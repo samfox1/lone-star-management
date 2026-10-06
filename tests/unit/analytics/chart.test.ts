@@ -1,7 +1,7 @@
 // The numbers a chart decides before it draws: where the axis tops out, what
 // "up 28%" means on hover, and how a day is named.
 import { describe, expect, it } from 'vitest'
-import { axisTicks, dayDelta, dayLabel, monotoneSegments, niceCeil, smoothPath } from '@/lib/chart'
+import { axisTicks, dayDelta, dayLabel, monotoneSegments, niceCeil, smoothPath, weekdayLabel } from '@/lib/chart'
 
 describe('niceCeil', () => {
   it('lands the axis top on a number a person can read back', () => {
@@ -183,5 +183,14 @@ describe('smoothPath', () => {
     expect(smoothPath(pts)).toBe(`M0.0,10.0 ${monotoneSegments(pts).join(' ')}`)
     expect(smoothPath([[3, 4]])).toBe('M3.0,4.0')
     expect(smoothPath([])).toBe('')
+  })
+})
+
+describe('weekdayLabel', () => {
+  it('names the day of the week, read off the string in UTC — never the day before west of Greenwich', () => {
+    expect(weekdayLabel('2026-09-07')).toBe('Mon, Sep 7')
+    expect(weekdayLabel('2026-10-04')).toBe('Sun, Oct 4')
+    expect(weekdayLabel('2026-12-31')).toBe('Thu, Dec 31')
+    expect(weekdayLabel('2027-01-01')).toBe('Fri, Jan 1')
   })
 })

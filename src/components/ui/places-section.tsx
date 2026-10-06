@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PlacesView } from '@/components/ui/places-view'
 import { CityTable } from '@/components/ui/city-table'
+import { EveryCountry } from '@/components/ui/analytics-sheets'
 import type { WorldMapData } from '@/lib/analytics-map'
 
 /**
@@ -19,20 +20,27 @@ import type { WorldMapData } from '@/lib/analytics-map'
 export function PlacesSection({ map }: { map: WorldMapData }) {
   const [country, setCountry] = useState<string | null>(null)
   return (
-    <div className="grid items-stretch gap-9 lg:grid-cols-[minmax(0,1fr)_270px]">
-      <PlacesView map={map} country={country} onSelectCountry={setCountry} />
-      <div className="relative min-h-0">
-        <CityTable
-          countries={map.countries}
-          unlocated={map.unlocated}
-          majorCities={map.majorCities}
-          other={map.other}
-          radiusMi={map.radiusMi}
-          country={country}
-          onSelectCountry={setCountry}
-          className="lg:absolute lg:inset-0"
-        />
+    <>
+      {/* EVERY COUNTRY opens the full table in a side panel (the r12 mock); no caption beside it
+          (Sam, 2026-09-14: "remove Where they are"). */}
+      <div className="mb-2 flex justify-end">
+        <EveryCountry map={map} />
       </div>
-    </div>
+      <div className="grid items-stretch gap-9 lg:grid-cols-[minmax(0,1fr)_270px]">
+        <PlacesView map={map} country={country} onSelectCountry={setCountry} />
+        <div className="relative min-h-0">
+          <CityTable
+            countries={map.countries}
+            unlocated={map.unlocated}
+            majorCities={map.majorCities}
+            other={map.other}
+            radiusMi={map.radiusMi}
+            country={country}
+            onSelectCountry={setCountry}
+            className="lg:absolute lg:inset-0"
+          />
+        </div>
+      </div>
+    </>
   )
 }

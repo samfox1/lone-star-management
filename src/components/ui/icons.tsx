@@ -54,6 +54,7 @@ export type IconName =
   | 'mailbox'
   | 'chevronsUpDown'
   | 'eraser'
+  | 'panel'
   | 'note'
   | 'grip'
   | 'minus'
@@ -402,6 +403,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="m9 17-5-5 5-5" />
       <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </>
+  ),
+  // A window with a panel down its right side: "opens a side panel" (the Analytics tables).
+  panel: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M14.5 4.5v15M17 9.5h1M17 12.5h1" />
     </>
   ),
   /** Remove background · Lucide `eraser` (ISC) */

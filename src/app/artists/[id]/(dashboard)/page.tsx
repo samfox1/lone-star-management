@@ -9,6 +9,7 @@ import { worldMap } from '@/lib/analytics-map'
 import { MetricExplorer } from './metric-explorer'
 import { SourceRings } from '@/components/ui/source-rings'
 import { DeviceSplit } from '@/components/ui/device-split'
+import { EverySource } from '@/components/ui/analytics-sheets'
 import { TopContent } from '@/components/ui/top-content'
 import { KLabel, StatusDot } from '@/components/ui/ui'
 import { CONTEXT_SINCE, metrics, reachesBeforeContext, summarizeDevices, summarizeSources, topContent, trafficWindow, entityRows, entityTargetRows, entityFacts, targetsCover, CONTENT_KINDS, type ContentKind, type ContentList, type ContentRef, type EntityRow } from '@/lib/analytics'
@@ -88,6 +89,7 @@ export default async function OverviewPage({
     CONTENT_KINDS.map((k, i) => [k.key, topContent(byEntity, { entity: k.entity, type: k.type }, refs[i][1], totalOf(k.metric))]),
   ) as Record<ContentKind['key'], ContentList>
   const partial = reachesBeforeContext(traffic.window)
+  const sources = summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)
 
   return (
     <div className="space-y-10">
@@ -123,8 +125,12 @@ export default async function OverviewPage({
           <DeviceSplit className="mt-3 lg:flex-1" shares={summarizeDevices(traffic.devices)} />
         </section>
         <section>
-          <KLabel>Source</KLabel>
-          <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
+          {/* EVERY SOURCE opens the full table in a side panel (the r12 mock). */}
+          <div className="flex items-center justify-between gap-4">
+            <KLabel>Source</KLabel>
+            <EverySource sources={sources} />
+          </div>
+          <SourceRings className="mt-3" sources={sources} />
         </section>
       </div>
 
