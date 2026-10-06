@@ -381,6 +381,34 @@ export function shouldSweep(roll: number, probability: number = SWEEP_PROBABILIT
   return roll < probability
 }
 
+/** One row of `enquiry_file_purges`: an audio file the nightly prune_enquiries() could not
+ *  delete from SQL, so it left the path for the Storage API (20261005120000). */
+export type FilePurge = { id: number; storage_path: string }
+
+/**
+ * The ORDER of draining that queue, kept here so a test can hold it (audit, 2026-10-05: it
+ * sat in index.ts, where swapping the two steps or dropping the `ok` check left every test
+ * green). index.ts supplies the three calls; this decides when each one runs.
+ *
+ * Objects FIRST, and a queue row goes only once its object is gone. The other way round, a
+ * failed Storage delete would leave the file in the bucket with nothing left pointing at it,
+ * kept forever and never retried. This way a failure keeps the rows, and the next drain tries
+ * again. A path whose upload never completed deletes as a no-op, so it cannot jam the queue.
+ *
+ * Rows go BY ID, never by path: the ids land in a PostgREST filter, and an integer is the one
+ * thing nothing a sender named their file can reach into.
+ */
+export async function drainPurgeQueue(io: {
+  readQueue(): Promise<FilePurge[] | null>
+  deleteObjects(paths: string[]): Promise<boolean>
+  deleteQueueRows(ids: number[]): Promise<void>
+}): Promise<void> {
+  const rows = await io.readQueue()
+  if (!rows?.length) return
+  if (!(await io.deleteObjects(rows.map((r) => r.storage_path)))) return
+  await io.deleteQueueRows(rows.map((r) => Number(r.id)))
+}
+
 /* ── Post-validation composition + the door's HTTP map ──────────────────────────── */
 
 export type ExtrasResult =

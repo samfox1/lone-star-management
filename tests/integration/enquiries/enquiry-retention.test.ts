@@ -24,8 +24,10 @@
  *             read or write the queue (insert, repoint, remove: each one a file deleted or kept
  *             wrongly)
  *           • the nightly job exists, is active, and runs prune_enquiries() at 04:20 UTC
- * Not here: draining the queue (supabase/functions/contact/index.ts, drainFilePurges): Deno
- *           plumbing, like the attachment sweep beside it. The rule in TS:
+ * Not here: draining the queue. Its order (files first, rows by id only after) is
+ *           drainPurgeQueue in supabase/functions/contact/validate.ts, held by
+ *           tests/unit/enquiries/contact-validate.test.ts; the three calls around it in
+ *           index.ts are Deno plumbing. The rule in TS:
  *           tests/unit/manager-tools/enquiries/enquiry-retention.test.ts.
  * Fixtures: the HOSTED project: the seeded manager A signed in, the service client, two
  *           throwaway artists, one tiny audio object, all removed by this file.

@@ -38,6 +38,8 @@ import {
   composeText,
   decideDoor,
   deliveryRecord,
+  drainPurgeQueue,
+  type FilePurge,
   formatFrom,
   hashIp,
   parseAllowedOrigins,
@@ -213,9 +215,8 @@ async function sweepExpiredAttachments(): Promise<void> {
  *
  * That job deletes the enquiry and its attachment rows, but it cannot delete the FILES from
  * SQL (see sweepExpiredAttachments), so it leaves their paths in `enquiry_file_purges`. This
- * finishes the job through the Storage API. Same order as the sweep: objects FIRST, and a
- * queue row goes only once its object is gone, so a failed delete is retried next time and
- * never forgotten. A path whose upload never completed deletes as a no-op.
+ * finishes the job through the Storage API. The order (objects first, rows by id only after)
+ * is decided by drainPurgeQueue in validate.ts and tested there; this is only the three calls.
  *
  * Runs after EVERY stored enquiry, not one in a hundred: the queue is empty almost always, so
  * it costs one small read, and a contact form's traffic is the only clock this has. It runs
@@ -224,26 +225,25 @@ async function sweepExpiredAttachments(): Promise<void> {
  */
 async function drainFilePurges(): Promise<void> {
   try {
-    const rows = await rest<{ id: number; storage_path: string }[]>(
-      'enquiry_file_purges?select=id,storage_path&order=id&limit=100',
-    )
-    if (!rows?.length) return
-
-    const del = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATTACHMENT_BUCKET}`, {
-      method: 'DELETE',
-      headers: {
-        apikey: SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json',
+    await drainPurgeQueue({
+      readQueue: () => rest<FilePurge[] | null>('enquiry_file_purges?select=id,storage_path&order=id&limit=100'),
+      deleteObjects: async (paths) => {
+        const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${ATTACHMENT_BUCKET}`, {
+          method: 'DELETE',
+          headers: {
+            apikey: SERVICE_KEY,
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefixes: paths }),
+          signal: AbortSignal.timeout(10_000),
+        })
+        return res.ok
       },
-      body: JSON.stringify({ prefixes: rows.map((r) => r.storage_path) }),
-      signal: AbortSignal.timeout(10_000),
+      deleteQueueRows: async (ids) => {
+        await rest(`enquiry_file_purges?id=in.(${ids.join(',')})`, { method: 'DELETE' })
+      },
     })
-    if (!del.ok) return
-
-    // By id, never by path: ids are integers, so nothing a sender named their file can reach
-    // into this filter.
-    await rest(`enquiry_file_purges?id=in.(${rows.map((r) => Number(r.id)).join(',')})`, { method: 'DELETE' })
   } catch (e) {
     console.error('contact: file purge failed', e)
   }

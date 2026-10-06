@@ -19,6 +19,8 @@ import {
   SLUG_STORE_MAX,
   decideDoor,
   deliveryRecord,
+  drainPurgeQueue,
+  type FilePurge,
   formatFrom,
   hasContent,
   hashIp,
@@ -931,6 +933,62 @@ describe('deliveryRecord — what the row says about the email, which decides ho
         p_provider_id: null,
         p_error: 'no usable recipient',
       })
+    }
+  })
+})
+
+describe('drainPurgeQueue — files the retention prune left behind: the file goes first, its queue row only after', () => {
+  // Storage cleanup is strict tier (AGENTS.md: data that can be lost, storage GC). The wrong
+  // order loses track of a file for good: drop the row, fail the Storage delete, and the audio
+  // stays in the bucket with nothing pointing at it. The calls are recorded in one log so the
+  // order itself is what the tests read.
+  function world(rows: FilePurge[] | null, objectsGone = true) {
+    const log: string[] = []
+    const removedIds: number[][] = []
+    const io = {
+      readQueue: async () => rows,
+      deleteObjects: async (paths: string[]) => {
+        log.push(`objects:${paths.join(',')}`)
+        return objectsGone
+      },
+      deleteQueueRows: async (ids: number[]) => {
+        log.push('rows')
+        removedIds.push(ids)
+      },
+    }
+    return { io, log, removedIds }
+  }
+  const queued: FilePurge[] = [
+    { id: 4, storage_path: 'e1/a.mp3' },
+    { id: 9, storage_path: 'e2/b.wav' },
+  ]
+
+  it('deletes the files before it removes their queue rows', async () => {
+    const w = world(queued)
+    await drainPurgeQueue(w.io)
+    expect(w.log).toEqual(['objects:e1/a.mp3,e2/b.wav', 'rows'])
+  })
+
+  it('keeps every queue row when Storage refuses the delete, so the next drain retries it', async () => {
+    const w = world(queued, false)
+    await drainPurgeQueue(w.io)
+    expect(w.log).toEqual(['objects:e1/a.mp3,e2/b.wav'])
+    expect(w.removedIds).toEqual([])
+  })
+
+  it('removes rows by their numeric ids, exactly the ones it read', async () => {
+    // The ids go into a PostgREST filter. A string id (PostgREST can send a bigint as one)
+    // is turned into a number, so only digits ever reach that filter.
+    const w = world([...queued, { id: '12' as unknown as number, storage_path: 'e3/c.mp3' }])
+    await drainPurgeQueue(w.io)
+    expect(w.removedIds).toEqual([[4, 9, 12]])
+  })
+
+  it('an empty queue makes no Storage call at all', async () => {
+    for (const rows of [[], null]) {
+      const w = world(rows)
+      await drainPurgeQueue(w.io)
+      expect(w.log).toEqual([])
     }
   })
 })
