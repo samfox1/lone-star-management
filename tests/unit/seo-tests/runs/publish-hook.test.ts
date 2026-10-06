@@ -17,18 +17,18 @@
  *           (tests/unit/search-engines/resubmit.test.ts); the publish itself (tests/unit/publish/).
  * Fixtures: the two schedulers are mocks (the real ones are tested in their own files); the
  *           password check, the publish actions and the PostgREST fake (which can refuse the
- *           revision insert) come from tests/unit/publish/_publish-world.ts; next/cache and
+ *           revision insert) come from tests/helpers/publish-world.ts; next/cache and
  *           next/server are mocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { A, WRONG_PASSWORD, gate, publishCases, setWorld, world } from '@tests/unit/publish/_publish-world'
+import { A, WRONG_PASSWORD, gate, publishCases, setWorld, world } from '@tests/helpers/publish-world'
 
 const h = vi.hoisted(() => ({ schedule: vi.fn(), resubmit: vi.fn() }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: vi.fn() }))
-vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
-vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/helpers/publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/publish-world')).serverMock)
 vi.mock('@/lib/seo-tests/after-publish', () => ({ scheduleSeoTestRun: h.schedule }))
 vi.mock('@/lib/search-engines/resubmit', () => ({ scheduleSitemapResubmit: h.resubmit }))
 

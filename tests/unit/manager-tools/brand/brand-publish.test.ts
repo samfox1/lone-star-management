@@ -19,12 +19,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { publicSnapshot, type ContentRow } from '@/lib/content'
 import { fakeClient, type Call } from '@tests/helpers/fake-client'
-import { A, setWorld } from '@tests/unit/publish/_publish-world'
+import { A, setWorld } from '@tests/helpers/publish-world'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 // The password gate signs in on a throwaway client; here it always says yes.
-vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
-vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/helpers/publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/publish-world')).serverMock)
 
 let fake = fakeClient()
 

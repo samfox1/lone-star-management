@@ -14,14 +14,14 @@
  *
  * DB-free over the PostgREST fake; `after` is captured so each test decides whether the
  * scheduled ping runs; `fetch` is a stub, so nothing reaches the network. The password gate,
- * the fake and the list of publish actions come from tests/unit/publish/_publish-world.ts.
+ * the fake and the list of publish actions come from tests/helpers/publish-world.ts.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INDEXNOW_CONTENT_KEY, INDEXNOW_KEY_PATH, INDEXNOW_VERSION_HEADER, isIndexNowKey } from '@samfox1/site-bridge/indexnow'
 import { INDEXNOW_ENDPOINT } from '@/lib/indexnow'
 import { saveEditorField } from '@/lib/site-editor/save'
 import { fakeClient, filterValue } from '@tests/helpers/fake-client'
-import { A, WRONG_PASSWORD, gate, isKeyWrite, publishCases, setWorld, world as baseWorld, type World } from '@tests/unit/publish/_publish-world'
+import { A, WRONG_PASSWORD, gate, isKeyWrite, publishCases, setWorld, world as baseWorld, type World } from '@tests/helpers/publish-world'
 
 const h = vi.hoisted(() => ({ after: vi.fn() }))
 
@@ -40,8 +40,8 @@ vi.mock('@/lib/net-guard', async (orig) => ({
   ...(await orig<typeof import('@/lib/net-guard')>()),
   pickTransport: (fetcher?: typeof fetch) => fetcher ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)),
 }))
-vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
-vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/helpers/publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/publish-world')).serverMock)
 
 const KEY = '0123456789abcdef0123456789abcdef'
 const ORIGIN = 'https://www.skeenmusic.com'

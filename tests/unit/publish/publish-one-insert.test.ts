@@ -14,12 +14,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PUBLISHABLE } from '@/lib/content'
 import { BRAND_KINDS } from '@/lib/brand'
-import { LOGO, PHOTO, PUBLISH_ACTIONS, setWorld, world, type PublishName } from '@tests/unit/publish/_publish-world'
+import { LOGO, PHOTO, PUBLISH_ACTIONS, setWorld, world, type PublishName } from '@tests/helpers/publish-world'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), unstable_cache: (fn: unknown) => fn }))
 // The password gate signs in on a throwaway client; here it always says yes.
-vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/unit/publish/_publish-world')).passwordMock(orig))
-vi.mock('@/lib/supabase/server', async () => (await import('@tests/unit/publish/_publish-world')).serverMock)
+vi.mock('@supabase/supabase-js', async (orig) => (await import('@tests/helpers/publish-world')).passwordMock(orig))
+vi.mock('@/lib/supabase/server', async () => (await import('@tests/helpers/publish-world')).serverMock)
 
 let fake = setWorld(world())
 
