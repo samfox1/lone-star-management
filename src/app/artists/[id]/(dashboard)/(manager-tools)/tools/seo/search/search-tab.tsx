@@ -432,7 +432,7 @@ function RowName({ kind, rowKey }: { kind: ListKind; rowKey: string }) {
       <>
         <span className="min-w-0">
           <span className="block truncate text-[14px] text-ink">{p.name}</span>
-          <span className="block truncate font-space text-[11px] text-ink-faint">{p.sub}</span>
+          <span className={cx('block truncate', MONO_META)}>{p.sub}</span>
         </span>
         {p.href ? <Icon name="external" size={14} className="flex-none text-ink-faint opacity-0 transition-opacity group-hover/srow:opacity-100" /> : null}
       </>

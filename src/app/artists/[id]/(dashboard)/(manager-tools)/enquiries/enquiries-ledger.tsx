@@ -334,7 +334,7 @@ function EnquiryRow({
             <span className="flex min-w-0 items-center gap-x-2.5">
               {showArtist ? <span className={cx(CAPS_META, 'flex-none text-ink-muted')}>{row.artistName}</span> : null}
               {row.attachmentCount > 0 ? (
-                <span className="relative flex flex-none items-center gap-0.5 font-space text-[11px] text-ink-faint">
+                <span className={cx('relative flex flex-none items-center gap-0.5', MONO_META)}>
                   <Icon name="tracks" size={12} />
                   {row.attachmentCount}
                   <span className="sr-only">{row.attachmentCount === 1 ? 'audio file' : 'audio files'}</span>

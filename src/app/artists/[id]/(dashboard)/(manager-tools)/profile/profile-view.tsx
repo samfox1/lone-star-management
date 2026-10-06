@@ -2,7 +2,6 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import { FACT_CONTENT_KEYS, MAX_ALIASES, MAX_ALIAS_LENGTH, countryOf } from '@samfox1/site-bridge/seo'
-import { cx } from '@/lib/cx'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
 import { genreError } from '@/lib/artist-facts'
 import { COUNTRY_OPTIONS, GENRE_MAX, SCHEMA_TYPES, artistNameError, type SchemaType } from '@/lib/manager-tools/profile/profile'
@@ -11,7 +10,7 @@ import { regionIn, regionsFor } from '@/lib/seo-regions'
 import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
 import { saveArtistFactAction, saveSeoFieldAction } from '../../actions'
 import { LedgerRow, LedgerSection } from '../_ui/ledger'
-import { CAPS_LABEL } from '../_ui/styles'
+import { EYEBROW } from '../_ui/styles'
 import { EndSlot, LineField } from '../_ui/fields'
 import { EditList } from '../_ui/edit-list'
 import { FieldError } from '../_ui/field-error'
@@ -302,7 +301,7 @@ export function ProfileView(p: ProfileViewProps) {
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span aria-hidden="true" className={cx(CAPS_LABEL, 'text-ink-faint')}>
+      <span aria-hidden="true" className={EYEBROW}>
         {label}
       </span>
       {children}

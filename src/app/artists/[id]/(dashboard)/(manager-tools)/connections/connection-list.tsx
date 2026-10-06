@@ -11,6 +11,7 @@ import { AddPlus } from '../_ui/add-row'
 import { RowChevron } from '../_ui/disclosure'
 import { FOCUS_RING } from '../_ui/focus-ring'
 import { LedgerSection } from '../_ui/ledger'
+import { ERROR_TEXT } from '../_ui/styles'
 import { useSeeded } from '../_ui/use-seeded'
 import { ConnectModal } from './connect-modal'
 import { ConnectionMark } from '../_ui/connection-mark'
@@ -182,7 +183,7 @@ function ConnectionRowView({
             </span>
           )}
           {row.state === 'failed' && (
-            <span className="inline-flex items-center gap-1.5 font-space text-[11px] text-accent-red">
+            <span className={cx('inline-flex items-center gap-1.5', ERROR_TEXT)}>
               <Icon name="alert" size={11} />
               Couldn’t connect ·
               <button type="button" onClick={pull} disabled={pulling} className="text-ink hover:text-accent disabled:opacity-50">

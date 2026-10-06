@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/icons'
 import { EDIT_GLYPH } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { EDIT_TRIGGER, EditRow } from './(manager-tools)/_ui/edit-row'
-import { CAPS_LABEL, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
+import { CAPS_LABEL, EYEBROW, REVEAL_ON_HOVER } from './(manager-tools)/_ui/styles'
 
 /**
  * The grammar every dashboard modal is built from (prototype G, Sam, 2026-09-11; its header
@@ -237,7 +237,7 @@ export function KvCells({ label, cells }: { label: string; cells: EditableProps[
       <div className="grid min-w-0 flex-1 grid-cols-[1.4fr_0.7fr_1fr] gap-4">
         {cells.map((c) => (
           <div key={c.label} className="flex min-w-0 flex-col gap-0.5">
-            <span className={cx(CAPS_LABEL, 'text-ink-faint')}>{c.label}</span>
+            <span className={EYEBROW}>{c.label}</span>
             {/* A click on a cell's own label opens that cell; on the row's label, the first. */}
             <Editable {...c} size="cell" trigger />
           </div>
