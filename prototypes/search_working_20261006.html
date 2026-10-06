@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search · is it working</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ONE accent, set here and nowhere else. Everything "you / better" reads it. */
+  :root {
+    --paper: #ffffff;
+    --ink: #111111;
+    --ink-2: #6b7280;
+    --ink-3: #9aa0a6;
+    --line: #ececec;
+    --mist: #f4f4f5;
+    --accent: #111111;
+    --ease: cubic-bezier(.22, .8, .24, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: 'Instrument Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .mono { font-family: 'Space Mono', monospace; font-variant-numeric: tabular-nums; }
+  svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+
+  /* ── the mock's own controls (not part of the design) ── */
+  .mockbar { position: sticky; top: 0; z-index: 50; display: flex; gap: 28px; align-items: center; padding: 12px 40px; background: #fafafa; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+  .mockbar .grp { display: flex; gap: 6px; align-items: center; }
+  .mockbar .grp > span { margin-right: 4px; }
+  .mockbar button { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: #fff; font-size: 12px; }
+  .mockbar button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); padding: 0 !important; }
+  .sw.on { box-shadow: 0 0 0 2px var(--ink); }
+
+  /* ── page ── */
+  .page { max-width: 1180px; padding: 40px 40px 80px; }
+  .top { display: flex; justify-content: space-between; align-items: center; }
+  .engines { display: flex; gap: 4px; }
+  .eng { position: relative; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); transition: color .2s, background .2s; }
+  .eng svg { width: 16px; height: 16px; }
+  .eng.on { color: var(--ink); background: var(--mist); }
+  .eng .pend { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #d99a2b; }
+  .periods { display: flex; gap: 2px; padding: 3px; border-radius: 99px; background: var(--mist); position: relative; }
+  .periods button { position: relative; z-index: 1; padding: 6px 13px; font-size: 12px; color: var(--ink-2); border-radius: 99px; transition: color .25s; font-family: 'Space Mono', monospace; }
+  .periods button.on { color: var(--ink); }
+  .periods .knob { position: absolute; top: 3px; bottom: 3px; border-radius: 99px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: left .45s var(--ease), width .45s var(--ease); }
+
+  .verdict { display: flex; align-items: center; gap: 14px; margin-top: 34px; }
+  .badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; flex: none; transition: background .4s; }
+  .badge.wait { background: var(--mist); color: var(--ink-2); }
+  .badge svg { width: 22px; height: 22px; stroke-width: 2.2; }
+  .badge path.draw { stroke-dasharray: 24; stroke-dashoffset: 24; }
+  .badge.go path.draw { animation: draw .6s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .vt { font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
+  .vs { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 30px; }
+  .tile { display: flex; gap: 14px; align-items: flex-start; padding: 6px 0; }
+  .tile .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--mist); display: grid; place-items: center; color: var(--ink); flex: none; }
+  .tile .val { display: flex; align-items: baseline; gap: 10px; }
+  .tile .n { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 30px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .d { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--accent); opacity: 0; transform: translateY(4px); transition: opacity .4s, transform .4s var(--ease); white-space: nowrap; }
+  .tile .d.show { opacity: 1; transform: none; }
+  .tile .d.flat { color: var(--ink-3); font-weight: 400; }
+  .tile .lab { font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+
+  /* ── chart: Climb ── */
+  .stage { position: relative; margin-top: 34px; }
+  .chartwrap { position: relative; }
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .rung-lab { font-family: 'Space Mono', monospace; font-size: 11px; fill: var(--ink-3); }
+  .date-lab { font-family: 'Space Mono', monospace; font-size: 10.5px; fill: var(--ink-3); }
+  .scrub { pointer-events: none; opacity: 0; transition: opacity .15s; }
+  .scrubbing .scrub { opacity: 1; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; border-radius: 10px; padding: 7px 10px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -100%) translateY(-14px); opacity: 0; transition: opacity .15s; }
+  .tip b { font-family: 'Space Mono', monospace; font-size: 13px; }
+  .tip span { color: #b8bcc4; margin-left: 8px; font-family: 'Space Mono', monospace; font-size: 11px; }
+  .scrubbing .tip.scrubtip { opacity: 1; }
+
+  .pin { cursor: pointer; }
+  .pin .bub { transition: transform .3s var(--ease); transform-box: fill-box; transform-origin: center; }
+  .pin:hover .bub, .pin.hot .bub { transform: scale(1.12); }
+  .card { position: absolute; z-index: 5; width: 270px; padding: 14px 16px; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(17,17,17,.12), 0 0 0 1px rgba(17,17,17,.05); opacity: 0; transform: translate(-50%, calc(-100% - 22px)) scale(.96); transform-origin: bottom center; transition: opacity .22s, transform .32s var(--ease); pointer-events: none; }
+  .card.show { opacity: 1; transform: translate(-50%, calc(-100% - 26px)) scale(1); }
+  .card .h { display: flex; gap: 10px; align-items: center; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .card .h .ci { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fff; flex: none; }
+  .card .h .ci.auto { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .card .h .ci svg { width: 14px; height: 14px; }
+  .card .when { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin: 8px 0 0 38px; }
+  .card .move { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; font-family: 'Space Mono', monospace; font-size: 13px; }
+  .card .move .a { color: var(--ink-3); }
+  .card .move .b { color: var(--accent); font-weight: 700; }
+
+  .addpin { position: absolute; right: 0; top: -2px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); border: 1.5px dashed #d9dade; transition: color .2s, border-color .2s, transform .3s var(--ease); }
+  .addpin:hover { color: var(--ink); border-color: var(--ink); transform: rotate(90deg); }
+
+  /* ── chart: Replay ── */
+  .replay { display: none; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px; align-items: start; margin-top: 34px; }
+  .show-replay .replay { display: grid; }
+  .show-replay .chartwrap { display: none; }
+  .serp { position: relative; border-radius: 20px; background: var(--mist); padding: 22px; }
+  .q { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 18px; border-radius: 99px; background: #fff; font-size: 17px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .q svg { width: 17px; height: 17px; }
+  .q .caret { width: 1.5px; height: 20px; background: var(--ink); animation: blink 1s steps(1) infinite; margin-left: -6px; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .lanes { position: relative; margin-top: 16px; }
+  .lane { height: 62px; display: grid; grid-template-columns: 26px 1fr; align-items: center; gap: 12px; }
+  .lane .k { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); text-align: right; }
+  .lane .sk { height: 42px; border-radius: 12px; background: #fff; opacity: .55; display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 0 16px; }
+  .lane .sk i { display: block; height: 7px; border-radius: 99px; background: #e9e9ec; }
+  .me { position: absolute; top: 0; left: 38px; right: 0; height: 54px; border-radius: 14px; background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 14px; box-shadow: 0 8px 24px rgba(17,17,17,.10), 0 0 0 1.5px var(--accent); will-change: transform; }
+  .av { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; }
+  .me .t { font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .me .u { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .toast { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 12px); display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 10px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 13px; opacity: 0; transition: opacity .25s, transform .4s var(--ease); white-space: nowrap; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .ci { width: 24px; height: 24px; border-radius: 50%; background: #fff; color: var(--ink); display: grid; place-items: center; }
+  .toast .ci svg { width: 13px; height: 13px; }
+  .readout .big { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 72px; letter-spacing: -.05em; line-height: .9; font-variant-numeric: tabular-nums; }
+  .readout .big small { font-size: 32px; color: var(--ink-3); letter-spacing: -.02em; margin-right: 2px; }
+  .readout .sub { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; margin-top: 10px; }
+  .readout .when { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); margin-top: 26px; }
+  .readout .seen { margin-top: 22px; display: flex; align-items: center; gap: 10px; }
+  .readout .seen .n { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 22px; }
+  .player { grid-column: 1 / -1; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; margin-top: 4px; }
+  .play { width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; transition: transform .2s var(--ease); }
+  .play:hover { transform: scale(1.06); }
+  .play svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+  .track { position: relative; height: 44px; cursor: pointer; touch-action: none; }
+  .track .rail { position: absolute; left: 0; right: 0; top: 21px; height: 3px; border-radius: 99px; background: var(--line); }
+  .track .fill { position: absolute; left: 0; top: 21px; height: 3px; border-radius: 99px; background: var(--accent); }
+  .track .head { position: absolute; top: 14px; width: 17px; height: 17px; margin-left: -8.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.12); }
+  .track .tp { position: absolute; top: 9px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; transition: transform .35s var(--ease); }
+  .track .tp.auto { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .track .tp svg { width: 12px; height: 12px; }
+  .track .tp.flash { transform: scale(1.3); }
+  .track .tl { position: absolute; top: 40px; white-space: nowrap; font-family: 'Space Mono', monospace; font-size: 10.5px; color: var(--ink-3); transform: translateX(-50%); }
+
+  /* ── lower ── */
+  .lower { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 64px; margin-top: 52px; }
+  .sec-h { display: flex; align-items: center; gap: 9px; color: var(--ink-2); font-size: 13px; margin-bottom: 8px; }
+  .srch { display: grid; grid-template-columns: minmax(0, 1fr) 84px 54px 60px; gap: 14px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .srch:last-child { border-bottom: 0; }
+  .srch .spark { width: 84px; height: 22px; }
+  .srch .rk { font-family: 'Space Mono', monospace; font-size: 13px; text-align: right; }
+  .srch .mv { font-family: 'Space Mono', monospace; font-size: 11.5px; font-weight: 700; color: var(--accent); text-align: right; }
+  .srch .mv.flat { color: var(--ink-3); font-weight: 400; }
+  .srch .mv.newb { justify-self: end; font-weight: 600; font-family: 'Instrument Sans'; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--mist); color: var(--ink); }
+  .ai-row { display: flex; align-items: center; justify-content: space-between; height: 48px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .ai-row:last-child { border-bottom: 0; }
+  .ai-row .c { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 15px; }
+  .ai-row.zero { color: var(--ink-3); }
+  .ai-row .meter { flex: 1; margin: 0 16px; height: 4px; border-radius: 99px; background: var(--mist); overflow: hidden; }
+  .ai-row .meter i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transform-origin: left; transform: scaleX(0); transition: transform .9s var(--ease); }
+  .clicks { text-decoration: none; display: inline-flex; align-items: center; gap: 10px; margin-top: 44px; padding: 10px 16px 10px 12px; border-radius: 99px; background: var(--mist); font-size: 13px; color: var(--ink-2); transition: background .2s; }
+  .clicks:hover { background: #ececee; }
+  .clicks b { color: var(--ink); font-family: 'Space Mono', monospace; }
+
+  @media (max-width: 900px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); row-gap: 22px; }
+    .lower, .replay { grid-template-columns: 1fr; gap: 36px; }
+    .page { padding: 28px 18px 60px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-google" viewBox="0 0 24 24"><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" stroke-width="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bing" viewBox="0 0 24 24"><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 2.1 C13.05 8 16 10.95 21.9 12 16 13.05 13.05 16 12 21.9 10.95 16 8 13.05 2.1 12 8 10.95 10.95 8 12 2.1 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-podium" viewBox="0 0 24 24"><path d="M3.5 20.5v-6h5.5v6M9 20.5V8.5h6v12M15 20.5v-4h5.5v4M3 20.5h18"/><path d="M12 3.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 5.3l2-.3z" stroke-width="1.2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path d="M4.5 6.5h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H11l-4.5 3.5v-3.5h-2a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 16.5h5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path class="draw" d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5l11 6.5-11 6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></symbol>
+</svg>
+
+<div class="mockbar">
+  <div class="grp"><span>Chart</span><button data-chart="climb" class="on">Climb</button><button data-chart="replay">Replay</button></div>
+  <div class="grp"><span>Numbers</span><button data-data="ex" class="on">Example, by January</button><button data-data="real">Skeen today (real)</button></div>
+  <div class="grp"><span>Accent</span>
+    <button class="sw on" data-acc="#111111" style="background:#111111" aria-label="Black"></button>
+    <button class="sw" data-acc="#2563eb" style="background:#2563eb" aria-label="Blue"></button>
+    <button class="sw" data-acc="#16a34a" style="background:#16a34a" aria-label="Green"></button>
+    <button class="sw" data-acc="#7c3aed" style="background:#7c3aed" aria-label="Violet"></button>
+  </div>
+</div>
+
+<main class="page" id="page">
+  <div class="top">
+    <div class="engines">
+      <button class="eng on" aria-label="Google" title="Google"><svg class="ic"><use href="#i-google"/></svg></button>
+      <button class="eng" aria-label="Bing, no numbers yet" title="Bing · no numbers yet"><svg class="ic"><use href="#i-bing"/></svg><i class="pend"></i></button>
+    </div>
+    <div class="periods" id="periods">
+      <span class="knob" id="knob"></span>
+      <button data-p="28d">28d</button><button data-p="3m" class="on">3m</button><button data-p="all">All</button>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <span class="badge" id="badge"><svg class="ic" id="badge-ic"><use href="#i-check"/></svg></span>
+    <div><div class="vt" id="vt">Climbing on Google</div><div class="vs" id="vs">Higher, more often, for more searches</div></div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="stage" id="stage">
+    <div class="chartwrap" id="chartwrap">
+      <svg class="chart" id="chart" viewBox="0 0 1100 380" role="img" aria-label="Your spot on Google over time"></svg>
+      <div class="tip scrubtip" id="scrubtip"></div>
+      <div class="card" id="card"></div>
+      <button class="addpin" title="Log something you did outside Tapir" aria-label="Log something you did"><svg class="ic" style="width:16px;height:16px"><use href="#i-plus"/></svg></button>
+    </div>
+
+    <div class="replay" id="replay">
+      <div class="serp">
+        <div class="q"><svg class="ic"><use href="#i-google"/></svg><span id="qtext"></span><i class="caret"></i></div>
+        <div class="lanes" id="lanes"></div>
+        <div class="toast" id="toast"></div>
+      </div>
+      <div class="readout">
+        <div class="big mono"><small>#</small><span id="rbig">2.7</span></div>
+        <div class="sub"><svg class="ic" style="width:16px;height:16px"><use href="#i-podium"/></svg>your spot for <b>&nbsp;skeen dj</b></div>
+        <div class="seen"><svg class="ic" style="color:var(--ink-3)"><use href="#i-eye"/></svg><span class="n mono" id="rseen">40</span><span style="color:var(--ink-2);font-size:13px">seen that week</span></div>
+        <div class="when" id="rwhen">Oct 6</div>
+      </div>
+      <div class="player">
+        <button class="play" id="play" aria-label="Play"><svg class="ic" id="playic"><use href="#i-play"/></svg></button>
+        <div class="track" id="track"><div class="rail"></div><div class="fill" id="fill"></div><div id="tpins"></div><div class="head" id="head"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lower">
+    <div>
+      <div class="sec-h"><svg class="ic" style="width:16px;height:16px"><use href="#i-search"/></svg>What people searched</div>
+      <div id="searches"></div>
+    </div>
+    <div>
+      <div class="sec-h"><svg class="ic" style="width:15px;height:15px"><use href="#i-ai"/></svg>Fans sent by AI</div>
+      <div id="ai"></div>
+    </div>
+  </div>
+  <a class="clicks" href="#" onclick="return false"><svg class="ic" style="width:15px;height:15px"><use href="#i-google"/></svg><b id="clk">25</b> clicks from Google <svg class="ic" style="width:14px;height:14px"><use href="#i-ext"/></svg></a>
+</main>
+
+<script>
+/* ═══════════ data ═══════════ */
+const DAY = 864e5
+const d = (s) => Date.parse(s + 'T00:00:00Z')
+const fmt = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+const EX = {
+  '28d': { start: '2026-12-02', step: 2, spot: [1.6, 1.6, 1.55, 1.6, 1.5, 1.55, 1.5, 1.45, 1.5, 1.4, 1.45, 1.4, 1.35, 1.4], seen: [190, 195, 200, 205, 200, 210, 205, 210, 215, 210, 215, 220, 215, 215] },
+  '3m': { start: '2026-10-06', step: 7, spot: [2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215] },
+  'all': { start: '2026-09-29', step: 7, spot: [2.6, 2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [140, 40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215] },
+}
+const EX_PINS = [
+  { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', a: '', b: 'counting starts' },
+  { date: '2026-10-08', icon: 'reply', title: 'Answered 6 fan questions', a: '#2.6', b: '#2.3' },
+  { date: '2026-10-27', icon: 'note', title: 'Added press quotes', a: '#2.2', b: '#1.9' },
+  { date: '2026-11-17', icon: 'links', title: 'Linked from Spotify and SoundCloud', a: '9 on page 1', b: '11' },
+  { date: '2026-12-01', icon: 'google', auto: true, title: 'Sitemap sent after new tour dates', a: '165 seen a week', b: '200' },
+]
+const EX_TILES = {
+  '28d': [['#1.4', '↑ 0.2'], ['215', '+25'], ['14', '+3'], ['8', '+5']],
+  '3m': [['#1.4', '↑ 1.3'], ['215', '+175'], ['14', '+11'], ['8', '+8']],
+  'all': [['#1.4', '↑ 1.2'], ['215', '+75'], ['14', '+11'], ['8', '+8']],
+}
+const REAL = { start: '2026-09-29', step: 1, spot: [2.26, 2.27, 2.52, 2.77, 3.38, 2.91, 2.58], seen: [23, 15, 23, 30, 16, 22, 12], wipFrom: 5 }
+const REAL_PINS = [
+  { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', a: '', b: 'counting starts' },
+  { date: '2026-09-30', icon: 'bing', auto: true, title: 'Added to Bing, sitemap sent', a: 'too early', b: 'Oct 14' },
+]
+const TILE_META = [
+  { icon: 'podium', lab: 'your spot' },
+  { icon: 'eye', lab: 'seen a week' },
+  { icon: 'search', lab: 'searches on page 1' },
+  { icon: 'ai', lab: 'fans sent by AI' },
+]
+const SEARCHES = {
+  ex: [['skeen dj', [2.6, 2.4, 2.1, 1.8, 1.6, 1.4, 1.3], '#1.3', '↑ 1.3'], ['chicago house dj', [9.8, 8.6, 7.9, 7.2], '#7.2', 'new'], ['skeen rushing back remix', [2.4, 2.1, 1.9, 1.8], '#1.8', 'new'], ['dj skeen', [2.4, 2.2, 1.9, 1.7, 1.5], '#1.5', '↑ 0.9']],
+  real: [['skeen dj', [2.6, 2.8], '#2.6', '–'], ['dj skeen', [2.5, 2.3], '#2.4', '–'], ['skeen music', [2.3, 1.5], '#2.0', '–']],
+}
+const AI = { ex: [['ChatGPT', 6], ['Perplexity', 2], ['Gemini', 0]], real: [['ChatGPT', 0], ['Perplexity', 0], ['Gemini', 0]] }
+
+/* ═══════════ state ═══════════ */
+const S = { data: 'ex', period: '3m', chart: 'climb' }
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+const $ = (id) => document.getElementById(id)
+const NS = 'http://www.w3.org/2000/svg'
+const ease = (t) => 1 - Math.pow(1 - t, 3)
+const easeIO = (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const icon = (n, cls = 'ic') => `<svg class="${cls}"><use href="#i-${n}"/></svg>`
+
+function dataset() { return S.data === 'real' ? REAL : EX[S.period] }
+function pins() {
+  const ds = dataset()
+  const t0 = d(ds.start), t1 = t0 + (ds.spot.length - 1) * ds.step * DAY
+  return (S.data === 'real' ? REAL_PINS : EX_PINS).filter((p) => d(p.date) >= t0 && d(p.date) <= t1)
+}
+
+/* Monotone cubic (Fritsch–Carlson): smooth, never overshoots a rank that never happened. */
+function monotone(ys) {
+  const n = ys.length
+  if (n < 2) return () => ys[0]
+  const m = [], c1 = [], c2 = [], c3 = []
+  for (let i = 0; i < n - 1; i++) m.push(ys[i + 1] - ys[i])
+  c1.push(m[0])
+  for (let i = 1; i < n - 1; i++) c1.push(m[i - 1] * m[i] <= 0 ? 0 : (2 * m[i - 1] * m[i]) / (m[i - 1] + m[i]))
+  c1.push(m[n - 2])
+  for (let i = 0; i < n - 1; i++) { const k = c1[i] + c1[i + 1] - 2 * m[i]; c2.push(m[i] - c1[i] - k); c3.push(k) }
+  return (x) => {
+    const i = Math.max(0, Math.min(n - 2, Math.floor(x)))
+    const t = x - i
+    return ys[i] + c1[i] * t + c2[i] * t * t + c3[i] * t * t * t
+  }
+}
+
+/* ═══════════ the Climb chart ═══════════ */
+const W = 1100, H = 380, L = 64, R = 56, T = 54, B = 44
+const N = 180
+let cur = null          // samples currently drawn (ranks), length N+1
+let lo = 1, hi = 3
+const X = (u) => L + u * (W - L - R)                  // u in 0..1
+const Y = (r) => T + ((r - lo) / (hi - lo)) * (H - T - B)
+
+function samplesOf(ds) {
+  const f = monotone(ds.spot)
+  return Array.from({ length: N + 1 }, (_, k) => f((k / N) * (ds.spot.length - 1)))
+}
+function rangeOf(ds) {
+  const mx = Math.max(...ds.spot), mn = Math.min(...ds.spot)
+  return [1, Math.max(3, Math.ceil(mx + .25))]
+}
+function pathOf(s) { return s.map((r, k) => `${k ? 'L' : 'M'}${X(k / N).toFixed(1)},${Y(r).toFixed(1)}`).join('') }
+
+const svg = $('chart')
+svg.innerHTML = `
+  <defs>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".16"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient>
+    <clipPath id="reveal"><rect id="revealr" x="0" y="0" width="0" height="${H}"/></clipPath>
+  </defs>
+  <g id="rungs"></g>
+  <g id="dates"></g>
+  <rect id="band" y="${T - 10}" height="${H - T - B + 10}" fill="var(--accent)" opacity="0" rx="10"/>
+  <g clip-path="url(#reveal)"><path id="areap" fill="url(#area)"/></g>
+  <path id="line" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="wip" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-dasharray="1 7" stroke-linecap="round" opacity="0"/>
+  <g id="dots"></g>
+  <g class="scrub"><line id="sl" y1="${T - 16}" y2="${H - B}" stroke="var(--ink)" stroke-opacity=".18"/><circle id="sd" r="5" fill="#fff" stroke="var(--accent)" stroke-width="2.5"/></g>
+  <g id="pinsg"></g>
+  <g id="me"><circle id="pulse" r="18" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0"/><circle r="17" fill="var(--ink)"/><circle r="17" fill="none" stroke="#fff" stroke-width="2.5"/><text text-anchor="middle" y="5" font-family="Instrument Sans" font-weight="600" font-size="14" fill="#fff">S</text></g>
+`
+
+function drawRungs(animate) {
+  const g = $('rungs'); g.innerHTML = ''
+  for (let r = 1; r <= hi; r++) {
+    const y = Y(r)
+    const el = document.createElementNS(NS, 'g')
+    el.innerHTML = `<line x1="${L}" x2="${W - R + 20}" y1="${y}" y2="${y}" stroke="var(--line)" ${r === 1 ? '' : 'stroke-dasharray="2 6"'}/>
+      <text class="rung-lab" x="${L - 18}" y="${y + 4}" text-anchor="end">#${r}</text>
+`
+    if (animate && !reduce) el.animate([{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 500, delay: 60 * r, easing: 'cubic-bezier(.22,.8,.24,1)', fill: 'backwards' })
+    g.appendChild(el)
+  }
+}
+function drawDates(animate) {
+  const ds = dataset(), g = $('dates'); g.innerHTML = ''
+  const n = ds.spot.length, every = n > 10 ? 2 : 1
+  for (let i = 0; i < n; i += every) {
+    const t = document.createElementNS(NS, 'text')
+    t.setAttribute('class', 'date-lab'); t.setAttribute('x', X(i / (n - 1))); t.setAttribute('y', H - 14); t.setAttribute('text-anchor', 'middle')
+    t.textContent = fmt(d(ds.start) + i * ds.step * DAY)
+    if (animate && !reduce) t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 200 + i * 25, fill: 'backwards' })
+    g.appendChild(t)
+  }
+}
+function render(s) {
+  $('line').setAttribute('d', pathOf(s))
+  $('areap').setAttribute('d', pathOf(s) + `L${X(1)},${H - B}L${X(0)},${H - B}Z`)
+}
+function dots(show) {
+  const ds = dataset(), g = $('dots'); g.innerHTML = ''
+  const n = ds.spot.length
+  ds.spot.forEach((r, i) => {
+    const c = document.createElementNS(NS, 'circle')
+    const wip = ds.wipFrom !== undefined && i >= ds.wipFrom
+    c.setAttribute('cx', X(i / (n - 1))); c.setAttribute('cy', Y(r)); c.setAttribute('r', 3)
+    c.setAttribute('fill', wip ? '#fff' : 'var(--accent)'); c.setAttribute('stroke', 'var(--accent)'); c.setAttribute('stroke-width', wip ? 1.5 : 0)
+    if (show && !reduce) c.animate([{ opacity: 0, r: 0 }, { opacity: 1, r: 3 }], { duration: 300, delay: i * 18, fill: 'backwards' })
+    g.appendChild(c)
+  })
+}
+function wipLine() {
+  const ds = dataset(), w = $('wip')
+  if (ds.wipFrom === undefined) { w.setAttribute('opacity', 0); $('line').removeAttribute('clip-path'); return }
+  const n = ds.spot.length, u0 = (ds.wipFrom - 1) / (n - 1)
+  const k0 = Math.round(u0 * N)
+  w.setAttribute('d', cur.slice(k0).map((r, j) => `${j ? 'L' : 'M'}${X((k0 + j) / N).toFixed(1)},${Y(r).toFixed(1)}`).join(''))
+  w.setAttribute('opacity', 1)
+  // the solid line stops where Google is still counting
+  let cp = $('solidclip')
+  if (!cp) { const c = document.createElementNS(NS, 'clipPath'); c.id = 'solidclip'; c.innerHTML = '<rect id="solidr" x="0" y="0" height="' + H + '"/>'; svg.querySelector('defs').appendChild(c) }
+  $('solidr').setAttribute('width', X(u0) + 1.5)
+  $('line').setAttribute('clip-path', 'url(#solidclip)')
+}
+function placeMe(s, animate) {
+  const x = X(1), y = Y(s[N])
+  $('me').setAttribute('transform', `translate(${x},${y})`)
+}
+function pulse() {
+  if (reduce) return
+  $('pulse').animate([{ opacity: .6, r: 17 }, { opacity: 0, r: 34 }], { duration: 1600, easing: 'ease-out', iterations: 2 })
+}
+
+function drawPins(animateWith) {
+  const ds = dataset(), g = $('pinsg'); g.innerHTML = ''
+  const t0 = d(ds.start), span = (ds.spot.length - 1) * ds.step * DAY
+  const f = monotone(ds.spot)
+  return pins().map((p, idx) => {
+    const u = (d(p.date) - t0) / span
+    const r = f(u * (ds.spot.length - 1))
+    const x = X(u), y = Y(r)
+    const el = document.createElementNS(NS, 'g')
+    el.setAttribute('class', 'pin'); el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', p.title)
+    el.setAttribute('transform', `translate(${x},${T - 26})`)
+    el.innerHTML = `<line x1="0" x2="0" y1="13" y2="${y - (T - 26) - 6}" stroke="var(--ink)" stroke-opacity=".22" stroke-dasharray="2 3"/>
+      <circle cx="0" cy="${y - (T - 26)}" r="4.5" fill="#fff" stroke="var(--ink)" stroke-width="1.5"/>
+      <g class="bub"><circle r="15" fill="${p.auto ? '#fff' : 'var(--ink)'}" stroke="var(--ink)" stroke-width="1.5"/>
+      <svg x="-8" y="-8" width="16" height="16" viewBox="0 0 24 24" style="color:${p.auto ? 'var(--ink)' : '#fff'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${p.icon}"/></svg></g>`
+    g.appendChild(el)
+    const show = () => showCard(p, x, T - 26, u)
+    el.addEventListener('mouseenter', show); el.addEventListener('focus', show)
+    el.addEventListener('mouseleave', hideCard); el.addEventListener('blur', hideCard)
+    if (animateWith) el.style.opacity = 0
+    return { el, x }
+  })
+}
+function popPin(p) {
+  p.el.style.opacity = 1
+  if (reduce) return
+  p.el.querySelector('.bub').animate([{ transform: 'scale(0)' }, { transform: 'scale(1.18)', offset: .6 }, { transform: 'scale(1)' }], { duration: 520, easing: 'cubic-bezier(.3,1.4,.5,1)' })
+  p.el.querySelector('line').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+}
+function showCard(p, x, y, u) {
+  const card = $('card'), wrap = $('chartwrap')
+  const scale = wrap.clientWidth / W
+  card.innerHTML = `<div class="h"><span class="ci ${p.auto ? 'auto' : ''}">${icon(p.icon)}</span>${p.title}</div>
+    <div class="when">${fmt(d(p.date))}${p.auto ? ' · done for you' : ''}</div>
+    <div class="move">${p.a ? `<span class="a">${p.a}</span><span class="a">→</span>` : ''}<span class="b">${p.b}</span></div>`
+  card.style.left = Math.min(Math.max(x * scale, 140), wrap.clientWidth - 140) + 'px'
+  card.style.top = y * scale + 'px'
+  card.classList.add('show')
+  // light the two weeks after
+  const ds = dataset(), span = (ds.spot.length - 1) * ds.step
+  const w = Math.min(14 / span, 1 - u) * (W - L - R)
+  const band = $('band')
+  band.setAttribute('x', x); band.setAttribute('width', Math.max(w, 0))
+  band.animate([{ opacity: 0 }, { opacity: .07 }], { duration: 250, fill: 'forwards' })
+}
+function hideCard() {
+  $('card').classList.remove('show')
+  $('band').animate([{ opacity: .07 }, { opacity: 0 }], { duration: 200, fill: 'forwards' })
+}
+
+/* The one orchestrated moment: rungs settle, the line draws, Skeen rides the head, each pin pops as the head passes. */
+let pinEls = []
+function intro() {
+  const ds = dataset()
+  ;[lo, hi] = rangeOf(ds)
+  cur = samplesOf(ds)
+  drawRungs(true); drawDates(true); render(cur); wipLine()
+  pinEls = drawPins(true)
+  $('dots').innerHTML = ''
+  const line = $('line'), len = line.getTotalLength()
+  if (reduce) { $('revealr').setAttribute('width', W); placeMe(cur); pinEls.forEach(popPin); dots(false); return }
+  line.style.strokeDasharray = len; line.style.strokeDashoffset = len
+  const start = performance.now() + 350, dur = 1700
+  const me = $('me')
+  const popped = new Set()
+  const step = (now) => {
+    const t = Math.min(1, Math.max(0, (now - start) / dur)), e = ease(t)
+    line.style.strokeDashoffset = len * (1 - e)
+    const pt = line.getPointAtLength(len * e)
+    me.setAttribute('transform', `translate(${pt.x},${pt.y})`)
+    $('revealr').setAttribute('width', pt.x)
+    pinEls.forEach((p, i) => { if (!popped.has(i) && pt.x >= p.x - 4) { popped.add(i); popPin(p) } })
+    if (t < 1) requestAnimationFrame(step)
+    else { line.style.strokeDasharray = 'none'; dots(true); pulse() }
+  }
+  me.setAttribute('transform', `translate(${X(0)},${Y(cur[0])})`)
+  requestAnimationFrame(step)
+}
+
+/* A period switch MORPHS the line to the new one: it answers the click by showing what changed. */
+function morphTo() {
+  const ds = dataset()
+  const from = cur.slice(), [lo0, hi0] = [lo, hi]
+  const to = samplesOf(ds), [lo1, hi1] = rangeOf(ds)
+  $('dots').innerHTML = ''; $('pinsg').innerHTML = ''
+  $('wip').setAttribute('opacity', 0); $('line').removeAttribute('clip-path')
+  drawDates(true)
+  const start = performance.now(), dur = reduce ? 1 : 750
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / dur), e = easeIO(t)
+    lo = lo0 + (lo1 - lo0) * e; hi = hi0 + (hi1 - hi0) * e
+    cur = from.map((v, k) => v + (to[k] - v) * e)
+    render(cur); placeMe(cur)
+    if (t < 1) requestAnimationFrame(step)
+    else { lo = lo1; hi = hi1; drawRungs(false); render(cur); wipLine(); dots(true); pinEls = drawPins(true); pinEls.forEach((p, i) => setTimeout(() => popPin(p), 60 * i)); pulse() }
+  }
+  requestAnimationFrame(step)
+}
+
+/* Scrub: the nearest week, its rank above the finger. */
+const wrap = $('chartwrap')
+wrap.addEventListener('pointermove', (ev) => {
+  if (ev.target.closest('.pin')) { wrap.classList.remove('scrubbing'); return }
+  const ds = dataset(), n = ds.spot.length
+  const rect = svg.getBoundingClientRect(), scale = rect.width / W
+  const vx = (ev.clientX - rect.left) / scale
+  if (vx < L - 10 || vx > W - R + 10) { wrap.classList.remove('scrubbing'); return }
+  const i = Math.max(0, Math.min(n - 1, Math.round(((vx - L) / (W - L - R)) * (n - 1))))
+  const x = X(i / (n - 1)), y = Y(ds.spot[i])
+  $('sl').setAttribute('x1', x); $('sl').setAttribute('x2', x)
+  $('sd').setAttribute('cx', x); $('sd').setAttribute('cy', y)
+  const tip = $('scrubtip')
+  tip.innerHTML = `<b>#${ds.spot[i].toFixed(1)}</b><span>${fmt(d(ds.start) + i * ds.step * DAY)}${ds.wipFrom !== undefined && i >= ds.wipFrom ? ' · still counting' : ''}</span>`
+  tip.style.left = x * scale + 'px'; tip.style.top = y * scale + 'px'
+  wrap.classList.add('scrubbing')
+})
+wrap.addEventListener('pointerleave', () => wrap.classList.remove('scrubbing'))
+
+/* ═══════════ the page around it ═══════════ */
+function countUp(el, text, delay) {
+  const m = text.match(/^(\D*)([\d.]+)(.*)$/)
+  if (!m || reduce) { el.textContent = text; return }
+  const [, pre, num, post] = m, target = parseFloat(num), dec = (num.split('.')[1] || '').length
+  const from = pre === '#' ? target + 1.5 : 0
+  const start = performance.now() + delay, dur = 1300
+  const step = (now) => {
+    const t = Math.min(1, Math.max(0, (now - start) / dur))
+    el.textContent = pre + (from + (target - from) * ease(t)).toFixed(dec) + post
+    if (t < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+function tiles(animate) {
+  const real = S.data === 'real'
+  const vals = real ? [['#2.5', '–'], ['140', '–'], ['3', '–'], ['0', '–']] : EX_TILES[S.period]
+  $('tiles').innerHTML = TILE_META.map((m, i) => `
+    <div class="tile"><span class="ico">${icon(m.icon)}</span>
+      <div><div class="val"><span class="n" id="tn${i}"></span><span class="d ${vals[i][1] === '–' ? 'flat' : ''}" id="td${i}">${vals[i][1]}</span></div><div class="lab">${m.lab}</div></div></div>`).join('')
+  vals.forEach((v, i) => {
+    countUp($(`tn${i}`), v[0], animate ? 350 + i * 90 : 0)
+    setTimeout(() => $(`td${i}`).classList.add('show'), reduce ? 0 : animate ? 1500 + i * 90 : 50)
+  })
+}
+function verdict() {
+  const real = S.data === 'real', b = $('badge')
+  b.classList.toggle('wait', real); b.classList.remove('go')
+  $('badge-ic').innerHTML = real ? '<use href="#i-clock"/>' : '<use href="#i-check"/>'
+  $('vt').textContent = real ? 'Too early to tell' : 'Climbing on Google'
+  $('vs').textContent = real ? 'Google started counting Sep 29. Back on Oct 27.' : 'Higher, more often, for more searches'
+  if (!real) { void b.offsetWidth; setTimeout(() => b.classList.add('go'), reduce ? 0 : 1900) }
+}
+function lower() {
+  const k = S.data === 'real' ? 'real' : 'ex'
+  $('searches').innerHTML = SEARCHES[k].map(([q, tr, rk, mv]) => {
+    const mn = Math.min(...tr, 1), mx = Math.max(...tr) + .2
+    const pts = tr.map((v, i) => `${(i / Math.max(1, tr.length - 1)) * 80 + 2},${((v - mn) / (mx - mn)) * 16 + 3}`).join(' ')
+    return `<div class="srch"><span>${q}</span><svg class="spark" viewBox="0 0 84 22"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rk">${rk}</span><span class="mv ${mv === 'new' ? 'newb' : mv === '–' ? 'flat' : ''}">${mv}</span></div>`
+  }).join('')
+  const ai = AI[k], max = Math.max(1, ...ai.map((a) => a[1]))
+  $('ai').innerHTML = ai.map(([n, c]) => `<div class="ai-row ${c ? '' : 'zero'}"><span>${n}</span><span class="meter"><i style="--w:${c / max}"></i></span><span class="c">${c}</span></div>`).join('')
+  requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('.ai-row .meter i').forEach((i) => (i.style.transform = `scaleX(${i.style.getPropertyValue('--w')})`))))
+  $('clk').textContent = S.data === 'real' ? '25' : '61'
+}
+function knob() {
+  const on = $('periods').querySelector('button.on'), k = $('knob')
+  k.style.left = on.offsetLeft + 'px'; k.style.width = on.offsetWidth + 'px'
+}
+
+/* ═══════════ the Replay chart ═══════════ */
+let rp = { t: 0, playing: false, raf: 0, last: 0 }
+function replaySet() {
+  const ds = dataset(), lanes = $('lanes')
+  const rows = Math.max(4, Math.ceil(Math.max(...ds.spot)) + 1)
+  lanes.innerHTML = Array.from({ length: rows }, (_, i) => `<div class="lane"><span class="k">#${i + 1}</span><div class="sk"><i style="width:${38 + ((i * 37) % 30)}%"></i><i style="width:${60 + ((i * 23) % 25)}%;opacity:.6"></i></div></div>`).join('') +
+    `<div class="me" id="mecard"><span class="av">S</span><div><div class="t">Skeen · Chicago house DJ and producer</div><div class="u">skeenmusic.com</div></div></div>`
+  const n = ds.spot.length, t0 = d(ds.start), span = (n - 1) * ds.step * DAY
+  $('tpins').innerHTML = pins().map((p) => `<span class="tp ${p.auto ? 'auto' : ''}" data-u="${(d(p.date) - t0) / span}" title="${p.title}" style="left:${((d(p.date) - t0) / span) * 100}%">${icon(p.icon)}</span>`).join('') +
+    Array.from({ length: n }, (_, i) => (i % (n > 10 ? 3 : 1) && i !== n - 1 ? '' : `<span class="tl" style="left:${(i / (n - 1)) * 100}%;${i === 0 ? 'transform:none' : i === n - 1 ? 'transform:translateX(-100%)' : ''}">${fmt(t0 + i * ds.step * DAY)}</span>`)).join('')
+  rp.passed = new Set()
+  replayAt(0)
+}
+function replayAt(t) {
+  rp.t = t
+  const ds = dataset(), n = ds.spot.length, f = monotone(ds.spot), x = t * (n - 1)
+  const r = f(x)
+  $('mecard').style.transform = `translateY(${(r - 1) * 62 + 4}px)`
+  $('rbig').textContent = r.toFixed(1)
+  const fs = monotone(ds.seen)
+  $('rseen').textContent = Math.round(fs(x))
+  $('rwhen').textContent = fmt(d(ds.start) + x * ds.step * DAY)
+  $('fill').style.width = t * 100 + '%'; $('head').style.left = t * 100 + '%'
+  document.querySelectorAll('#tpins .tp').forEach((el, i) => {
+    const u = +el.dataset.u
+    if (t >= u && !rp.passed.has(i)) { rp.passed.add(i); if (rp.playing) flash(el, pins()[i]) }
+    if (t < u) rp.passed.delete(i)
+  })
+}
+function flash(el, p) {
+  el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 420)
+  const toast = $('toast')
+  toast.innerHTML = `<span class="ci">${icon(p.icon)}</span>${p.title}`
+  toast.classList.add('show'); clearTimeout(rp.tt); rp.tt = setTimeout(() => toast.classList.remove('show'), 1700)
+}
+function play() {
+  if (rp.t >= 1) replayAt(0)
+  rp.playing = true; $('playic').innerHTML = '<use href="#i-pause"/>'
+  rp.last = performance.now()
+  const dur = 6500
+  const step = (now) => {
+    if (!rp.playing) return
+    const t = Math.min(1, rp.t + (now - rp.last) / dur); rp.last = now
+    replayAt(t)
+    if (t < 1) rp.raf = requestAnimationFrame(step); else pause()
+  }
+  rp.raf = requestAnimationFrame(step)
+}
+function pause() { rp.playing = false; cancelAnimationFrame(rp.raf); $('playic').innerHTML = '<use href="#i-play"/>' }
+$('play').addEventListener('click', () => (rp.playing ? pause() : play()))
+const track = $('track')
+const seek = (ev) => { const r = track.getBoundingClientRect(); replayAt(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width))) }
+track.addEventListener('pointerdown', (ev) => { pause(); track.setPointerCapture(ev.pointerId); seek(ev); track.onpointermove = seek })
+track.addEventListener('pointerup', () => (track.onpointermove = null))
+function typeQuery(done) {
+  const q = 'skeen dj', el = $('qtext'); el.textContent = ''
+  if (reduce) { el.textContent = q; done(); return }
+  let i = 0
+  const tick = () => { el.textContent = q.slice(0, ++i); if (i < q.length) setTimeout(tick, 70); else setTimeout(done, 350) }
+  setTimeout(tick, 300)
+}
+
+/* ═══════════ wiring ═══════════ */
+function boot(animate = true) {
+  verdict(); tiles(animate); lower()
+  if (S.chart === 'climb') intro()
+  else { pause(); replaySet(); typeQuery(() => play()) }
+}
+document.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => {
+  if (S.data === 'real' || b.classList.contains('on')) return
+  document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x === b)); S.period = b.dataset.p; knob()
+  tiles(false); verdict()
+  if (S.chart === 'climb') morphTo(); else { pause(); replaySet(); play() }
+}))
+document.querySelectorAll('[data-chart]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-chart]').forEach((x) => x.classList.toggle('on', x === b)); S.chart = b.dataset.chart
+  $('page').classList.toggle('show-replay', S.chart === 'replay'); boot()
+}))
+document.querySelectorAll('[data-data]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-data]').forEach((x) => x.classList.toggle('on', x === b)); S.data = b.dataset.data
+  if (S.data === 'real') { S.period = '28d'; document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x.dataset.p === '28d')) }
+  else { S.period = '3m'; document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x.dataset.p === '3m')) }
+  knob(); boot()
+}))
+document.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-acc]').forEach((x) => x.classList.toggle('on', x === b))
+  document.documentElement.style.setProperty('--accent', b.dataset.acc)
+}))
+// The mock can open on a given view: ?chart=replay&data=real&acc=2563eb&t=0.6
+const qs = new URLSearchParams(location.search)
+if (qs.get('acc')) { document.documentElement.style.setProperty('--accent', '#' + qs.get('acc')); document.querySelectorAll('[data-acc]').forEach((x) => x.classList.toggle('on', x.dataset.acc === '#' + qs.get('acc'))) }
+if (qs.get('data') === 'real') { S.data = 'real'; S.period = '28d'; document.querySelectorAll('[data-data]').forEach((x) => x.classList.toggle('on', x.dataset.data === 'real')); document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x.dataset.p === '28d')) }
+if (qs.get('chart') === 'replay') { S.chart = 'replay'; $('page').classList.add('show-replay'); document.querySelectorAll('[data-chart]').forEach((x) => x.classList.toggle('on', x.dataset.chart === 'replay')) }
+document.fonts.ready.then(() => { knob(); boot() })
+</script>
+</body>
+</html>
