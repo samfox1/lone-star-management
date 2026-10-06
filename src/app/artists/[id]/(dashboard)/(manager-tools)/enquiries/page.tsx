@@ -46,7 +46,6 @@ export default async function EnquiriesPage({ params }: { params: Promise<{ id: 
     artistName: artist.name as string,
   }))
 
-  // No SectionShell: it only added a spacer above the list, and Subscribers, whose layout this
-  // page follows, has none.
+  // No wrapper above the list: Subscribers, whose layout this page follows, has none.
   return <EnquiriesLedger rows={rows} kinds={kinds} />
 }

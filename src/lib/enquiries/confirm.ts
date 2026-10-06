@@ -14,7 +14,7 @@ import { clockTime } from '@/lib/manager-tools/format'
 export const CODE_LENGTH = 6
 
 /** Seconds between sends to one address (the SQL refuses sooner with `too_soon`). */
-export const RESEND_SECONDS = 60
+const RESEND_SECONDS = 60
 
 /** The same address however it was typed: confirmation is per (artist, lower(email)). */
 export function emailKey(email: string): string {
@@ -181,7 +181,7 @@ export function confirmStateFrom(res: { data: unknown; error: { code?: string } 
 
 /** How long a code can be typed (the SQL's 15 minutes). A code sent on this visit counts as
  *  live until then, so a second click does not send over it. */
-export const CODE_LIFE_MS = 15 * 60 * 1000
+const CODE_LIFE_MS = 15 * 60 * 1000
 
 /** A code sent at `sentAt` can still be typed at `now`. */
 export function codeIsLive(sentAt: number | undefined, now: number): boolean {

@@ -29,9 +29,9 @@
  */
 
 /** Days an emailed enquiry is kept. */
-export const KEEP_DAYS_SENT = 30
+const KEEP_DAYS_SENT = 30
 /** Days every other enquiry is kept. */
-export const KEEP_DAYS_NOT_SENT = 90
+const KEEP_DAYS_NOT_SENT = 90
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

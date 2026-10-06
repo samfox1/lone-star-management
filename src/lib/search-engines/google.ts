@@ -68,7 +68,7 @@ export type GoogleInspection = { verdict: string | null; coverage: string | null
 
 /** The dimensions Tapir reads from Search Analytics. Google has more (searchAppearance, hour);
  *  nothing reads them, so they are never asked for. */
-export const GOOGLE_SEARCH_DIMENSIONS = ['date', 'query', 'page', 'country', 'device'] as const
+const GOOGLE_SEARCH_DIMENSIONS = ['date', 'query', 'page', 'country', 'device'] as const
 export type GoogleSearchDimension = (typeof GOOGLE_SEARCH_DIMENSIONS)[number]
 
 /** One searchAnalytics.query. Dates are Google's days (Pacific time), YYYY-MM-DD, both ends

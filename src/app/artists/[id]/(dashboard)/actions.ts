@@ -28,7 +28,6 @@ import {
   type GenericEntity,
   type ToggleKind,
   type PagePublishable,
-  type PublishableEntity,
   type SupportAct,
   type UnpublishedDiff,
   TOGGLE_KIND,
@@ -275,26 +274,6 @@ export async function publishAllGatedAction(
       await gcMediaObjects(supabase, artistId)
     },
   )
-}
-
-/** Publish ONE content/media section (per-section Publish button). Returns an
- *  error string for the client to toast instead of throwing. */
-export async function publishSectionAction(
-  type: PublishableEntity,
-  artistId: string,
-): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  try {
-    await publishContent(supabase, type, artistId, user?.id)
-    if (type === 'video') await gcVideoObjects(supabase, artistId)
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Publish failed.' }
-  }
-  revalidatePath(`/artists/${artistId}`, 'layout')
-  return {}
 }
 
 /** Publish the Site section: media + site text + the artist profile together, as one

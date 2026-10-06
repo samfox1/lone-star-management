@@ -36,7 +36,7 @@ export const BIO_FACTS = ['name', 'bio', 'location', 'genre'] as const satisfies
 export const PHOTO_FACT = 'photo'
 export type BioFact = (typeof BIO_FACTS)[number] | typeof PHOTO_FACT
 /** Every fact, in the order a row names them. */
-export const ALL_BIO_FACTS: readonly BioFact[] = [...BIO_FACTS, PHOTO_FACT]
+const ALL_BIO_FACTS: readonly BioFact[] = [...BIO_FACTS, PHOTO_FACT]
 
 /** Each fact as the manager reads it: "bio and city changed". */
 export const FACT_WORDS: Record<BioFact, string> = { name: 'name', bio: 'bio', location: 'city', genre: 'genre', photo: 'photo' }
@@ -209,7 +209,7 @@ export function connectedBios(links: readonly LinkRowLike[], artist: Integration
 export type BioRead = { status: 'pass' | 'fail'; value: string; sentence: string; lead?: 'Almost' }
 
 /** The AI test that reads each bio Tapir can read. */
-export const BIO_TESTS = { youtube: 'youtube' } as const satisfies Partial<Record<OutsideBio, SeoTestId>>
+const BIO_TESTS = { youtube: 'youtube' } as const satisfies Partial<Record<OutsideBio, SeoTestId>>
 
 /** The reads, from the newest stored run's `results` (read defensively: a stored row is data). */
 export function bioReads(results: unknown): Partial<Record<OutsideBio, BioRead>> {

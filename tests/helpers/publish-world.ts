@@ -47,7 +47,6 @@ export const PUBLISH_ACTIONS: Record<PublishName, Entry> = {
   publishEntityAction: { run: (a) => a.publishEntityAction('tour_date', A, 'pw'), gated: true, pings: true, shipsSiteText: false },
   publishBrandWithPasswordAction: { run: (a) => a.publishBrandWithPasswordAction(A, 'pw'), gated: true, pings: false, shipsSiteText: false },
   publishSiteAction: { run: (a) => a.publishSiteAction(A), gated: false, pings: false, shipsSiteText: false },
-  publishSectionAction: { run: (a) => a.publishSectionAction('tour_date', A), gated: false, pings: false, shipsSiteText: false },
 }
 
 /** The entries `pick` keeps, as `it.each` rows named after the action. */
