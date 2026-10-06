@@ -105,6 +105,40 @@ export type EditListProps<T> = {
 const UNDERLINE = 'border-b border-hairline bg-transparent p-0 outline-none placeholder:text-ink-faint focus:border-ink'
 const DEFAULT_TEXT = 'text-[15px] leading-6 text-ink'
 
+/** A + field that starts short, so it stays on the names' line in a narrow column (it grows as
+ *  you type): a song's Featuring and a tour date's lineup. */
+export const SHORT_ADD_FIELD = 'min-w-[8ch] max-w-full [field-sizing:content]'
+
+/**
+ * THE WHOLE-LIST SAVE, for a list stored as ONE value (a song's Featuring names, a tour date's
+ * lineup). Every add, edit and remove sends the whole list through `persist`, optimistic first.
+ * A refusal puts the list back and hands its message to EditList, which keeps the open field's
+ * text; the server's own copy (`saved`: trimmed, deduped) replaces ours when it sends one. A
+ * refused remove has no field to keep its reason, so it toasts. FeaturedChips and SupportActs
+ * wrote this out line for line until 2026-10-05.
+ */
+export function useListSave<T>(initial: T[], persist: (next: T[]) => MaybeAsync<{ error?: string; saved?: T[] } | void>) {
+  const [items, setItems] = useState(initial)
+
+  async function save(next: T[]): Promise<EditListResult> {
+    const prev = items
+    setItems(next) // optimistic
+    const res = await persist(next)
+    if (res?.error) {
+      setItems(prev)
+      return { error: res.error }
+    }
+    if (res?.saved) setItems(res.saved) // as stored
+  }
+
+  async function remove(i: number) {
+    const res = await save(items.filter((_, j) => j !== i))
+    if (res?.error) toast(res.error, 'error')
+  }
+
+  return { items, save, remove }
+}
+
 /** The second line's shape inside an item or the + field. */
 type Line = { label: string; maxLength: number; inputMode?: InputMode; textClass: string }
 
