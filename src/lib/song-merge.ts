@@ -19,6 +19,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeTitle, type PlatformReleaseKind } from '@/lib/sync-match'
 import { RELEASE_TYPES, type ReleaseType } from '@/lib/releases'
+import { listWords } from '@/lib/manager-tools/format'
 
 /** Enough of a song to tell whether another one is its duplicate. */
 type TwinCandidate = { id: string; title: string; release_id?: string | null }
@@ -290,11 +291,7 @@ export function planSongMerge(keep: MergeableSong, drop: MergeableSong): MergePl
 /** Manager-facing wording for a refusal. Names the platforms so the fix is obvious:
  *  clear the wrong handle on one row, or accept that these are two different songs. */
 function mergeConflictMessage(conflicts: MergeConflict[]): string {
-  const platforms = [...new Set(conflicts.map((c) => c.platform))]
-  const list =
-    platforms.length === 1
-      ? platforms[0]
-      : `${platforms.slice(0, -1).join(', ')} and ${platforms[platforms.length - 1]}`
+  const list = listWords([...new Set(conflicts.map((c) => c.platform))])
   return `These songs have different ${list} links, so they're probably not the same song. Clear the wrong one first, then merge.`
 }
 

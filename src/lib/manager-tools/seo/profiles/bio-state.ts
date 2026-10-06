@@ -17,7 +17,7 @@ import type { ARTIST_SNAPSHOT } from '@/lib/content'
 import { buildConnectionRows, type ConnectionDef, type LinkRowLike } from '@/lib/connections'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
 import type { SeoTestId } from '@/lib/seo-tests/types'
-import { shortDay } from '../../format'
+import { listWords, shortDay } from '../../format'
 import { OUTSIDE_BIOS, bioItem, type OutsideBio } from './bios'
 
 /**
@@ -177,9 +177,7 @@ export function bioState({ confirmedAt, factsChangedAt: changedAt, now }: { conf
 
 /** "bio", "city and genre", "name, bio and genre". */
 export function changedWords(fields: readonly BioFact[]): string {
-  const words = fields.map((f) => FACT_WORDS[f])
-  if (words.length < 2) return words.join('')
-  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+  return listWords(fields.map((f) => FACT_WORDS[f]))
 }
 
 /** An outside bio the artist has: its platform is connected (Connections). */

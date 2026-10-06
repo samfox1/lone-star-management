@@ -14,6 +14,7 @@
  * three people.
  */
 import { EVENT_TYPES } from '@/lib/events'
+import { listWords } from '@/lib/manager-tools/format'
 
 /** Every non-view event type, with the words the sentence uses for it. */
 export const ACTIONS = [
@@ -61,10 +62,7 @@ export function versusSite(rate: number, siteRate: number): string {
 }
 
 /** "no plays, link clicks, … or video clicks" — from the registry, never hand-listed. */
-const NOTHING = (() => {
-  const nouns = ACTIONS.map((a) => a.noun)
-  return `no ${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]}`
-})()
+const NOTHING = `no ${listWords(ACTIONS.map((a) => a.noun), 'or')}`
 
 export function sourceStory(
   label: string,

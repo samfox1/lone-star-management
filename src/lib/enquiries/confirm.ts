@@ -8,7 +8,7 @@
  * (20261006120000_email_confirmations.sql). Nothing here decides who receives anything: an
  * address the dashboard draws as confirmed is still routed only if the database says so.
  */
-import { clockTime } from '@/lib/manager-tools/format'
+import { clockTime, listWords, minutesSeconds } from '@/lib/manager-tools/format'
 
 /** Digits in a code (begin_email_confirmation mints six). */
 export const CODE_LENGTH = 6
@@ -144,7 +144,7 @@ export function secondsLeft(sentAt: number | undefined, now: number): number {
 /** The countdown beside the resend glyph: "1:00", "0:42"; nothing once it may send. */
 export function countdown(seconds: number): string {
   if (seconds <= 0) return ''
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  return minutesSeconds(seconds)
 }
 
 // ---------------------------------------------------------------------------
@@ -224,9 +224,7 @@ export function tokenResult(row: unknown): TokenResult {
 
 /** Kind labels in a sentence: "booking", "booking and demo", "booking, demo and contact". */
 export function kindWords(kinds: readonly string[]): string {
-  const words = [...new Set(kinds.map((k) => k.trim().toLowerCase()).filter(Boolean))]
-  if (words.length <= 1) return words[0] ?? ''
-  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+  return listWords([...new Set(kinds.map((k) => k.trim().toLowerCase()).filter(Boolean))])
 }
 
 /** After the address on the confirmed page: "gets Skeen’s booking enquiries." */

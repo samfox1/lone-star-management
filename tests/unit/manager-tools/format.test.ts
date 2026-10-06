@@ -7,7 +7,7 @@
  * leap day, the same day a year apart).
  */
 import { describe, expect, it } from 'vitest'
-import { SAVE_FAILED, clockTime, plural, shortDay, shortLink } from '@/lib/manager-tools/format'
+import { SAVE_FAILED, clockTime, listWords, minutesSeconds, plural, shortDay, shortLink } from '@/lib/manager-tools/format'
 
 const DATES = [
   '2026-09-29T12:00:00Z',
@@ -100,5 +100,52 @@ describe('clockTime, plural, shortLink, SAVE_FAILED', () => {
 
   it('SAVE_FAILED is the sentence every tool showed', () => {
     expect(SAVE_FAILED).toBe('Couldn’t save that.')
+  })
+})
+
+/**
+ * listWords replaced the "a, b and c" join hand-written in nine modules (2026-10-05, "consolidate
+ * shared code"): the Publish bars, the bio and kind sentences, the AI test's sentences, the merge
+ * refusal, the analytics "no plays … or video clicks". The copies' own expression is kept here as
+ * the oracle, so a change to the word order (an Oxford comma, a lone item) goes red.
+ */
+describe('listWords reproduces the join it replaced', () => {
+  const old = (xs: string[], joiner: string) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${joiner} ${xs[xs.length - 1]}`)
+  const LISTS = [[], ['bio'], ['city', 'genre'], ['name', 'bio', 'genre'], ['a', 'b', 'c', 'd'], ['', 'x']]
+
+  it('matches the copies for every length, with "and" and "or"', () => {
+    for (const xs of LISTS) {
+      expect(listWords(xs), xs.join('|')).toBe(old(xs, 'and'))
+      expect(listWords(xs, 'or'), xs.join('|')).toBe(old(xs, 'or'))
+    }
+  })
+
+  it('reads as the sentences print it: no comma before the last word', () => {
+    expect(listWords([])).toBe('')
+    expect(listWords(['bio'])).toBe('bio')
+    expect(listWords(['city', 'genre'])).toBe('city and genre')
+    expect(listWords(['name', 'bio', 'genre'])).toBe('name, bio and genre')
+    expect(listWords(['plays', 'link clicks', 'video clicks'], 'or')).toBe('plays, link clicks or video clicks')
+  })
+})
+
+/**
+ * minutesSeconds replaced the m:ss written three times (the code window's resend countdown, the AI
+ * test's running clock, a song's play time). Each caller keeps its own edge rule (nothing at 0, never
+ * below 0:00); this is only the shape.
+ */
+describe('minutesSeconds', () => {
+  it('is whole minutes, then two-digit seconds', () => {
+    expect(minutesSeconds(0)).toBe('0:00')
+    expect(minutesSeconds(7)).toBe('0:07')
+    expect(minutesSeconds(60)).toBe('1:00')
+    expect(minutesSeconds(92)).toBe('1:32')
+    expect(minutesSeconds(605)).toBe('10:05')
+  })
+
+  // A song's position arrives in fractional seconds; the old player floored both halves.
+  it('floors a fraction, as the player did', () => {
+    expect(minutesSeconds(59.9)).toBe('0:59')
+    expect(minutesSeconds(61.5)).toBe('1:01')
   })
 })

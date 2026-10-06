@@ -29,9 +29,22 @@ export function clockTime(at: Date, locale?: string): string {
   return at.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
 }
 
+/** A countdown or a running clock: "0:07", "1:32". Whole minutes, then two-digit seconds, each
+ *  floored. The caller decides what 0 and below print (the code window prints nothing at 0). */
+export function minutesSeconds(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+}
+
 /** "1 page", "3 pages": the count, then the word that agrees with it. */
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
+}
+
+/** Words in a sentence: "bio", "city and genre", "name, bio and genre" (or "… or …"). No comma
+ *  before the last word: every list the tools print reads that way. '' for none. */
+export function listWords(items: readonly string[], joiner: 'and' | 'or' = 'and'): string {
+  if (items.length <= 1) return items.join('')
+  return `${items.slice(0, -1).join(', ')} ${joiner} ${items[items.length - 1]}`
 }
 
 /**

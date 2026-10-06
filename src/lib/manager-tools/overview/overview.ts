@@ -12,7 +12,7 @@
 import { siteUnpublished, type SectionDiff, type UnpublishedDiff } from '@/lib/content'
 import { publicSiteOrigin } from '@/lib/custom-site'
 import { displayAddress } from '@/lib/settings'
-import { plural } from '../format'
+import { listWords, plural } from '../format'
 import { PROFILE_SEG } from '../profile/route'
 
 /** null: the count could not be read. The row then shows none, never a 0 it did not see. */
@@ -88,6 +88,6 @@ export function waitingMessage(diff: UnpublishedDiff): string {
     for (const w of (WORD[key] as (d: SectionDiff) => string[])(d)) if (!parts.includes(w)) parts.push(w)
   }
   if (!parts.length) return ''
-  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+  const list = listWords(parts)
   return `${list.charAt(0).toUpperCase()}${list.slice(1)} changed`
 }

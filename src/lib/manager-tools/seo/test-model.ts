@@ -17,7 +17,7 @@
 import { SEO_MANUAL_COOLDOWN_S, SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
 import type { StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
-import { clockTime, plural, shortDay } from '../format'
+import { clockTime, minutesSeconds, plural, shortDay } from '../format'
 import { SEO_EDIT_TARGETS } from './sections'
 
 export type RunCounts = { pass: number; fail: number; unknown: number; na: number; applicable: number }
@@ -282,8 +282,7 @@ export function evidenceRows(evidence: unknown): EvidenceRow[] {
 
 /** The running test's clock: "0:07", "1:32". Whole seconds; never below 0:00. */
 export function clockText(seconds: number): string {
-  const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return minutesSeconds(Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0)
 }
 
 /* ── times, in the manager's own time zone ──────────────────────────────────────────── */

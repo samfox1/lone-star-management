@@ -30,6 +30,7 @@
  * LINEAR. Everything here that reads fetched html scans it once (indexOf / sticky regexes
  * with no nested repeats); nothing backtracks on a hostile page.
  */
+import { listWords } from '@/lib/manager-tools/format'
 import { trimTrailingSlashes } from '@/lib/url'
 import { SEO_BOTS, botsForTest, robotsTokensOf } from './bots'
 import { sameSite } from './evidence'
@@ -50,7 +51,6 @@ const num = (n: number) => n.toLocaleString('en-US')
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`
 const pageName = (path: string) => (path === '/' ? 'your home page' : `your page ${path}`)
 const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`)
-const listWords = (items: string[], and = 'and') => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]}`)
 
 /** A status in plain words, no number (the number is in the details). */
 const STATUS_WORDS: Record<number, string> = {

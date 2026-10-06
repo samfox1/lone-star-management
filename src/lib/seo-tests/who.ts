@@ -20,7 +20,7 @@
  */
 import { MAX_TITLE, defaultSeoTitle } from '@samfox1/site-bridge/seo'
 import { musicBrainzCreateUrl } from '@/lib/manager-tools/connections/services/musicbrainz/seed'
-import { shortLink } from '@/lib/manager-tools/format'
+import { listWords, shortLink } from '@/lib/manager-tools/format'
 import { countryCode, countryName } from './apple-storefront'
 import {
   clip, collapse, fold, hasType, homeOf, isBareName, isObj, metaOf, namesArtist, num, pagesOf, plural, strings, textOf, wordsOf,
@@ -221,9 +221,6 @@ function shownText(bio: string, pageText: string): string {
   return shown.join(' ')
 }
 
-/** "a, b or c" / "a and b". */
-const listWords = (xs: string[], joiner: 'or' | 'and') => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${joiner} ${xs[xs.length - 1]}`)
-
 const bio = make('bio', (e) => {
   const pages = pagesOf(e)
   const home = homeOf(e)
@@ -387,7 +384,7 @@ const genre = make('genre', (e) => {
   const genres = all.filter(meaningful)
   const evidence = [{ label: 'genre', value: all.length ? all.join(', ') : 'not set' }, ...tapirRow]
   if (!genres.length) return { status: 'fail', value: 'not named', sentence: 'your site doesn’t name your genre for search engines.', todo, action: facts, evidence, limits }
-  const said = genres.length === 1 ? genres[0] : `${genres.slice(0, -1).join(', ')} and ${genres[genres.length - 1]}`
+  const said = listWords(genres)
   if (saved.length && !genres.some((g) => saved.some((s) => matchFold(s) === matchFold(g)))) {
     return { status: 'fail', lead: 'Almost', value: 'not your genre', sentence: `your site says your genre is ${clip(said, 60)}, but in Digital Tapir it’s ${clip(saved.join(', '), 60)}.`, todo: 'Publish from Digital Tapir, then test again. If it stays, your site needs an update from whoever built it.', action: facts, evidence, limits }
   }

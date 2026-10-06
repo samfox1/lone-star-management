@@ -9,7 +9,7 @@
  *   alt      every content `<img>` on the pages read has a real description; with no photo
  *            on the pages or in Tapir it does not apply (`na`)
  */
-import { shortLink } from '@/lib/manager-tools/format'
+import { listWords, shortLink } from '@/lib/manager-tools/format'
 import { clip, homeOf, isBareName, metaOf, namesArtist, pagesOf, siteName, type PageState } from './html'
 import { describes } from './match'
 import { SHARE_MAX_BYTES } from './share-image'
@@ -175,7 +175,7 @@ const preview = make('preview', (e) => {
   const limits = 'Each app draws its own preview, and some keep an old one for days. We read what your home page tells them, not what each app shows.'
   if (!problems.length) return { status: 'pass', value: 'name + description', sentence: 'Shared links show your name and a description.', evidence, limits }
   const says = problems.map((p) => p.say)
-  const list = says.length === 1 ? says[0] : `${says.slice(0, -1).join(', ')} and ${says[says.length - 1]}`
+  const list = listWords(says)
   return {
     status: 'fail', ...(problems.every((p) => p.soft) ? { lead: 'Almost' as const } : {}),
     value: problems.length === 1 ? problems[0].short : `${problems.length} problems`,

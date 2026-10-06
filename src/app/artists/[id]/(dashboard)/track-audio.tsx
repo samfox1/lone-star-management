@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
+import { minutesSeconds } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { PortalModal } from '@/components/ui/portal-modal'
@@ -23,9 +24,7 @@ const PauseIcon = () => (
 
 function fmtTime(s: number): string {
   if (!Number.isFinite(s) || s < 0) return '0:00'
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${sec.toString().padStart(2, '0')}`
+  return minutesSeconds(s)
 }
 
 /**

@@ -24,6 +24,7 @@ import {
   parseConfirmRequest,
   replyStatus,
 } from '../../../supabase/functions/email-confirm/build'
+import { kindWords } from '@/lib/enquiries/confirm'
 
 const TOKEN = 'Zm9vYmFyYmF6cXV4LXF1dXgtY29yZ2UtZ3JhdWx0LWdhcnBseQ'
 
@@ -55,6 +56,13 @@ describe('kindsToWords', () => {
 
   it('drops blanks, nulls and repeats (a Postgres text[] can hold a null)', () => {
     expect(kindsToWords(['Booking', ' ', null, 'booking', 'Demo'])).toBe('booking and demo')
+  })
+
+  // The function cannot import src/lib, so this join is a copy of the app's (kindWords, on
+  // listWords since 2026-10-05). The email and the confirmed page name the same kinds the same way.
+  it('words the kinds exactly as the confirmed page does', () => {
+    for (const kinds of [[], ['Booking'], ['Booking', 'Contact'], ['Booking', 'Demo', 'Contact'], [' Booking ', 'booking', 'Sync licensing', 'Other']])
+      expect(kindsToWords(kinds), kinds.join('|')).toBe(kindWords(kinds))
   })
 })
 
