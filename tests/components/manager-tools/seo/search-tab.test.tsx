@@ -141,16 +141,16 @@ describe('Both, side by side', () => {
     expect(screen.getByText('#1')).toBeTruthy()
   })
 
-  // Behind the ranking chart's info button: the searches it is built from, and a plain line when
-  // "Skeen" on its own is not one of them (Sam, 2026-10-06: "some way to be more transparent").
-  it('CRITICAL: lists the searches the ranking line uses, and says when the bare name is not among them', () => {
+  // Behind the ranking chart's info button: the searches it is built from (Sam, 2026-10-06: "some
+  // way to be more transparent"), as a plain list.
+  it('CRITICAL: lists the searches the ranking line uses', () => {
     nav.params = new URLSearchParams('e=google')
     show(answer(ok(GOOGLE), ok(BING)))
     expect(document.querySelector('[data-name-searches]')).toBeNull() // behind the info button, not a table on the page
     fireEvent.click(screen.getByRole('button', { name: 'Searches behind this ranking' }))
     const list = screen.getByRole('dialog', { name: 'Searches behind this ranking' })
+    // Each search with how often it was seen and its spot, most seen first.
     expect([...list.querySelectorAll('[data-row="name-search"]')].map((r) => r.textContent)).toEqual(['skeen dj39 seen#2.5', 'skeen music2 seen#3'])
-    expect(list.querySelector('[data-note-line="bare-name"]')?.textContent).toBe('“Skeen” on its own: not showing up on Google yet')
   })
 
   // Behind the seen / clicked chart's info button: the searches its totals are made of, and what

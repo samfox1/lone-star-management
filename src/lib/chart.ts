@@ -131,11 +131,12 @@ export function rankFloor(spots: readonly number[]): number {
   return Math.max(3, Math.ceil(Math.max(1, ...spots) + 0.25))
 }
 
-/** The spots a spot axis names, from #1 down to its floor: every one up to six, then every
- *  second, then every fifth (plus #1, the one that matters). */
+/** The spots a spot axis names above its floor (the floor has its own label at the bottom):
+ *  every one up to six, then every 2nd, 5th, 10th or 25th as the axis grows, always #1, and none
+ *  within half a step of the floor, where two labels would overlap. */
 export function rankTicks(floor: number): number[] {
-  const step = floor <= 6 ? 1 : floor <= 12 ? 2 : 5
+  const step = floor <= 6 ? 1 : floor <= 12 ? 2 : floor <= 60 ? 5 : floor <= 120 ? 10 : 25
   const ticks = [1]
-  for (let t = step; t <= floor; t += step) if (t > 1) ticks.push(t)
+  for (let t = step; floor - t >= step / 2; t += step) if (t > 1) ticks.push(t)
   return ticks
 }

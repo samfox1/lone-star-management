@@ -14,9 +14,9 @@ import { searchPeriodAction } from './actions'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { modalCardNarrowClass } from '@/components/ui/ui'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
-import { SEARCH_PERIODS, type EngineStats, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
-import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
+import { SEARCH_PERIODS, pacificDay, type EngineStats, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
+import { ENGINE_NAME, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, reachFacts, spotBoard, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
 import { HoverLabel } from '../../../_ui/row-icon'
@@ -121,8 +121,8 @@ export function SearchTab({ artistId, answer, name, ai }: {
           <div className="flex items-center gap-2">
             <h1 className={TITLE}>{searchTitle(view, name)}</h1>
             {spotEngines.length ? (
-              <InfoButton label={NAME_SEARCHES_WORDS.title}>
-                <NameSearches view={view} stats={stats} engines={spotEngines} name={name} />
+              <InfoButton label={NAME_SEARCHES_WORDS.title} small>
+                <NameSearches stats={stats} engines={spotEngines} name={name} />
               </InfoButton>
             ) : null}
           </div>
@@ -171,15 +171,19 @@ const points = (days: string[]) => days.map((day) => ({ day, views: 0, visitors:
 const seriesOf = (lines: BoardLine[]): Series[] =>
   lines.map((l) => ({
     key: l.key, label: l.label, values: l.values, color: l.tone, ...(l.thick ? { thick: true } : {}),
+    ...(l.partialFrom === undefined ? {} : { partialFrom: l.partialFrom }),
     group: ENGINE_NAME[l.engine], short: l.metric === 'seen' ? 'Seen' : l.metric === 'clicks' ? 'Clicks' : '',
   }))
 const spot = (v: number) => `#${spotWords(v)}`
 
 /** YOUR SPOT: each engine's spot when someone searches the name, #1 at the top. */
 function SpotSection({ view, stats, name, answer, onToggle }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; name: string; answer: SearchStatsAnswer; onToggle: (e: SearchEngineId) => void }) {
-  const board = spotBoard(view, stats, name)
+  // The day each site was added, as the rest of the page reads days (Pacific), and the earliest of
+  // them inside the period, so the axis can start there and its pin has a day to land on.
+  const addedDay = (e: SearchEngineId) => { const at = answer.added[e]; return at && Number.isFinite(Date.parse(at)) ? pacificDay(Date.parse(at)) : null }
+  const startAt = enginesOf(view).map(addedDay).filter((d): d is string => d !== null && d >= answer.period.start).sort()[0]
+  const board = spotBoard(view, stats, name, startAt)
   const both = board.lines.length > 1
-  const added = answer.added
   // Google and Bing as toggles where the legend was: each its line's colour and name (Sam,
   // 2026-10-06: "have the google and bing toggles be where this is: Google ranking -- the lines
   // and their text indicators").
@@ -205,8 +209,8 @@ function SpotSection({ view, stats, name, answer, onToggle }: { view: EngineView
   }
   // The day the site was added to each engine, on that engine's line, when it is in view.
   const pins: ChartPin[] = board.lines.flatMap((l) => {
-    const at = added[l.engine]
-    return at ? [{ day: at.slice(0, 10), series: l.key, icon: <SourceGlyph source={l.engine} size={14} />, title: `Site added to ${ENGINE_NAME[l.engine]}`, note: '' }] : []
+    const day = addedDay(l.engine)
+    return day ? [{ day, series: l.key, icon: <SourceGlyph source={l.engine} size={14} />, title: `Site added to ${ENGINE_NAME[l.engine]}`, note: '' }] : []
   })
   const facts: Fact[] = board.lines.flatMap((l) => {
     const f = spotFacts(nameSpot(stats[l.engine]!.searchDays, name))
@@ -225,7 +229,7 @@ function SpotSection({ view, stats, name, answer, onToggle }: { view: EngineView
       <div className="mt-1 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart
           points={points(board.days)} height={CHART_H} series={seriesOf(board.lines)} scale="rank" dots
-          partialFrom={board.partialFrom} format={spot} legend={false} pins={pins} className="min-w-0"
+          format={spot} legend={false} pins={pins} className="min-w-0"
           endMark={<span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-paper shadow-[0_0_0_5px_rgba(17,17,17,0.08)]">{initial}</span>}
         />
         <FactsColumn facts={facts} label="Your spot, in numbers" />
@@ -240,7 +244,7 @@ function SpotSection({ view, stats, name, answer, onToggle }: { view: EngineView
  * modal shows up wit this info"; then "smaller, less wide … visibly appealing. Larger text"). The
  * glyph alone, faint until hovered, no box behind it.
  */
-function InfoButton({ label, children }: { label: string; children: ReactNode }) {
+function InfoButton({ label, small = false, children }: { label: string; small?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -249,7 +253,7 @@ function InfoButton({ label, children }: { label: string; children: ReactNode })
         <HoverLabel label={label} />
       </button>
       {open && (
-        <PortalModal ariaLabel={label} cardClass={modalCardNarrowClass} onClose={() => setOpen(false)}>
+        <PortalModal ariaLabel={label} cardClass={small ? SMALL_CARD : modalCardNarrowClass} onClose={() => setOpen(false)}>
           {children}
         </PortalModal>
       )}
@@ -257,26 +261,32 @@ function InfoButton({ label, children }: { label: string; children: ReactNode })
   )
 }
 
-/** BASED ON THESE SEARCHES: what the ranking line is made of, behind its info button, so the
- *  number is never taken on trust (Sam, 2026-10-06: "allow user to see the searches that the
- *  chart is using"; then "show all of the searching that resulted in this site. Not just the
- *  top"): every search naming the artist, how often the site was seen for it and its spot; and,
- *  when the bare name is not one of them, a plain line saying so. The window scrolls. */
-function NameSearches({ view, stats, engines, name }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; engines: SearchEngineId[]; name: string }) {
+/** The ranking's window: a small card, just big enough for a short list (Sam, 2026-10-06: "minimal
+ *  and small, dont need a lot of wasted space"). */
+const SMALL_CARD = 'relative flex max-h-[70vh] w-[300px] max-w-[90vw] flex-col overflow-auto rounded-2xl bg-paper p-5 shadow-2xl'
+
+/** The searches the ranking line is made of, behind the title's ⓘ: a small list (Sam, 2026-10-06:
+ *  "I just want a list of the names being searched that are used for this chart … minimal and
+ *  small"; then "show the metrics for these specific searches"): each search, how often the site
+ *  was seen for it and its spot, most seen first, an engine's mark beside each when both are drawn. */
+function NameSearches({ stats, engines, name }: { stats: Partial<Record<SearchEngineId, SearchStats>>; engines: SearchEngineId[]; name: string }) {
   const both = engines.length > 1
   const rows = engines
     .flatMap((e) => nameSearches(stats[e]!.searchDays, name).map((r) => ({ ...r, engine: e })))
     .sort((a, b) => b.seen - a.seen || a.key.localeCompare(b.key))
-  const bare = rows.some((r) => isBareName(r.key, name))
   return (
     <div data-name-searches>
-      <WindowHead words={NAME_SEARCHES_WORDS} />
-      <ul aria-label={NAME_SEARCHES_WORDS.title} className="mt-4 border-t border-hairline">
+      <h2 className={cx(CAPS_LABEL, 'pr-8 font-bold text-ink-faint')}>{NAME_SEARCHES_WORDS.title}</h2>
+      <ul aria-label={NAME_SEARCHES_WORDS.title} className="mt-3">
         {rows.map((r) => (
-          <SearchRowItem key={`${r.engine}:${r.key}`} kind="name-search" engine={both ? r.engine : null} search={r.key} meta={`${countWords(r.seen)} seen`} badge={spot(r.spot)} />
+          <li key={`${r.engine}:${r.key}`} data-row="name-search" className="flex items-baseline gap-2 py-1 text-[14px] text-ink">
+            {both ? <SourceGlyph source={r.engine} size={12} className="flex-none self-center text-ink-faint" /> : null}
+            <span className="min-w-0 flex-1 truncate">{r.key}</span>
+            <span className="flex-none font-space text-[11px] tabular-nums text-ink-faint">{countWords(r.seen)} seen</span>
+            <span className="w-10 flex-none text-right font-space text-[12px] font-bold tabular-nums">{spot(r.spot)}</span>
+          </li>
         ))}
       </ul>
-      {!bare ? <WindowNote data="bare-name">{bareNameWords(name, view)}</WindowNote> : null}
     </div>
   )
 }
@@ -358,7 +368,7 @@ function ReachSection({ artistId, answer }: { artistId: string; answer: SearchSt
       {failed ? <p data-reach-failed className={cx(MONO_META, 'mt-4')}>Couldn&apos;t load {period} just now. Pick it again to retry.</p> : null}
       {!board.lines.length ? <p data-reach-empty className={cx(MONO_META, 'mt-4')}>No numbers for this period yet.</p> : null}
       <div aria-busy={loading} className={cx('mt-4 grid gap-8 transition-opacity duration-150 lg:grid-cols-[minmax(0,1fr)_200px]', loading && 'opacity-50')}>
-        <TimelineChart key={`${shown}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
+        <TimelineChart key={`${shown}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} legend={false} className="min-w-0" />
         <FactsColumn facts={facts} label="Seen and clicked, in numbers" />
       </div>
     </section>
@@ -440,6 +450,7 @@ function EngineCheck({ engine, label, on, status, tone, onToggle }: { engine: Se
       on={on}
       onToggle={onToggle}
       tone={tone}
+      note={dot?.label}
       after={dot ? (
         <span className="relative flex">
           <span aria-hidden data-dot={dot.tone} data-engine-dot={engine} className={cx('h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />

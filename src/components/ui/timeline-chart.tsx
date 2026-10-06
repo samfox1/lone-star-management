@@ -65,6 +65,9 @@ export type Series = {
    *  (Metrics: "GOOGLE Seen 23 Clicks 6"), where colour shades alone can't tell them apart. */
   group?: string
   short?: string
+  /** This line's own first day still being counted, in place of the chart's `partialFrom`
+   *  (Metrics: Google's lines are dotted at the end, Bing's never are). */
+  partialFrom?: number
 }
 
 const PAD_TOP = 8
@@ -155,7 +158,7 @@ export function TimelineChart({
   const x = (i: number) => (points.length < 2 ? w / 2 : (i / (points.length - 1)) * w)
   const padTop = pins?.length ? PIN_BAND : PAD_TOP
   const y = (v: number) => (rank ? padTop + ((v - 1) / (extent - 1)) * (h - padTop) : padTop + (1 - v / extent) * (h - padTop))
-  const tickValues = rank ? rankTicks(finalExtent).filter((t) => t < finalExtent) : axisTicks(finalExtent)
+  const tickValues = rank ? rankTicks(finalExtent) : axisTicks(finalExtent)
   const tickLabel = (t: number) => (rank ? `#${t}` : String(t))
   const idxOf = (s: Series) => points.map((_, i) => i).filter((i) => counted(s, i))
   const ptsOf = (s: Series): Pt[] => idxOf(s).map((i) => [x(i), y(valueAt(s, i))])
@@ -232,7 +235,8 @@ export function TimelineChart({
               const segs = monotoneSegments(pts)
               const at_ = (k: number) => `M${pts[k][0].toFixed(1)},${pts[k][1].toFixed(1)}`
               // The gaps into a day still being counted, and every gap after, dotted.
-              const k = partialFrom === undefined ? -1 : idxOf(s).findIndex((i) => i >= partialFrom)
+              const pf = s.partialFrom ?? partialFrom
+              const k = pf === undefined ? -1 : idxOf(s).findIndex((i) => i >= pf)
               const cut = k === -1 ? segs.length : Math.max(0, k - 1)
               const solid = [at_(0), ...segs.slice(0, cut)].join(' ')
               const tail = cut < segs.length ? `${at_(cut)} ${segs.slice(cut).join(' ')}` : null

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './icons'
 import { ICON_HOVER } from './icon-hover'
@@ -46,6 +46,15 @@ export function PortalModal({
   // original scroll.
   useLockBodyScroll(true)
 
+  // Focus goes into the window on opening (its ×) and back to whatever opened it on closing, so a
+  // keyboard is never left behind the scrim (review, 2026-10-06).
+  const closeBtn = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    closeBtn.current?.focus({ preventScroll: true })
+    return () => opener?.focus?.({ preventScroll: true })
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -68,6 +77,7 @@ export function PortalModal({
     >
       <div className={cardClass}>
         <button
+          ref={closeBtn}
           type="button"
           onClick={onClose}
           aria-label="Close"

@@ -56,23 +56,14 @@ export function searchIntro(view: EngineView): string {
   return `Where your site ranks on ${view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]} when people search to find you, day by day. #1 is the top result.`
 }
 
-/** The ranking's ⓘ window: a plain title and one line on what is counted. */
-export const NAME_SEARCHES_WORDS = {
-  title: 'Searches behind this ranking',
-  about: 'The searches with your name in them, and your average spot when your site was shown.',
-} as const
+/** The ranking's ⓘ window: its title only (the list says the rest). */
+export const NAME_SEARCHES_WORDS = { title: 'Searches behind this ranking' } as const
 
 /** The seen / clicked chart's ⓘ window. */
 export const REACH_SEARCHES_WORDS = {
   title: 'Searches behind these numbers',
   about: 'The searches your site was shown for most, and how many people clicked through.',
 } as const
-
-/** Said under the ranking chart when the bare name is not among its searches (Sam, 2026-10-06:
- *  he searched "Skeen" and the site was nowhere): plainly, never implied by the number. */
-export function bareNameWords(name: string, view: EngineView): string {
-  return `“${name}” on its own: not showing up ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`} yet`
-}
 
 
 /** The seen and clicked chart's own header and sentence (Sam, 2026-10-06: "Have a header and

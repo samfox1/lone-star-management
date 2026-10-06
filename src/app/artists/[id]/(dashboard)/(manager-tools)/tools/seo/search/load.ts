@@ -62,7 +62,11 @@ export async function loadSearchStats(artistId: string, key: SearchPeriodKey): P
  */
 export async function loadAiVisits(artistId: string, period: SearchPeriod): Promise<AiVisit[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase.rpc('analytics_sources', { p_artist_id: artistId, p_since: period.start, p_until: period.end })
+  // The search period's days are Pacific; the analytics door counts UTC days. A Pacific day ends
+  // at 07:00 UTC the next day, so the read runs one UTC day further, or the last day's evening is
+  // missed (review, 2026-10-06). It may take in a few early hours of the day before at the start.
+  const until = new Date(Date.parse(`${period.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+  const { data, error } = await supabase.rpc('analytics_sources', { p_artist_id: artistId, p_since: period.start, p_until: until })
   if (error) throw new Error(`analytics_sources: ${error.message}`)
   return aiVisits(((data ?? []) as Record<string, unknown>[]).map((r) => ({ source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''), visitors: Number(r.visitors ?? 0) })))
 }

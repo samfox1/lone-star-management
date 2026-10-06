@@ -15,11 +15,21 @@ function words(s: string): string {
   return s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }
 
+/** Scripts written without spaces between words (as the AI test's own matcher knows them). */
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]/u
+
 /** Whether a search names the artist: the name's words, whole and in order, anywhere in it
- *  ("dj skeen" names Skeen; "skeena river" does not). A name with no words names nothing. */
+ *  ("dj skeen" names Skeen; "skeena river" does not). Also the name typed without its inner
+ *  symbols as one word ("acdc" names AC/DC), and, for a name in a script written without spaces,
+ *  the name anywhere ("米津玄師ライブ"). A name with no words names nothing. Search text, unlike
+ *  page text (seo-tests/html.ts `namesArtist`), drops accents and symbols: people type them less. */
 export function namesArtist(search: string, name: string): boolean {
   const n = words(name)
-  return n !== '' && ` ${words(search)} `.includes(` ${n} `)
+  if (n === '') return false
+  const s = words(search)
+  if (UNSPACED.test(n)) return s.includes(n)
+  const squashed = n.replace(/ /g, '')
+  return ` ${s} `.includes(` ${n} `) || (squashed !== n && ` ${s} `.includes(` ${squashed} `))
 }
 
 /** One day on the line: the spot (1 is the top result) and how often the site was seen. */
@@ -90,11 +100,4 @@ export function nameSearches(rows: readonly SearchDayRow[], name: string): NameS
   return [...by]
     .map(([key, s]) => ({ key, seen: s.seen, spot: s.weighted / s.seen }))
     .sort((a, b) => b.seen - a.seen || a.key.localeCompare(b.key))
-}
-
-/** Whether a search is the name on its own ("Skeen", not "skeen dj"): the hardest one to win, and
- *  the page says plainly when it isn't among the searches. */
-export function isBareName(search: string, name: string): boolean {
-  const n = words(name)
-  return n !== '' && words(search) === n
 }

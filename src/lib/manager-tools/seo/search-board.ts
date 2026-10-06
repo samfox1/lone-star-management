@@ -22,37 +22,51 @@ export type BoardLine = {
   values: (number | null)[]
   /** Seen / clicked lines: whether each day is finished (Google still counts its last ~2). */
   final?: boolean[]
+  /** The first day index THIS line is still being counted, from which it is dotted (Google's;
+   *  Bing's lines never are: review, 2026-10-06). */
+  partialFrom?: number
   tone: Tone
   thick?: boolean
 }
-export type Board = { days: string[]; lines: BoardLine[]; partialFrom: number | undefined }
+export type Board = { days: string[]; lines: BoardLine[] }
 
 const TONE: Record<SearchEngineId, Tone> = { google: 'ink', bing: 'grey' }
 
-/** The first day index still being counted by any of the engines drawn (Google's preliminary
- *  days; Bing has none), or undefined. */
-function firstPartial(days: string[], drawn: SearchStats[]): number | undefined {
-  const from = drawn.map((s) => s.preliminaryFrom).filter((d): d is string => d !== null).sort()[0]
-  const i = from === undefined ? -1 : days.findIndex((d) => d >= from)
-  return i === -1 ? undefined : i
+/** The first day index at or after an engine's first preliminary day, if it has one in view. */
+function partialOf(days: string[], preliminaryFrom: string | null): { partialFrom?: number } {
+  const i = preliminaryFrom === null ? -1 : days.findIndex((d) => d >= preliminaryFrom)
+  return i === -1 ? {} : { partialFrom: i }
+}
+
+/** Every day from `from` to `to`, both included. */
+function dayRange(from: string, to: string): string[] {
+  const out: string[] = []
+  for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10))
+  return out
 }
 
 /** The ranking: each engine's spot when someone searches the artist's name
- *  (search-spot.ts `nameSpot`), on one row of days; null where an engine has no reading. */
-export function spotBoard(view: EngineView, stats: Partial<Record<SearchEngineId, SearchStats>>, name: string): Board {
+ *  (search-spot.ts `nameSpot`), on EVERY day from the first reading (or `startAt`, the day the
+ *  site was added, when earlier) to the last; null where an engine has no reading. Every day, so a
+ *  reading sits at its own date and a pin has a day to land on (review, 2026-10-06). */
+export function spotBoard(view: EngineView, stats: Partial<Record<SearchEngineId, SearchStats>>, name: string, startAt?: string): Board {
   const per = enginesOf(view)
     .filter((e) => stats[e])
     .map((e) => ({ e, points: new Map(nameSpot(stats[e]!.searchDays, name).map((p) => [p.date, p.spot])) }))
     .filter((x) => x.points.size > 0)
   // Side by side only when both have a line: one engine alone reads as that engine.
   const both = per.length > 1
-  const days = [...new Set(per.flatMap((x) => [...x.points.keys()]))].sort()
+  const read = [...new Set(per.flatMap((x) => [...x.points.keys()]))].sort()
+  if (!read.length) return { days: [], lines: [] }
+  const first = startAt && startAt < read[0] ? startAt : read[0]
+  const days = dayRange(first, read[read.length - 1])
   const lines = per.map(({ e, points }): BoardLine => ({
     // "Google ranking" (Sam, 2026-10-06), one engine or both.
     key: `${e}-spot`, engine: e, label: `${ENGINE_NAME[e]} ranking`,
     values: days.map((d) => points.get(d) ?? null), tone: both ? TONE[e] : 'ink',
+    ...partialOf(days, stats[e]!.preliminaryFrom),
   }))
-  return { days, lines, partialFrom: firstPartial(days, per.map((x) => stats[x.e]!)) }
+  return { days, lines }
 }
 
 /**
@@ -80,20 +94,24 @@ export function reachBoard(on: readonly SearchEngineId[], answers: Partial<Recor
         label: both ? `${ENGINE_NAME[e]} ${metric}` : metric === 'seen' ? `Seen in ${ENGINE_NAME[e]}` : `Clicks from ${ENGINE_NAME[e]}`,
         values: zero.includes(e) ? days.map(() => 0) : pairs.map((p) => p[e]?.[field] ?? null),
         final: zero.includes(e) ? days.map(() => true) : pairs.map((p) => p[e]?.final ?? true),
+        ...(zero.includes(e) ? {} : partialOfFinal(pairs.map((p) => p[e]?.final ?? true))),
         tone: both ? TONE[e] : metric === 'seen' ? 'ink' : 'grey',
         ...(both && metric === 'clicks' ? { thick: true } : {}),
       })
     }
   }
-  const partial = pairs.findIndex((p) => withData.some((e) => p[e] && !p[e]!.final))
-  return { days, lines, partialFrom: partial === -1 ? undefined : partial }
+  return { days, lines }
+}
+
+/** The first unfinished day of a line, from which it is dotted. */
+function partialOfFinal(final: boolean[]): { partialFrom?: number } {
+  const i = final.indexOf(false)
+  return i === -1 ? {} : { partialFrom: i }
 }
 
 /** Every day of a period, first to last. */
 function periodDays(p: SearchPeriod): string[] {
-  const out: string[] = []
-  for (let t = Date.parse(`${p.start}T00:00:00Z`); t <= Date.parse(`${p.end}T00:00:00Z`); t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10))
-  return out
+  return dayRange(p.start, p.end)
 }
 
 /** The numbers beside the seen / clicked chart, per line: the total (every day, the unfinished

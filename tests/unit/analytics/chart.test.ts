@@ -203,11 +203,18 @@ describe('a spot axis (#1 at the top)', () => {
     expect(rankFloor([7.8])).toBe(9)
     expect(rankFloor([])).toBe(3)
   })
-  it('names every spot up to six, then every second, then every fifth — always from #1', () => {
-    expect(rankTicks(3)).toEqual([1, 2, 3])
-    expect(rankTicks(6)).toEqual([1, 2, 3, 4, 5, 6])
+  // The floor gets its own label at the bottom, so the ticks stop short of it, and a tick that
+  // would sit within half a step of the floor is dropped (review, 2026-10-06: #50 sat 7 px above
+  // #51 and the two labels overlapped). Past #60 the steps widen so the gridlines don't crowd.
+  it('CRITICAL: names every spot up to six, then every 2nd, 5th, 10th, 25th — from #1, never crowding the floor', () => {
+    expect(rankTicks(3)).toEqual([1, 2])
+    expect(rankTicks(6)).toEqual([1, 2, 3, 4, 5])
     expect(rankTicks(9)).toEqual([1, 2, 4, 6, 8])
-    expect(rankTicks(12)).toEqual([1, 2, 4, 6, 8, 10, 12])
-    expect(rankTicks(31)).toEqual([1, 5, 10, 15, 20, 25, 30])
+    expect(rankTicks(12)).toEqual([1, 2, 4, 6, 8, 10])
+    expect(rankTicks(31)).toEqual([1, 5, 10, 15, 20, 25])
+    expect(rankTicks(51)).toEqual([1, 5, 10, 15, 20, 25, 30, 35, 40, 45])
+    expect(rankTicks(54)).toEqual([1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+    expect(rankTicks(95)).toEqual([1, 10, 20, 30, 40, 50, 60, 70, 80, 90])
+    expect(rankTicks(140)).toEqual([1, 25, 50, 75, 100, 125])
   })
 })

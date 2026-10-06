@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 
 /**
@@ -11,13 +11,17 @@ import { cx } from '@/lib/cx'
  * box a color to help indicate which line it represents"); `after` sits after the name (an
  * engine's status dot).
  */
-export function SquareCheck({ label, on, onToggle, tone = 'ink', after }: { label: string; on: boolean; onToggle: () => void; tone?: 'ink' | 'grey'; after?: ReactNode }) {
+export function SquareCheck({ label, on, onToggle, tone = 'ink', after, note }: { label: string; on: boolean; onToggle: () => void; tone?: 'ink' | 'grey'; after?: ReactNode; note?: string }) {
+  // `note` is said after the name to a screen reader (an engine's "No numbers yet", which the eye
+  // gets from the dot): the aria-label is the name alone, so it rides on aria-describedby.
+  const noteId = useId()
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={on}
       aria-label={label}
+      aria-describedby={note ? noteId : undefined}
       onClick={onToggle}
       className="group flex cursor-pointer select-none items-center gap-2 font-space text-xs text-ink"
     >
@@ -36,6 +40,7 @@ export function SquareCheck({ label, on, onToggle, tone = 'ink', after }: { labe
       </span>
       <span>{label}</span>
       {after}
+      {note ? <span id={noteId} className="sr-only">{note}</span> : null}
     </button>
   )
 }

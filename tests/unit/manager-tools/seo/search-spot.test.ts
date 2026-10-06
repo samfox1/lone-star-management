@@ -7,8 +7,8 @@
  * Tier:     STRICT (AGENTS.md "Test depth"): it parses outside search text and decides the one
  *           number that proves the SEO work is working.
  * Covers:   • which searches name the artist: whole words in order, accents and punctuation aside
- *           • the searches the line is made of, shown under the chart (Sam, 2026-10-06: "some way
- *             to be more transparent about what we are showing"), and whether the bare name is one
+ *           • the searches the line is made of, behind the chart's ⓘ (Sam, 2026-10-06: "some way
+ *             to be more transparent about what we are showing")
  *           • the spot per day over those searches, weighted by how often each was seen
  *           • now (the last seven days), the average, and the climb (first week against last, by
  *             date, once two weeks apart)
@@ -21,7 +21,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isBareName, nameSearches, nameSpot, namesArtist, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
+import { nameSearches, nameSpot, namesArtist, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import type { SearchDayRow } from '@/lib/manager-tools/seo/search-stats'
 
 // Skeen's REAL searches by day (tests/fixtures/search-stats.json, google_query_date_all).
@@ -53,10 +53,21 @@ describe('namesArtist', () => {
     expect(namesArtist('skeen -- dj', 'Skeen DJ')).toBe(true)
   })
 
+  // A name with symbols inside a word is also found typed without them ("acdc"), and names in
+  // scripts written without spaces are found inside a run of words (review, 2026-10-06).
+  it('CRITICAL: "AC/DC" matches "acdc", a Japanese name matches inside unspaced words — and "skeena" still does not', () => {
+    expect(namesArtist('acdc tickets', 'AC/DC')).toBe(true)
+    expect(namesArtist('ac dc tickets', 'AC/DC')).toBe(true)
+    expect(namesArtist('米津玄師ライブ', '米津玄師')).toBe(true)
+    expect(namesArtist('skeena', 'Skeen')).toBe(false)
+    expect(namesArtist('acdcx', 'AC/DC')).toBe(false)
+  })
+
   // A name with no letters in it matches nothing.
   it('a name with no words in it names nothing', () => {
     expect(namesArtist('anything', '  ')).toBe(false)
     expect(namesArtist('anything', '!!!')).toBe(false)
+    expect(namesArtist('', '!!!')).toBe(false)
   })
 })
 
@@ -164,16 +175,5 @@ describe('nameSearches — the searches the line is made of', () => {
   it('a tie in how often each was seen goes by the words', () => {
     const rows: SearchDayRow[] = [{ key: 'skeen b', date: '2026-10-01', impressions: 3, position: 2 }, { key: 'skeen a', date: '2026-10-01', impressions: 3, position: 1 }]
     expect(nameSearches(rows, 'Skeen').map((r) => r.key)).toEqual(['skeen a', 'skeen b'])
-  })
-})
-
-describe('isBareName — the name on its own', () => {
-  // "Skeen" alone is the hardest search to win; the page says plainly when it is not among them.
-  it('CRITICAL: only the name itself, however it is written; the name inside a longer search is not bare', () => {
-    expect(isBareName('skeen', 'Skeen')).toBe(true)
-    expect(isBareName('  SKEEN!', 'Skeen')).toBe(true)
-    expect(isBareName('beyonce', 'Beyoncé')).toBe(true)
-    expect(isBareName('skeen dj', 'Skeen')).toBe(false)
-    expect(isBareName('', '  ')).toBe(false)
   })
 })

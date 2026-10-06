@@ -44,31 +44,41 @@ describe('spotBoard — your spot when someone searches your name', () => {
   it('CRITICAL: one engine: its name searches\' spot by day, a reach search left out, the days still counting marked', () => {
     const b = spotBoard('google', { google: GOOGLE }, 'Skeen')
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
-    expect(b.lines).toEqual([{ key: 'google-spot', engine: 'google', label: 'Google ranking', values: [2, 1.5, 1], tone: 'ink' }])
-    expect(b.partialFrom).toBe(1)
+    expect(b.lines).toEqual([{ key: 'google-spot', engine: 'google', label: 'Google ranking', values: [2, 1.5, 1], tone: 'ink', partialFrom: 1 }])
   })
 
   // Both: one row of days, each engine its own line, blank where it has no reading.
   it('CRITICAL: both: each engine its own line on one row of days, null where it has nothing — Google ink, Bing grey', () => {
     const b = spotBoard('both', { google: GOOGLE, bing: BING }, 'Skeen')
     expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
-    expect(b.lines.map((l) => [l.key, l.label, l.tone, l.values])).toEqual([
-      ['google-spot', 'Google ranking', 'ink', [null, 2, 1.5, 1]],
-      ['bing-spot', 'Bing ranking', 'grey', [3, null, null, null]],
+    expect(b.lines.map((l) => [l.key, l.label, l.tone, l.values, l.partialFrom])).toEqual([
+      ['google-spot', 'Google ranking', 'ink', [null, 2, 1.5, 1], 2],
+      ['bing-spot', 'Bing ranking', 'grey', [3, null, null, null], undefined], // Bing counts nothing still: never dotted
     ])
-    expect(b.partialFrom).toBe(2)
+  })
+
+  // Every day on the axis, readings or not (review, 2026-10-06: an axis of reading days only drew
+  // Sep 25 and Oct 3 side by side, and a "site added" pin landed only on a day with a reading).
+  it('CRITICAL: the axis is every day from the first reading to the last, blank where there is none — and can start earlier', () => {
+    const gaps = stats('google', { searchDays: [sd('skeen', '2026-09-25', 4, 3), sd('skeen', '2026-10-03', 4, 2)] })
+    const b = spotBoard('google', { google: gaps }, 'Skeen')
+    expect(b.days).toEqual(['2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03'])
+    expect(b.lines[0].values).toEqual([3, null, null, null, null, null, null, null, 2])
+    // From the day the site was added, when that is earlier: the pin has a day to sit on.
+    expect(spotBoard('google', { google: gaps }, 'Skeen', '2026-09-23').days[0]).toBe('2026-09-23')
+    expect(spotBoard('google', { google: gaps }, 'Skeen', '2026-09-28').days[0]).toBe('2026-09-25')
   })
 
   // An unfinished day with no spot reading draws no dotted part.
   it('a day still being counted with no reading of the spot marks nothing', () => {
     const late = stats('google', { searchDays: [sd('skeen', '2026-09-29', 4, 2)], preliminaryFrom: '2026-10-01' })
-    expect(spotBoard('google', { google: late }, 'Skeen').partialFrom).toBeUndefined()
+    expect(spotBoard('google', { google: late }, 'Skeen').lines[0].partialFrom).toBeUndefined()
   })
 
   // No searches for the name: no line, and with none at all the chart is empty.
   it('an engine with no name searches draws no line; none at all is an empty board', () => {
     const quiet = stats('google', { searchDays: [sd('chicago dj', '2026-09-29', 5, 30)] })
-    expect(spotBoard('google', { google: quiet }, 'Skeen')).toEqual({ days: [], lines: [], partialFrom: undefined })
+    expect(spotBoard('google', { google: quiet }, 'Skeen')).toEqual({ days: [], lines: [] })
     expect(spotBoard('both', { google: GOOGLE, bing: stats('bing', {}) }, 'Skeen').lines.map((l) => l.key)).toEqual(['google-spot'])
   })
 })
@@ -89,10 +99,9 @@ describe('reachBoard — how often the site was seen in search, and clicked, for
     const b = reachBoard(['google'], { google: ok(GOOGLE), bing: ok(BING) })
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
     expect(b.lines).toEqual([
-      { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], final: [true, false, false], tone: 'ink' },
-      { key: 'google-clicks', engine: 'google', metric: 'clicks', label: 'Clicks from Google', values: [6, 5, 4], final: [true, false, false], tone: 'grey' },
+      { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], final: [true, false, false], tone: 'ink', partialFrom: 1 },
+      { key: 'google-clicks', engine: 'google', metric: 'clicks', label: 'Clicks from Google', values: [6, 5, 4], final: [true, false, false], tone: 'grey', partialFrom: 1 },
     ])
-    expect(b.partialFrom).toBe(1)
   })
 
   // Both on: Google's and Bing's numbers stay apart, never summed into one line.
@@ -105,7 +114,9 @@ describe('reachBoard — how often the site was seen in search, and clicked, for
       ['google-clicks', 'Google clicks', 'ink', true, [null, 6, 5, 4]],
       ['bing-clicks', 'Bing clicks', 'grey', true, [1, 0, null, null]],
     ])
-    expect(b.partialFrom).toBe(2) // Google's first day still being counted, on the shared row of days
+    // Each line dotted from ITS first day still being counted: Google's from Oct 1's row of days
+    // (index 2); Bing's, finished, never (review, 2026-10-06).
+    expect(b.lines.map((l) => [l.key, l.partialFrom])).toEqual([['google-seen', 2], ['bing-seen', undefined], ['google-clicks', 2], ['bing-clicks', undefined]])
   })
 
   // An engine with nothing yet stays at 0 beside the other (Sam, 2026-10-06: "it can just stay at 0").
@@ -130,12 +141,12 @@ describe('reachBoard — how often the site was seen in search, and clicked, for
     expect(reachBoard(['google'], { google: ok(GOOGLE), bing: ok(BING) }).lines.map((l) => l.engine)).toEqual(['google', 'google'])
     const broke: EngineStats = { engine: 'bing', state: 'error', period: P28 }
     expect(reachBoard(['google', 'bing'], { google: ok(GOOGLE), bing: broke }).lines.map((l) => l.key)).toEqual(['google-seen', 'google-clicks'])
-    expect(reachBoard([], { google: ok(GOOGLE), bing: ok(BING) })).toEqual({ days: [], lines: [], partialFrom: undefined })
+    expect(reachBoard([], { google: ok(GOOGLE), bing: ok(BING) })).toEqual({ days: [], lines: [] })
   })
 
   // Bing has no unfinished days, so nothing is dotted.
   it('an engine counting nothing still (Bing never does) marks no day', () => {
-    expect(reachBoard(['bing'], { bing: ok(BING) }).partialFrom).toBeUndefined()
+    expect(reachBoard(['bing'], { bing: ok(BING) }).lines.every((l) => l.partialFrom === undefined)).toBe(true)
   })
 })
 
