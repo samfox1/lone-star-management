@@ -33,6 +33,8 @@
  *           • sends: not within 60 s; per address 5 an hour and 10 a day; per artist 20 an hour;
  *             the whole platform 200 an hour, also when sends arrive at once
  *           • the link: it confirms once; used, unknown and expired all answer 'invalid'
+ *           • removal: an address off every list is forgotten (confirmed, code, link and grace
+ *             cleared) but keeps its send and wrong-try times, so a remove + re-add resets no limit
  *           • only SHA-256 hashes are stored
  * Not here: the legacy-grace SEED, which runs once, at push time, on real artists' rows
  *           (checked locally: one row per artist and lower(email), 14 days, safe to re-run).
@@ -791,6 +793,11 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
   // asks for a new code. Checked at COMMIT (a deferred trigger), because set_enquiry_recipients
   // deletes a kind's whole list and inserts it again in one call: a check at the delete would
   // forget every address a plain re-save keeps.
+  //
+  // Forgotten is NOT deleted (20261006160000, review 2026-10-06). The row also holds the send
+  // and wrong-try times every limit counts, and deleting it let any manager reset them all by
+  // removing an address and adding it back: unlimited codes to a stranger's inbox, and guesses
+  // with no daily cap. So the confirmation, code, link and grace go; the times stay.
   describe('removal forgets', () => {
     /** The manager's own door, the way the dashboard saves a kind's list. */
     async function saveList(slug: string, emails: string[]): Promise<void> {
@@ -809,17 +816,79 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       expect((await row(a.id, email))?.confirmed_at).not.toBeNull()
     }
 
-    it('CRITICAL: taken off every list, it is forgotten; added again, it needs a new code', async () => {
+    it('CRITICAL: taken off every list, it is forgotten; added again, it needs a new code, no sooner than before', async () => {
       const email = fresh('forget')
       await list(a.id, 'booking', email)
       await confirmed(email)
 
       await saveList('booking', [])
-      expect(await row(a.id, email)).toBeNull()
+      // Nothing left that confirms or routes it; its one send (seconds ago) still on record.
+      const forgotten = await row(a.id, email)
+      expect(forgotten).toMatchObject({
+        confirmed_at: null,
+        grace_until: null,
+        code_hash: null,
+        prev_code_hash: null,
+        code_expires_at: null,
+        token_hash: null,
+        token_expires_at: null,
+      })
+      expect(forgotten!.sent_at).toHaveLength(1)
 
       await list(a.id, 'booking', email)
       expect(await routed(a.id, 'booking')).not.toContain(email)
+      // THE RESET THIS CLOSES: removing and re-adding must not empty the 60 s gap.
+      expect(await begin(userA, a.id, email)).toMatchObject({ status: 'too_soon', code: null, token: null })
+      // Past the gap, it gets its new code like any waiting address.
+      await setSends(a.id, email, [ago(2 * MIN)])
       expect((await begin(userA, a.id, email)).status).toBe('sent')
+    })
+
+    it("CRITICAL: removing and re-adding it does not clear the day's wrong tries", async () => {
+      // Ten wrong tries today lock the address. Before 20261006160000 a remove + re-add deleted
+      // that record, so a manager guessing at a stranger's code got 5 fresh tries per round,
+      // with no daily cap at all.
+      const email = fresh('forget-locked')
+      await list(a.id, 'booking', email)
+      await send(a.id, email)
+      const { error } = await svc
+        .from('artist_email_confirmations')
+        .update({ wrong_at: Array.from({ length: 10 }, () => ago(HOUR)) })
+        .eq('artist_id', a.id)
+        .eq('email', email)
+      if (error) throw new Error(error.message)
+      // Planted witness: it IS locked before the round trip.
+      expect((await confirmCode(asA, a.id, email, '000000')).verdict).toBe('locked_today')
+
+      await saveList('booking', [])
+      await list(a.id, 'booking', email)
+      // Past the 60 s gap, so the send goes and only the day's lock can refuse the code.
+      await setSends(a.id, email, [ago(2 * MIN)])
+      const { code } = await send(a.id, email)
+
+      // The RIGHT code, refused: the lock outlived the removal.
+      expect((await confirmCode(asA, a.id, email, code)).verdict).toBe('locked_today')
+      expect((await row(a.id, email))!.confirmed_at).toBeNull()
+      expect(await routed(a.id, 'booking')).not.toContain(email)
+    })
+
+    it('a legacy address in its grace, taken off and put back, receives nothing', async () => {
+      // Grace was for the addresses already on a list the day this shipped; one removed and added
+      // again is a new address (20261006130000). Forgetting must clear the grace, not just the
+      // confirmation, or the re-added address would route unconfirmed for the rest of it.
+      const email = fresh('forget-grace')
+      await list(a.id, 'booking', email)
+      const { error } = await svc
+        .from('artist_email_confirmations')
+        .insert({ artist_id: a.id, email, grace_until: new Date(Date.now() + 24 * HOUR).toISOString() })
+      if (error) throw new Error(error.message)
+      // Planted witness: in its grace, it receives.
+      expect(await routed(a.id, 'booking')).toContain(email)
+
+      await saveList('booking', [])
+      await list(a.id, 'booking', email)
+
+      expect(await routed(a.id, 'booking')).not.toContain(email)
     })
 
     it('still on another list, it stays confirmed', async () => {
@@ -857,7 +926,10 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
 
       const { error: del } = await svc.from('enquiry_kinds').delete().eq('id', (k as { id: string }).id)
       if (del) throw new Error(`delete kind: ${del.message}`)
-      expect(await row(a.id, email)).toBeNull()
+      // Forgotten, and its send kept (a kind deleted is a removal like any other).
+      const forgotten = await row(a.id, email)
+      expect(forgotten).toMatchObject({ confirmed_at: null })
+      expect(forgotten!.sent_at).toHaveLength(1)
     })
   })
 
