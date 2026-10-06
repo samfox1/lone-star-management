@@ -26,8 +26,7 @@ const P28: SearchPeriod = { key: '28d', days: 28, start: '2026-09-05', end: '202
 const day = (date: string, clicks: number, impressions: number, final = true): SearchDay => ({ date, clicks, impressions, final })
 const sd = (key: string, date: string, impressions: number, position: number): SearchDayRow => ({ key, date, impressions, position })
 const stats = (engine: 'google' | 'bing', over: Partial<SearchStats>): SearchStats => ({
-  engine, period: P28, totals: { clicks: 0, impressions: 0, ctr: null, position: null }, series: [], queries: [], searchDays: [],
-  pages: [], countries: null, devices: null, unlisted: { clicks: 0, impressions: 0 }, coverage: null, preliminaryFrom: null, ...over,
+  engine, period: P28, totals: { clicks: 0, impressions: 0, ctr: null, position: null }, series: [], queries: [], searchDays: [], unlisted: { clicks: 0, impressions: 0 }, coverage: null, preliminaryFrom: null, ...over,
 })
 
 const GOOGLE = stats('google', {

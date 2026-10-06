@@ -1,8 +1,9 @@
 /**
  * "HOW FANS FIND YOU": Google's and Bing's search numbers for an artist's site, in ONE shape
  * (Sam, 2026-10-02). PURE: the answers come in already parsed (search-engines/google.ts
- * `searchAnalytics`, bing.ts `trafficStats` / `queryStats` / `pageStats`); the asking lives in
- * search-stats-ask.ts.
+ * `searchAnalytics`, bing.ts `trafficStats` / `queryStats`); the asking lives in
+ * search-stats-ask.ts. Only what the Metrics page shows is asked for: the pages, countries and
+ * devices lists left with the r12 rebuild, and so did their requests (2026-10-06, Sam: yes).
  *
  * The words, the same for both engines:
  *   impressions  how often the site was SEEN in search results (Bing's and Google's word agree)
@@ -22,8 +23,6 @@
  *   • Google's last ~2 days are preliminary (`preliminaryFrom`, from its metadata); its "today"
  *     comes back 0 / 0 because it hasn't counted it yet, so trailing EMPTY preliminary days are
  *     dropped. Inside the data, a day with no row is a real zero day (the engines leave them out).
- *   • A page address ends up in a link: http(s) only, no credentials. Country codes (Google's
- *     ISO alpha-3) and devices come from fixed sets.
  */
 import type { BingDay, BingResult, BingTopRow } from '@/lib/search-engines/bing'
 import type { GoogleResult, GoogleSearchAnswer, GoogleSearchRequest, GoogleSearchRow } from '@/lib/search-engines/google'
@@ -56,14 +55,10 @@ export type SearchStats = {
   totals: SearchTotals
   /** Every day from the first with data to the last, oldest first. */
   series: SearchDay[]
-  /** Top searches / pages, busiest first (at most TOP). */
+  /** Top searches, busiest first (at most TOP). */
   queries: SearchRow[]
   /** Every search's spot per day (Google) or per week (Bing), oldest first, then by search. */
   searchDays: SearchDayRow[]
-  pages: SearchRow[]
-  /** null: this engine doesn't say (Bing). */
-  countries: SearchRow[] | null
-  devices: SearchRow[] | null
   /** In the totals but not in the search list: rare searches the engine hides, and any past the top. */
   unlisted: { clicks: number; impressions: number }
   /** The first and last day the engine has numbers for in the period. */
@@ -82,7 +77,7 @@ export type EngineStats =
   | { engine: SearchEngineId; state: 'no_data'; period: SearchPeriod }
   | { engine: SearchEngineId; state: CouldntAsk; period: SearchPeriod; reason?: string; status?: number }
 
-/** How many searches, pages and countries are kept. */
+/** How many searches are kept. */
 export const TOP = 50
 
 /* ── days ───────────────────────────────────────────────────────────────────────────── */
@@ -166,21 +161,6 @@ function searchText(v: string): string | null {
   return t || null
 }
 
-/** A page address that is safe as a link: http(s), no credentials, not absurdly long. */
-function pageUrl(v: string): string | null {
-  if (!v || v.length > 2048) return null
-  try {
-    const u = new URL(v)
-    return (u.protocol === 'https:' || u.protocol === 'http:') && !u.username && !u.password ? u.href : null
-  } catch {
-    return null
-  }
-}
-
-const country = (v: string) => (/^[a-z]{3}$/i.test(v) ? v.toUpperCase() : null)
-const DEVICES = new Set(['desktop', 'mobile', 'tablet'])
-const device = (v: string) => (DEVICES.has(v.toLowerCase()) ? v.toLowerCase() : null)
-
 /** Rows whose key passes `clean`, renamed to the clean key. */
 function cleanRows<T extends { clicks: number; impressions: number; position: number | null }>(rows: T[], keyOf: (r: T) => string | null, clean: (v: string) => string | null): Raw[] {
   const out: Raw[] = []
@@ -235,15 +215,15 @@ function searchDayRows(rows: { key: string | null; date: string | null; impressi
 /* ── Google ─────────────────────────────────────────────────────────────────────────── */
 
 /** What Tapir asks Google for one period, in order. `total` first: the asker sends it alone and
- *  asks the rest only if Google answered it (one refusal costs one request, not seven).
+ *  asks the rest only if Google answered it (one refusal costs one request, not four).
  *  `searchDay` is every search on every day ([query, date]): the spot line's source. */
-export const GOOGLE_PARTS = ['total', 'date', 'query', 'page', 'country', 'device', 'searchDay'] as const
+export const GOOGLE_PARTS = ['total', 'date', 'query', 'searchDay'] as const
 export type GooglePart = (typeof GOOGLE_PARTS)[number]
 export type GoogleAnswers = Record<GooglePart, GoogleResult<GoogleSearchAnswer>>
 
-const ROW_LIMIT: Record<GooglePart, number> = { total: 1, date: 1000, query: TOP, page: TOP, country: 250, device: 10, searchDay: 25000 }
+const ROW_LIMIT: Record<GooglePart, number> = { total: 1, date: 1000, query: TOP, searchDay: 25000 }
 const DIMENSIONS: Record<GooglePart, GoogleSearchRequest['dimensions']> = {
-  total: undefined, date: ['date'], query: ['query'], page: ['page'], country: ['country'], device: ['device'], searchDay: ['query', 'date'],
+  total: undefined, date: ['date'], query: ['query'], searchDay: ['query', 'date'],
 }
 
 /** Each part's request for the period: fresh (preliminary) days included, as Search Console shows. */
@@ -278,9 +258,6 @@ export function normaliseGoogle(period: SearchPeriod, a: GoogleAnswers): EngineS
       series,
       queries,
       searchDays: searchDayRows(rows('searchDay').map((r) => ({ key: r.keys[0] ?? null, date: r.keys[1] ?? null, impressions: r.impressions, position: r.position })), period),
-      pages: topRows(cleanRows(rows('page'), firstKey, pageUrl), TOP),
-      countries: topRows(cleanRows(rows('country'), firstKey, country), TOP),
-      devices: topRows(cleanRows(rows('device'), firstKey, device), DEVICES.size),
       unlisted: unlistedOf(totals, queries),
       coverage: coverageOf(series),
       preliminaryFrom,
@@ -290,15 +267,15 @@ export function normaliseGoogle(period: SearchPeriod, a: GoogleAnswers): EngineS
 
 /* ── Bing ───────────────────────────────────────────────────────────────────────────── */
 
-export type BingAnswers = { traffic: BingResult<BingDay[]>; queries: BingResult<BingTopRow[]>; pages: BingResult<BingTopRow[]> }
+export type BingAnswers = { traffic: BingResult<BingDay[]>; queries: BingResult<BingTopRow[]> }
 
 /**
- * Bing sends every day it has (traffic) and its top searches / pages a row per WEEK; the period
+ * Bing sends every day it has (traffic) and its top searches a row per WEEK; the period
  * picks the days and the weekly rows dated inside it (an undated row can't be placed: left out).
  * Totals are the days' sums; position comes from the searches only (Bing gives no total rank).
  */
 export function normaliseBing(period: SearchPeriod, a: BingAnswers): EngineStats {
-  const fail = failed('bing', period, [a.traffic, a.queries, a.pages])
+  const fail = failed('bing', period, [a.traffic, a.queries])
   if (fail) return fail
   const ok = <T>(r: BingResult<T[]>) => (r as { ok: true; value: T[] }).value
   const series = dailySeries(
@@ -306,15 +283,13 @@ export function normaliseBing(period: SearchPeriod, a: BingAnswers): EngineStats
     null,
   )
   const queryRows = ok(a.queries).filter((r) => inPeriod(period, r.date))
-  const pageRows = ok(a.pages).filter((r) => inPeriod(period, r.date))
   const queries = topRows(cleanRows(queryRows, (r) => r.key, searchText), TOP)
-  const pages = topRows(cleanRows(pageRows, (r) => r.key, pageUrl), TOP)
   const sums = sumOf(series)
-  if (sums.clicks === 0 && sums.impressions === 0 && !queries.length && !pages.length) return { engine: 'bing', state: 'no_data', period }
+  if (sums.clicks === 0 && sums.impressions === 0 && !queries.length) return { engine: 'bing', state: 'no_data', period }
   const totals: SearchTotals = { ...sums, ctr: ctrOf(sums.clicks, sums.impressions), position: weightedPosition(queryRows) }
   return {
     engine: 'bing',
     state: 'ok',
-    stats: { engine: 'bing', period, totals, series, queries, searchDays: searchDayRows(queryRows, period), pages, countries: null, devices: null, unlisted: unlistedOf(totals, queries), coverage: coverageOf(series), preliminaryFrom: null },
+    stats: { engine: 'bing', period, totals, series, queries, searchDays: searchDayRows(queryRows, period), unlisted: unlistedOf(totals, queries), coverage: coverageOf(series), preliminaryFrom: null },
   }
 }

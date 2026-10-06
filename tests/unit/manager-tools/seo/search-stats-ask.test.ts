@@ -48,7 +48,6 @@ function fakes(over: Partial<{ google: SearchClients['google']; bing: SearchClie
       ? {
           trafficStats: async (site) => (asked.push({ engine: 'bing:traffic', site }), { ok: true, value: [DAY] }),
           queryStats: async (site) => (asked.push({ engine: 'bing:queries', site }), { ok: true, value: [] }),
-          pageStats: async (site) => (asked.push({ engine: 'bing:pages', site }), { ok: true, value: [] }),
         }
       : over.bing
   const deps: SearchStatsDeps = {
@@ -86,7 +85,7 @@ describe('askSearchStats', () => {
     expect(g[0].req).toEqual(googleRequests(r.period).total)
     expect(g.map((a) => a.req)).toEqual(expect.arrayContaining(GOOGLE_PARTS.map((p) => googleRequests(r.period)[p])))
     expect(g).toHaveLength(GOOGLE_PARTS.length)
-    expect(f.asked.filter((a) => a.engine.startsWith('bing')).map((a) => a.engine).sort()).toEqual(['bing:pages', 'bing:queries', 'bing:traffic'])
+    expect(f.asked.filter((a) => a.engine.startsWith('bing')).map((a) => a.engine).sort()).toEqual(['bing:queries', 'bing:traffic'])
   })
 
   // A refused total stops Google there: one request, not six.
@@ -106,7 +105,7 @@ describe('askSearchStats', () => {
     expect([onlyBing.google.state, onlyBing.bing.state]).toEqual(['not_registered', 'ok'])
     const hang = await askSearchStats(ARTIST, '28d', fakes({ google: { searchAnalytics: () => new Promise(() => {}) } }).deps)
     expect([hang.google.state, hang.bing.state]).toEqual(['timeout', 'ok'])
-    const boom = await askSearchStats(ARTIST, '28d', fakes({ bing: { trafficStats: async () => Promise.reject(new Error('x')), queryStats: async () => ({ ok: true, value: [] }), pageStats: async () => ({ ok: true, value: [] }) } }).deps)
+    const boom = await askSearchStats(ARTIST, '28d', fakes({ bing: { trafficStats: async () => Promise.reject(new Error('x')), queryStats: async () => ({ ok: true, value: [] }) } }).deps)
     expect([boom.google.state, boom.bing.state]).toEqual(['ok', 'error'])
   })
 

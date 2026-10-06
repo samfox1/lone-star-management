@@ -4,19 +4,17 @@
  *
  * Code:     src/lib/manager-tools/seo/search-stats.ts
  * Feature:  SEO / GEO page · "How fans find you" (data side, Sam 2026-10-02)
- * Tier:     STRICT (AGENTS.md "Test depth"): it reads outside answers, decides what the artist is
- *           told about their own audience, and a page address from it ends up in a link.
+ * Tier:     STRICT (AGENTS.md "Test depth"): it reads outside answers and decides what the artist is
+ *           told about their own audience.
  * Covers:   • the periods: Google's day (Pacific time), last 28 days / last 3 months, both ends in
  *           • Skeen's REAL Google answers end to end: totals from the TOTAL (the query rows don't
  *             add up to it: Google hides rare searches), the "unlisted" rest, the daily series with
  *             Google's preliminary days marked and its not-yet-counted "today" dropped, queries,
- *             pages, countries, devices
+ *             and every search's spot by day
  *           • a day with no row inside the data is a real zero day; nothing outside the period
- *           • only http(s) page addresses (no javascript:, no credentials); country and device
- *             codes from a fixed set; control characters out of a search
- *           • Bing: totals from the daily traffic, top searches and pages merged across Bing's
- *             weekly rows (position weighted by how often each was SEEN), no countries or devices
- *             (Bing doesn't say: null, not empty)
+ *           • control characters out of a search, and it is cut to 200
+ *           • Bing: totals from the daily traffic, top searches merged across Bing's weekly rows
+ *             (position weighted by how often each was SEEN)
  *           • nothing recorded is `no_data`; a refusal is `quota` (429, Google 403 "quota", Bing
  *             ErrorCode 4/5) or `error`, and carries no numbers at all
  *           • every Google request is derived from the period (the asker sends exactly these)
@@ -52,7 +50,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 /** A fixture through the REAL Google parser. */
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const creds = { client_email: 'x@y.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() }
-async function viaGoogle(body: unknown, dims: ('date' | 'query' | 'page' | 'country' | 'device')[] = []): Promise<GoogleResult<GoogleSearchAnswer>> {
+async function viaGoogle(body: unknown, dims: ('date' | 'query')[] = []): Promise<GoogleResult<GoogleSearchAnswer>> {
   const fetcher = (async (u: string) => (u.includes('oauth2') ? json({ access_token: 't' }) : json(body))) as unknown as typeof fetch
   return googleClient(creds, { fetcher }).searchAnalytics(SITE, { startDate: '2026-07-02', endDate: '2026-10-02', dimensions: dims })
 }
@@ -60,9 +58,6 @@ const skeenGoogle = async (): Promise<GoogleAnswers> => ({
   total: await viaGoogle(FX.google_total_all),
   date: await viaGoogle(FX.google_date_all, ['date']),
   query: await viaGoogle(FX.google_query_all, ['query']),
-  page: await viaGoogle(FX.google_page_all, ['page']),
-  country: await viaGoogle(FX.google_country_all, ['country']),
-  device: await viaGoogle(FX.google_device_all, ['device']),
   searchDay: await viaGoogle(FX.google_query_date_all, ['query', 'date']),
 })
 /** A fixture through the REAL Bing parsers: days (GetRankAndTrafficStats) or top rows. */
@@ -128,21 +123,14 @@ describe('Google: Skeen’s real numbers', () => {
     expect(r.stats.coverage).toEqual({ from: '2026-09-29', to: '2026-10-01' })
   })
 
-  // Queries, pages, countries (ISO alpha-3, upper case) and devices, busiest first.
-  it('lists queries, pages, countries and devices', async () => {
+  // The searches, busiest first.
+  it('lists the searches, busiest first', async () => {
     const r = normaliseGoogle(P3M, await skeenGoogle())
     if (r.state !== 'ok') throw new Error(r.state)
     expect(r.stats.queries).toEqual([
       { key: 'skeen dj', clicks: 9, impressions: 35, ctr: 9 / 35, position: 2.5428571428571427 },
       { key: 'skeen music', clicks: 2, impressions: 4, ctr: 0.5, position: 2.25 },
       { key: 'dj skeen', clicks: 1, impressions: 3, ctr: 1 / 3, position: 2.666666666666667 },
-    ])
-    expect(r.stats.pages).toEqual([{ key: 'https://www.skeenmusic.com/', clicks: 15, impressions: 56, ctr: 15 / 56, position: 2.357142857142857 }])
-    expect(r.stats.countries?.map((c) => c.key)).toEqual(['USA', 'NLD', 'BMU', 'GBR', 'IND', 'AUS', 'DEU', 'AUT', 'CHE', 'ITA', 'KOR', 'NOR', 'SWE'])
-    expect(r.stats.countries?.[0]).toEqual({ key: 'USA', clicks: 11, impressions: 36, ctr: 11 / 36, position: 2.6944444444444446 })
-    expect(r.stats.devices).toEqual([
-      { key: 'desktop', clicks: 13, impressions: 38, ctr: 13 / 38, position: 2.3421052631578947 },
-      { key: 'mobile', clicks: 2, impressions: 18, ctr: 2 / 18, position: 2.388888888888889 },
     ])
   })
 })
@@ -227,26 +215,13 @@ describe('Google: the edges', () => {
     expect(s.queries[0]).toMatchObject({ ctr: null, position: null })
   })
 
-  // A page address ends up in a link: http(s) only, no credentials, no junk. Two spellings Google
-  // treats as one page are one row.
-  it('keeps only http(s) page addresses', () => {
-    const bad = ['javascript:alert(1)', 'data:text/html,x', '/about', 'https://user:pw@www.skeenmusic.com/', 'ftp://www.skeenmusic.com/', `https://www.skeenmusic.com/${'a'.repeat(2100)}`, '']
-    const s = stats(answers({ page: { rows: [...bad.map((u) => row([u], 5, 5)), row(['https://www.skeenmusic.com/music'], 1, 2), row(['http://www.skeenmusic.com/'], 1, 1)], firstIncompleteDate: null } }))
-    expect(s.pages.map((p) => p.key)).toEqual(['https://www.skeenmusic.com/music', 'http://www.skeenmusic.com/'])
-  })
-
-  // Countries are three letters (Google's ISO alpha-3), devices one of three; a search keeps no
-  // control characters and is cut to 200.
-  it('keeps country and device codes from a fixed set and cleans searches', () => {
+  // A search keeps no control characters and is cut to 200.
+  it('cleans searches', () => {
     const s = stats(
       answers({
-        country: { rows: [row(['usa'], 1, 1), row(['zzz'], 1, 1), row(['us'], 1, 1), row(['usa1'], 1, 1), row(['<b>'], 1, 1)], firstIncompleteDate: null },
-        device: { rows: [row(['TABLET'], 1, 1), row(['SMART_TV'], 1, 1), row(['mobile'], 1, 1)], firstIncompleteDate: null },
         query: { rows: [row(['skeen\u0000 dj\u001b'], 1, 1), row(['\u0007'], 1, 1), row(['x'.repeat(300)], 0, 1)], firstIncompleteDate: null },
       }),
     )
-    expect(s.countries?.map((c) => c.key)).toEqual(['USA', 'ZZZ'])
-    expect(s.devices?.map((d) => d.key)).toEqual(['mobile', 'tablet'])
     expect(s.queries.map((q) => q.key)).toEqual(['skeen dj', 'x'.repeat(200)])
   })
 
@@ -279,19 +254,19 @@ describe('Google: the edges', () => {
     }
     expect(normaliseGoogle(P28, { ...base, query: fail(429) }).state).toBe('quota')
     expect(normaliseGoogle(P28, { ...base, total: fail(403, 'Quota exceeded for quota metric'), date: fail(500) }).state).toBe('quota')
-    expect(normaliseGoogle(P28, { ...base, page: fail(403, 'User does not have sufficient permission') }).state).toBe('error')
-    expect(normaliseGoogle(P28, { ...base, total: fail(500), device: fail(429) }).state).toBe('quota')
+    expect(normaliseGoogle(P28, { ...base, query: fail(403, 'User does not have sufficient permission') }).state).toBe('error')
+    expect(normaliseGoogle(P28, { ...base, total: fail(500), date: fail(429) }).state).toBe('quota')
     expect(normaliseGoogle(P28, { ...base, total: { ok: false, reason: 'google_network' } })).toEqual({ engine: 'google', state: 'error', period: P28, reason: 'google_network' })
   })
 })
 
 describe('Bing', () => {
   const D = (iso: string) => `/Date(${Date.parse(`${iso}T07:00:00Z`)}-0700)/`
-  const answers = (traffic: BingResult<BingDay[]>, queries: BingResult<BingTopRow[]> = ok([]), pages: BingResult<BingTopRow[]> = ok([])): BingAnswers => ({ traffic, queries, pages })
+  const answers = (traffic: BingResult<BingDay[]>, queries: BingResult<BingTopRow[]> = ok([])): BingAnswers => ({ traffic, queries })
 
   // Skeen today: Bing answered every call, with nothing. That is no_data, not zeros.
   it('is no_data for Skeen’s real empty answers', async () => {
-    const r = normaliseBing(P3M, answers(await bingDays(FX.bing_traffic_skeen), await bingRows(FX.bing_query_skeen), await bingRows(FX.bing_page_skeen)))
+    const r = normaliseBing(P3M, answers(await bingDays(FX.bing_traffic_skeen), await bingRows(FX.bing_query_skeen)))
     expect(r).toEqual({ engine: 'bing', state: 'no_data', period: P3M })
   })
 
@@ -302,7 +277,7 @@ describe('Bing', () => {
   })
 
   // Totals are the daily traffic's sums; Bing's weekly query rows are merged per search; position
-  // is weighted by impressions (how often each was SEEN); Bing names no countries or devices.
+  // is weighted by impressions (how often each was SEEN).
   it('sums the days, merges the weekly rows and weights position by impressions', async () => {
     const traffic = await bingDays({ d: [{ Date: D('2026-09-20'), Clicks: 2, Impressions: 10 }, { Date: D('2026-09-22'), Clicks: 1, Impressions: 30 }, { Date: D('2026-08-01'), Clicks: 50, Impressions: 50 }] })
     const queries = await bingRows({
@@ -314,8 +289,7 @@ describe('Bing', () => {
         { Query: 'undated', Clicks: 9, Impressions: 9, AvgImpressionPosition: 1 },
       ],
     })
-    const pages = await bingRows({ d: [{ Query: 'javascript:alert(1)', Date: D('2026-09-21'), Clicks: 3, Impressions: 3 }, { Query: 'https://www.skeenmusic.com/', Date: D('2026-09-21'), Clicks: 2, Impressions: 40, AvgImpressionPosition: 3 }] })
-    const r = normaliseBing(P28, answers(traffic, queries, pages))
+    const r = normaliseBing(P28, answers(traffic, queries))
     if (r.state !== 'ok') throw new Error(r.state)
     expect(r.stats.totals).toEqual({ clicks: 3, impressions: 40, ctr: 3 / 40, position: (10 * 2 + 30 * 4) / 40 })
     expect(r.stats.series).toEqual([
@@ -327,9 +301,6 @@ describe('Bing', () => {
       { key: 'skeen', clicks: 2, impressions: 40, ctr: 2 / 40, position: 3.5 },
       { key: 'skeen dj', clicks: 0, impressions: 5, ctr: 0, position: null },
     ])
-    expect(r.stats.pages).toEqual([{ key: 'https://www.skeenmusic.com/', clicks: 2, impressions: 40, ctr: 2 / 40, position: 3 }])
-    expect(r.stats.countries).toBeNull()
-    expect(r.stats.devices).toBeNull()
     expect(r.stats.preliminaryFrom).toBeNull()
     expect(r.stats.unlisted).toEqual({ clicks: 1, impressions: 0 })
     // Every search's spot by WEEK (Bing's rows are weekly), dated and ranked rows only, oldest first.
@@ -344,7 +315,7 @@ describe('Bing', () => {
     const fail = (status: number, code?: number) => ({ ok: false as const, reason: 'bing_stats' as const, status, ...(code === undefined ? {} : { code }) })
     expect(normaliseBing(P28, answers(fail(400, 4)))).toEqual({ engine: 'bing', state: 'quota', period: P28, reason: 'bing_stats', status: 400 })
     expect(normaliseBing(P28, answers(ok([]), fail(400, 5))).state).toBe('quota')
-    expect(normaliseBing(P28, answers(ok([]), ok([]), fail(429))).state).toBe('quota')
+    expect(normaliseBing(P28, answers(ok([]), fail(429))).state).toBe('quota')
     expect(normaliseBing(P28, answers(fail(400, 14))).state).toBe('error')
     expect(normaliseBing(P28, answers({ ok: false, reason: 'bing_auth', status: 401 }))).toEqual({ engine: 'bing', state: 'error', period: P28, reason: 'bing_auth', status: 401 })
   })

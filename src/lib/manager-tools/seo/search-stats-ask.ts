@@ -35,7 +35,7 @@ import {
 
 export type SearchClients = {
   google: Pick<GoogleClient, 'searchAnalytics'> | null
-  bing: Pick<BingClient, 'trafficStats' | 'queryStats' | 'pageStats'> | null
+  bing: Pick<BingClient, 'trafficStats' | 'queryStats'> | null
 }
 
 export type SearchStatsDeps = {
@@ -79,8 +79,8 @@ async function askGoogle(client: NonNullable<SearchClients['google']>, siteUrl: 
 }
 
 async function askBing(client: NonNullable<SearchClients['bing']>, siteUrl: string, period: SearchPeriod): Promise<EngineStats> {
-  const [traffic, queries, pages] = await Promise.all([client.trafficStats(siteUrl), client.queryStats(siteUrl), client.pageStats(siteUrl)])
-  return normaliseBing(period, { traffic, queries, pages })
+  const [traffic, queries] = await Promise.all([client.trafficStats(siteUrl), client.queryStats(siteUrl)])
+  return normaliseBing(period, { traffic, queries })
 }
 
 /** One artist's search numbers for the period, from every engine the site is registered with. */

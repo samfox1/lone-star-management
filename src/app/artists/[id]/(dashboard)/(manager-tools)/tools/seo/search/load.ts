@@ -32,8 +32,8 @@ const cachedStats = unstable_cache(
     return answer
   },
   // v2 (2026-10-02): the answer carries `added`, the registration dates; a v1 entry has none.
-  // v3 (2026-10-06): each engine's stats carry `searchDays` (every search's spot by day).
-  ['search-stats-v3'],
+  // v4 (2026-10-06): `searchDays` in, the pages / countries / devices lists out.
+  ['search-stats-v4'],
   { revalidate: SIX_HOURS_S, tags: ['search-stats'] },
 )
 
