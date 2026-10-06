@@ -38,7 +38,8 @@ const PHOTO_PURPOSES = new Set(['profile_photo', 'gallery_image'])
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
 
 /** The shape the bridge accepts before it writes `open.spotify.com/artist/<id>` into the fact
- *  card (`sameAsFrom`). known.test.ts checks this against `sameAsFrom` itself. */
+ *  card (`sameAsFrom`). tests/unit/seo-tests/runs/what-tapir-knows.test.ts checks this against
+ *  `sameAsFrom` itself. */
 const SPOTIFY_ID = /^[A-Za-z0-9]+$/
 
 /**

@@ -166,9 +166,8 @@ export function seoValueError(key: string, value: string, ctx?: Partial<FactCont
     // The REGISTRY check only. Whether the connected site can actually render `home` or
     // `page` is in its manifest, which is announced at runtime over the bridge and stored
     // nowhere — so no server call can consult it (SEO_GEO_PLAN B2 assumed otherwise). The
-    // manifest filter therefore lives in the two panels that offer the choice
-    // (editor/panels/site-tools.tsx and tools/seo/sections/about.tsx), and both offer only
-    // `hidden` when they hold no declaration. A value that slips past anyway is inert, not
+    // manifest filter therefore lives in the panel that offers the choice
+    // (editor/panels/site-tools.tsx), which offers only `hidden` when it holds no declaration. A value that slips past anyway is inert, not
     // destructive: the bridge's aboutPlacement falls back to the site's declared default.
     return (ABOUT_PLACEMENTS as readonly string[]).includes(value) ? null : 'Unknown about placement.'
   }

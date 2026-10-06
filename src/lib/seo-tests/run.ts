@@ -2,7 +2,7 @@
  * ONE RUN of the SEO / GEO tests (SEO_TEST_IDS): claim → read what Tapir knows → gather the evidence ONCE →
  * run every test in SEO_TEST_IDS order → store. The page only ever reads what this stored.
  *
- * What a run guarantees, each pinned by tests/unit/seo-tests/run.test.ts:
+ * What a run guarantees, each pinned by tests/unit/seo-tests/runs/running.test.ts:
  *   • ONE AT A TIME, cool-downs, publish coalescing and a per-manager ceiling, enforced by the
  *     DATABASE (seo_test_claim; the rules live in the migration). A refused claim gathers nothing
  *     and fetches nothing, so a hammered button cannot hammer the artist's site or MusicBrainz.
