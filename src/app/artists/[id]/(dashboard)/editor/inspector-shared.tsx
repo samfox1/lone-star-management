@@ -4,6 +4,7 @@ import { Icon, type IconName } from '@/components/ui/icons'
 import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
 import { formatCount, isTooLong, nearLimit, tooLongError } from '@/lib/site-editor/text-limits'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
+import { landedOnControl } from '../(manager-tools)/_ui/edit-row'
 
 /**
  * The shared vocabulary of the editor inspector — the primitives every panel (Style,
@@ -115,16 +116,16 @@ export function runSerialized(
  * dont think that I should only be able to click the button to do it.").
  *
  * A row's click opens its editing UNLESS it landed on a control of its own inside the row (a
- * button, a link, a field, a switch), which keeps doing its own thing. The row never becomes a
- * button itself: its pencil (or its text, in a click-to-edit list) stays the focusable control,
- * so nothing interactive nests inside anything interactive.
+ * button, a link, a field, a switch, a menu, an inline panel), which keeps doing its own thing,
+ * or in a portal opened from the row. The row never becomes a button itself: its pencil (or its
+ * text, in a click-to-edit list) stays the focusable control, so nothing interactive nests
+ * inside anything interactive.
+ *
+ * What counts as a control is the dashboard's own list (landedOnControl, _ui/edit-row.tsx), not
+ * a copy: the editor kept a shorter one that had already drifted (no menus, no portal guard).
  */
-const OWN_CONTROLS = 'button, a[href], input, select, textarea, label, [role="checkbox"], [role="switch"]'
-
-/** Whether a row's click landed on a control of its own rather than on the row around it. */
 export function clickedAControl(e: React.MouseEvent<HTMLElement>): boolean {
-  const hit = e.target instanceof Element ? e.target.closest(OWN_CONTROLS) : null
-  return !!hit && hit !== e.currentTarget && e.currentTarget.contains(hit)
+  return landedOnControl(e.currentTarget, e.target)
 }
 
 /** A click-to-edit list's row (EditList, one item per row): a click anywhere on it opens its
@@ -208,8 +209,12 @@ export function FieldRow({
  * dashboard's one pencil rule (EDIT_TARGET / REVEAL_ON_HOVER, _ui/styles.ts). One row
  * shape for Text, Links, Merch, and Style — the "version A" prototype. An empty value
  * renders muted so a blank reads as "nothing set yet", not broken.
+ *
+ * Not the dashboard's EditRow (_ui/edit-row.tsx), which clicks its pencil: this row calls
+ * onEdit itself and ignores a click on its header while open, so a stray click can't toggle
+ * it shut. Both read the same control list (clickedAControl).
  */
-export function EditRow({
+export function PanelRow({
   label,
   value,
   empty = false,

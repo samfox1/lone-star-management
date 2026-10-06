@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SiteTools } from '@/app/artists/[id]/(dashboard)/editor/panels/site-tools'
-import { EditRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
+import { PanelRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
 import { saveArtistFactAction, saveCursorFieldAction, saveSeoFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { ABOUT_PLACEMENTS } from '@samfox1/site-bridge/seo'
 import { CURSOR_CONTENT_KEYS, type CursorSettings } from '@samfox1/site-bridge/cursor'
@@ -204,7 +204,7 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
 
   it('CRITICAL: the text rows sit FLUSH with the select rows, not indented', () => {
     // Sam, 2026-09-09, with a screenshot: "this indentation isnt good. it should be all
-    // flush." EditRow carries its own px-4 because its usual home is a full-bleed list;
+    // flush." PanelRow carries its own px-4 because its usual home is a full-bleed list;
     // inside PANEL_BODY's px-5 that stacked into a 16px step, so Title and Genre sat in
     // from Social card and About. Asserted as a CLASS because jsdom does no layout — the
     // real check is the screenshot, and this stops the padding creeping back.
@@ -212,15 +212,15 @@ describe('SiteTools — SEO / GEO group (SEO_GEO_PLAN B6)', () => {
       <SiteTools artistId="artist-1" photos={[]} values={NO_VALUES} seo={{ seo_title: 'SKEEN' }} />,
     )
     const row = screen.getByRole('button', { name: 'Edit Title' }).closest('div.group')
-    expect(row, 'the Title row is not an EditRow any more').not.toBeNull()
+    expect(row, 'the Title row is not a PanelRow any more').not.toBeNull()
     expect(row?.className, 'the SEO rows are indented again').not.toContain('px-4')
     expect(container.querySelector('.px-4')).toBeNull()
-    // The WITNESS, rendered rather than claimed: a plain EditRow still pads, so what the
+    // The WITNESS, rendered rather than claimed: a plain PanelRow still pads, so what the
     // SEO rows have is a flush VARIANT and not padding deleted for every panel. (The
     // first version of this test asserted only the absence above and called it a
     // witness — review, 2026-09-09.)
     cleanup()
-    const plain = render(<EditRow label="Elsewhere" value="v" onEdit={() => {}} />)
+    const plain = render(<PanelRow label="Elsewhere" value="v" onEdit={() => {}} />)
     expect(plain.container.querySelector('div.group')?.className).toContain('px-4')
   })
 

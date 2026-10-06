@@ -3,7 +3,7 @@ import { buttonClass } from '@/components/ui/ui'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { useMemo, useState } from 'react'
 import { applyStyleValue, buildItemStyleControls, fromItemStored, toItemStored, type StyleControl } from '@/lib/site-editor/style-controls'
-import { EditRow, FIELD, GroupLabel, SaveLine } from './inspector-shared'
+import { PanelRow, FIELD, GroupLabel, SaveLine } from './inspector-shared'
 import { EditorPanel } from './editor-panel'
 import { StyleControlRow } from './panels/style-tools'
 import type { SiteStyleOptions } from '@/lib/site-editor/style-controls'
@@ -38,7 +38,7 @@ const KIND_LABEL: Record<MediaKind, string> = { photo: 'Photo', artwork: 'Artwor
 
 /**
  * Alt text + fact-sheet kind: ONE row on the panel, the description itself (Sam, 2026-10-05:
- * click-to-edit, no "Edit alt tag" words). It is the panel's EditRow: "ALT TEXT" over the words,
+ * click-to-edit, no "Edit alt tag" words). It is a PanelRow: "ALT TEXT" over the words,
  * a pencil that shows on hover, and a click anywhere on the row opens the small modal. Never the
  * recommendation (Sam, 2026-08-26: "not the name"): that is the modal input's placeholder.
  *
@@ -62,7 +62,7 @@ function AltRow({
       {/* pt-2 above; the Style label brings its own pt-4 below. px-1 + the row's px-4 puts its
           words on the panel's 20px line, under the ↻ and over STYLE. */}
       <div className="px-1 pt-2">
-        <EditRow label="Alt text" value={alt.value || 'Not set'} empty={!alt.value} editLabel={`alt for ${label}`} onEdit={() => setOpen(true)} />
+        <PanelRow label="Alt text" value={alt.value || 'Not set'} empty={!alt.value} editLabel={`alt for ${label}`} onEdit={() => setOpen(true)} />
       </div>
       {open && <AltModal label={label} alt={alt} kind={kind} slug={slug} onClose={() => setOpen(false)} />}
     </>

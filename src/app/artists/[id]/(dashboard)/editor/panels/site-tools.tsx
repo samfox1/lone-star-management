@@ -20,7 +20,7 @@ import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { mediaUrl } from '@/lib/storage-url'
 import { ColorPalette } from '../color-picker'
-import { clickedAControl, ControlRow, EditRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
+import { clickedAControl, ControlRow, PanelRow, GroupLabel, PANEL_BODY, SaveLine } from '../inspector-shared'
 import { RowIcon } from '../../(manager-tools)/_ui/row-icon'
 import { ChoiceMenu } from '../../(manager-tools)/_ui/choice-menu'
 import { SCHEMA_TYPES } from '@/lib/manager-tools/profile/profile'
@@ -284,7 +284,7 @@ export function SiteTools({
  *  which is where Sam said cursor files should live. */
 
 /**
- * [label] [snippet] [pencil] — the row every other panel uses (EditRow), so "Edit" is one
+ * [label] [snippet] [pencil] — the row every other panel uses (PanelRow), so "Edit" is one
  * gesture everywhere in the inspector. It replaced a label + inline `<input>`: a
  * description clipped mid-word in a 200px box, and the only way to read it was to click
  * in and arrow across (Sam, 2026-09-09, with a screenshot).
@@ -305,7 +305,7 @@ function SeoEditRow({
   onEdit?: (field: SiteTextField) => void
 }) {
   return (
-    <EditRow
+    <PanelRow
       label={label}
       value={value || 'Not set'}
       empty={!value}

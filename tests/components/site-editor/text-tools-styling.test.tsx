@@ -574,20 +574,20 @@ describe('Reset on a section region restores the SITE’S value, not nothing', (
   })
 })
 
-import { EditRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
+import { PanelRow } from '@/app/artists/[id]/(dashboard)/editor/inspector-shared'
 
-describe('EditRow — the version-A row primitive', () => {
+describe('PanelRow — the version-A row primitive', () => {
   it('CRITICAL: two-line mode shows KEY over value, with a muted placeholder when empty', () => {
-    const { rerender } = render(<EditRow label="Name" value="Juniper Hale" onEdit={() => {}} />)
+    const { rerender } = render(<PanelRow label="Name" value="Juniper Hale" onEdit={() => {}} />)
     expect(screen.getByText('Name')).toBeTruthy()
     expect(screen.getByText('Juniper Hale')).toBeTruthy()
     // Empty → the placeholder text is what shows as the value.
-    rerender(<EditRow label="Bio" value="Not set" empty onEdit={() => {}} />)
+    rerender(<PanelRow label="Bio" value="Not set" empty onEdit={() => {}} />)
     expect(screen.getByText('Not set')).toBeTruthy()
   })
 
   it('CRITICAL: single-line mode (no value) shows ONLY the label — the Style row', () => {
-    const { container } = render(<EditRow label="Masthead bar" onEdit={() => {}} />)
+    const { container } = render(<PanelRow label="Masthead bar" onEdit={() => {}} />)
     expect(screen.getByText('Masthead bar')).toBeTruthy()
     // No second value line: the label is the only text node in the row (two-line mode
     // would render a second span for the value).
@@ -596,7 +596,7 @@ describe('EditRow — the version-A row primitive', () => {
 
   it('the pencil fires onEdit and is labelled "Edit <label>"', () => {
     const onEdit = vi.fn()
-    render(<EditRow label="Tagline" value="x" onEdit={onEdit} />)
+    render(<PanelRow label="Tagline" value="x" onEdit={onEdit} />)
     fireEvent.click(screen.getByRole('button', { name: 'Edit Tagline' }))
     expect(onEdit).toHaveBeenCalledTimes(1)
   })

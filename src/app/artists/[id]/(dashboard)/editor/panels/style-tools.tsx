@@ -16,7 +16,7 @@ import {
   type SiteStyleOptions,
   type StyleControl, sliderSteps, sliderIndex } from '@/lib/site-editor/style-controls'
 import {
-  EditRow,
+  PanelRow,
   ControlRow,
   SaveLine,
   GroupLabel,
@@ -399,7 +399,7 @@ export function StyleTools({
                 {/* Version-A row: just the region name, a hover pencil (Sam,
                     2026-08-12 — no "Paper · 2px" value line). The pencil reveals the
                     controls inline below, the same as the Links rows; open, it is an X. */}
-                <EditRow label={rowLabel} expanded={isOpen} onEdit={() => setOpen(isOpen ? null : r.key)} />
+                <PanelRow label={rowLabel} expanded={isOpen} onEdit={() => setOpen(isOpen ? null : r.key)} />
                 {isOpen && (
                   <div className={PANEL_BODY}>
                     {/* Site-wide regions get SURFACE controls only (controlsForRegion):

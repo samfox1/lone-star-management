@@ -1,6 +1,6 @@
 import { groupByPrefix, sectionRowLabel } from '@/lib/site-editor/manifest'
 import { type EditorTextField } from '../inspector-types'
-import { GroupLabel, SaveLine, EditRow, EYEBROW, type SaveStatus } from '../inspector-shared'
+import { GroupLabel, SaveLine, PanelRow, EYEBROW, type SaveStatus } from '../inspector-shared'
 import { isTooLong } from '@/lib/site-editor/text-limits'
 import { cx } from '@/lib/cx'
 
@@ -43,7 +43,7 @@ export function TextTools({
   const row = (f: EditorTextField, heading: string) => {
     const value = values[f.key] ?? ''
     // Under a heading, drop the heading word — "Hero" › "Name", not "Hero name".
-    // The full label stays the aria name (EditRow builds "Edit <label>").
+    // The full label stays the aria name (PanelRow builds "Edit <label>").
     const rowLabel = sectionRowLabel(heading, f.label) || f.label
     // An unset field falls back to the site's own words when the manifest supplies
     // them — "Empty" is useless to someone looking at a page of words.
@@ -53,7 +53,7 @@ export function TextTools({
     // them), so the row says so rather than passing them off as saved.
     const unsaved = f.maxLength !== undefined && isTooLong(value, f.maxLength)
     return (
-      <EditRow
+      <PanelRow
         key={f.key}
         label={rowLabel}
         value={shown}

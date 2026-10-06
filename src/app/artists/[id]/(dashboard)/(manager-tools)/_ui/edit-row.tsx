@@ -58,6 +58,19 @@ const CONTROL = [
   ),
 ].join(',')
 
+/**
+ * Whether a click on `row` had a job of its own: it landed on a control inside the row, or in a
+ * portal opened from it (a portal's click bubbles through React, not the DOM, so its target is
+ * not inside the row). THE one test of "a control, not the row" (Sam, 2026-10-05: the row is the
+ * target): the site editor's rows read it too (clickedAControl, editor/inspector-shared.tsx),
+ * so the dashboard and the editor can't drift on what counts as a control.
+ */
+export function landedOnControl(row: HTMLElement, target: EventTarget | null): boolean {
+  if (!(target instanceof Element) || !row.contains(target)) return true
+  const control = target.closest(CONTROL)
+  return !!control && control !== row && row.contains(control)
+}
+
 /** The pointer shows a hand only on a row that has something to open (or add). */
 const OPENS = 'has-[[data-edit-trigger]:not(:disabled)]:cursor-pointer has-[[data-add-trigger]:not(:disabled)]:cursor-pointer'
 
@@ -79,7 +92,7 @@ const TYPING = 'input:not([type="file"]), textarea, select, [contenteditable]:no
 const addAtPress = new WeakMap<HTMLElement, boolean>()
 
 /** The row's mousedown, before the press blurs or closes anything: may its + take this click? */
-export function noteRowPress(e: MouseEvent<HTMLElement>) {
+function noteRowPress(e: MouseEvent<HTMLElement>) {
   const row = e.currentTarget
   const focused = typeof document === 'undefined' ? null : document.activeElement
   const typing = !!focused && focused !== row && row.contains(focused) && focused.matches(TYPING)
@@ -87,17 +100,15 @@ export function noteRowPress(e: MouseEvent<HTMLElement>) {
 }
 
 /** The row's click: open its trigger, unless the click had a job of its own. */
-export function openRowEdit(e: MouseEvent<HTMLElement>) {
+function openRowEdit(e: MouseEvent<HTMLElement>) {
   const row = e.currentTarget
   // Read and forget the press's note first, so no early return below leaves it for the next click.
   const hadAdd = addAtPress.get(row)
   addAtPress.delete(row)
   if (e.defaultPrevented) return
-  const target = e.target
-  // A portal's click (a modal opened from inside the row) bubbles through React, not the DOM.
-  if (!(target instanceof Element) || !row.contains(target)) return
-  const control = target.closest(CONTROL)
-  if (control && row.contains(control)) return
+  if (landedOnControl(row, e.target)) return
+  // landedOnControl has ruled out anything that is not an Element inside the row.
+  const target = e.target as Element
   const selection = typeof window.getSelection === 'function' ? window.getSelection() : null
   if (selection && !selection.isCollapsed && selection.anchorNode && row.contains(selection.anchorNode)) return
   // A pencil first; only a row with none hands the click to its + or upload glyph.
