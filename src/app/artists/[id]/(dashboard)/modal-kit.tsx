@@ -149,6 +149,9 @@ function Editable({
       e.preventDefault() // inside a form this must never submit it
       void commit(draft.trim())
     } else if (e.key === 'Escape') {
+      // "Mine": CardModal closes the card on any Escape no field has claimed, so without
+      // this, cancelling an edit to a venue closed the whole tour date (as EditList's did).
+      e.preventDefault()
       setDraft(current)
       setEditing(false)
     }

@@ -19,6 +19,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { CardModal } from '@/app/artists/[id]/(dashboard)/card-modal'
+import { KvField } from '@/app/artists/[id]/(dashboard)/modal-kit'
 
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
@@ -163,5 +164,24 @@ describe('CardModal Escape', () => {
     } finally {
       document.removeEventListener('keydown', handled)
     }
+  })
+
+  // The real field behind every modal row: Escape cancels the edit and the card stays open.
+  it('Escape in a modal row’s field (KvField) cancels the edit, not the card', () => {
+    // Every KvField and KvCells row in the song, release, tour, merch and video cards is this
+    // field. Its Escape only reset the draft, so cancelling a typo in a venue closed the date.
+    const onClose = vi.fn()
+    render(
+      <CardModal open onClose={onClose} label="Song">
+        <KvField label="Title" value="Old" onSave={vi.fn()} />
+      </CardModal>,
+    )
+    fireEvent.click(screen.getByText('Old'))
+    const input = screen.getByRole('textbox', { name: 'Title' })
+    fireEvent.change(input, { target: { value: 'typo' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull()
+    expect(screen.getByText('Old')).toBeInTheDocument()
   })
 })
