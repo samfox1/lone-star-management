@@ -179,7 +179,7 @@ describe('Bing with no numbers yet', () => {
     // Beside Google's numbers: no note row (Sam, 2026-10-06), only the amber dot on Bing's button.
     // The ranking reads as Google alone; the seen / clicked chart keeps Bing on, at zero.
     expect(document.querySelector('[data-note-engine="bing"]')).toBeNull()
-    expect(within(header()).getByRole('checkbox', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
+    expect(within(header()).getByRole('checkbox', { name: 'Bing ranking' }).querySelector('[data-dot="pending"]')).not.toBeNull()
     expect(drawn()).toEqual(['google-spot', 'google-seen', 'bing-seen', 'google-clicks', 'bing-clicks'])
     expect(facts('Seen and clicked')).toEqual([
       expect.stringMatching(/^Google seen56/), expect.stringMatching(/^Bing seen0/),
@@ -219,10 +219,10 @@ describe('the switches', () => {
   it('CRITICAL: Google and Bing are toggles, both on; Bing off shows Google alone and goes in the address; 3 months navigates with p=3m', () => {
     const push = vi.spyOn(window.history, 'pushState')
     show(answer(ok(GOOGLE), ok(BING)))
-    expect(within(header()).getAllByRole('checkbox').map((c) => [c.getAttribute('aria-label'), c.getAttribute('aria-checked')])).toEqual([['Google', 'true'], ['Bing', 'true']])
+    expect(within(header()).getAllByRole('checkbox').map((c) => [c.getAttribute('aria-label'), c.getAttribute('aria-checked')])).toEqual([['Google ranking', 'true'], ['Bing ranking', 'true']])
     expect(within(header()).queryByRole('button', { name: 'Both' })).toBeNull()
     act(() => {
-      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing' }))
+      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing ranking' }))
     })
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('google')
     expect(push).toHaveBeenCalledWith(null, '', '/artists/a1/tools/seo/search?e=google')
@@ -230,16 +230,16 @@ describe('the switches', () => {
     expect(drawn()).toEqual(['google-spot', 'google-seen', 'bing-seen', 'google-clicks', 'bing-clicks'])
     // The last one on stays on.
     act(() => {
-      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Google' }))
+      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Google ranking' }))
     })
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('google')
     // Bing back on: both again.
     act(() => {
-      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing' }))
+      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing ranking' }))
     })
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('both')
     act(() => {
-      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing' }))
+      fireEvent.click(within(header()).getByRole('checkbox', { name: 'Bing ranking' }))
     })
     fireEvent.click(within(screen.getByRole('group', { name: 'Period' })).getByRole('button', { name: '3m' }))
     expect(nav.push).toHaveBeenCalledWith('/artists/a1/tools/seo/search?e=google&p=3m', { scroll: false })
@@ -249,7 +249,7 @@ describe('the switches', () => {
   // the last one on stays on (Sam, 2026-10-06).
   it('CRITICAL: the seen / clicked chart\'s own Google and Bing toggles — both on to start, the last one stays on', () => {
     show(answer(ok(GOOGLE), ok(BING)))
-    expect(within(lower()).getAllByRole('checkbox').map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'true'])
+    expect(within(lower()).getAllByRole('checkbox').map((b) => [b.getAttribute('aria-label'), b.getAttribute('aria-checked')])).toEqual([['Google', 'true'], ['Bing', 'true'], ['Clicks', 'true']])
     fireEvent.click(within(lower()).getByRole('checkbox', { name: 'Bing' }))
     expect(drawn()).toEqual(['google-spot', 'bing-spot', 'google-seen', 'google-clicks'])
     expect(facts('Seen and clicked')).toEqual([expect.stringMatching(/^Seen56/), expect.stringMatching(/^Clicks15/)])

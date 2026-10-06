@@ -3,8 +3,9 @@ import { BIO_ANCHOR, PROFILE_SEG } from '../profile/route'
 
 /**
  * THE SEO / GEO TOOL'S TABS (Sam, 2026-09-29): Details · Answers · AI test, and Profiles
- * (2026-09-30: outside profiles, starting with the Apple Music & Amazon bio email), and Search
- * (2026-10-02: "How fans find you", Google's and Bing's search numbers). Facts left
+ * (2026-09-30: outside profiles, starting with the Apple Music & Amazon bio email), and Metrics
+ * (2026-10-02 as "Search", "How fans find you", Google's and Bing's search numbers; renamed
+ * Metrics 2026-10-06 by Sam, its address still `search`). Facts left
  * on 2026-10-02 for the Profile tool (PROFILE_TOOL_PLAN.md); its old address redirects there. Tabs on
  * the thin rail's second panel, exactly like Brand and Settings: tools-registry.ts builds its
  * `tabs` from SEO_TABS below, so the rail, the routes and the tests all derive from this one list.
@@ -20,7 +21,7 @@ export const SEO_SECTIONS = [
   { seg: 'answers', label: 'Answers' },
   { seg: 'test', label: 'AI test' },
   { seg: 'profiles', label: 'Profiles' },
-  { seg: 'search', label: 'Search' },
+  { seg: 'search', label: 'Metrics' },
 ] as const
 
 export type SeoSection = (typeof SEO_SECTIONS)[number]['seg']

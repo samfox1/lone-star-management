@@ -217,6 +217,17 @@ describe('TimelineChart', () => {
       expect(early).not.toBe(late)
     })
 
+    // Lines with a group read together under its name, each by its short word: on Metrics the
+    // black and grey shades alone can't tell Google's seen from Bing's (Sam, 2026-10-06).
+    it('grouped lines read by name: one row per group, each value with its word', () => {
+      const { container } = render(<TimelineChart points={three} height={100} series={[
+        { ...S('google-seen', [10, 23, 5]), group: 'Google', short: 'Seen' }, { ...S('bing-seen', [1, 2, 0], 'ink'), group: 'Bing', short: 'Seen' },
+        { ...S('google-clicks', [1, 6, 0], 'ink'), group: 'Google', short: 'Clicks' }, { ...S('bing-clicks', [0, 0, 0], 'ink'), group: 'Bing', short: 'Clicks' },
+      ]} />)
+      fireEvent.pointerMove(plot(container), { clientX: 300 })
+      expect([...container.querySelectorAll('[data-readout-group]')].map((g) => g.textContent)).toEqual(['GoogleSeen23Clicks6', 'BingSeen2Clicks0'])
+    })
+
     it('an uncounted day reads as a dash, and leaving clears everything', () => {
       const across = [{ day: '2026-09-10', views: 4, visitors: 0 }, { day: '2026-09-11', views: 5, visitors: 9 }]
       const { container } = render(<TimelineChart points={across} height={100} series={[

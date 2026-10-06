@@ -7,7 +7,7 @@ import { dayLabel } from '@/lib/chart'
 import { growthSize } from '@/lib/format'
 import { Icon } from '@/components/ui/icons'
 import { SourceGlyph } from '@/components/ui/source-glyphs'
-import { ChartLegend, TimelineChart, type ChartPin, type Series } from '@/components/ui/timeline-chart'
+import { TimelineChart, type ChartPin, type Series } from '@/components/ui/timeline-chart'
 import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
 import { PortalModal } from '@/components/ui/portal-modal'
@@ -129,11 +129,6 @@ export function SearchTab({ answer, answers, name, ai }: {
           <p data-intro className={INTRO}>{searchIntro(view)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div role="group" aria-label="Engine" className="flex items-center gap-5">
-            {(['google', 'bing'] as const).map((e) => (
-              <EngineCheck key={e} engine={e} on={engines.includes(e)} status={answer[e]} onToggle={() => toggleEngine(e)} />
-            ))}
-          </div>
           <Segmented
             label="Period"
             options={(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => ({ key: p, label: p }))}
@@ -150,7 +145,7 @@ export function SearchTab({ answer, answers, name, ai }: {
           <>
             {/* An engine beside one that answered, which itself has nothing, says so only by the
                 dot on its button (Sam, 2026-10-06: "I also dont want seeing this row"). */}
-            <SpotSection key={`spot-${view}-${answer.period.key}`} view={view} stats={stats} name={name} added={answer.added} />
+            <SpotSection key={`spot-${view}-${answer.period.key}`} view={view} stats={stats} name={name} answer={answer} onToggle={toggleEngine} />
             <ReachSection answers={answers} startPeriod={answer.period.key} />
             <div className="mt-14 grid gap-11 min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[1024px]:gap-x-12">
               <Searched view={view} stats={stats} both={both} />
@@ -171,20 +166,41 @@ const INTRO = 'mt-2 text-[13px] leading-relaxed text-ink-muted'
 
 const CHART_H = 380
 const points = (days: string[]) => days.map((day) => ({ day, views: 0, visitors: 0 }))
+// Hover reads each engine's lines together, by name (Sam, 2026-10-06: "Say Google: clicks: views:
+// Bing: … the shades dont work").
 const seriesOf = (lines: BoardLine[]): Series[] =>
-  lines.map((l) => ({ key: l.key, label: l.label, values: l.values, color: l.tone, ...(l.thick ? { thick: true } : {}) }))
+  lines.map((l) => ({
+    key: l.key, label: l.label, values: l.values, color: l.tone, ...(l.thick ? { thick: true } : {}),
+    group: ENGINE_NAME[l.engine], short: l.metric === 'seen' ? 'Seen' : l.metric === 'clicks' ? 'Clicks' : '',
+  }))
 const spot = (v: number) => `#${spotWords(v)}`
 
 /** YOUR SPOT: each engine's spot when someone searches the name, #1 at the top. */
-function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; name: string; added: SearchStatsAnswer['added'] }) {
+function SpotSection({ view, stats, name, answer, onToggle }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>>; name: string; answer: SearchStatsAnswer; onToggle: (e: SearchEngineId) => void }) {
   const board = spotBoard(view, stats, name)
   const both = board.lines.length > 1
+  const added = answer.added
+  // Google and Bing as toggles where the legend was: each its line's colour and name (Sam,
+  // 2026-10-06: "have the google and bing toggles be where this is: Google ranking -- the lines
+  // and their text indicators").
+  const toggles = (
+    <div role="group" aria-label="Engine" className="flex flex-wrap items-center gap-5">
+      {(['google', 'bing'] as const).map((e) => (
+        <EngineCheck
+          key={e} engine={e} label={`${ENGINE_NAME[e]} ranking`} on={enginesOf(view).includes(e)} status={answer[e]}
+          tone={board.lines.find((l) => l.engine === e)?.tone ?? (e === 'google' ? 'ink' : 'grey')} onToggle={() => onToggle(e)}
+        />
+      ))}
+    </div>
+  )
   if (!board.lines.length) {
     return (
-      <p data-no-spot className={cx(MONO_META, 'mt-10 flex items-center gap-2')}>
-        <SourceGlyph source={view === 'both' ? 'google' : view} size={13} className="text-ink-faint" />
-        {`No one has searched “${name}” on ${view === 'both' ? 'Google or Bing' : ENGINE_NAME[view]} yet.`}
-      </p>
+      <section aria-label="Your spot" className="mt-5">
+        {toggles}
+        <p data-no-spot className={cx(MONO_META, 'mt-6')}>
+          {`No one has searched “${name}” on ${view === 'both' ? 'Google or Bing' : ENGINE_NAME[view]} yet.`}
+        </p>
+      </section>
     )
   }
   // The day the site was added to each engine, on that engine's line, when it is in view.
@@ -205,7 +221,7 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
   const initial = name.trim().charAt(0).toUpperCase() || '·'
   return (
     <section aria-label="Your spot" className="mt-5">
-      <ChartLegend series={seriesOf(board.lines)} />
+      {toggles}
       <div className="mt-1 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart
           points={points(board.days)} height={CHART_H} series={seriesOf(board.lines)} scale="rank" dots
@@ -255,7 +271,7 @@ function NameSearches({ view, stats, engines, name }: { view: EngineView; stats:
   return (
     <div data-name-searches>
       <WindowHead words={NAME_SEARCHES_WORDS} />
-      <ul aria-label={NAME_SEARCHES_WORDS.title} className="mt-5">
+      <ul aria-label={NAME_SEARCHES_WORDS.title} className="mt-4 border-t border-hairline">
         {rows.map((r) => (
           <SearchRowItem key={`${r.engine}:${r.key}`} kind="name-search" engine={both ? r.engine : null} search={r.key} meta={`${countWords(r.seen)} seen`} badge={spot(r.spot)} />
         ))}
@@ -291,7 +307,6 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
       growth: g === null ? null : { dir: g > 0.0005 ? 'up' : g < -0.0005 ? 'down' : 'flat', size: growthSize(g), tail: `since ${dayLabel(board.days[0])}` },
     }
   })
-  const clicksLabel = on.length === 1 ? `Clicks from ${ENGINE_NAME[on[0]]}` : 'Clicks'
   return (
     <section aria-label="Seen and clicked" className="mt-14">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
@@ -305,11 +320,6 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
           <p className={INTRO}>{reachIntro(on)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div role="group" aria-label="Engines on this chart" className="flex items-center gap-5">
-            {(['google', 'bing'] as const).map((e) => (
-              <EngineCheck key={e} engine={e} on={on.includes(e)} status={a[e]} onToggle={() => toggle(e)} />
-            ))}
-          </div>
           <Segmented
             label="Period of this chart"
             options={(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => ({ key: p, label: p }))}
@@ -318,11 +328,13 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
           />
         </div>
       </div>
-      <div className="mt-4 flex items-center">
-        <SquareCheck label={clicksLabel} on={clicks} onToggle={() => setClicks((c) => !c)} />
-      </div>
-      <div className="mt-4">
-        <ChartLegend series={seriesOf(lines)} />
+      {/* The toggles are the legend, each square in its line's colour: Google ink, Bing grey beside
+          each other (alone, an engine's seen is ink), and Clicks the heavier line (grey alone). */}
+      <div role="group" aria-label="Engines on this chart" className="mt-5 flex flex-wrap items-center gap-5">
+        {(['google', 'bing'] as const).map((e) => (
+          <EngineCheck key={e} engine={e} label={ENGINE_NAME[e]} on={on.includes(e)} status={a[e]} tone={both || !on.includes(e) ? (e === 'google' ? 'ink' : 'grey') : 'ink'} onToggle={() => toggle(e)} />
+        ))}
+        <SquareCheck label="Clicks" on={clicks} onToggle={() => setClicks((c) => !c)} tone={both ? 'ink' : 'grey'} />
       </div>
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart key={`${period}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
@@ -346,7 +358,7 @@ function ReachSearches({ answer, engines }: { answer: SearchStatsAnswer; engines
   return (
     <div data-reach-searches>
       <WindowHead words={REACH_SEARCHES_WORDS} />
-      <ul aria-label={REACH_SEARCHES_WORDS.title} className="mt-5">
+      <ul aria-label={REACH_SEARCHES_WORDS.title} className="mt-4 border-t border-hairline">
         {rows.map((r) => (
           <SearchRowItem
             key={`${r.engine}:${r.key}`} kind="reach-search" engine={both ? r.engine : null} search={r.key}
@@ -362,57 +374,61 @@ function ReachSearches({ answer, engines }: { answer: SearchStatsAnswer; engines
   )
 }
 
-/** A window's plain title and its one line. */
+/** A window's title and its one line, in the page's own type: capitals in mono, then plain words
+ *  (Sam, 2026-10-06: "use the other fonts for this modal: the style doesnt reflect the rest"). */
 function WindowHead({ words }: { words: { title: string; about: string } }) {
   return (
     <>
-      <h2 className="pr-8 text-[18px] font-semibold tracking-[-0.015em] text-ink">{words.title}</h2>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-ink-muted">{words.about}</p>
+      <h2 className={cx(TITLE, 'pr-8')}>{words.title}</h2>
+      <p className={INTRO}>{words.about}</p>
     </>
   )
 }
 
-/** One search in a window: the words big, then a quiet count and the number that matters in a soft chip. */
+/** One search in a window, as the page's lists draw a row: the words in the sans, the count quiet
+ *  in mono, the number that matters bold in mono, a hairline under it. */
 function SearchRowItem({ kind, engine, search, meta, badge }: { kind: string; engine: SearchEngineId | null; search: string; meta: string; badge: string }) {
   return (
-    <li data-row={kind} className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface">
+    <li data-row={kind} className="flex items-center gap-3 border-b border-hairline-soft py-2.5">
       {engine ? (
         <span className="flex flex-none text-ink-faint">
-          <SourceGlyph source={engine} size={14} />
+          <SourceGlyph source={engine} size={13} />
           <span className="sr-only">{ENGINE_NAME[engine]}</span>
         </span>
       ) : null}
-      <span className="min-w-0 flex-1 truncate text-[16px] text-ink">{search}</span>
-      <span className="flex-none font-space text-[12px] tabular-nums text-ink-faint">{meta}</span>
-      <span className="flex-none rounded-md bg-surface px-2 py-1 font-space text-[13px] font-bold tabular-nums text-ink">{badge}</span>
+      <span className="min-w-0 flex-1 truncate text-[15px] text-ink">{search}</span>
+      <span className="flex-none font-space text-[11px] tabular-nums text-ink-faint">{meta}</span>
+      <span className="w-14 flex-none text-right font-space text-[13px] font-bold tabular-nums text-ink">{badge}</span>
     </li>
   )
 }
 
-/** A plain line at the foot of a window, set apart on a soft ground. */
+/** A plain line at the foot of a window, in the page's mono. */
 function WindowNote({ data, children }: { data: string; children: ReactNode }) {
-  return <p data-note-line={data} className="mt-4 rounded-lg bg-surface px-3 py-2.5 text-[14px] leading-snug text-ink-muted">{children}</p>
+  return <p data-note-line={data} className="mt-3.5 font-space text-[12px] leading-relaxed text-ink-muted">{children}</p>
 }
 
-/** An engine as a word toggle: the square check, the name ("the whole word", Sam 2026-10-06, in
- *  place of the G and b glyphs), and the amber / red dot when it has nothing yet or couldn't be
- *  asked, named on hover. */
-function EngineCheck({ engine, on, status, onToggle }: { engine: SearchEngineId; on: boolean; status: EngineStats; onToggle: () => void }) {
+/** An engine as a word toggle that is also its line's legend: the square check filled in its line's
+ *  colour, the name ("the whole word", Sam 2026-10-06), and the amber / red dot when it has nothing
+ *  yet or couldn't be asked, named on hover. */
+function EngineCheck({ engine, label, on, status, tone, onToggle }: { engine: SearchEngineId; label: string; on: boolean; status: EngineStats; tone: 'ink' | 'grey'; onToggle: () => void }) {
   const dot = engineDot(status)
   return (
     <SquareCheck
-      label={ENGINE_NAME[engine]}
+      label={label}
       on={on}
       onToggle={onToggle}
+      tone={tone}
       after={dot ? (
         <span className="relative flex">
-          <span aria-hidden data-dot={dot.tone} className={cx('h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
+          <span aria-hidden data-dot={dot.tone} data-engine-dot={engine} className={cx('h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
           <HoverLabel label={dot.label} />
         </span>
       ) : null}
     />
   )
 }
+
 
 const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
 

@@ -61,6 +61,10 @@ export type Series = {
   faded?: boolean
   /** Drawn heavier. */
   thick?: boolean
+  /** Lines sharing a group are read together on hover, under the group's name, each by `short`
+   *  (Metrics: "GOOGLE Seen 23 Clicks 6"), where colour shades alone can't tell them apart. */
+  group?: string
+  short?: string
 }
 
 const PAD_TOP = 8
@@ -178,6 +182,10 @@ export function TimelineChart({
   const here = at == null ? [] : all.filter((s) => counted(s, at))
   // Where the hover line stops: the highest drawn value on that day (the smallest y).
   const yTop = at == null ? h : Math.min(h, ...here.map((s) => y(valueAt(s, at))))
+  // Lines with a group read together on hover, group by group in the order they come.
+  const groups = all.some((s) => s.group)
+    ? [...all.reduce((m, s) => m.set(s.group ?? s.label, [...(m.get(s.group ?? s.label) ?? []), s]), new Map<string, Series[]>())]
+    : null
   const frac = at == null || points.length < 2 ? 0.5 : at / lastIdx
   const shift = frac < 0.12 ? '-16px' : frac > 0.88 ? 'calc(-100% + 16px)' : '-50%'
 
@@ -343,17 +351,32 @@ export function TimelineChart({
             <div
               role="status"
               data-readout
-              className="pointer-events-none absolute z-10 flex items-center gap-2.5 whitespace-nowrap rounded-lg bg-paper px-2.5 py-1.5 font-space text-[11px] text-ink shadow-[0_6px_18px_rgba(17,17,17,0.12)]"
+              className={cx(
+                'pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-paper px-2.5 py-1.5 font-space text-[11px] text-ink shadow-[0_6px_18px_rgba(17,17,17,0.12)]',
+                groups ? 'flex flex-col gap-1' : 'flex items-center gap-2.5',
+              )}
               style={{ left: (x(at) / w) * 100 + '%', top: yTop - 12, transform: `translate(${shift}, -100%)` }}
             >
               <span className="text-[10px] uppercase tracking-[0.08em] text-ink-faint">{dayLabel(shown.day)}</span>
-              {all.map((s) => (
-                <span key={s.key} className="inline-flex items-center gap-1.5 font-bold tabular-nums">
-                  <span aria-hidden className={cx('h-[7px] w-[7px] rounded-[2px]', SWATCH[s.color])} />
-                  <span className="sr-only">{s.label} </span>
-                  {counted(s, at) ? format(valueAt(s, at)) : '—'}
-                </span>
-              ))}
+              {groups
+                ? groups.map(([g, members]) => (
+                    <span key={g} data-readout-group={g} className="flex items-baseline gap-2.5">
+                      <span className="w-14 text-[10px] font-bold uppercase tracking-[0.08em] text-ink">{g}</span>
+                      {members.map((s) => (
+                        <span key={s.key} className="tabular-nums">
+                          {s.short ? <span className="mr-1 text-ink-faint">{s.short}</span> : <span className="sr-only">{s.label} </span>}
+                          <span className="font-bold">{counted(s, at) ? format(valueAt(s, at)) : '—'}</span>
+                        </span>
+                      ))}
+                    </span>
+                  ))
+                : all.map((s) => (
+                    <span key={s.key} className="inline-flex items-center gap-1.5 font-bold tabular-nums">
+                      <span aria-hidden className={cx('h-[7px] w-[7px] rounded-[2px]', SWATCH[s.color])} />
+                      <span className="sr-only">{s.label} </span>
+                      {counted(s, at) ? format(valueAt(s, at)) : '—'}
+                    </span>
+                  ))}
             </div>
           )}
         </div>

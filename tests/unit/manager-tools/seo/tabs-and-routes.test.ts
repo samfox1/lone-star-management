@@ -64,7 +64,7 @@ const moved = async (section: string) => {
 describe('the registry', () => {
   // Five tabs, unique, Details first as the tool's own route, so the tool opens on it.
   it('five tabs, unique, Details first as the tool’s own route', () => {
-    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Answers', 'AI test', 'Profiles', 'Search'])
+    expect(SEO_SECTIONS.map((s) => s.label)).toEqual(['Details', 'Answers', 'AI test', 'Profiles', 'Metrics'])
     expect(new Set(SEO_SECTIONS.map((s) => s.seg)).size).toBe(SEO_SECTIONS.length)
     for (const s of SEO_SECTIONS) expect(isSeoSection(s.seg)).toBe(true)
     expect(isSeoSection('logo')).toBe(false)
