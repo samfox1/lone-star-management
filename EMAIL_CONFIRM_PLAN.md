@@ -35,6 +35,7 @@ booking link). Nothing sends to it. Noted for later.
 | Link | the email's Confirm button, 7 days |
 | Resend | not within 60 s of the last; per address at most 5 an hour and 10 a day; at most 20 per artist per hour; at most 200 per hour across the whole platform (one global lock, so sends arriving at once cannot slip past) |
 | One per address | confirmation is per (artist, lower(email)): skeen@ on three lists confirms once |
+| Removal | an address off every list is forgotten: confirmation, grace, code and link cleared (20261006130000). Its send and wrong-try times STAY (20261006160000), so removing and re-adding it resets no limit |
 | New send | replaces the code AND the link (only the latest email works) |
 | Only listed addresses | a code is only ever sent to an address on one of the artist's lists |
 | Stored | only SHA-256 hashes of the code and the link token, never the plaintext |
@@ -108,9 +109,12 @@ Pure parts (`build.ts`: subject, text, html, kinds-to-words) unit-tested under
   moves back); the 6th digit calls `confirmEmailCodeAction`; `'wrong'` shakes and clears,
   `'locked'`/`'expired'` say so in one line and enable resend; resend glyph bottom-left with a
   60 s countdown.
-- Clicking a blue address opens the window WITHOUT sending (resend is the glyph).
-- Editing a CONFIRMED address adds the new one (blue) and keeps the old; when the new one confirms
-  in the window, the old one is removed from that kind's list.
+- Clicking a blue address sends its code and opens the window, unless a code it can still type is
+  out: then it opens on that code (Sam, 2026-10-05: send it "and then the modal opens after").
+- Editing an address REPLACES it in place (Sam, 2026-10-05: "If a email has been deleted (hit the
+  x on it to remove it), it should stop recieving emails"): the list is saved with the new address
+  where the old one was, the old one stops receiving at once, and the new one waits (blue + key),
+  its code is sent and the window opens. Nothing keeps the old one until the new one confirms.
 - Light tests: one main path (add → window → 6 digits → confirmed shows ink).
 
 ### 4. The link page: `src/app/confirm-email/[token]/page.tsx`

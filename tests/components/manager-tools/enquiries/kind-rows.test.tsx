@@ -21,6 +21,7 @@ import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiri
 import {
   deleteEnquiryKindAction,
   saveEnquiryKindAction,
+  sendEmailCodeAction,
   setEnquiryRecipientsAction,
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
 import type { EnquiryKindRow } from '@/lib/enquiries/kinds'
@@ -124,9 +125,10 @@ describe('click an address', () => {
     expect(setList).not.toHaveBeenCalled()
   })
 
-  // A confirmed address is changed by ADDING the new one (it waits for its code) and keeping the
-  // old until the new one confirms (EMAIL_CONFIRM_PLAN.md), so enquiries never stop between.
-  it('Enter saves the WHOLE list: the old address kept, the new one added', async () => {
+  // Sam, 2026-10-05: "If a email has been deleted (hit the x on it to remove it), it should stop
+  // recieving emails." So an edit REPLACES the address where it stood: the old one is off the
+  // list at once (never kept until the new one confirms), and the new one waits for its code.
+  it('Enter saves the WHOLE list with the address replaced in place; the new one gets its code', async () => {
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: 'A&R' }, { id: 'r2', email: 'b@x.com', label: null }])])
 
     open('demo', 'a@x.com')
@@ -136,11 +138,12 @@ describe('click an address', () => {
       fireEvent.keyDown(field, { key: 'Enter' })
     })
 
+    expect(setList).toHaveBeenCalledTimes(1)
     expect(setList).toHaveBeenCalledWith('a1', 'k-demo', [
-      { id: 'r1', email: 'a@x.com', label: 'A&R' },
-      { id: 'r2', email: 'b@x.com', label: null },
       { email: 'a2@x.com', label: 'A&R' },
+      { id: 'r2', email: 'b@x.com', label: null },
     ])
+    expect(vi.mocked(sendEmailCodeAction)).toHaveBeenCalledWith('a1', 'a2@x.com')
   })
 
   it('a refused address is not sent, says why, and stays in the field', async () => {

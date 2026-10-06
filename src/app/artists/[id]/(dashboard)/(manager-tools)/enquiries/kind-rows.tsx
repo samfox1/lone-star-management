@@ -60,10 +60,12 @@ import {
  * CONFIRMED OR WAITING (EMAIL_CONFIRM_PLAN.md §3, 2026-10-05). An address is used only once it
  * has proved it wants the enquiries. A confirmed one looks and behaves exactly as above. A
  * waiting one is accent blue with a key after it (Sam: "Lets do key") and is not click-to-edit:
- * a click opens the code window without sending (hover: "Enter code"). Adding an address saves
- * the list, sends its code and opens the window. Changing a CONFIRMED address adds the new one
- * (waiting) and keeps the old, which goes from that kind's list when the new one confirms. One
- * confirmation covers the address on every list (it is per artist and address).
+ * a click sends its code (unless one it can still type is out) and opens the code window (hover:
+ * "Enter code"). Adding an address saves the list, sends its code and opens the window. Changing
+ * an address REPLACES it where it stood (Sam, 2026-10-05: "If a email has been deleted (hit the x
+ * on it to remove it), it should stop recieving emails"): the old one is off the list at once, and
+ * the new one waits for its code like any added address. One confirmation covers the address on
+ * every list (it is per artist and address).
  */
 export function KindRows({
   artistId,
@@ -85,16 +87,14 @@ export function KindRows({
    *  typeable), then this visit's sends. For the window's countdown, and so a click on a blue
    *  address never sends over a code someone is reading out. */
   const sentAt = useRef(new Map<string, number>(Object.entries(confirm.liveCodes ?? {})))
-  /** A confirmed address being changed: the new one's key → the old one, which leaves that
-   *  kind's list when the new one confirms. */
-  const replacing = useRef(new Map<string, { kindId: string; email: string }>())
   const { ask, dialog } = useConfirm()
 
   const patch = (id: string, next: Partial<EnquiryKindRow>) =>
     setKinds((ks) => ks.map((k) => (k.id === id ? { ...k, ...next } : k)))
 
-  /** An address off every list is forgotten, as the database does at commit (20261006130000;
-   *  Sam, 2026-10-05: "forget it on removal"): added again, it waits for a new code. */
+  /** An address off every list is forgotten, as the database does at commit (20261006130000,
+   *  20261006160000; Sam, 2026-10-05: "forget it on removal"): added again, it waits for a new
+   *  code. The database keeps its send times, so the 60 s gap and the caps still apply. */
   function forgetUnlisted(stillListed: { email: string }[]) {
     const keep = new Set(stillListed.map((r) => emailKey(r.email)))
     setConfirmed((s) => new Set([...s].filter((e) => keep.has(e))))
@@ -135,31 +135,26 @@ export function KindRows({
    * it (the loader's liveCodes), opens the window on THAT code, never a new one over it. The
    * window decides as it opens (the clock is read there, not during this render).
    */
-  function openCode(kindId: string, email: string, opts: { send: boolean | 'unless-live'; replaces?: string }) {
-    if (opts.replaces) replacing.current.set(emailKey(email), { kindId, email: opts.replaces })
-    setCodeFor({ kindId, email, send: opts.send, sentAt: sentAt.current.get(emailKey(email)) })
+  function openCode(kindId: string, email: string, send: boolean | 'unless-live') {
+    setCodeFor({ kindId, email, send, sentAt: sentAt.current.get(emailKey(email)) })
   }
 
-  /** Drop an address from one kind's list (by address, not position: the list may have moved). */
-  async function dropFrom(kindId: string, email: string, confirmLast: boolean) {
+  /** The code window's trash: drop its address from that kind's list (by address, not position:
+   *  the list may have moved). */
+  async function dropFrom(kindId: string, email: string) {
     const k = kinds.find((x) => x.id === kindId)
     if (!k) return
     const next = k.recipients.filter((r) => emailKey(r.email) !== emailKey(email))
     if (next.length === k.recipients.length) return
-    if (confirmLast && !next.length && !(await ask(`Remove ${email}? No one else gets ${k.label} enquiries.`, { action: 'Remove' }))) return
+    if (!next.length && !(await ask(`Remove ${email}? No one else gets ${k.label} enquiries.`, { action: 'Remove' }))) return
     const res = await save(k, next)
     if (res.error) toast(res.error, 'error')
   }
 
-  /** The address proved itself: ink everywhere it is listed, and an address it replaces goes. */
+  /** The address proved itself: ink everywhere it is listed. */
   function onConfirmed(email: string) {
-    const key = emailKey(email)
-    setConfirmed((s) => new Set(s).add(key))
+    setConfirmed((s) => new Set(s).add(emailKey(email)))
     setCodeFor(null)
-    const swap = replacing.current.get(key)
-    if (!swap) return
-    replacing.current.delete(key)
-    void dropFrom(swap.kindId, swap.email, false)
   }
 
   return (
@@ -171,7 +166,7 @@ export function KindRows({
             artistId={artistId}
             kind={k}
             waiting={waiting}
-            onCode={(email, opts) => openCode(k.id, email, opts)}
+            onCode={(email, send) => openCode(k.id, email, send)}
             onSave={(next) => save(k, next)}
             onSaved={(saved) => patch(k.id, saved)}
             onDeleted={() => {
@@ -195,8 +190,7 @@ export function KindRows({
           onConfirmed={() => onConfirmed(codeFor.email)}
           onRemove={() => {
             setCodeFor(null)
-            replacing.current.delete(emailKey(codeFor.email))
-            void dropFrom(codeFor.kindId, codeFor.email, true)
+            void dropFrom(codeFor.kindId, codeFor.email)
           }}
           onClose={() => setCodeFor(null)}
         />
@@ -209,7 +203,7 @@ export function KindRows({
 /**
  * AN ADDRESS WAITING FOR ITS CODE (mock: prototypes/email_confirm_20261005.html §03): the
  * accent blue (the on-site check's "pending"), a 14px key after it, "Enter code" on hover. A
- * click opens the code window; it sends nothing (the window's glyph does).
+ * click opens the code window, which sends a code first unless one it can still type is out.
  */
 function WaitingAddress({ email, onOpen }: { email: string; onOpen: () => void }) {
   return (
@@ -263,7 +257,7 @@ function KindRow({
   waiting: (email: string) => boolean
   /** Open the code window for an address on this row; `send` sends a code as it opens
    *  ('unless-live': only when no code it can still type is out). */
-  onCode: (email: string, opts: { send: boolean | 'unless-live'; replaces?: string }) => void
+  onCode: (email: string, send: boolean | 'unless-live') => void
   /** The whole new list. Resolves `{ error }` (unsaid: the caller does not toast). */
   onSave: (next: Addr[]) => Promise<{ error?: string }>
   /** The name and/or description as stored. */
@@ -284,21 +278,18 @@ function KindRow({
    *  the window opens; one already confirmed (it is on another list) needs neither. */
   async function add(email: string) {
     const res = await onSave([...addresses, { email, label: null }])
-    if (!res.error && waiting(email)) onCode(email, { send: true })
+    if (!res.error && waiting(email)) onCode(email, true)
     return res
   }
 
+  /** An edit REPLACES the address in place (Sam, 2026-10-05: a removed address "should stop
+   *  recieving emails", and an edited one is removed): the old one stops at once, never kept
+   *  until the new one confirms. The new one then gets its code like an added one; a change of
+   *  case, or an address already confirmed on another list, needs none. */
   async function edit(i: number, email: string) {
-    const old = addresses[i]
-    // A confirmed address is never swapped for one nobody has confirmed: enquiries would stop
-    // until the new one proves itself. The new one joins the list (waiting) and the old one
-    // keeps receiving until then (EMAIL_CONFIRM_PLAN.md §3). A change of case is the same address.
-    if (!waiting(old.email) && waiting(email) && emailKey(email) !== emailKey(old.email)) {
-      const res = await onSave([...addresses, { email, label: old.label }])
-      if (!res.error) onCode(email, { send: true, replaces: old.email })
-      return res
-    }
-    return onSave(addresses.map((r, j) => (j === i ? { email, label: r.label } : r)))
+    const res = await onSave(addresses.map((r, j) => (j === i ? { email, label: r.label } : r)))
+    if (!res.error && waiting(email)) onCode(email, true)
+    return res
   }
 
   /** No question for an ordinary address; asked only for the kind's LAST one, after which
@@ -358,7 +349,7 @@ function KindRow({
         onAdd={add}
         onRemove={(i) => void remove(i)}
         removeLabel={(r) => `Remove ${r.label || r.email}`}
-        atRest={(r) => (waiting(r.email) ? <WaitingAddress email={r.email} onOpen={() => onCode(r.email, { send: 'unless-live' })} /> : undefined)}
+        atRest={(r) => (waiting(r.email) ? <WaitingAddress email={r.email} onOpen={() => onCode(r.email, 'unless-live')} /> : undefined)}
         className="justify-start min-[900px]:justify-end"
       />
       {dialog}
