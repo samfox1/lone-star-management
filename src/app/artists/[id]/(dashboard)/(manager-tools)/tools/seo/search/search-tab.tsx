@@ -17,7 +17,7 @@ import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask
 import { SEARCH_PERIODS, type EngineStats, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
 import { ENGINE_NAME, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
-import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
+import { reachBoard, reachFacts, spotBoard, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
 import { HoverLabel } from '../../../_ui/row-icon'
 import { CAPS_LABEL, FOCUS_RING_OFFSET, MONO_META } from '../../../_ui/styles'
@@ -316,13 +316,13 @@ function ReachSection({ artistId, answer }: { artistId: string; answer: SearchSt
   const lines = board.lines.filter((l) => clicks || l.metric !== 'clicks')
   const both = new Set(board.lines.map((l) => l.engine)).size > 1
   const toggle = (e: SearchEngineId) => setOn((cur) => (cur.includes(e) ? (cur.length > 1 ? cur.filter((x) => x !== e) : cur) : [...cur, e]))
+  const byKey = new Map(reachFacts(lines).map((f) => [f.key, f]))
   const facts: Fact[] = lines.map((l) => {
-    const readings = l.values.filter((v): v is number => v !== null)
-    const total = readings.reduce((n, v) => n + v, 0)
-    const g = weekGrowth(l.values)
+    const f = byKey.get(l.key)!
+    const g = f.growth
     return {
-      key: l.key, label: both ? l.label : l.metric === 'seen' ? 'Seen' : 'Clicks', value: total,
-      sub: { label: 'Per day', value: perDay(readings.length ? total / readings.length : 0) },
+      key: l.key, label: both ? l.label : l.metric === 'seen' ? 'Seen' : 'Clicks', value: f.total,
+      sub: { label: 'Per day', value: perDay(f.perDay) },
       growth: g === null ? null : { dir: g > 0.0005 ? 'up' : g < -0.0005 ? 'down' : 'flat', size: growthSize(g), tail: `since ${dayLabel(board.days[0])}` },
     }
   })

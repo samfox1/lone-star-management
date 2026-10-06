@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { aiVisits } from '@/lib/manager-tools/seo/ai-visits'
-import { reachBoard, spotBoard, weekGrowth } from '@/lib/manager-tools/seo/search-board'
+import { reachBoard, reachFacts, spotBoard, weekGrowth } from '@/lib/manager-tools/seo/search-board'
 import type { EngineStats, SearchDay, SearchDayRow, SearchPeriod, SearchStats } from '@/lib/manager-tools/seo/search-stats'
 
 const P28: SearchPeriod = { key: '28d', days: 28, start: '2026-09-05', end: '2026-10-02' }
@@ -89,8 +89,8 @@ describe('reachBoard — how often the site was seen in search, and clicked, for
     const b = reachBoard(['google'], { google: ok(GOOGLE), bing: ok(BING) })
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
     expect(b.lines).toEqual([
-      { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], tone: 'ink' },
-      { key: 'google-clicks', engine: 'google', metric: 'clicks', label: 'Clicks from Google', values: [6, 5, 4], tone: 'grey' },
+      { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], final: [true, false, false], tone: 'ink' },
+      { key: 'google-clicks', engine: 'google', metric: 'clicks', label: 'Clicks from Google', values: [6, 5, 4], final: [true, false, false], tone: 'grey' },
     ])
     expect(b.partialFrom).toBe(1)
   })
@@ -136,6 +136,33 @@ describe('reachBoard — how often the site was seen in search, and clicked, for
   // Bing has no unfinished days, so nothing is dotted.
   it('an engine counting nothing still (Bing never does) marks no day', () => {
     expect(reachBoard(['bing'], { bing: ok(BING) }).partialFrom).toBeUndefined()
+  })
+})
+
+describe('reachFacts — the numbers beside the seen / clicked chart', () => {
+  const ok = (stats: SearchStats): EngineStats => ({ engine: stats.engine, state: 'ok', stats })
+  const flat = (n: number, last: number[]) => stats('google', {
+    series: [...Array.from({ length: 14 }, (_, i) => day(`2026-09-${String(10 + i).padStart(2, '0')}`, 1, n)),
+      ...last.map((v, i) => day(`2026-09-${String(24 + i)}`, 1, v, false))],
+    preliminaryFrom: '2026-09-24',
+  })
+
+  // The review's case (2026-10-06): a flat 100 a day whose last two days Google is still counting
+  // (70, 15). Counting them read as a ▼16.4% fall; the days still being counted are left out of
+  // the change and the per-day average, and stay in the total (they are real, just not finished).
+  it('CRITICAL: days still being counted stay in the total but out of the change and the per-day average', () => {
+    const [seen] = reachFacts(reachBoard(['google'], { google: ok(flat(100, [70, 15])) }).lines)
+    expect(seen.key).toBe('google-seen')
+    expect(seen.total).toBe(1400 + 85)
+    expect(seen.perDay).toBe(100)
+    expect(seen.growth).toBe(0)
+  })
+
+  // A zero line (an engine with nothing yet) is all zeros: no change, nothing per day.
+  it('an engine with nothing yet: zero total, zero a day, no change', () => {
+    const none: EngineStats = { engine: 'bing', state: 'no_data', period: P28 }
+    const facts = reachFacts(reachBoard(['google', 'bing'], { google: ok(flat(100, [])), bing: none }).lines)
+    expect(facts.find((f) => f.key === 'bing-seen')).toEqual({ key: 'bing-seen', total: 0, perDay: 0, growth: null })
   })
 })
 

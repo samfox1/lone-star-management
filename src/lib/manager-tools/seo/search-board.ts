@@ -14,7 +14,17 @@ import type { EngineStats, SearchEngineId, SearchPeriod, SearchStats } from './s
  * answered), an engine's seen is ink and its clicks grey.
  */
 export type Tone = 'ink' | 'grey'
-export type BoardLine = { key: string; engine: SearchEngineId; metric?: 'seen' | 'clicks'; label: string; values: (number | null)[]; tone: Tone; thick?: boolean }
+export type BoardLine = {
+  key: string
+  engine: SearchEngineId
+  metric?: 'seen' | 'clicks'
+  label: string
+  values: (number | null)[]
+  /** Seen / clicked lines: whether each day is finished (Google still counts its last ~2). */
+  final?: boolean[]
+  tone: Tone
+  thick?: boolean
+}
 export type Board = { days: string[]; lines: BoardLine[]; partialFrom: number | undefined }
 
 const TONE: Record<SearchEngineId, Tone> = { google: 'ink', bing: 'grey' }
@@ -69,6 +79,7 @@ export function reachBoard(on: readonly SearchEngineId[], answers: Partial<Recor
         key: `${e}-${metric}`, engine: e, metric,
         label: both ? `${ENGINE_NAME[e]} ${metric}` : metric === 'seen' ? `Seen in ${ENGINE_NAME[e]}` : `Clicks from ${ENGINE_NAME[e]}`,
         values: zero.includes(e) ? days.map(() => 0) : pairs.map((p) => p[e]?.[field] ?? null),
+        final: zero.includes(e) ? days.map(() => true) : pairs.map((p) => p[e]?.final ?? true),
         tone: both ? TONE[e] : metric === 'seen' ? 'ink' : 'grey',
         ...(both && metric === 'clicks' ? { thick: true } : {}),
       })
@@ -83,6 +94,26 @@ function periodDays(p: SearchPeriod): string[] {
   const out: string[] = []
   for (let t = Date.parse(`${p.start}T00:00:00Z`); t <= Date.parse(`${p.end}T00:00:00Z`); t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10))
   return out
+}
+
+/** The numbers beside the seen / clicked chart, per line: the total (every day, the unfinished
+ *  ones too: what they hold is real), the average per day and the change, the last week against
+ *  the first, over FINISHED days only (the review, 2026-10-06: a flat 100 a day read as ▼16.4%
+ *  because Google's last two days were still being counted). */
+export type ReachFact = { key: string; total: number; perDay: number; growth: number | null }
+
+export function reachFacts(lines: readonly BoardLine[]): ReachFact[] {
+  return lines.map((l) => {
+    const sum = (xs: number[]) => xs.reduce((n, v) => n + v, 0)
+    const finished = l.values.map((v, i) => (l.final?.[i] === false ? null : v))
+    const done = finished.filter((v): v is number => v !== null)
+    return {
+      key: l.key,
+      total: sum(l.values.filter((v): v is number => v !== null)),
+      perDay: done.length ? sum(done) / done.length : 0,
+      growth: weekGrowth(finished),
+    }
+  })
 }
 
 const WEEK = 7
