@@ -584,7 +584,9 @@ describe.skipIf(!EMAIL_CONFIRMATIONS_PUSHED)('email confirmations', () => {
       expect((await row(a.id, email))!.code_attempts).toBe(0)
       expect((await confirmToken(first.token)).status).toBe('invalid')
       expect((await row(a.id, email))!.confirmed_at).toBeNull()
-      expect((await confirmCode(asA, a.id, email, first.code)).verdict).toBe('wrong')
+      // The replaced code no longer confirms: since 20261006150000 it says so ('replaced').
+      expect((await confirmCode(asA, a.id, email, first.code)).verdict).toBe('replaced')
+      expect((await row(a.id, email))!.confirmed_at).toBeNull()
       // The email prints "482 913"; a paste keeps the gap.
       const spaced = `${second.code.slice(0, 3)} ${second.code.slice(3)}`
       expect((await confirmCode(asA, a.id, email, spaced)).verdict).toBe('confirmed')
