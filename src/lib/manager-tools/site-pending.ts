@@ -1,5 +1,5 @@
 import type { UnpublishedDiff } from '@/lib/content'
-import { plural } from '../format'
+import { plural } from './format'
 
 const count = (d: { added: number; edited: number; deleted: number }) => d.added + d.edited + d.deleted
 

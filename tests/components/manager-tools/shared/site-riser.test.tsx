@@ -5,7 +5,7 @@
  *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-riser.tsx (was
  *           tools/seo/seo-riser.tsx until Profile shared it, 2026-10-02),
- *           src/lib/manager-tools/seo/pending.ts (pendingMessage)
+ *           src/lib/manager-tools/site-pending.ts (pendingMessage)
  * Feature:  SEO / GEO, Profile, Connections and EPK · the site Publish bar
  * Tier:     STRICT (AGENTS.md "Test depth"): publishing is what the live site receives.
  * Covers:   • hidden means gone (invisible and inert) while nothing waits
@@ -22,7 +22,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SiteRiser } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-riser'
-import { pendingMessage } from '@/lib/manager-tools/seo/pending'
+import { pendingMessage } from '@/lib/manager-tools/site-pending'
 import { publishEntityAction, publishSiteWithPasswordAction } from '@/app/artists/[id]/(dashboard)/actions'
 import type { UnpublishedDiff } from '@/lib/content'
 

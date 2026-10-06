@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { diffUnpublished, siteUnpublished, type UnpublishedDiff } from '@/lib/content'
-import { pendingMessage } from '@/lib/manager-tools/seo/pending'
+import { pendingMessage } from '@/lib/manager-tools/site-pending'
 import { dashboardDiff, requireArtist } from '../../_data'
 import { SiteRiser } from './site-riser'
 
