@@ -549,4 +549,12 @@ describe('the artist-row facts: city, genre, type (artistFactUpdate)', () => {
     expect(artistFactUpdate('location', "Côte d'Ivoire")).toEqual({ column: 'location', value: "Côte d'Ivoire" })
     expect(artistFactUpdate('location', 'São Paulo 🎧')).toEqual({ column: 'location', value: 'São Paulo 🎧' })
   })
+  // The genre too: Profile refused markup in a genre before sending it, and the server took it
+  // from anyone who called the action directly. One rule now (genreError), on both sides.
+  it('CRITICAL: the genre refuses markup and control characters on the server, as Profile does', () => {
+    expect(artistFactUpdate('genre', '<b>House</b>')).toEqual({ error: 'Leave out < and >.' })
+    expect(artistFactUpdate('genre', 'Ho\u0000use')).toEqual({ error: 'That has hidden characters in it. Type it again.' })
+    // Tab and newline are only whitespace, folded as before.
+    expect(artistFactUpdate('genre', 'House,\n\tTechno')).toEqual({ column: 'genre', value: 'House, Techno' })
+  })
 })

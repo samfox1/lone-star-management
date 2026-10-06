@@ -4,31 +4,45 @@
  * type: a server action's TS signature is not a runtime guard.
  */
 import { factText } from '@samfox1/site-bridge/seo'
-import { CITY_MAX_LENGTH, factTextError } from '@/lib/seo-facts'
+import { cityError, factTextError } from '@/lib/seo-facts'
 
 export const ARTIST_FACT_COLUMNS = ['genre', 'location', 'schema_type'] as const
 export type ArtistFactColumn = (typeof ARTIST_FACT_COLUMNS)[number]
 export const SCHEMA_TYPES = ['MusicGroup', 'Person'] as const
+
+/** The genre column's cap, on the genres as stored: joined by ", ", spaces folded. */
+export const GENRE_MAX = 120
+
+/** Spaces folded and trimmed: the genre as it is stored. */
+const foldSpaces = (s: string) => s.replace(/\s+/g, ' ').trim()
+
+/**
+ * THE GENRE'S RULE, one copy for Profile's genre list (refused before it is sent) and the save
+ * below: the fact text rule (no markup, no control characters), then the cap. The server once
+ * checked only the cap, so a `<` that Profile refused was still stored by a direct call.
+ */
+export function genreError(raw: string): string | null {
+  return factTextError(raw) ?? (foldSpaces(raw).length > GENRE_MAX ? `Keep it under ${GENRE_MAX} characters.` : null)
+}
 
 export function artistFactUpdate(
   column: string,
   value: string,
 ): { error: string } | { column: ArtistFactColumn; value: string | null } {
   if (!(ARTIST_FACT_COLUMNS as readonly string[]).includes(column)) return { error: 'Unknown field.' }
-  // The CITY ("Based in") is one of the place facts (lib/seo-facts.ts): the same text rule
-  // as its region and country — no markup, no control characters, hidden marks stripped.
+  // The CITY ("Based in") is one of the place facts (lib/seo-facts.ts cityError): the same text
+  // rule as its region and country — no markup, no control characters, hidden marks stripped.
   if (column === 'location') {
-    const bad = factTextError(value)
+    const bad = cityError(value)
     if (bad) return { error: bad }
-    const city = factText(value)
-    if (Array.from(city).length > CITY_MAX_LENGTH) return { error: `Keep it under ${CITY_MAX_LENGTH} characters.` }
-    return { column, value: city || null }
+    return { column, value: factText(value) || null }
   }
-  const trimmed = value.replace(/\s+/g, ' ').trim()
   if (column === 'schema_type') {
-    if (!(SCHEMA_TYPES as readonly string[]).includes(trimmed)) return { error: 'Unknown artist type.' }
-    return { column, value: trimmed }
+    const type = foldSpaces(value)
+    if (!(SCHEMA_TYPES as readonly string[]).includes(type)) return { error: 'Unknown artist type.' }
+    return { column, value: type }
   }
-  if (trimmed.length > 120) return { error: 'Keep it under 120 characters.' }
-  return { column: column as ArtistFactColumn, value: trimmed || null }
+  const bad = genreError(value)
+  if (bad) return { error: bad }
+  return { column: 'genre', value: foldSpaces(value) || null }
 }

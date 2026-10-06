@@ -4,13 +4,14 @@ import { useRef, useState, type ReactNode } from 'react'
 import { FACT_CONTENT_KEYS, MAX_ALIASES, MAX_ALIAS_LENGTH, countryOf } from '@samfox1/site-bridge/seo'
 import { cx } from '@/lib/cx'
 import { SAVE_FAILED } from '@/lib/manager-tools/format'
+import { genreError } from '@/lib/artist-facts'
 import { COUNTRY_OPTIONS, GENRE_MAX, SCHEMA_TYPES, artistNameError, type SchemaType } from '@/lib/manager-tools/profile/profile'
-import { CITY_MAX_LENGTH, cleanFactValue, factErrors, factTextError, joinAliases, readFacts, thisYearAt, type FactField } from '@/lib/seo-facts'
+import { cityError, cleanFactValue, factErrors, joinAliases, readFacts, thisYearAt, type FactField } from '@/lib/seo-facts'
 import { regionIn, regionsFor } from '@/lib/seo-regions'
 import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
 import { saveArtistFactAction, saveSeoFieldAction } from '../../actions'
 import { LedgerRow, LedgerSection } from '../_ui/ledger'
-import { CAPS_LABEL, MONO_META } from '../_ui/styles'
+import { CAPS_LABEL } from '../_ui/styles'
 import { EndSlot, LineField } from '../_ui/fields'
 import { EditList } from '../_ui/edit-list'
 import { FieldError } from '../_ui/field-error'
@@ -44,10 +45,9 @@ export type ProfileViewProps = {
  * SEO / GEO Facts tab and Settings › General (the name), with the same saves.
  *
  * Every value is checked by the SAME rules the save gate applies (lib/seo-facts.ts
- * `cleanFactValue`, the city's `factTextError`, the name's `artistNameError`) before it is sent: a
- * refusal shows under its row in those words and is never sent. What the gate would tidy ("usa"
- * → "United States") is shown back once saved. Rows autosave to the draft; the page's Publish bar
- * ships them (_ui/site-pending.tsx).
+ * `cleanFactValue` and the city's `cityError`, lib/artist-facts.ts `genreError`, the name's
+ * `artistNameError`) before it is sent: a refusal shows under its row in those words and is never
+ * sent. Rows autosave to the draft; the page's Publish bar ships them (_ui/site-pending.tsx).
  */
 export function ProfileView(p: ProfileViewProps) {
   const { artistId } = p
@@ -59,8 +59,6 @@ export function ProfileView(p: ProfileViewProps) {
   const [errors, setErrors] = useState<Partial<Record<'name' | 'type' | 'genre' | 'city' | FactField, string>>>(() =>
     factErrors(p.facts, { name: p.artistName, location: p.city, schema_type: p.schemaType }, thisYearAt(new Date())),
   )
-  /** What the gate stored for a field whose text is still being typed ("Saved as …"). */
-  const [tidied, setTidied] = useState<Partial<Record<FactField, string>>>({})
   const refuse = (k: keyof typeof errors, msg: string | null) => setErrors((e) => ({ ...e, [k]: msg ?? undefined }))
   /** The name the fact rules judge against (another name may not be the artist's own): the
    *  saved one, never one still refused. */
@@ -82,14 +80,7 @@ export function ProfileView(p: ProfileViewProps) {
     persist: async (key, val) => {
       const field = (Object.keys(FACT_CONTENT_KEYS) as FactField[]).find((f) => FACT_CONTENT_KEYS[f] === key)
       const r = await saveSeoFieldAction(artistId, key, val)
-      if (field) {
-        refuse(field, r.ok ? null : (r.error ?? SAVE_FAILED))
-        // Show back what the gate stored, when it tidied the text (a known country's name).
-        if (r.ok) {
-          const cleaned = cleanFactValue(key as (typeof FACT_CONTENT_KEYS)[FactField], val, { artistName, thisYear: thisYearAt(new Date()) })
-          if ('value' in cleaned && cleaned.value !== val.trim()) setTidied((t) => ({ ...t, [field]: cleaned.value }))
-        }
-      }
+      if (field) refuse(field, r.ok ? null : (r.error ?? SAVE_FAILED))
       return { ok: r.ok, error: r.error }
     },
     // The gate's rule, before anything is queued: a refused value is never sent, and it
@@ -100,7 +91,6 @@ export function ProfileView(p: ProfileViewProps) {
       return 'error' in cleanFactValue(FACT_CONTENT_KEYS[field], val, { artistName, thisYear: thisYearAt(new Date()) }) ? null : val
     },
   })
-  const cityChecked = (raw: string): string | null => factTextError(raw) ?? (Array.from(raw.trim()).length > CITY_MAX_LENGTH ? `Keep it under ${CITY_MAX_LENGTH} characters.` : null)
   const artistSave = useDebouncedFieldSave<string>({
     persist: async (col, val) => {
       const r = await saveArtistFactAction(artistId, col as 'genre' | 'location' | 'schema_type', val)
@@ -108,7 +98,7 @@ export function ProfileView(p: ProfileViewProps) {
       return { ok: r.ok, error: r.error }
     },
     // The city's rule (the same as its region and country): a refused city is never sent.
-    normalize: (val, col) => (col === 'location' && cityChecked(val) ? null : val),
+    normalize: (val, col) => (col === 'location' && cityError(val) ? null : val),
   })
 
   const setNameValue = (raw: string) => {
@@ -121,7 +111,6 @@ export function ProfileView(p: ProfileViewProps) {
   const setFact = (field: FactField, raw: string) => {
     const key = FACT_CONTENT_KEYS[field]
     setFacts((f) => ({ ...f, [key]: raw }))
-    setTidied((t) => ({ ...t, [field]: undefined }))
     const r = cleanFactValue(key, raw, { artistName, thisYear: thisYearAt(new Date()) })
     refuse(field, 'error' in r ? r.error : null)
     seoSave.save(key, raw)
@@ -129,7 +118,7 @@ export function ProfileView(p: ProfileViewProps) {
 
   const setCityValue = (raw: string) => {
     setCity(raw)
-    refuse('city', cityChecked(raw))
+    refuse('city', cityError(raw))
     artistSave.save('location', raw)
   }
 
@@ -141,10 +130,7 @@ export function ProfileView(p: ProfileViewProps) {
     .split(',')
     .map((g) => g.trim())
     .filter(Boolean)
-  const genreProblem = (next: readonly string[]): string | null => {
-    const joined = next.join(', ')
-    return factTextError(joined) ?? (joined.length > GENRE_MAX ? `Keep it under ${GENRE_MAX} characters.` : null)
-  }
+  const genreProblem = (next: readonly string[]): string | null => genreError(next.join(', '))
   const saveGenres = (next: readonly string[]) => {
     const joined = next.filter(Boolean).join(', ')
     refuse('genre', null)
@@ -301,7 +287,6 @@ export function ProfileView(p: ProfileViewProps) {
                 <ChoiceMenu label="Country" value={countryOf(country)?.name ?? country} options={COUNTRY_OPTIONS} align="end" size="cell" onChange={pickCountry} />
               </Cell>
             </div>
-            {tidied.country ? <span className={MONO_META}>{`Saved as ${tidied.country}`}</span> : null}
             {errors.city ? <FieldError>{errors.city}</FieldError> : null}
             {errors.region ? <FieldError>{errors.region}</FieldError> : null}
             {errors.country ? <FieldError>{errors.country}</FieldError> : null}

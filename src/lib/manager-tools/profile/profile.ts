@@ -22,8 +22,8 @@ export const COUNTRY_OPTIONS: readonly { value: string; label: string }[] = [
   ...[...COUNTRIES].map((c) => ({ value: c.name, label: c.name })).sort((a, b) => a.label.localeCompare(b.label, 'en')),
 ]
 
-/** The genre column's cap (lib/artist-facts.ts `artistFactUpdate`). */
-export const GENRE_MAX = 120
+/** The genre column's cap, from the save's own rule (lib/artist-facts.ts `genreError`). */
+export { GENRE_MAX } from '@/lib/artist-facts'
 
 /** The name's cap (artists.name), as the name action enforces it. */
 export const ARTIST_NAME_MAX = 200

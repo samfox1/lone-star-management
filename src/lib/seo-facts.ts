@@ -187,6 +187,16 @@ export function readFacts(content: FactsContent, artist: FactsArtist): FactsView
 }
 
 /**
+ * THE CITY'S RULE ("Based in", artists.location), one copy for the Profile row (refused before it
+ * is sent), the save (artist-facts.ts artistFactUpdate) and the stored-value check (factErrors).
+ * The fact text rule, as its region and country, then the cap on what is STORED: hidden marks
+ * stripped and spaces folded (factText), so a pasted zero-width space never tips it over.
+ */
+export function cityError(raw: string): string | null {
+  return factTextError(raw) ?? (chars(factText(raw)) > CITY_MAX_LENGTH ? `Keep it under ${CITY_MAX_LENGTH} characters.` : null)
+}
+
+/**
  * What is STORED that the gate would refuse today, by field: a value written before a
  * rule existed, by a script, or an alias that became the name after a rename. Each one is
  * either dropped from the fact card already (the bridge re-applies the rules) or, for the
@@ -194,8 +204,7 @@ export function readFacts(content: FactsContent, artist: FactsArtist): FactsView
  */
 export function factErrors(content: FactsContent, artist: FactsArtist, thisYear: number): Partial<Record<'city' | FactField, string>> {
   const out: Partial<Record<'city' | FactField, string>> = {}
-  const city = artist.location ?? ''
-  const cityBad = factTextError(city) ?? (chars(factText(city)) > CITY_MAX_LENGTH ? `Keep it under ${CITY_MAX_LENGTH} characters.` : null)
+  const cityBad = cityError(artist.location ?? '')
   if (cityBad) out.city = cityBad
   const ctx = { artistName: artist.name ?? '', thisYear, country: content[FACT_CONTENT_KEYS.country] ?? null }
   for (const field of Object.keys(FACT_CONTENT_KEYS) as FactField[]) {
