@@ -3,8 +3,8 @@
  * search-stats.ts that talks to the outside. SERVER ONLY.
  *
  *   • Only where Tapir REGISTERED the site (site_verifications, verified, read through the service
- *     client by seo-tests/run.ts `readRegistered`, the same reader the AI test and the sitemap
- *     resend use), on the address exactly as registered. Nothing registered: no key is read.
+ *     client by search-engines/registered.ts `readRegistered`, the same reader the AI test and the
+ *     sitemap resend use), on the address exactly as registered. Nothing registered: no key is read.
  *   • Both engines at once, inside ONE deadline. Whatever hasn't answered by then is `timeout`;
  *     the deadline also aborts the requests. The other engine's answer still stands.
  *   • Google: the total first, the other five parts only if it answered (a refusal costs one
@@ -17,7 +17,7 @@
  */
 import type { BingClient } from '@/lib/search-engines/bing'
 import type { GoogleClient } from '@/lib/search-engines/google'
-import type { SeoRegistration } from '@/lib/seo-tests/run'
+import type { SeoRegistration } from '@/lib/search-engines/registered'
 import {
   GOOGLE_PARTS,
   couldntAsk,
@@ -146,17 +146,10 @@ export function searchStatsDepsFromEnv(): SearchStatsDeps {
   if (process.env.VITEST) throw new Error('searchStatsDepsFromEnv is not for tests: inject deps')
   return {
     readRegistered: async (artistId) => {
-      const [{ createAdminClient }, { readRegistered }] = await Promise.all([import('@/lib/supabase/admin'), import('@/lib/seo-tests/run')])
+      const [{ createAdminClient }, { readRegistered }] = await Promise.all([import('@/lib/supabase/admin'), import('@/lib/search-engines/registered')])
       return readRegistered(createAdminClient(), artistId)
     },
-    clients: async ({ signal }) => {
-      const [{ googleClient, googleCredsFromEnv }, { bingClient }] = await Promise.all([import('@/lib/search-engines/google'), import('@/lib/search-engines/bing')])
-      const creds = googleCredsFromEnv(process.env.GOOGLE_SEARCH_SERVICE_ACCOUNT_B64)
-      const key = process.env.BING_WEBMASTER_API_KEY?.trim()
-      // Google's and Bing's own API hosts, never an artist's address: the plain fetch, as the
-      // clients use, listening to the deadline too (as seo-tests/run.ts listingClientsFromEnv).
-      const fetcher = ((input: string | URL | Request, init?: RequestInit) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, signal]) : signal })) as typeof fetch
-      return { google: creds ? googleClient(creds, { fetcher }) : null, bing: key ? bingClient(key, { fetcher }) : null }
-    },
+    // Every request listens to the deadline too (search-engines/clients.ts).
+    clients: ({ signal }) => import('@/lib/search-engines/clients').then((m) => m.engineClientsFromEnv({ signal })),
   }
 }

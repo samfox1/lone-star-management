@@ -33,6 +33,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { pickTransport } from '@/lib/net-guard'
 import type { BingClient } from '@/lib/search-engines/bing'
 import type { GoogleClient } from '@/lib/search-engines/google'
+import { readRegistered, type SeoRegistration } from '@/lib/search-engines/registered'
 import { BROWSER_UA } from './bots'
 import { buildCrawl, crawlPath } from './crawl'
 import { sameSite } from './evidence'
@@ -275,10 +276,9 @@ export async function checkOtherHost(origin: string, opts: GatherOptions = {}): 
 
 /* ── the crawl: is it listed on Google / Bing? ──────────────────────────────────────── */
 
-/** A search engine the site is registered with (site_verifications, verified), at the address
- *  it was registered as: the Search Console property / the Bing site, exactly. `verifiedAt`:
- *  when it was verified (the row's verified_at), which the Search tab reads as "added Sep 30". */
-export type SeoRegistration = { provider: 'google' | 'bing'; siteUrl: string; verifiedAt?: string }
+// The registration reader lives with the search engines (search-engines/registered.ts); kept
+// importable from here for the run's own callers and tests.
+export { readRegistered, type SeoRegistration }
 
 export type ListingClients = {
   google: Pick<GoogleClient, 'inspectUrl'> | null
@@ -288,48 +288,14 @@ export type ListingClients = {
 /** Pages asked about: the ones the run opened ("/" and up to 4 more). */
 const LISTING_PAGES = 5
 
-/** A registered address in the shape the migration allows: https, a host, the root, nothing else. */
-function registeredUrl(v: unknown): string | null {
-  if (typeof v !== 'string') return null
-  try {
-    const u = new URL(v)
-    return u.protocol === 'https:' && u.pathname === '/' && !u.search && !u.hash && !u.username && !u.password && u.port === '' ? v : null
-  } catch {
-    return null
-  }
-}
-
-/** The site's VERIFIED registrations, read through the WRITER (service role): site_verifications
- *  is closed to every signed-in user. [] when there are none or the read fails. */
-export async function readRegistered(writer: SupabaseClient, artistId: string): Promise<SeoRegistration[]> {
-  const { data, error } = await writer.from('site_verifications').select('provider, site_url, verified_at').eq('artist_id', artistId)
-  if (error || !Array.isArray(data)) return []
-  const out: SeoRegistration[] = []
-  for (const row of data as Record<string, unknown>[]) {
-    const provider = row?.provider
-    if ((provider !== 'google' && provider !== 'bing') || typeof row.verified_at !== 'string' || !row.verified_at) continue
-    const siteUrl = registeredUrl(row.site_url)
-    if (siteUrl && !out.some((r) => r.provider === provider)) out.push({ provider, siteUrl, verifiedAt: row.verified_at })
-  }
-  return out
-}
-
-/** The clients, from the server's keys: a missing key is that provider's null. Loaded lazily, so
- *  a run with nothing registered never reads a key. Every request they make also listens to
- *  `signal` (the clients take a fetcher, not a signal), so the run's deadline aborts it. */
+/** The clients, from the server's keys (search-engines/clients.ts): a missing key is that
+ *  provider's null. Loaded lazily, so a run with nothing registered never reads a key. Every
+ *  request they make also listens to `signal`, so the run's deadline aborts it. */
 export async function listingClientsFromEnv(opts: { signal?: AbortSignal } = {}): Promise<ListingClients> {
   // Tests load .env.local (vitest.setup.ts), so a test that forgot to inject its own clients would
   // call the real Google and Bing with the real keys. Under vitest this refuses instead.
   if (process.env.VITEST) throw new Error('listingClientsFromEnv is not for tests: inject deps.listingClients')
-  const [{ googleClient, googleCredsFromEnv }, { bingClient }] = await Promise.all([import('@/lib/search-engines/google'), import('@/lib/search-engines/bing')])
-  const creds = googleCredsFromEnv(process.env.GOOGLE_SEARCH_SERVICE_ACCOUNT_B64)
-  const key = process.env.BING_WEBMASTER_API_KEY?.trim()
-  const stop = opts.signal
-  // Google's and Bing's own API hosts, never an artist's address: the plain fetch, as the clients use.
-  const fetcher = stop
-    ? ((input: string | URL | Request, init?: RequestInit) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, stop]) : stop })) as typeof fetch
-    : undefined
-  return { google: creds ? googleClient(creds, { fetcher }) : null, bing: key ? bingClient(key, { fetcher }) : null }
+  return (await import('@/lib/search-engines/clients')).engineClientsFromEnv(opts)
 }
 
 /** A signal that aborts at `deadline`; `done()` aborts it now (stragglers stop) and clears the timer. */

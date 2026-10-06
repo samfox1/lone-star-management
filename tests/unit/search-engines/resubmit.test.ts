@@ -14,7 +14,8 @@
  *             for this artist through the service client
  *           • nothing throws out: a refusal, a throw anywhere, `after` itself refusing; the log
  *             line carries codes only, never a message
- *           • the real loaders refuse under vitest
+ *           • the real loaders refuse under vitest, the shared key-reading client builder
+ *             (clients.ts, also behind the AI test's listing and the Search tab) included
  * Not here: Google's request shape for sitemaps.submit (google.test.ts); which publishes schedule
  *           it (publish-hook.test.ts).
  * Fixtures: a PostgREST fake that answers site_verifications for artist A only; a fake Google
@@ -26,6 +27,7 @@ import { fakeClient, filterValue, type Call, type Reply } from '@tests/helpers/f
 const h = vi.hoisted(() => ({ after: vi.fn() }))
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: h.after }))
 
+import { engineClientsFromEnv } from '@/lib/search-engines/clients'
 import { googleFromEnv, resubmitSitemap, scheduleSitemapResubmit, serviceFromEnv, type ResubmitDeps } from '@/lib/search-engines/resubmit'
 
 const A = 'artist-a'
@@ -154,5 +156,18 @@ describe('resending the sitemap to Google', () => {
     await expect(googleFromEnv()).rejects.toThrow(/not for tests/)
     expect(() => serviceFromEnv()).toThrow(/not for tests/)
     expect(await resubmitSitemap(A)).toEqual({ sent: false, reason: 'error' })
+  })
+
+  // The ONE builder that reads Google's and Bing's keys refuses on its own, whichever wrapper
+  // forgets. A boolean, so a failure prints nothing of what came back (2026-09-30: a test printed
+  // part of the real Google key).
+  it('CRITICAL: the shared key-reading client builder refuses inside a test', async () => {
+    let refused = false
+    try {
+      await engineClientsFromEnv()
+    } catch {
+      refused = true
+    }
+    expect(refused).toBe(true)
   })
 })

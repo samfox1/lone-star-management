@@ -6,7 +6,7 @@
  *
  * ONLY FOR A SITE TAPIR REGISTERED: the artist's `site_verifications` row for Google, VERIFIED, at
  * an https root address (the Search Console property exactly: https://www.example.com/). It is
- * read through the SERVICE client (the table is closed to every signed-in user) by seo-tests/run.ts
+ * read through the SERVICE client (the table is closed to every signed-in user) by registered.ts
  * `readRegistered`, the same reader the AI test's listing uses. The sitemap is `<property>sitemap.xml`,
  * the one registration sent (register.ts).
  *
@@ -20,8 +20,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { readRegistered } from '@/lib/seo-tests/run'
-import { googleClient, googleCredsFromEnv, type GoogleClient, type GoogleReason } from './google'
+import { engineClientsFromEnv } from './clients'
+import type { GoogleClient, GoogleReason } from './google'
+import { readRegistered } from './registered'
 
 export type ResubmitOutcome =
   | { sent: true; siteUrl: string; sitemapUrl: string }
@@ -48,11 +49,11 @@ export function serviceFromEnv(): SupabaseClient {
   return createAdminClient()
 }
 
-/** The real Google client from the server's key, or null when there is none. Refuses under vitest. */
+/** The real Google client from the server's key (clients.ts), or null when there is none. No
+ *  signal: one submit, inside the client's own timeout. Refuses under vitest. */
 export async function googleFromEnv(): Promise<Pick<GoogleClient, 'submitSitemap'> | null> {
   refuseUnderVitest('googleFromEnv')
-  const creds = googleCredsFromEnv(process.env.GOOGLE_SEARCH_SERVICE_ACCOUNT_B64)
-  return creds ? googleClient(creds) : null
+  return (await engineClientsFromEnv()).google
 }
 
 /** Resend one artist's sitemap to Search Console, if Tapir registered the site. Never throws; at
