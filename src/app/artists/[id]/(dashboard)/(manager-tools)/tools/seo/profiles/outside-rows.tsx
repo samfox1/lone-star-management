@@ -6,7 +6,7 @@ import type { DiscogsCheck, OutsideChecks, WikidataCheck } from '@/lib/manager-t
 import { shortLink } from '@/lib/manager-tools/format'
 import { FOCUS_RING } from '../../../_ui/focus-ring'
 import { CardField, RowMark, SentenceAction } from '../../../_ui/disclosure'
-import { OutLink, ProfileCard, ProfileRow, QuietRow, VALUE } from './_ui/profile-row'
+import { OutLink, ProfileCard, ProfileRow, QuietRow, ToConnections, VALUE } from './_ui/profile-row'
 
 /**
  * The Profiles tab's Discogs and Wikidata rows (lib/manager-tools/seo/profiles/outside.ts), read
@@ -30,10 +30,6 @@ function Row({ name, ok, status, note, children }: { name: string; ok: boolean |
       <ProfileCard id={id}>{children}</ProfileCard>
     </ProfileRow>
   )
-}
-
-function ToConnections({ artistId }: { artistId: string }) {
-  return <SentenceAction icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" />
 }
 
 /** No site to look for: nothing was asked, and there is nothing to open. */

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { FOCUS_RING } from '../../../../_ui/focus-ring'
-import { DisclosureCard, DisclosureItem, QuietItem, RowFace, RowMark, RowValue } from '../../../../_ui/disclosure'
+import { DisclosureCard, DisclosureItem, QuietItem, RowFace, RowMark, RowValue, SentenceAction } from '../../../../_ui/disclosure'
 
 /**
  * THE PROFILES TAB'S ROWS, in the AI test's row and card (Batch 2, Sam 2026-10-02,
@@ -111,4 +111,10 @@ export function OutLink({ href, children }: { href: string; children: ReactNode 
       {children}
     </a>
   )
+}
+
+/** The way to the Connections tool from a card: a connected profile and an outside one are both
+ *  linked or fixed there. */
+export function ToConnections({ artistId }: { artistId: string }) {
+  return <SentenceAction icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" />
 }

@@ -6,7 +6,7 @@ import type { DatabasePage, ProfileLink } from '@/lib/manager-tools/seo/profiles
 import { shortLink } from '@/lib/manager-tools/format'
 import { CardField, RowMark, SentenceAction } from '../../../_ui/disclosure'
 import { PlatformMark } from '../_ui/mark'
-import { OutLink, ProfileCard, ProfileRow, VALUE } from './_ui/profile-row'
+import { OutLink, ProfileCard, ProfileRow, ToConnections, VALUE } from './_ui/profile-row'
 
 /**
  * THE CONNECTED PROFILES AND MUSICBRAINZ (moved from the SEO / GEO Facts tab's Profiles section,
@@ -17,10 +17,6 @@ import { OutLink, ProfileCard, ProfileRow, VALUE } from './_ui/profile-row'
  *   Connected profiles   how many the site's fact card lists, each platform's mark; Connections
  *   MusicBrainz          what is linked, or its own artist editor filled in
  */
-
-function ToConnections({ artistId }: { artistId: string }) {
-  return <SentenceAction icon="plug" label="Open Connections" href={`/artists/${artistId}/connections`} link="app" />
-}
 
 /** The platforms as their marks, the ones the fact card leaves out faint. */
 function Marks({ profiles }: { profiles: readonly ProfileLink[] }) {
