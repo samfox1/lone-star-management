@@ -61,6 +61,31 @@ API ("I dont want this project to rely on Claude API calls"): Perplexity + OpenA
 (Sam: "Remind me to talk through what google and bing's apis can do for us after we complete these
 next steps"). The short version is in the conversation of 2026-09-30 and VISIBILITY_TOOLKIT.md.
 
+## Profile kit + Skeen's outside profiles — AFTER the Lone Star side (Sam, 2026-10-06)
+
+Why: plain "skeen" doesn't find the site (page one is the surname, dictionaries, a skin scanner,
+another musician). Google learns that "Skeen" is this DJ from OTHER sites naming him and linking
+skeenmusic.com, so this is the lever for the bare name. "skeen dj" / "skeen music" already sit at #2–3.
+
+Skeen's status in SEO › Profiles (2026-10-06): MusicBrainz no page, Discogs none linked, Wikidata
+none, Bandsintown and RA not started, every outside bio "not confirmed", YouTube has no site, city
+or genre, the AllMusic email drafted but not sent.
+
+The kit (one place in the Profiles tab, each site one click). None of these sites lets Tapir
+create a profile; Tapir does the prep:
+- MusicBrainz: the pre-filled editor ALREADY EXISTS (connections/services/musicbrainz/seed.ts);
+  the artist signs in and submits.
+- Discogs: the release details to copy (its API can't add database entries).
+- Resident Advisor: the claim / create details to paste (no API, terms ban bots). ra.co/dj/skeen is
+  the Glasgow DJ, so Skeen needs his own page under another name (RA Pro, photo, ~72 h).
+- Bandsintown: generate the shows CSV (already planned); the artist uploads it.
+- YouTube: write the site, city and genre into the channel description through the YouTube Data API
+  (channels.update) after the owner signs in with Google once.
+- Instagram / Spotify / TikTok: the exact bio text to copy (their APIs can't edit a bio).
+- Wikidata: never edited by Tapir (self-editing rules); the Profiles tab only checks it.
+Check each claim above against the site's current docs before building it (written from memory
+2026-10-06, not re-verified).
+
 ## Admin page + "Add website" button — LATER, after Skeen is finished (Sam, 2026-09-30)
 
 Sam: "We can wait on the add website button. That will be on an admin page that we will create
