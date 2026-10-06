@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Suspense } from 'react'
 import { CHECK_SLUG, checkState } from '@/lib/posthog-check'
 import { PostHogCheck, PostHogCheckSlot, POSTHOG_TIMEOUT_MS } from '@/components/ui/posthog-check'
-import { comparisonWindow, hogqlQueries, HOGQL_COLUMNS } from '@/lib/compare-posthog'
+import { comparisonWindow, firstDayQuery, hogqlQueries, HOGQL_COLUMNS } from '@/lib/compare-posthog'
 
 describe('checkState', () => {
   const env = { POSTHOG_PERSONAL_API_KEY: 'phx_test', POSTHOG_PROJECT_ID: '123' }
@@ -57,16 +57,32 @@ describe('PostHogCheck — the panel itself', () => {
     vi.useRealTimers()
   })
 
+  /** PostHog answering every query with ITS columns: the first day, then the window's. */
+  const FIRST = '2026-09-17'
+  const answer = (query: string) => {
+    if (query === firstDayQuery(CHECK_SLUG)) return { columns: ['first', 'n'], results: [[FIRST, 40]] }
+    const byQuery = new Map(Object.entries(hogqlQueries(CHECK_SLUG, comparisonWindow(30, NOW, FIRST), true)).map(([n, q]) => [q, n]))
+    const name = byQuery.get(query) as keyof typeof HOGQL_COLUMNS
+    return { results: name === 'daily' ? [['2026-09-20', '$pageview', 50, 0]] : [], columns: HOGQL_COLUMNS[name] }
+  }
+
+  it("starts the window the day after PostHog's first day, as the script does", async () => {
+    // Before this (2026-10-06) the panel read all 30 days, nine of them from before PostHog
+    // existed, and printed AGREEMENT 68% (views 40%) beside a script that printed 95%.
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => new Response(JSON.stringify(answer(JSON.parse(String(init?.body)).query.query)))))
+    const text = JSON.stringify(await PostHogCheck({ supabase: supabase as never, artistId: 'a1', slug: CHECK_SLUG, now: NOW }))
+    // The day after FIRST through yesterday; without the cut it is 2026-08-24..2026-09-22.
+    expect(text).toContain('2026-09-18..2026-09-22')
+  })
+
   it('reads PostHog BEFORE ours, so the gap can never look like a door drop', async () => {
     // Answer each query with ITS columns, so the PostHog read succeeds and ours runs.
-    const byQuery = new Map(Object.entries(hogqlQueries(CHECK_SLUG, comparisonWindow(30, NOW), true)).map(([n, q]) => [q, n]))
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))
     vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => {
       calls.push('posthog')
       await gate
-      const name = byQuery.get(JSON.parse(String(init?.body)).query.query) as keyof typeof HOGQL_COLUMNS
-      return new Response(JSON.stringify({ results: [], columns: HOGQL_COLUMNS[name] }))
+      return new Response(JSON.stringify(answer(JSON.parse(String(init?.body)).query.query)))
     }))
     const out = PostHogCheck({ supabase: supabase as never, artistId: 'a1', slug: CHECK_SLUG, now: NOW })
     // PostHog is in flight and has not answered: ours must not have started. Listing

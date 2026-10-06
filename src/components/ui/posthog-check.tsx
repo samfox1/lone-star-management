@@ -4,9 +4,11 @@ import { CHECK_SLUG, checkState } from '@/lib/posthog-check'
 import {
   comparisonWindow,
   compare,
+  firstDayQuery,
   formatReport,
   hogqlQueries,
   oursSide,
+  parseFirstDay,
   parseHogQL,
   posthogSide,
   type HogQLRows,
@@ -65,7 +67,9 @@ export async function PostHogCheck({ supabase, artistId, slug, now }: Props) {
 
   let text: string
   try {
-    const w = comparisonWindow(30, now)
+    // From the day after PostHog's first day, as the script does: the nine days before it
+    // read as PostHog zeros and showed AGREEMENT 68% beside the script's 95% (2026-10-06).
+    const w = comparisonWindow(30, now, parseFirstDay(await askPostHog(firstDayQuery(slug), 'first day')))
     // PostHog FIRST, ours second, as the script does: a click PostHog holds has already
     // reached our door, so the gap between the reads can only produce ours-only clicks,
     // never a false door drop. Read together, they could (review 2026-09-23).
@@ -106,47 +110,47 @@ async function readOurs(supabase: SupabaseClient, artistId: string, w: Window): 
   return { timeline, typeTimeline, sources, places, entities }
 }
 
-async function readPostHog(slug: string, w: Window) {
+/** One HogQL query, its raw JSON answer. */
+async function askPostHog(query: string, name: string): Promise<unknown> {
   const host = (process.env.POSTHOG_HOST ?? 'https://us.posthog.com').replace(/\/+$/, '')
   const url = `${host}/api/projects/${process.env.POSTHOG_PROJECT_ID}/query/`
+  // Two timeouts, hand-rolled so a test's fake clock can drive them. The abort signal covers
+  // ONLY the wait for headers: aborting after they arrive tears down the body's
+  // decompression stream, which on Node 20 throws undici's
+  // "controller[kState].transformAlgorithm is not a function" outside any try/catch and
+  // fails the Suspense boundary (seen live 2026-09-23). The body is raced against a timer
+  // instead and, on timeout, simply left to close with the request.
+  const ctl = new AbortController()
+  const headersTimer = setTimeout(() => ctl.abort(), POSTHOG_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      signal: ctl.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.POSTHOG_PERSONAL_API_KEY}` },
+      body: JSON.stringify({ query: { kind: 'HogQLQuery', query } }),
+      cache: 'no-store',
+    })
+  } finally {
+    clearTimeout(headersTimer)
+  }
+  if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
+  let bodyTimer: ReturnType<typeof setTimeout> | undefined
+  const stalled = new Promise<never>((_, reject) => {
+    bodyTimer = setTimeout(() => reject(new Error(`PostHog ${name}: the body did not finish in ${POSTHOG_TIMEOUT_MS}ms`)), POSTHOG_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([res.json(), stalled])
+  } finally {
+    clearTimeout(bodyTimer)
+  }
+}
+
+async function readPostHog(slug: string, w: Window) {
   const run = async (bots: boolean) => {
     const q = hogqlQueries(slug, w, bots)
     const names = Object.keys(q) as (keyof typeof q)[]
-    const rows = await Promise.all(
-      names.map(async (name) => {
-        // Two timeouts, hand-rolled so a test's fake clock can drive them. The abort
-        // signal covers ONLY the wait for headers: aborting after they arrive tears down
-        // the body's decompression stream, which on Node 20 throws undici's
-        // "controller[kState].transformAlgorithm is not a function" outside any
-        // try/catch and fails the Suspense boundary (seen live 2026-09-23). The body is
-        // raced against a timer instead and, on timeout, simply left to close with the
-        // request.
-        const ctl = new AbortController()
-        const headersTimer = setTimeout(() => ctl.abort(), POSTHOG_TIMEOUT_MS)
-        let res: Response
-        try {
-          res = await fetch(url, {
-            signal: ctl.signal,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.POSTHOG_PERSONAL_API_KEY}` },
-            body: JSON.stringify({ query: { kind: 'HogQLQuery', query: q[name] } }),
-            cache: 'no-store',
-          })
-        } finally {
-          clearTimeout(headersTimer)
-        }
-        if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status}`)
-        let bodyTimer: ReturnType<typeof setTimeout> | undefined
-        const stalled = new Promise<never>((_, reject) => {
-          bodyTimer = setTimeout(() => reject(new Error(`PostHog ${name}: the body did not finish in ${POSTHOG_TIMEOUT_MS}ms`)), POSTHOG_TIMEOUT_MS)
-        })
-        try {
-          return parseHogQL(await Promise.race([res.json(), stalled]), name)
-        } finally {
-          clearTimeout(bodyTimer)
-        }
-      }),
-    )
+    const rows = await Promise.all(names.map(async (name) => parseHogQL(await askPostHog(q[name], name), name)))
     return Object.fromEntries(names.map((n, i) => [n, rows[i]])) as Record<keyof typeof q, HogQLRows>
   }
   try {
