@@ -46,12 +46,12 @@ export default async function EpkPage({ params }: { params: Promise<{ id: string
   const artist = await requireArtist(id)
   const supabase = await createClient()
 
-  const [{ data: press }, site] = await Promise.all([
+  // None needs another's answer, so the releases count no longer costs a round trip of its own.
+  const [{ data: press }, site, { data: releaseRows }] = await Promise.all([
     supabase.from('artists').select('press_pitch, press_quotes, tech_rider_path, stage_plot_path').eq('id', id).single(),
     getPublishedSite(supabase, artist.slug as string),
+    supabase.rpc('get_public_releases', { p_slug: artist.slug }),
   ])
-
-  const { data: releaseRows } = await supabase.rpc('get_public_releases', { p_slug: artist.slug })
   const { requirements, ready } = epkReadiness({
     site,
     releaseCount: ((releaseRows as unknown[] | null) ?? []).length,

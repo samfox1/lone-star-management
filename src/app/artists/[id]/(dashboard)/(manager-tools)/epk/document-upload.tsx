@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/icons'
 import { cx } from '@/lib/cx'
 import { DOCUMENTS_BUCKET, DOCUMENTS_FOLDER, type PressDocumentKind } from '@/lib/epk'
 import { DOCUMENT_UPLOAD_RULES } from '@/lib/upload'
+import { useConfirm } from '../../confirm-dialog'
 import { UploadField } from '../../upload-field'
 import { toast } from '../../toast'
 import { LedgerRow } from '../_ui/ledger'
@@ -18,7 +19,8 @@ const TILE = 'relative grid h-16 w-28 flex-none place-items-center rounded-lg bo
  * One press-document row, the stage plot or the tech rider, in Brand's ledger (Batch 3, Sam
  * 2026-10-02): the name, what it is, "PDF · private", and a tile on the right. Empty, the tile is
  * a dashed "Add" beside a + ; attached, it shows a PDF mark, clicking it uploads a new one, and
- * the row ends in a trash.
+ * the row ends in a trash. The trash asks first, like every other trash in these tools: the file
+ * has no undo short of uploading it again.
  *
  * Uploads go to the PRIVATE `documents` bucket, so unlike every other uploader on the dashboard
  * there is no preview and no link: the file is not reachable from a browser by design. It
@@ -40,8 +42,10 @@ export function DocumentUpload({
   present: boolean
 }) {
   const noun = label.toLowerCase()
+  const { ask, dialog } = useConfirm()
 
   async function clear() {
+    if (!(await ask(`Remove the ${noun}?`, { action: 'Remove' }))) return
     const res = await savePressDocumentAction(artistId, kind, null)
     // Surfaced, not swallowed: a Remove blocked by RLS must not look like it worked.
     if (res.error) toast(res.error, 'error')
@@ -56,6 +60,7 @@ export function DocumentUpload({
       meta="PDF · private"
       remove={present ? <RowIcon icon="trash" label="Remove" tone="danger" onClick={() => void clear()} /> : undefined}
     >
+      {dialog}
       <UploadField
         accept="application/pdf"
         label={present ? `Replace ${noun}` : `Upload ${noun}`}

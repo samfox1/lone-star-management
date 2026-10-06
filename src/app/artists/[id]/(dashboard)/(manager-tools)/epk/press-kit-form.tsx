@@ -45,7 +45,7 @@ const tidy = (q: Quote): Quote => ({
  * text: what they said, who said it, the link. A click opens the three as lines, with ✓ and
  * its trash; Enter or ✓ saves, Escape or a click away puts it back. The bare + opens three
  * empty lines where the new quote will sit, with ✓ and ×. A quote needs words: ✓ on an empty
- * one goes to its "What they said" line, and a quote emptied of them leaves the list.
+ * one goes to its "What they said" line. The trash is the one way a saved quote leaves the list.
  *
  * Draft until the profile is published (the page's rising Publish bar). A save says nothing on
  * success; a refusal is an error toast.
@@ -146,9 +146,8 @@ function QuoteRow({ quote, onSave, onRemove }: { quote: Quote; onSave: (q: Quote
         start={quote}
         onSave={(q) => {
           close(true)
-          // Emptied of its words, it is no longer a quote (the server would drop it too).
-          if (!q.quote) onRemove()
-          else if (q.source !== quote.source || q.quote !== quote.quote || q.url !== quote.url) onSave(q)
+          // Never empty: QuoteFields keeps a quote with no words open on its words line.
+          if (q.source !== quote.source || q.quote !== quote.quote || q.url !== quote.url) onSave(q)
         }}
         onCancel={(keyboard) => close(keyboard)}
         onRemove={() => {
