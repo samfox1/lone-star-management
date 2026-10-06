@@ -129,10 +129,16 @@ export async function askSearchStats(artistId: string, key: SearchPeriodKey, dep
 }
 
 /** Worth keeping for hours: everything but a refusal, an error or a timeout, which are asked
- *  again next time. (`not_registered` / `no_key` are kept: they change only when Tapir registers
- *  the site or the server gets a key; revalidate the `search-stats` tag then.) */
+ *  again next time, and NOTHING registered at all. Registration runs from the CLI
+ *  (scripts/site-register.ts), which can't clear the Next cache, so a stored "Site not added yet"
+ *  would outlive it by up to 6 hours; that answer asks no engine (one service-role read), so it is
+ *  cheap to ask again. One engine `not_registered` beside an answer IS kept: a Google-only site
+ *  would otherwise ask Google six times on every open. Adding the second engine later therefore
+ *  waits out the 6 hours (nothing purges the cache yet). `no_key` is kept: it changes only with a
+ *  deploy. */
 const PASSING = new Set<EngineStats['state']>(['quota', 'error', 'timeout'])
-export const isCacheable = (a: SearchStatsAnswer) => !PASSING.has(a.google.state) && !PASSING.has(a.bing.state)
+export const isCacheable = (a: SearchStatsAnswer) =>
+  !(a.google.state === 'not_registered' && a.bing.state === 'not_registered') && !PASSING.has(a.google.state) && !PASSING.has(a.bing.state)
 
 /** The real deps: the service client and the server's keys (a missing key is that engine's
  *  null). Loaded lazily, so nothing registered reads no key. Refuses under vitest. */

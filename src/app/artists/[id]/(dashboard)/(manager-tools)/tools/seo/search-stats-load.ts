@@ -17,8 +17,9 @@ class NotCached extends Error {
 /**
  * Keyed by artist, period AND the period's last day, so a new day is a new entry (yesterday's
  * window is never served as today's). `unstable_cache`, not `use cache`: this app has not opted
- * into cacheComponents (see api/merch/[slug]/route.ts). Tag `search-stats`: revalidate it when
- * Tapir registers a site, so "not registered" doesn't outlive the registration.
+ * into cacheComponents (see api/merch/[slug]/route.ts). Nothing revalidates the `search-stats`
+ * tag: registration runs from the CLI, outside the Next cache. So "nothing registered" is never
+ * stored (isCacheable), and the tag is only a handle for a purge path if one is ever needed.
  */
 const cachedStats = unstable_cache(
   async (artistId: string, key: SearchPeriodKey, end: string): Promise<SearchStatsAnswer> => {

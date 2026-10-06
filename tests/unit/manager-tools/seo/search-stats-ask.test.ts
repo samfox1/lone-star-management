@@ -12,7 +12,8 @@
  *             first, the rest only if it answered); Bing its three calls
  *           • no key on the server: `no_key`; an engine that doesn't answer by the deadline: `timeout`
  *             (the other engine's answer still stands); a throw: `error`
- *           • what may be cached: answers only (ok / no_data), never a "couldn't ask"
+ *           • what may be cached: answers and a settled "no key" / one engine not registered;
+ *             never a refusal, an error, a timeout, or "nothing registered yet"
  *           • the env-backed deps refuse under vitest
  *           • the answer carries each engine's registration date (the Search tab's "added Sep 30")
  * Not here: the numbers themselves (search-stats.test.ts); the calls (search-stats-calls.test.ts).
@@ -130,15 +131,25 @@ describe('askSearchStats', () => {
 })
 
 describe('what may be cached', () => {
-  // Answers (and the settled "not registered" / "no key") are kept for hours; a refusal, an error
-  // or a timeout is asked again next time.
+  // Answers (and a settled "no key") are kept for hours; a refusal, an error or a timeout is asked
+  // again next time.
   it('never caches a refusal, an error or a timeout', async () => {
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes().deps))).toBe(true)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: null }).deps))).toBe(true)
-    expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ registered: [] }).deps))).toBe(true)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: { searchAnalytics: async () => ({ ok: false, reason: 'google_stats', status: 429 }) } }).deps))).toBe(false)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: { searchAnalytics: () => new Promise(() => {}) } }).deps))).toBe(false)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', { ...fakes().deps, readRegistered: async () => Promise.reject(new Error('db')) }))).toBe(false)
+  })
+
+  // Registration runs from the CLI (scripts/site-register.ts), which can't clear the Next cache: a
+  // stored "Site not added yet" would outlive the registration by up to 6 hours. Nothing registered
+  // asks no engine (one service-role read), so it is never stored. One engine registered still is:
+  // otherwise a site with only Google would ask Google six times on every open (its quota is per site).
+  it('never caches "nothing registered", but keeps an answer with one engine registered', async () => {
+    expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ registered: [] }).deps))).toBe(false)
+    const onlyGoogle = await askSearchStats(ARTIST, '28d', fakes({ registered: [{ provider: 'google', siteUrl: SITE }] }).deps)
+    expect([onlyGoogle.google.state, onlyGoogle.bing.state]).toEqual(['ok', 'not_registered'])
+    expect(isCacheable(onlyGoogle)).toBe(true)
   })
 })
 
