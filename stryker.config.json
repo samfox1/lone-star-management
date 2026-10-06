@@ -38,6 +38,7 @@
     "src/lib/search-engines/address.ts",
     "src/lib/search-engines/bing.ts",
     "src/lib/search-engines/google.ts",
+    "src/lib/search-engines/parse.ts",
     "src/lib/search-engines/register.ts",
     "src/lib/search-engines/registered.ts",
     "src/lib/search-engines/resubmit.ts",

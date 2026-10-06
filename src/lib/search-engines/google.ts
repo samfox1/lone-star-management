@@ -21,6 +21,7 @@
  */
 import { createSign } from 'node:crypto'
 import { isGoogleVerification } from '@samfox1/site-bridge/verification'
+import { DAY, isCount } from './parse'
 
 export type GoogleCreds = { client_email: string; private_key: string }
 
@@ -84,9 +85,6 @@ export type GoogleSearchRow = { keys: string[]; clicks: number; impressions: num
 /** The rows, and the first day Google is still counting (`metadata.firstIncompleteDate`, only
  *  with dataState all): that day and later are preliminary. */
 export type GoogleSearchAnswer = { rows: GoogleSearchRow[]; firstIncompleteDate: string | null }
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/
-const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
 
 /** A row in Google's shape for `width` dimensions, or null. */
 function searchRow(r: unknown, width: number): GoogleSearchRow | null {

@@ -18,6 +18,7 @@
  * may be stored (site_verifications.error_code), `detail` is for the operator, printed, never stored.
  */
 import { isBingVerification } from '@samfox1/site-bridge/verification'
+import { isCount } from './parse'
 
 export type BingReason = 'bing_auth' | 'bing_add' | 'bing_code' | 'bing_verify' | 'bing_feed' | 'bing_urlinfo' | 'bing_stats' | 'bing_network'
 /** `code` is Bing's own ApiErrorCode when it sent one (4 ThrottleUser and 5 ThrottleHost are its
@@ -72,8 +73,6 @@ export type BingDay = { date: string; clicks: number; impressions: number }
  *  position when the result was SEEN (AvgImpressionPosition, Google's meaning of position);
  *  null when Bing has none (it sends -1 or 0). */
 export type BingTopRow = { key: string; date: string | null; clicks: number; impressions: number; position: number | null }
-
-const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
 
 function bingDayRow(r: unknown): BingDay | null {
   if (!r || typeof r !== 'object') return null

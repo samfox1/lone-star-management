@@ -27,6 +27,7 @@
  */
 import type { BingDay, BingResult, BingTopRow } from '@/lib/search-engines/bing'
 import type { GoogleResult, GoogleSearchAnswer, GoogleSearchRequest, GoogleSearchRow } from '@/lib/search-engines/google'
+import { DAY } from '@/lib/search-engines/parse'
 
 export type SearchEngineId = 'google' | 'bing'
 
@@ -79,7 +80,6 @@ export const TOP = 50
 
 /* ── days ───────────────────────────────────────────────────────────────────────────── */
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/
 const DAY_MS = 86_400_000
 
 const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10)
