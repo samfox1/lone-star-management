@@ -1,4 +1,4 @@
-// The Analytics side panels' tables (Every day / source / country): how a column sorts.
+// The Analytics side panels' tables (All days / sources / countries): how a column sorts.
 import { describe, expect, it } from 'vitest'
 import { firstDir, shareLabel, sortRows } from '@/lib/detail-table'
 

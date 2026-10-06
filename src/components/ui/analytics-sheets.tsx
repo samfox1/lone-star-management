@@ -12,8 +12,9 @@ import { SourceGlyph } from './source-glyphs'
 
 /**
  * The Analytics page's three full tables, each behind a button that opens it in a side
- * panel (the r12 mock): EVERY DAY beside the chart's legend, EVERY SOURCE beside SOURCE,
- * EVERY COUNTRY above the list by the map. A country steps into its cities, a source into
+ * panel (the r12 mock): ALL DAYS on the chart's legend row, ALL SOURCES beside SOURCE, ALL
+ * COUNTRIES above the list by the map — every one at the page's right edge (Sam, 2026-10-06:
+ * "say all sources/days/etc … they should all be right aligned"). A country steps into its cities, a source into
  * the sites that sent it; the back arrow steps out. Every number is one the page already
  * shows, in full.
  */
@@ -21,7 +22,7 @@ import { SourceGlyph } from './source-glyphs'
 /** One line of the chart, for the day table: its short name, its days, and when it was first counted. */
 export type DayColumn = { key: string; label: string; values: number[]; since?: string }
 
-export function EveryDay({ days, lines }: { days: string[]; lines: DayColumn[] }) {
+export function AllDays({ days, lines }: { days: string[]; lines: DayColumn[] }) {
   const [open, setOpen] = useState(false)
   const rows = days.map((day, i) => ({ day, i }))
   const columns: Column<(typeof rows)[number]>[] = [
@@ -34,10 +35,10 @@ export function EveryDay({ days, lines }: { days: string[]; lines: DayColumn[] }
   ]
   return (
     <>
-      <SheetButton label="Every day" onClick={() => setOpen(true)} />
+      <SheetButton label="All days" onClick={() => setOpen(true)} />
       {open && (
-        <SideSheet title="Every day" onClose={() => setOpen(false)}>
-          <DetailTable label="Every day" columns={columns} rows={rows} rowKey={(r) => r.day} sort={{ key: 'day', dir: 'desc' }} />
+        <SideSheet title="All days" onClose={() => setOpen(false)}>
+          <DetailTable label="All days" columns={columns} rows={rows} rowKey={(r) => r.day} sort={{ key: 'day', dir: 'desc' }} />
         </SideSheet>
       )}
     </>
@@ -46,7 +47,7 @@ export function EveryDay({ days, lines }: { days: string[]; lines: DayColumn[] }
 
 type Host = { host: string; visitors: number }
 
-export function EverySource({ sources }: { sources: SourceSummary[] }) {
+export function AllSources({ sources }: { sources: SourceSummary[] }) {
   const [open, setOpen] = useState(false)
   const [into, setInto] = useState<SourceSummary | null>(null)
   const total = sources.reduce((n, s) => n + s.visitors, 0)
@@ -68,13 +69,13 @@ export function EverySource({ sources }: { sources: SourceSummary[] }) {
   const close = () => { setOpen(false); setInto(null) }
   return (
     <>
-      <SheetButton label="Every source" onClick={() => setOpen(true)} />
+      <SheetButton label="All sources" onClick={() => setOpen(true)} />
       {open && (
-        <SideSheet title={into ? into.label : 'Every source'} onClose={close} onBack={into ? () => setInto(null) : undefined}>
+        <SideSheet title={into ? into.label : 'All sources'} onClose={close} onBack={into ? () => setInto(null) : undefined}>
           {into
             ? <DetailTable key={into.source} label={`Sites that sent ${into.label}`} columns={hostColumns} rows={into.hosts} rowKey={(h) => h.host} sort={{ key: 'visitors', dir: 'desc' }} />
             : <DetailTable
-                label="Every source" columns={columns} rows={sources} rowKey={(s) => s.source} sort={{ key: 'visitors', dir: 'desc' }}
+                label="All sources" columns={columns} rows={sources} rowKey={(s) => s.source} sort={{ key: 'visitors', dir: 'desc' }}
                 // A source steps into the sites that sent it, when there are any (Direct has none).
                 onRow={setInto} leads={(s) => s.hosts.length > 0}
               />}
@@ -87,7 +88,7 @@ export function EverySource({ sources }: { sources: SourceSummary[] }) {
 type Country = WorldMapData['countries'][number]
 type City = { key: string; name: string; region: string; visitors: number; views: number }
 
-export function EveryCountry({ map }: { map: Pick<WorldMapData, 'countries' | 'majorCities' | 'other'> }) {
+export function AllCountries({ map }: { map: Pick<WorldMapData, 'countries' | 'majorCities' | 'other'> }) {
   const [open, setOpen] = useState(false)
   const [into, setInto] = useState<string | null>(null)
   const total = map.countries.reduce((n, c) => n + c.visitors, 0)
@@ -116,12 +117,12 @@ export function EveryCountry({ map }: { map: Pick<WorldMapData, 'countries' | 'm
   const close = () => { setOpen(false); setInto(null) }
   return (
     <>
-      <SheetButton label="Every country" onClick={() => setOpen(true)} />
+      <SheetButton label="All countries" onClick={() => setOpen(true)} />
       {open && (
-        <SideSheet title={into ? countryName(into) : 'Every country'} onClose={close} onBack={into ? () => setInto(null) : undefined}>
+        <SideSheet title={into ? countryName(into) : 'All countries'} onClose={close} onBack={into ? () => setInto(null) : undefined}>
           {into
             ? <DetailTable key={into} label={`Cities in ${countryName(into)}`} columns={cityColumns} rows={cities} rowKey={(c) => c.key} sort={{ key: 'visitors', dir: 'desc' }} />
-            : <DetailTable label="Every country" columns={columns} rows={map.countries} rowKey={(c) => c.code} sort={{ key: 'visitors', dir: 'desc' }} onRow={(c) => setInto(c.code)} />}
+            : <DetailTable label="All countries" columns={columns} rows={map.countries} rowKey={(c) => c.code} sort={{ key: 'visitors', dir: 'desc' }} onRow={(c) => setInto(c.code)} />}
         </SideSheet>
       )}
     </>

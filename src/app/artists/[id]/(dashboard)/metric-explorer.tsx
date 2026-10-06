@@ -5,10 +5,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { METRICS, OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, growthSize } from '@/lib/format'
-import { SWATCH, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { ChartLegend, SWATCH, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
 import { analyticsPins, type PinKind } from '@/lib/analytics-pins'
 import type { IconName } from '@/components/ui/icons'
-import { EveryDay } from '@/components/ui/analytics-sheets'
+import { AllDays } from '@/components/ui/analytics-sheets'
 import { Segmented } from './segmented'
 
 /**
@@ -94,8 +94,8 @@ export function MetricExplorer({
     return { ...f, delta: comparable ? f.delta : null }
   }
   // Every day, every line the chart can draw, drawn or not: the table is the whole record.
-  const everyDay = (
-    <EveryDay
+  const allDays = (
+    <AllDays
       days={days_}
       lines={[byKey.views, ...OVERLAYS.map((k) => byKey[k])].filter(Boolean).map((m) => ({ key: m.key, label: META[m.key].short, values: m.series, since: sinceOf(m.key) }))}
     />
@@ -150,12 +150,19 @@ export function MetricExplorer({
         />
       </div>
 
+      {/* The legend gets its own row across the chart AND the numbers, so ALL DAYS sits at the
+          page's right edge like ALL SOURCES and ALL COUNTRIES below (Sam, 2026-10-06). */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <ChartLegend series={series} />
+        {allDays}
+      </div>
+
       {/* The column is as wide as its widest number and no wider; the chart takes
           the rest (Sam, 2026-09-13: "make the right container smaller"). From lg up
           the column is laid absolutely in its cell, so however many lines are on it
           adds no height of its own. Keyed by the window, so a new window draws on. */}
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legendEnd={everyDay} pins={pins} className="min-w-0" />
+        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legend={false} pins={pins} className="min-w-0" />
 
         <div role="region" aria-label="Numbers" className="relative min-h-0">
           <dl className="flex flex-col text-right lg:absolute lg:inset-0">

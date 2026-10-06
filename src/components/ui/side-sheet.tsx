@@ -9,7 +9,7 @@ import { useLockBodyScroll } from './use-lock-body-scroll'
 
 /**
  * A panel down the right side of the page, over a light scrim: where the Analytics page
- * opens its full tables (Every day, Every source, Every country; the r12 mock, Sam
+ * opens its full tables (All days, All sources, All countries; the r12 mock, Sam
  * 2026-10-06: "a button along right edge that indicates clicking it opens up a side
  * panel table"). It slides in, and out again when closed; nothing moves under reduced
  * motion.
@@ -92,16 +92,26 @@ export function SideSheet({ title, onClose, onBack, children }: {
   )
 }
 
-/** The button that opens a side panel: its words in quiet caps, then the panel glyph. */
+/**
+ * The button that opens a side panel: the panel glyph alone, and its words slide out to the
+ * glyph's LEFT while it is hovered or focused (Sam, 2026-10-06: "the text shouldnt appear until
+ * hovering over that side panel button"). It sits at a right edge, so it grows leftward and the
+ * glyph never moves. The words are always its name, for a screen reader and for touch.
+ */
 export function SheetButton({ label, onClick, className }: { label: string; onClick: () => void; className?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cx('group inline-flex items-center gap-2 whitespace-nowrap py-1.5 font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-muted transition-colors hover:text-ink', className)}
+      className={cx('group inline-flex items-center whitespace-nowrap py-1.5 font-space text-[11px] font-bold uppercase tracking-[0.1em] text-ink-muted outline-none transition-colors hover:text-ink focus-visible:text-ink', className)}
     >
-      {label}
-      <Icon name="panel" size={20} className="transition-transform duration-200 group-hover:translate-x-0.5 group-hover:[stroke-width:2]" />
+      <span
+        data-sheet-label
+        className="max-w-0 overflow-hidden opacity-0 transition-[max-width,opacity,margin] duration-300 ease-[cubic-bezier(.22,.8,.24,1)] group-hover:mr-2 group-hover:max-w-[180px] group-hover:opacity-100 group-focus-visible:mr-2 group-focus-visible:max-w-[180px] group-focus-visible:opacity-100"
+      >
+        {label}
+      </span>
+      <Icon name="panel" size={20} className="transition-[stroke-width] duration-200 group-hover:[stroke-width:2] group-focus-visible:[stroke-width:2]" />
     </button>
   )
 }

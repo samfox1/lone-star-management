@@ -72,6 +72,7 @@ export function TimelineChart({
   series,
   partialLast = false,
   legendEnd,
+  legend = true,
   pins,
   className,
 }: {
@@ -81,8 +82,10 @@ export function TimelineChart({
   series?: Series[]
   /** The last day is today, still being counted: its gap is drawn dotted. */
   partialLast?: boolean
-  /** Anything that belongs at the right end of the legend row (the "Every day" button). */
+  /** Anything that belongs at the right end of the legend row. */
   legendEnd?: ReactNode
+  /** false: the caller draws the legend itself (ChartLegend), e.g. on a row wider than the chart. */
+  legend?: boolean
   /** Moments marked above the lines; each sits on its `series` and shows only while it is drawn. */
   pins?: ChartPin[]
   className?: string
@@ -150,19 +153,14 @@ export function TimelineChart({
 
   return (
     <div className={cx('text-ink', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <ul aria-label="Series" className="flex flex-wrap items-center gap-5 font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">
-          {all.map((s) => (
-            <li key={s.key} className="flex items-center gap-1.5">
-              <span aria-hidden className={cx('inline-block h-[3px] w-4 rounded-full', SWATCH[s.color])} />
-              {s.label}
-            </li>
-          ))}
-        </ul>
-        {legendEnd}
-      </div>
+      {legend && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <ChartLegend series={all} />
+          {legendEnd}
+        </div>
+      )}
 
-      <div className="mt-4 flex gap-3">
+      <div className="flex gap-3">
         <div aria-hidden className="relative w-8 shrink-0 font-space text-[10px] tabular-nums text-ink-faint" style={{ height }}>
           {axisTicks(finalTop).map((t) => (
             <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: y(t) }}>{t}</span>
@@ -349,6 +347,20 @@ export function TimelineChart({
         </tbody>
       </table>
     </div>
+  )
+}
+
+/** The names of the lines drawn, each beside its colour: identity is never the colour alone. */
+export function ChartLegend({ series }: { series: Pick<Series, 'key' | 'label' | 'color'>[] }) {
+  return (
+    <ul aria-label="Series" className="flex flex-wrap items-center gap-5 font-space text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+      {series.map((s) => (
+        <li key={s.key} className="flex items-center gap-1.5">
+          <span aria-hidden className={cx('inline-block h-[3px] w-4 rounded-full', SWATCH[s.color])} />
+          {s.label}
+        </li>
+      ))}
+    </ul>
   )
 }
 

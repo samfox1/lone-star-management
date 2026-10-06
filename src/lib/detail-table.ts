@@ -1,5 +1,5 @@
 /**
- * How the Analytics side panels' tables sort (Every day, Every source, Every country):
+ * How the Analytics side panels' tables sort (All days, All sources, All countries):
  * pure, so the rule is pinned without a DOM (components/ui/detail-table.tsx draws them).
  */
 export type SortDir = 'asc' | 'desc'
