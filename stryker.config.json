@@ -53,6 +53,7 @@
     "src/lib/manager-tools/seo/profiles/bio-state.ts",
     "src/lib/manager-tools/seo/profiles/outside.ts",
     "src/lib/manager-tools/seo/profiles/outside-check.ts",
+    "src/lib/manager-tools/seo/search-spot.ts",
     "src/lib/manager-tools/seo/search-stats.ts",
     "src/lib/manager-tools/seo/search-stats-ask.ts",
     "src/lib/manager-tools/seo/search-model.ts",

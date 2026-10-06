@@ -45,6 +45,11 @@ export type SearchDay = { date: string; clicks: number; impressions: number; fin
 /** A search, a page (`key` is its address), a country (ISO alpha-3, upper case) or a device. */
 export type SearchRow = { key: string; clicks: number; impressions: number; ctr: number | null; position: number | null }
 
+/** One search on one day (Google) or week (Bing): how often the site was seen for it and the
+ *  spot it held. Only rows with a spot. What the "your spot" line and each search's trend are
+ *  drawn from (search-spot.ts). */
+export type SearchDayRow = { key: string; date: string; impressions: number; position: number }
+
 export type SearchStats = {
   engine: SearchEngineId
   period: SearchPeriod
@@ -53,6 +58,8 @@ export type SearchStats = {
   series: SearchDay[]
   /** Top searches / pages, busiest first (at most TOP). */
   queries: SearchRow[]
+  /** Every search's spot per day (Google) or per week (Bing), oldest first, then by search. */
+  searchDays: SearchDayRow[]
   pages: SearchRow[]
   /** null: this engine doesn't say (Bing). */
   countries: SearchRow[] | null
@@ -214,19 +221,34 @@ function failed(engine: SearchEngineId, period: SearchPeriod, answers: { ok: boo
   return { engine, state: isQuota(f) ? 'quota' : 'error', period, reason: f.reason, ...(f.status === undefined ? {} : { status: f.status }) }
 }
 
+/** Search-by-day rows, cleaned: in the period, a real search, seen, and ranked; oldest first. */
+function searchDayRows(rows: { key: string | null; date: string | null; impressions: number; position: number | null }[], period: SearchPeriod): SearchDayRow[] {
+  const out: SearchDayRow[] = []
+  for (const r of rows) {
+    const key = r.key === null ? null : searchText(r.key)
+    if (key === null || !inPeriod(period, r.date) || r.position === null || r.impressions <= 0) continue
+    out.push({ key, date: r.date!, impressions: r.impressions, position: r.position })
+  }
+  return out.sort((a, b) => (a.date === b.date ? (a.key < b.key ? -1 : a.key > b.key ? 1 : 0) : a.date < b.date ? -1 : 1))
+}
+
 /* ── Google ─────────────────────────────────────────────────────────────────────────── */
 
 /** What Tapir asks Google for one period, in order. `total` first: the asker sends it alone and
- *  asks the rest only if Google answered it (one refusal costs one request, not six). */
-export const GOOGLE_PARTS = ['total', 'date', 'query', 'page', 'country', 'device'] as const
+ *  asks the rest only if Google answered it (one refusal costs one request, not seven).
+ *  `searchDay` is every search on every day ([query, date]): the spot line's source. */
+export const GOOGLE_PARTS = ['total', 'date', 'query', 'page', 'country', 'device', 'searchDay'] as const
 export type GooglePart = (typeof GOOGLE_PARTS)[number]
 export type GoogleAnswers = Record<GooglePart, GoogleResult<GoogleSearchAnswer>>
 
-const ROW_LIMIT: Record<GooglePart, number> = { total: 1, date: 1000, query: TOP, page: TOP, country: 250, device: 10 }
+const ROW_LIMIT: Record<GooglePart, number> = { total: 1, date: 1000, query: TOP, page: TOP, country: 250, device: 10, searchDay: 25000 }
+const DIMENSIONS: Record<GooglePart, GoogleSearchRequest['dimensions']> = {
+  total: undefined, date: ['date'], query: ['query'], page: ['page'], country: ['country'], device: ['device'], searchDay: ['query', 'date'],
+}
 
 /** Each part's request for the period: fresh (preliminary) days included, as Search Console shows. */
 export function googleRequests(p: SearchPeriod): Record<GooglePart, GoogleSearchRequest> {
-  const req = (part: GooglePart): GoogleSearchRequest => ({ startDate: p.start, endDate: p.end, ...(part === 'total' ? {} : { dimensions: [part] }), rowLimit: ROW_LIMIT[part], dataState: 'all' })
+  const req = (part: GooglePart): GoogleSearchRequest => ({ startDate: p.start, endDate: p.end, ...(DIMENSIONS[part] ? { dimensions: DIMENSIONS[part] } : {}), rowLimit: ROW_LIMIT[part], dataState: 'all' })
   return Object.fromEntries(GOOGLE_PARTS.map((part) => [part, req(part)])) as Record<GooglePart, GoogleSearchRequest>
 }
 
@@ -255,6 +277,7 @@ export function normaliseGoogle(period: SearchPeriod, a: GoogleAnswers): EngineS
       totals,
       series,
       queries,
+      searchDays: searchDayRows(rows('searchDay').map((r) => ({ key: r.keys[0] ?? null, date: r.keys[1] ?? null, impressions: r.impressions, position: r.position })), period),
       pages: topRows(cleanRows(rows('page'), firstKey, pageUrl), TOP),
       countries: topRows(cleanRows(rows('country'), firstKey, country), TOP),
       devices: topRows(cleanRows(rows('device'), firstKey, device), DEVICES.size),
@@ -292,6 +315,6 @@ export function normaliseBing(period: SearchPeriod, a: BingAnswers): EngineStats
   return {
     engine: 'bing',
     state: 'ok',
-    stats: { engine: 'bing', period, totals, series, queries, pages, countries: null, devices: null, unlisted: unlistedOf(totals, queries), coverage: coverageOf(series), preliminaryFrom: null },
+    stats: { engine: 'bing', period, totals, series, queries, searchDays: searchDayRows(queryRows, period), pages, countries: null, devices: null, unlisted: unlistedOf(totals, queries), coverage: coverageOf(series), preliminaryFrom: null },
   }
 }

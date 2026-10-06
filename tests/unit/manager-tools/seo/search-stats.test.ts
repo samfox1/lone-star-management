@@ -63,6 +63,7 @@ const skeenGoogle = async (): Promise<GoogleAnswers> => ({
   page: await viaGoogle(FX.google_page_all, ['page']),
   country: await viaGoogle(FX.google_country_all, ['country']),
   device: await viaGoogle(FX.google_device_all, ['device']),
+  searchDay: await viaGoogle(FX.google_query_date_all, ['query', 'date']),
 })
 /** A fixture through the REAL Bing parsers: days (GetRankAndTrafficStats) or top rows. */
 const bingWith = (body: unknown) => bingClient('k'.repeat(32), { fetcher: (async () => json(body)) as unknown as typeof fetch })
@@ -93,8 +94,10 @@ describe('the periods', () => {
     expect(Object.keys(reqs)).toEqual([...GOOGLE_PARTS])
     for (const part of GOOGLE_PARTS) {
       expect(reqs[part], part).toMatchObject({ startDate: '2026-09-05', endDate: '2026-10-02', dataState: 'all' })
-      expect(reqs[part].dimensions ?? [], part).toEqual(part === 'total' ? [] : [part])
+      expect(reqs[part].dimensions ?? [], part).toEqual(part === 'total' ? [] : part === 'searchDay' ? ['query', 'date'] : [part])
     }
+    // Every search on every day: as many rows as Google allows, so a small site's are all there.
+    expect(reqs.searchDay.rowLimit).toBe(25000)
   })
 })
 
@@ -144,16 +147,47 @@ describe('Google: Skeen’s real numbers', () => {
   })
 })
 
+describe('Google: every search, day by day', () => {
+  // The spot each search held on each day it was seen (Google's [query, date] rows): what the
+  // "your spot" line and each search's little trend are drawn from. Oldest day first.
+  it('CRITICAL: keeps each search\'s spot and how often it was seen, per day, oldest first', async () => {
+    const r = normaliseGoogle(P3M, await skeenGoogle())
+    if (r.state !== 'ok') throw new Error(r.state)
+    expect(r.stats.searchDays).toEqual([
+      { key: 'dj skeen', date: '2026-09-29', impressions: 2, position: 2.5 },
+      { key: 'skeen dj', date: '2026-09-29', impressions: 13, position: 2.1538461538461537 },
+      { key: 'skeen music', date: '2026-09-29', impressions: 2, position: 3 },
+      { key: 'dj skeen', date: '2026-09-30', impressions: 1, position: 3 },
+      { key: 'skeen dj', date: '2026-09-30', impressions: 11, position: 2.3636363636363633 },
+      { key: 'skeen dj', date: '2026-10-01', impressions: 15, position: 2.9333333333333336 },
+      { key: 'skeen music', date: '2026-10-01', impressions: 2, position: 1.5 },
+      { key: 'dj skeen', date: '2026-10-02', impressions: 1, position: 2 },
+      { key: 'skeen dj', date: '2026-10-02', impressions: 17, position: 2.6470588235294117 },
+    ])
+  })
+
+  it('CRITICAL: drops a row outside the period, one with no spot, and one whose search is not text', async () => {
+    const answers = await skeenGoogle()
+    const junk = await viaGoogle({ rows: [
+      { keys: ['skeen', '2026-06-01'], clicks: 1, impressions: 4, position: 1 }, // before the period
+      { keys: ['skeen', '2026-09-29'], clicks: 0, impressions: 0, position: 0 }, // nothing to rank
+      { keys: ['skeen', '2026-09-30'], clicks: 0, impressions: 3, position: 0 }, // seen, but no spot
+      { keys: ['skeen', '2026-10-01'], clicks: 0, impressions: 0, position: 2 }, // a spot never seen: it would weigh nothing (and divide by zero)
+      { keys: ['   ', '2026-09-29'], clicks: 1, impressions: 3, position: 2 }, // no words
+      { keys: ['skeen', '2026-09-29'], clicks: 1, impressions: 3, position: 1.5 },
+    ] }, ['query', 'date'])
+    const r = normaliseGoogle(P3M, { ...answers, searchDay: junk })
+    if (r.state !== 'ok') throw new Error(r.state)
+    expect(r.stats.searchDays).toEqual([{ key: 'skeen', date: '2026-09-29', impressions: 3, position: 1.5 }])
+  })
+})
+
 describe('Google: the edges', () => {
   const row = (keys: string[], clicks: number, impressions: number, position: number | null = 2) => ({ keys, clicks, impressions, position })
-  const answers = (over: Partial<Record<keyof GoogleAnswers, GoogleSearchAnswer>>): GoogleAnswers => ({
-    total: ok(over.total ?? { rows: [row([], 10, 100)], firstIncompleteDate: null }),
-    date: ok(over.date ?? { rows: [], firstIncompleteDate: null }),
-    query: ok(over.query ?? { rows: [], firstIncompleteDate: null }),
-    page: ok(over.page ?? { rows: [], firstIncompleteDate: null }),
-    country: ok(over.country ?? { rows: [], firstIncompleteDate: null }),
-    device: ok(over.device ?? { rows: [], firstIncompleteDate: null }),
-  })
+  // Every part from the registry (a hand-list here missed `searchDay` when it was added): a total
+  // of 10 / 100 unless given, every other part empty.
+  const answers = (over: Partial<Record<keyof GoogleAnswers, GoogleSearchAnswer>>): GoogleAnswers =>
+    Object.fromEntries(GOOGLE_PARTS.map((part) => [part, ok(over[part] ?? { rows: part === 'total' ? [row([], 10, 100)] : [], firstIncompleteDate: null })])) as GoogleAnswers
   const stats = (a: GoogleAnswers, p: SearchPeriod = P28) => {
     const r = normaliseGoogle(p, a)
     if (r.state !== 'ok') throw new Error(r.state)
@@ -297,6 +331,11 @@ describe('Bing', () => {
     expect(r.stats.devices).toBeNull()
     expect(r.stats.preliminaryFrom).toBeNull()
     expect(r.stats.unlisted).toEqual({ clicks: 1, impressions: 0 })
+    // Every search's spot by WEEK (Bing's rows are weekly), dated and ranked rows only, oldest first.
+    expect(r.stats.searchDays).toEqual([
+      { key: 'skeen', date: '2026-09-14', impressions: 10, position: 2 },
+      { key: 'skeen', date: '2026-09-21', impressions: 30, position: 4 },
+    ])
   })
 
   // Bing refusing: ErrorCode 4/5 or a 429 is quota, anything else an error; no numbers either way.

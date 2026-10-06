@@ -56,6 +56,7 @@ const stats = (engine: 'google' | 'bing', series: SearchDay[]): SearchStats => (
   totals: { clicks: 0, impressions: 0, ctr: null, position: null },
   series,
   queries: [],
+  searchDays: [],
   pages: [],
   countries: null,
   devices: null,

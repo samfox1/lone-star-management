@@ -1,5 +1,5 @@
 {
-  "_about": "REAL answers fetched 2026-10-02 for https://www.skeenmusic.com/ (registered 2026-09-30), startDate 2026-07-02, endDate 2026-10-02. google_*: Search Console API v3 searchAnalytics.query, untrimmed (_all = dataState all, _final = the default). bing_*_skeen: Bing Webmaster JSON API, untrimmed: Bing has nothing for the site yet. bing_documented_*: NOT real, Microsoft Learn's own JSON samples for the method (no real Bing answer with data exists yet).",
+  "_about": "REAL answers fetched 2026-10-02 for https://www.skeenmusic.com/ (registered 2026-09-30), startDate 2026-07-02, endDate 2026-10-02. google_*: Search Console API v3 searchAnalytics.query, untrimmed (_all = dataState all, _final = the default). bing_*_skeen: Bing Webmaster JSON API, untrimmed: Bing has nothing for the site yet. bing_documented_*: NOT real, Microsoft Learn's own JSON samples for the method (no real Bing answer with data exists yet). google_query_date_all: the same window and site with dimensions [query, date], rowLimit 25000, dataState all, fetched 2026-10-06 (so it counts days Google had not finished on 2026-10-02).",
   "google_total_all": {
     "rows": [
       {
@@ -302,5 +302,100 @@
         "Query": "query"
       }
     ]
+  },
+  "google_query_date_all": {
+    "rows": [
+      {
+        "keys": [
+          "skeen dj",
+          "2026-09-30"
+        ],
+        "clicks": 4,
+        "impressions": 11,
+        "ctr": 0.36363636363636365,
+        "position": 2.3636363636363633
+      },
+      {
+        "keys": [
+          "skeen dj",
+          "2026-09-29"
+        ],
+        "clicks": 3,
+        "impressions": 13,
+        "ctr": 0.23076923076923078,
+        "position": 2.1538461538461537
+      },
+      {
+        "keys": [
+          "skeen dj",
+          "2026-10-01"
+        ],
+        "clicks": 2,
+        "impressions": 15,
+        "ctr": 0.13333333333333333,
+        "position": 2.9333333333333336
+      },
+      {
+        "keys": [
+          "dj skeen",
+          "2026-09-29"
+        ],
+        "clicks": 1,
+        "impressions": 2,
+        "ctr": 0.5,
+        "position": 2.5
+      },
+      {
+        "keys": [
+          "skeen dj",
+          "2026-10-02"
+        ],
+        "clicks": 1,
+        "impressions": 17,
+        "ctr": 0.058823529411764705,
+        "position": 2.6470588235294117
+      },
+      {
+        "keys": [
+          "skeen music",
+          "2026-09-29"
+        ],
+        "clicks": 1,
+        "impressions": 2,
+        "ctr": 0.5,
+        "position": 3
+      },
+      {
+        "keys": [
+          "skeen music",
+          "2026-10-01"
+        ],
+        "clicks": 1,
+        "impressions": 2,
+        "ctr": 0.5,
+        "position": 1.5
+      },
+      {
+        "keys": [
+          "dj skeen",
+          "2026-09-30"
+        ],
+        "clicks": 0,
+        "impressions": 1,
+        "ctr": 0,
+        "position": 3
+      },
+      {
+        "keys": [
+          "dj skeen",
+          "2026-10-02"
+        ],
+        "clicks": 0,
+        "impressions": 1,
+        "ctr": 0,
+        "position": 2
+      }
+    ],
+    "responseAggregationType": "byProperty"
   }
 }

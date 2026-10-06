@@ -54,6 +54,7 @@ const GOOGLE: SearchStats = {
     { date: '2026-09-30', clicks: 5, impressions: 14, final: false },
     { date: '2026-10-01', clicks: 4, impressions: 19, final: false },
   ],
+  searchDays: [],
   queries: [
     { key: 'skeen dj', clicks: 9, impressions: 35, ctr: 0.257, position: 2.54 },
     { key: 'skeen music', clicks: 2, impressions: 4, ctr: 0.5, position: 2.25 },
@@ -72,6 +73,7 @@ const BING: SearchStats = {
   engine: 'bing',
   totals: { clicks: 3, impressions: 8, ctr: 0.375, position: 1.5 },
   series: [{ date: '2026-09-30', clicks: 3, impressions: 8, final: true }],
+  searchDays: [],
   queries: [{ key: 'skeen music', clicks: 3, impressions: 8, ctr: 0.375, position: 1.5 }],
   pages: [],
   countries: null,
