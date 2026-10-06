@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { cx } from '@/lib/cx'
 import { BIO_ANCHOR } from '@/lib/manager-tools/profile/route'
 import { seoTabSeg } from '@/lib/manager-tools/seo/sections'
+import { wordCount } from '@/lib/seo-tests/match'
 import { Icon } from '@/components/ui/icons'
 import { formatCount, isTooLong, nearLimit, TEXT_LIMITS, tooLongError } from '@/lib/site-editor/text-limits'
 import { useDebouncedFieldSave } from '../../editor/use-debounced-field-save'
@@ -119,7 +120,9 @@ function BioModal({
   })
   const max = TEXT_LIMITS.bio
   const n = bio.trim().length
-  const words = bio.trim() ? bio.trim().split(/\s+/).length : 0
+  // The AI test's own count (Intl.Segmenter words), so the window can't say "met" while the test
+  // still says the bio is under its floor: a spaced dash or '&' is not a word, a CJK bio is many.
+  const words = wordCount(bio)
   const met = words >= minWords
   const tooLong = isTooLong(bio, max)
   return (

@@ -17,10 +17,19 @@ export const metadata = { title: 'Profile — Lone Star Management' }
  *
  * The bar is the SEO / GEO tabs' own (_ui/site-pending.tsx): Publish ships the profile, the
  * site's words and the site's photos, which is everything this page writes.
+ *
+ * SPEED (Sam's call, 2026-10-05: start the independent reads in parallel, and do not change
+ * what the page shows).
+ * The photo row's two reads need nothing from loadProfile, so they start beside it rather than
+ * after it: PhotoRow is called here, which runs its reads now, instead of being left in the tree
+ * to start them only once the rest had loaded. They are RLS-scoped like loadProfile's own, and
+ * its gate (requireArtist) still 404s a non-owner before anything renders. Nothing streams in
+ * later, so the page paints whole, as before. What it still waits on is the outside-bios nudge
+ * (load.ts), two reads in a row after the gate.
  */
 export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const p = await loadProfile(id)
+  const [p, photo] = await Promise.all([loadProfile(id), PhotoRow({ artistId: id })])
   return (
     <>
       <ProfileView
@@ -33,7 +42,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         bio={p.bio}
         bioMinWords={BIO_MIN_WORDS}
         bioNudge={p.bioNudge}
-        photo={<PhotoRow artistId={id} />}
+        photo={photo}
       />
       {/* Its own boundary, so the pending check never holds up the page above it. */}
       <Suspense fallback={null}>

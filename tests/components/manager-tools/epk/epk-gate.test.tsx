@@ -102,7 +102,8 @@ describe('EPK page — the gate', () => {
 
   // The contact rule reads only a published mailto: link (or a template site's booking_email),
   // and the first one is typed in the editor's Links › Contact list. Settings once sat here and
-  // could set neither, so the red row was a dead end (Sam, 2026-10-05: "the editor's Contact links").
+  // could set neither, so the red row was a dead end (Sam's pick, 2026-10-05: the editor's
+  // Contact links).
   it('a missing contact email links to the editor, where a contact is added', async () => {
     mockedSite.mockResolvedValue({ ...(fullSite as object), links: [] } as never)
     releases = [{ title: 'First Light' }]

@@ -327,6 +327,15 @@ describe('the bio', () => {
     expect(within(dialog).getAllByRole('textbox')).toHaveLength(1)
     expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull()
   })
+  // The count is the AI test's own (seo-tests/match.ts wordCount): a spaced dash is not a word,
+  // so it cannot tip the window to "met" while the test still says the bio is under its floor.
+  it('counts words as the AI test does: a spaced dash is not the 100th word', () => {
+    show({ bio: `${Array(50).fill('word').join(' ')} — ${Array(49).fill('word').join(' ')}` })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the bio' }))
+    const count = screen.getByRole('dialog', { name: 'Bio' }).querySelector('[data-bio-counts]')!
+    expect(count.textContent).toBe('99 / 100 words')
+    expect(count.hasAttribute('data-met')).toBe(false)
+  })
 })
 
 describe('the nudge', () => {
