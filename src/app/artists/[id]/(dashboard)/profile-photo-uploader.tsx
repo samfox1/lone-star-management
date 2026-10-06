@@ -3,7 +3,7 @@
 import type { AssetBudget } from '@/lib/site-editor/asset-budget'
 import { MediaUploader } from './media-uploader'
 import { toast } from './toast'
-import { setProfilePhotoAction } from './(manager-tools)/profile/photo-actions'
+import { setProfilePhotoAction } from './profile-photo-actions'
 
 /**
  * An upload that becomes THE profile photo the way the Profile page's picker does it

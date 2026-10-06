@@ -17,9 +17,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ProfilePhotoControl } from '@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-picker'
-import { setProfilePhotoAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions'
+import { setProfilePhotoAction } from '@/app/artists/[id]/(dashboard)/profile-photo-actions'
 
-vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions', () => ({ setProfilePhotoAction: vi.fn(async () => ({})) }))
+vi.mock('@/app/artists/[id]/(dashboard)/profile-photo-actions', () => ({ setProfilePhotoAction: vi.fn(async () => ({})) }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 const uploader: { onUploaded?: (m: { id: string; storage_path: string }) => void } = {}
 vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({

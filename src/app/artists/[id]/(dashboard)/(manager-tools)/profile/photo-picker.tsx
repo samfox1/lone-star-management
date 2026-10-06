@@ -12,7 +12,7 @@ import { ADD_TRIGGER, EDIT_TRIGGER } from '../_ui/edit-row'
 import { HoverLabel } from '../_ui/row-icon'
 import { FOCUS_RING_OFFSET } from '../_ui/styles'
 import { useSeeded } from '../_ui/use-seeded'
-import { setProfilePhotoAction } from './photo-actions'
+import { setProfilePhotoAction } from '../../profile-photo-actions'
 
 /** One of the artist's Images: its media id, file and a small preview. */
 export type LibraryPhoto = { id: string; path: string; thumb: string }

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { setProfilePhotoFromImage } from '@/lib/profile-photo'
-import { requireOwnedArtist } from '../../_owns'
+import { requireOwnedArtist } from './_owns'
 
 /**
  * The profile photo's door (lib/profile-photo.ts). It checks the caller owns the artist (a
@@ -11,6 +11,10 @@ import { requireOwnedArtist } from '../../_owns'
  * uses too, and revalidates so the Publish bar sees the draft change. Every upload door lands the
  * photo in Images first and then calls this with its id (profile-photo-uploader.tsx), so every
  * profile photo stays pickable after it is replaced.
+ *
+ * Dashboard-wide, beside profile-photo-uploader.tsx, because doors outside the tools call it too
+ * (the Site & profile page and the editor's Profile photo tile, through the uploader); the
+ * Profile tool's picker imports it from here. It sat in (manager-tools)/profile/ until 2026-10-05.
  */
 
 /** Make one of the artist's Images the profile photo (the Profile page's picker, and every upload). */

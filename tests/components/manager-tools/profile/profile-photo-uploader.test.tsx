@@ -22,7 +22,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ProfilePhotoUploader } from '@/app/artists/[id]/(dashboard)/profile-photo-uploader'
-import { setProfilePhotoAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions'
+import { setProfilePhotoAction } from '@/app/artists/[id]/(dashboard)/profile-photo-actions'
 import { setImageFieldAction } from '@/app/artists/[id]/(dashboard)/actions'
 import { EditorInspector } from '@/app/artists/[id]/(dashboard)/editor/editor-inspector'
 
@@ -38,7 +38,7 @@ vi.mock('@/app/artists/[id]/(dashboard)/media-uploader', () => ({
   },
   GallerySlotUploader: () => null,
 }))
-vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions', () => ({ setProfilePhotoAction: vi.fn(async () => ({})) }))
+vi.mock('@/app/artists/[id]/(dashboard)/profile-photo-actions', () => ({ setProfilePhotoAction: vi.fn(async () => ({})) }))
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/connections/actions', () => import('@tests/helpers/connections-actions'))
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => import('@tests/helpers/editor-actions'))

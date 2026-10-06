@@ -2,8 +2,8 @@
  * The Profile page's own two actions keep their guards on the server: the photo is set only for
  * the artist's owner, and the name only when its rule passes, trimmed.
  *
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions.ts
- *           (setProfilePhotoAction), profile/actions.ts (saveArtistNameAction)
+ * Code:     src/app/artists/[id]/(dashboard)/profile-photo-actions.ts (setProfilePhotoAction),
+ *           (manager-tools)/profile/actions.ts (saveArtistNameAction)
  * Feature:  Profile (PROFILE_TOOL_PLAN.md): the photo row's picker and every upload door, and the
  *           Name row
  * Tier:     STRICT (AGENTS.md "Test depth"): an ownership gate and a validator on the server. Every
@@ -54,7 +54,7 @@ vi.mock('@/lib/profile-photo', async (importOriginal) => ({
 
 const photoWrite = vi.mocked(setProfilePhotoFromImage)
 const clientMade = vi.mocked(createClient)
-const photoActions = () => import('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-actions')
+const photoActions = () => import('@/app/artists/[id]/(dashboard)/profile-photo-actions')
 const nameActions = () => import('@/app/artists/[id]/(dashboard)/(manager-tools)/profile/actions')
 
 beforeEach(() => {
