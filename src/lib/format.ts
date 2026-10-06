@@ -38,6 +38,16 @@ export function formatTrend(t: number | null): Trend {
   return { label: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`, dir }
 }
 
+/**
+ * How big a change is, without its sign: a ▲ or ▼ beside it carries the direction (the
+ * Analytics numbers column). One decimal under a thousand percent; whole and with a
+ * thousands comma above, where a decimal is noise ("4,130%", not "4130.0%").
+ */
+export function growthSize(t: number): string {
+  const pct = Math.abs(t * 100)
+  return pct >= 1000 ? `${Math.round(pct).toLocaleString('en-US')}%` : `${pct.toFixed(1)}%`
+}
+
 /** Text colour for a trend %: blue up, red down, faint flat. */
 export function trendTextClass(dir: Trend['dir']): string {
   return dir === 'up' ? 'text-accent' : dir === 'down' ? 'text-accent-red' : 'text-ink-faint'

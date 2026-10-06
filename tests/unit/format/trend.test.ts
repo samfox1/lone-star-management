@@ -21,7 +21,7 @@
  * Said here so the next reader of the report doesn't spend the afternoon on them.
  */
 import { describe, expect, it } from 'vitest'
-import { compactNumber, formatTrend, seriesTrend, trendLineClass, trendTextClass, type Trend } from '@/lib/format'
+import { compactNumber, formatTrend, growthSize, seriesTrend, trendLineClass, trendTextClass, type Trend } from '@/lib/format'
 
 describe('seriesTrend', () => {
   it('CRITICAL: a flat week is flat, not +33% (the halves must be equal length)', () => {
@@ -113,5 +113,19 @@ describe('the trend colours', () => {
     expect(trendLineClass('down')).toBe('text-accent-red')
     expect(trendLineClass('up')).toBe('text-ink')
     expect(trendLineClass('flat')).toBe('text-ink')
+  })
+})
+
+describe('growthSize — how big a change is, without its sign (the arrow carries the direction)', () => {
+  it('one decimal under a thousand percent', () => {
+    expect(growthSize(2.251)).toBe('225.1%')
+    expect(growthSize(-0.354)).toBe('35.4%')
+    expect(growthSize(0)).toBe('0.0%')
+  })
+  it('whole, with a thousands comma, from a thousand percent up ("4,130%", not "4130.0%")', () => {
+    expect(growthSize(41.3)).toBe('4,130%')
+    expect(growthSize(9.995)).toBe('999.5%')
+    expect(growthSize(10)).toBe('1,000%')
+    expect(growthSize(-12.5)).toBe('1,250%')
   })
 })

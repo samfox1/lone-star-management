@@ -68,3 +68,50 @@ export function dayLabel(day: string): string {
   const [, m, d] = day.split('-')
   return `${MONTHS[Number(m) - 1] ?? ''} ${Number(d)}`
 }
+
+/** A point on the drawing, in the drawing's own units: [x, y]. */
+export type Pt = readonly [number, number]
+
+/**
+ * A smooth line through every point that never overshoots: Fritsch–Carlson monotone
+ * cubic interpolation (what d3 calls curveMonotoneX). Between two days the curve stays
+ * within their two values, so a quiet day after a busy one never dips below the floor,
+ * a flat run stays flat and a peak is never drawn higher than it was — a plain spline
+ * would invent all three. The x values must increase.
+ *
+ * One cubic Bézier per gap, `C c1x,c1y c2x,c2y x,y`, so a caller can draw some gaps
+ * solid and the last one dotted (today, still being counted). Fewer than two points is
+ * no line.
+ */
+export function monotoneSegments(pts: readonly Pt[]): string[] {
+  const n = pts.length
+  if (n < 2) return []
+  const h: number[] = []
+  const s: number[] = [] // each gap's straight-line slope
+  for (let i = 0; i < n - 1; i++) {
+    h.push(pts[i + 1][0] - pts[i][0])
+    s.push(h[i] === 0 ? 0 : (pts[i + 1][1] - pts[i][1]) / h[i])
+  }
+  // A point's slope: the mean of its two gaps, or level where the line turns.
+  const m: number[] = pts.map((_, i) => (i === 0 ? s[0] : i === n - 1 ? s[n - 2] : s[i - 1] * s[i] <= 0 ? 0 : (s[i - 1] + s[i]) / 2))
+  // Fritsch–Carlson: the two end slopes of a gap are scaled down until the curve cannot
+  // overshoot. A flat gap needs nothing: both its ends are already level (each is a turn,
+  // or a line end taking the flat gap's own slope).
+  for (let i = 0; i < n - 1; i++) {
+    if (s[i] === 0) continue
+    const a = m[i] / s[i], b = m[i + 1] / s[i], t = a * a + b * b
+    if (t > 9) { const k = 3 / Math.sqrt(t); m[i] = k * a * s[i]; m[i + 1] = k * b * s[i] }
+  }
+  const f = (v: number) => v.toFixed(1)
+  return h.map((gap, i) => {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], third = gap / 3
+    return `C${f(x0 + third)},${f(y0 + m[i] * third)} ${f(x1 - third)},${f(y1 - m[i + 1] * third)} ${f(x1)},${f(y1)}`
+  })
+}
+
+/** The whole smooth line as an SVG path: a move to the first point, then every gap. */
+export function smoothPath(pts: readonly Pt[]): string {
+  if (!pts.length) return ''
+  const start = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
+  return [start, ...monotoneSegments(pts)].join(' ')
+}

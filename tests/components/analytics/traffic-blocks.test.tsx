@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // The timeline chart, and the ways it can lie.
 /**
- *   TimelineChart draws up to three series. They must share ONE scale that starts
+ *   TimelineChart draws up to five series. They must share ONE scale that starts
  *   at ZERO, or the comparison a reader makes by eye ("visitors are about a third
  *   of views") is one the chart invented. A series first counted mid-window starts
- *   there, not at a row of zeros; the hover readout says what a day is and how far
- *   it sits from the average.
+ *   there, not at a row of zeros; the hover line stops at the topmost line and the
+ *   readout names the day and every value. Each line's drawn day points are on its
+ *   group's `data-points` (the path between them is a smooth curve, lib/chart.ts).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
@@ -17,13 +18,13 @@ const points = [
   { day: '2026-09-12', views: 50, visitors: 50 },
 ]
 
-/** The y a value is drawn at, read back off a polyline's points. */
+/** The y a value is drawn at, read back off a series' day points. */
 const ys = (pts: string) => pts.trim().split(/\s+/).map((p) => Number(p.split(',')[1]))
 
 describe('TimelineChart', () => {
-  const lineOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"] polyline`)!
-  const ysOf = (c: HTMLElement, key: string) => ys(lineOf(c, key).getAttribute('points')!)
-  const S = (key: string, values: number[], color: 'accent' | 'accent-red' | 'ink' = 'accent', since?: string) =>
+  const pointsOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"]`)!.getAttribute('data-points')!.trim().split(/\s+/)
+  const ysOf = (c: HTMLElement, key: string) => ys(c.querySelector(`[data-series="${key}"]`)!.getAttribute('data-points')!)
+  const S = (key: string, values: number[], color: 'accent' | 'accent-red' | 'ink' | 'chart-4' | 'chart-5' = 'accent', since?: string) =>
     ({ key, label: key[0].toUpperCase() + key.slice(1), values, color, since })
 
   it('CRITICAL: the scale starts at ZERO, not at the series minimum', () => {
@@ -64,16 +65,16 @@ describe('TimelineChart', () => {
     const { container } = render(<TimelineChart points={four} height={80} series={[
       S('views', [1, 2, 3, 4]), S('visitors', [1, 1, 1, 1], 'accent-red'), S('bots', [0, 1, 0, 1], 'ink'),
     ]} />)
-    expect(container.querySelectorAll('polygon')).toHaveLength(1)
-    expect(container.querySelector('[data-series="views"] polygon')).not.toBeNull()
-    expect(container.querySelectorAll('polyline')).toHaveLength(3)
+    expect(container.querySelectorAll('[data-area]')).toHaveLength(1)
+    expect(container.querySelector('[data-series="views"] [data-area]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-line]')).toHaveLength(3)
     const legend = screen.getByRole('list', { name: 'Series' })
     expect(within(legend).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Views', 'Visitors', 'Bots'])
   })
 
   it('draws views alone by default, with no overlay', () => {
     const { container } = render(<TimelineChart points={points} height={80} />)
-    expect(container.querySelectorAll('polyline')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-line]')).toHaveLength(1)
     expect(screen.queryByText('Visitors')).toBeNull()
   })
 
@@ -86,8 +87,8 @@ describe('TimelineChart', () => {
 
     it('CRITICAL: starts where the counting started — an uncounted day is not a zero', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={two} />)
-      expect(lineOf(container, 'visitors').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
-      expect(lineOf(container, 'views').getAttribute('points')!.trim().split(/\s+/)).toHaveLength(4)
+      expect(pointsOf(container, 'visitors')).toHaveLength(2)
+      expect(pointsOf(container, 'views')).toHaveLength(4)
       // The legend names the series only — no "from Sep 12" note (Sam, 2026-09-13).
       expect(screen.queryByText(/from sep/i)).toBeNull()
       expect(container.querySelector('rect')).toBeNull() // no shaded span
@@ -97,8 +98,8 @@ describe('TimelineChart', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={two} />)
       const vis = container.querySelector('[data-series="visitors"]')!
       expect(vis.getAttribute('data-mark')).toBe('line+dots')
-      expect(vis.querySelectorAll('ellipse')).toHaveLength(2)
-      expect(vis.querySelector('polyline')!.getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
+      expect(vis.querySelectorAll('circle')).toHaveLength(2)
+      expect(pointsOf(container, 'visitors')).toHaveLength(2)
     })
 
     it('the lead series never gets dots, however short', () => {
@@ -106,8 +107,8 @@ describe('TimelineChart', () => {
       const { container } = render(<TimelineChart points={across} height={100} series={[
         S('views', across.map((p) => p.views), 'accent', '2026-09-12'),
       ]} />)
-      expect(container.querySelector('[data-series="views"] polyline')!.getAttribute('points')!.trim().split(/\s+/)).toHaveLength(2)
-      expect(container.querySelectorAll('[data-series="views"] ellipse')).toHaveLength(0)
+      expect(pointsOf(container, 'views')).toHaveLength(2)
+      expect(container.querySelectorAll('[data-series="views"] circle')).toHaveLength(0)
       expect(container.querySelector('[data-series="views"]')!.getAttribute('data-mark')).toBe('line')
     })
 
@@ -117,7 +118,7 @@ describe('TimelineChart', () => {
         S('views', six.map((p) => p.views)), S('visitors', six.map((p) => p.visitors), 'accent-red', '2026-09-12'),
       ]} />)
       expect(container.querySelector('[data-series="visitors"]')!.getAttribute('data-mark')).toBe('line')
-      expect(container.querySelectorAll('[data-series="visitors"] polyline')).toHaveLength(1)
+      expect(container.querySelectorAll('[data-series="visitors"] circle')).toHaveLength(0)
     })
 
   })
@@ -164,30 +165,34 @@ describe('TimelineChart', () => {
     ]
     const plot = (c: HTMLElement) => c.querySelector('svg')!.parentElement!
 
-    it('CRITICAL: hovering a day names the date, lists every drawn series, and says how far the lead sits from the window average', () => {
+    it('CRITICAL: hovering a day names the date and every drawn value — and nothing more (Sam: the old readout was too big)', () => {
       const { container } = render(<TimelineChart points={three} height={100} series={[
         S('views', [100, 60, 20]), S('visitors', [25, 40, 0], 'accent-red'),
       ]} />)
       fireEvent.pointerMove(plot(container), { clientX: 300 })
       const text = screen.getByRole('status').textContent!
       expect(text).toContain('Sep 11')
-      expect(text).toMatch(/views60/i)
-      expect(text).toMatch(/visitors40/i)
-      // Average of 100, 60, 20 is 60: the middle day sits exactly on it.
-      expect(text).toMatch(/0\.0% vs average/i)
+      expect(text).toMatch(/views\s*60/i)
+      expect(text).toMatch(/visitors\s*40/i)
+      expect(text).not.toMatch(/average|%/i)
       fireEvent.pointerMove(plot(container), { clientX: 0 })
-      expect(screen.getByRole('status').textContent).toMatch(/\+66\.7% vs average/i)
+      expect(screen.getByRole('status').textContent).toMatch(/views\s*100/i)
     })
 
-    it('CRITICAL: withholds the deviation when the window average is zero — nothing to deviate from', () => {
-      const { container } = render(<TimelineChart points={[
-        { day: '2026-09-10', views: 0, visitors: 0 }, { day: '2026-09-11', views: 0, visitors: 0 },
-      ]} height={100} />)
-      fireEvent.pointerMove(plot(container), { clientX: 600 })
-      expect(screen.getByRole('status').textContent).not.toMatch(/%/)
+    it('CRITICAL: the hover line rises from the floor and STOPS at the topmost line that day (Sam: "the vertical line should stop at the slope")', () => {
+      const { container } = render(<TimelineChart points={three} height={100} series={[
+        S('views', [100, 60, 20]), S('visitors', [25, 40, 0], 'accent-red'),
+      ]} />)
+      fireEvent.pointerMove(plot(container), { clientX: 300 })
+      const line = container.querySelector('[data-crosshair] line')!
+      // Day 2: views 60 is the top line there; the scale tops at 100, the plot starts at 8.
+      expect(Number(line.getAttribute('y1'))).toBeCloseTo(8 + (1 - 60 / 100) * 92, 5)
+      expect(Number(line.getAttribute('y2'))).toBe(100)
+      // A ring on each line at that day.
+      expect(container.querySelectorAll('[data-crosshair] circle')).toHaveLength(2)
     })
 
-    it('CRITICAL: the readout follows the hovered value — a low day puts it low, not flush with the top rule', () => {
+    it('CRITICAL: the readout sits just above the topmost value — a low day puts it low, not flush with the top rule', () => {
       const { container } = render(<TimelineChart points={[
         { day: '2026-09-10', views: 100, visitors: 0 }, { day: '2026-09-11', views: 5, visitors: 0 },
       ]} height={100} />)
@@ -196,22 +201,20 @@ describe('TimelineChart', () => {
       const high = parseFloat((container.querySelector('[data-readout]') as HTMLElement).style.top)
       fireEvent.pointerMove(plot, { clientX: 600 })
       const low = parseFloat((container.querySelector('[data-readout]') as HTMLElement).style.top)
-      expect(low).toBeGreaterThan(high)
-      expect(high).toBeGreaterThanOrEqual(4)
-      expect(low).toBeLessThanOrEqual(64)
+      expect(high).toBeCloseTo(8 - 12, 5)
+      expect(low).toBeCloseTo(8 + (1 - 5 / 100) * 92 - 12, 5)
     })
 
-    it('the readout sits to the right of the dot, and flips to the left near the window end', () => {
-      const { container } = render(<TimelineChart points={three} height={100} />)
+    it('the readout is centred over the day, and pulled inward at either end of the window so it stays over the plot', () => {
+      const five = Array.from({ length: 5 }, (_, i) => ({ day: `2026-09-1${i}`, views: 10, visitors: 0 }))
+      const { container } = render(<TimelineChart points={five} height={100} />)
       const plot = container.querySelector('svg')!.parentElement!
-      fireEvent.pointerMove(plot, { clientX: 0 })
-      const early = (container.querySelector('[data-readout]') as HTMLElement).style
-      expect(early.left).not.toBe('')
-      expect(early.right).toBe('')
-      fireEvent.pointerMove(plot, { clientX: 600 })
-      const late = (container.querySelector('[data-readout]') as HTMLElement).style
-      expect(late.right).not.toBe('')
-      expect(late.left).toBe('')
+      const shiftAt = (clientX: number) => { fireEvent.pointerMove(plot, { clientX }); return (container.querySelector('[data-readout]') as HTMLElement).style.transform }
+      const early = shiftAt(0), mid = shiftAt(300), late = shiftAt(600)
+      expect(mid).toContain('-50%')
+      expect(early).not.toContain('-50%')
+      expect(late).not.toContain('-50%')
+      expect(early).not.toBe(late)
     })
 
     it('an uncounted day reads as a dash, and leaving clears everything', () => {
@@ -220,9 +223,30 @@ describe('TimelineChart', () => {
         S('views', [4, 5]), S('visitors', [0, 9], 'accent-red', '2026-09-11'),
       ]} />)
       fireEvent.pointerMove(plot(container), { clientX: 0 })
-      expect(screen.getByRole('status').textContent).toMatch(/visitors—/i)
+      expect(screen.getByRole('status').textContent).toMatch(/visitors\s*—/i)
       fireEvent.pointerLeave(plot(container))
       expect(screen.queryByRole('status')).toBeNull()
+    })
+  })
+
+  describe('today, still being counted', () => {
+    const four = [
+      { day: '2026-09-10', views: 10, visitors: 0 }, { day: '2026-09-11', views: 20, visitors: 0 },
+      { day: '2026-09-12', views: 30, visitors: 0 }, { day: '2026-09-13', views: 5, visitors: 0 },
+    ]
+    it('CRITICAL: the last gap is drawn dotted, apart from the solid line, which stops a day short', () => {
+      const { container } = render(<TimelineChart points={four} height={100} partialLast />)
+      const solid = container.querySelector('[data-series="views"] [data-line]')!.getAttribute('d')!
+      const tail = container.querySelector('[data-series="views"] [data-today]')!.getAttribute('d')!
+      expect(solid.match(/C/g)).toHaveLength(2) // two of the three gaps
+      expect(tail.match(/C/g)).toHaveLength(1)
+      expect(tail.startsWith('M400.0,')).toBe(true) // from yesterday (x = 2/3 of 600)…
+      expect(tail.endsWith('600.0,84.7')).toBe(true) // …to today: 5 on a scale topping at 30, 8 + (1 - 5/30) * 92
+    })
+    it('without it, every gap is solid and nothing is dotted', () => {
+      const { container } = render(<TimelineChart points={four} height={100} />)
+      expect(container.querySelector('[data-today]')).toBeNull()
+      expect(container.querySelector('[data-series="views"] [data-line]')!.getAttribute('d')!.match(/C/g)).toHaveLength(3)
     })
   })
 })

@@ -193,17 +193,21 @@ export type TrafficWindow = {
  * event, and a bot is the thing we refuse to count as either).
  */
 export const METRICS = [
-  { key: 'views', label: 'Views', type: null, chart: true },
-  { key: 'visitors', label: 'Unique visitors', type: null, chart: true },
-  { key: 'plays', label: 'Plays', type: 'play', chart: false },
-  { key: 'link_clicks', label: 'Link clicks', type: 'link_click', chart: false },
-  { key: 'ticket_clicks', label: 'Ticket clicks', type: 'ticket_click', chart: false },
-  { key: 'buy_clicks', label: 'Buy clicks', type: 'buy_click', chart: false },
-  { key: 'bots', label: 'Bots filtered', type: null, chart: true },
+  { key: 'views', label: 'Views', short: 'Views', type: null, chart: true, since: 'always' },
+  { key: 'visitors', label: 'Unique visitors', short: 'Visitors', type: null, chart: true, since: 'context' },
+  { key: 'bots', label: 'Bots filtered', short: 'Bots', type: null, chart: true, since: 'context' },
+  { key: 'plays', label: 'Song plays', short: 'Plays', type: 'play', chart: true, since: 'always' },
+  { key: 'link_clicks', label: 'Link clicks', short: 'Clicks', type: 'link_click', chart: true, since: 'always' },
+  { key: 'ticket_clicks', label: 'Ticket clicks', short: 'Tickets', type: 'ticket_click', chart: false, since: 'always' },
+  { key: 'buy_clicks', label: 'Buy clicks', short: 'Buys', type: 'buy_click', chart: false, since: 'always' },
 ] as const
-/** The metrics that can be on the chart: views always, visitors and bots as
- *  toggles. Plays and the click metrics are counted (they feed the content
- *  lists) but Sam did not want them on the chart. */
+/** The metrics that can be on the chart: views always, the rest as toggles, in this
+ *  order. Song plays and link clicks joined the chart with the r12 mock (Sam,
+ *  2026-10-06: "Build it"); ticket and buy clicks stay off it (they feed the content
+ *  lists). `since: 'context'` marks a metric that exists only from the 2026-09-12
+ *  cut-over (CONTEXT_SINCE): a visitor is a hash and a bot a flag, and rows before
+ *  it carry neither, so the chart starts it there and its prior window is compared
+ *  only once that window was wholly counted. Events were counted throughout. */
 const CHART_METRICS: readonly MetricKey[] = METRICS.filter((m) => m.chart).map((m) => m.key)
 export const OVERLAYS: readonly MetricKey[] = CHART_METRICS.filter((k) => k !== 'views')
 

@@ -88,15 +88,11 @@ export default async function OverviewPage({
     CONTENT_KINDS.map((k, i) => [k.key, topContent(byEntity, { entity: k.entity, type: k.type }, refs[i][1], totalOf(k.metric))]),
   ) as Record<ContentKind['key'], ContentList>
   const partial = reachesBeforeContext(traffic.window)
-  const counted = traffic.timeline.filter((d) => d.day >= CONTEXT_SINCE)
-  const countedViews = counted.reduce((n, d) => n + d.views, 0)
-  const countedVisitors = counted.reduce((n, d) => n + d.visitors, 0)
-  const viewsPerVisitor = countedVisitors ? (countedViews / countedVisitors).toFixed(2) : '—'
 
   return (
     <div className="space-y-10">
       <section>
-        {/* The overview: one chart, one metric at a time, its facts beside it.
+        {/* The overview: one chart, its numbers beside it.
             Views is the default because it is the one figure that runs unbroken
             across the 2026-09-12 cut-over — every row before it was written without
             a visitor hash and counts as no one. */}
@@ -107,11 +103,8 @@ export default async function OverviewPage({
           countedSince={CONTEXT_SINCE}
           windowKey={windowKey}
           days={days}
-          extras={{
-            // Over the days both were counted (see viewsPerVisitor); the page note explains the cut-over.
-            views: [{ label: 'Per visitor', value: viewsPerVisitor }],
-            bots: [{ label: 'Share of hits', value: totalOf('views') + totalOf('bots') ? `${((totalOf('bots') / (totalOf('views') + totalOf('bots'))) * 100).toFixed(1)}%` : '—' }],
-          }}
+          // The window always ends today (analyticsWindow), which is still being counted.
+          partialLast
         />
       </section>
 

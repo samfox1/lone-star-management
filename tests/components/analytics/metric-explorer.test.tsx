@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The views chart with visitors and bots as toggles, and facts that never disagree with what is drawn.
+// The views chart with every other counted line as a toggle, and numbers that never disagree with what is drawn.
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MetricExplorer } from '@/app/artists/[id]/(dashboard)/metric-explorer'
@@ -17,38 +17,36 @@ const timeline = days.map((day, i) => ({ day, views: series.views[i], visitors: 
 const metrics: Metric[] = METRICS.map((m) => ({ key: m.key, label: m.label, series: series[m.key], total: series[m.key].reduce((a, b) => a + b, 0) }))
 const prevTotals: Record<MetricKey, number> = { views: 100, visitors: 0, plays: 6, link_clicks: 8, ticket_clicks: 0, buy_clicks: 0, bots: 0 }
 const setup = (windowKey = '7', daysN = 4, prev = prevTotals, countedSince = '2026-09-12') => render(
-  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prev} windowKey={windowKey} days={daysN} countedSince={countedSince}
-    extras={{ bots: [{ label: 'Share of hits', value: '2.0%' }] }} />,
+  <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={prev} windowKey={windowKey} days={daysN} countedSince={countedSince} />,
 )
-const lineOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"] polyline`)!.getAttribute('points')!.trim().split(/\s+/)
+const pointsOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"]`)!.getAttribute('data-points')!.trim().split(/\s+/)
 const toggles = () => screen.getByRole('group', { name: 'Series' })
-const facts = () => screen.getByRole('region', { name: 'Facts' })
+const numbers = () => screen.getByRole('region', { name: 'Numbers' })
+const factOf = (key: string) => numbers().querySelector(`[data-fact="${key}"]`) as HTMLElement | null
+const drawnKeys = (c: HTMLElement) => [...c.querySelectorAll('[data-series]')].map((g) => g.getAttribute('data-series'))
 
 describe('MetricExplorer', () => {
   const check = (name: string) => within(toggles()).getByRole('checkbox', { name })
 
-  it('CRITICAL: views is always drawn with no switch; the two overlays are square checks, ON by default; nothing is Plays', () => {
+  it('CRITICAL: views is always drawn with no switch; every other chart line is a square check — visitors and bots on, the rest off', () => {
     const { container } = setup()
     const boxes = within(toggles()).getAllByRole('checkbox')
-    expect(boxes.map((b) => b.getAttribute('aria-label'))).toEqual(OVERLAYS.map((k) => metrics.find((m) => m.key === k)!.label))
+    expect(boxes.map((b) => b.getAttribute('aria-label'))).toEqual(OVERLAYS.map((k) => METRICS.find((m) => m.key === k)!.label))
     expect(within(toggles()).queryByText('Views')).toBeNull()
-    expect(within(toggles()).queryByText('Plays')).toBeNull()
-    for (const b of boxes) expect(b).toHaveAttribute('aria-checked', 'true')
-    expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
+    expect(boxes.map((b) => b.getAttribute('aria-checked'))).toEqual(OVERLAYS.map((k) => String(k === 'visitors' || k === 'bots')))
+    expect(drawnKeys(container)).toEqual(['views', 'visitors', 'bots'])
   })
 
-  it('CRITICAL: unchecking removes that line from the SAME chart, checking adds it back', () => {
+  it('CRITICAL: a check adds its line to the SAME chart and its numbers to the column; unchecking takes both away', () => {
     const { container } = setup()
+    fireEvent.click(check('Song plays'))
+    expect(drawnKeys(container)).toEqual(['views', 'visitors', 'bots', 'plays'])
+    expect(factOf('plays')!.textContent).toMatch(/plays12per day\s*3\.0/i)
     fireEvent.click(check('Unique visitors'))
-    expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
-    expect(container.querySelector('[data-series="visitors"]')).toBeNull()
-    fireEvent.click(check('Bots filtered'))
-    expect(container.querySelectorAll('[data-series]')).toHaveLength(1)
-    fireEvent.click(check('Unique visitors'))
-    expect(container.querySelectorAll('[data-series]')).toHaveLength(2)
-    expect(within(screen.getByRole('list', { name: 'Series' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Views', 'Unique visitors',
-    ])
+    expect(drawnKeys(container)).toEqual(['views', 'bots', 'plays'])
+    expect(factOf('visitors')).toBeNull()
+    // The column lists exactly what is drawn, in the same order.
+    expect([...numbers().querySelectorAll('[data-fact]')].map((f) => f.getAttribute('data-fact'))).toEqual(drawnKeys(container))
   })
 
   it('CRITICAL: clicking the NAME toggles once, exactly as the square does — not twice, which is not at all', () => {
@@ -60,67 +58,47 @@ describe('MetricExplorer', () => {
     expect(container.querySelectorAll('[data-series]')).toHaveLength(3)
   })
 
-  it('CRITICAL: an overlay starts at the cut-over on the chart; views runs the whole window', () => {
+  it('CRITICAL: a cut-over line starts at the cut-over on the chart; views and the events run the whole window', () => {
     const { container } = setup()
+    fireEvent.click(check('Link clicks'))
     // Four days, counted from the third: two points, not four zeros-then-values.
-    expect(lineOf(container, 'visitors')).toHaveLength(2)
-    expect(lineOf(container, 'bots')).toHaveLength(2)
-    expect(lineOf(container, 'views')).toHaveLength(4)
+    expect(pointsOf(container, 'visitors')).toHaveLength(2)
+    expect(pointsOf(container, 'bots')).toHaveLength(2)
+    expect(pointsOf(container, 'views')).toHaveLength(4)
+    expect(pointsOf(container, 'link_clicks')).toHaveLength(4)
   })
 
-  it('the facts tabs are always there — Views, Visitors, Bots — drawn or not', () => {
+  it('CRITICAL: each line\'s numbers are its total and per day over the days it was counted — and no best day', () => {
     setup()
-    const tabs = screen.getByRole('tablist', { name: 'Facts for' })
-    expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Views', 'Visitors', 'Bots'])
-    fireEvent.click(check('Bots filtered')) // off the chart…
-    expect(within(tabs).getByRole('tab', { name: 'Bots' })).toBeTruthy() // …still a tab
+    expect(factOf('views')!.textContent).toMatch(/views200per day\s*50/i)
+    // 50 visitors over 2 counted days → 25 a day, not 12.5 over four.
+    expect(factOf('visitors')!.textContent).toMatch(/visitors50per day\s*25/i)
+    expect(numbers().textContent).not.toMatch(/best day/i)
   })
 
-  it('facts lead with views: total, change on the prior window, best day, per day', () => {
-    setup()
-    const f = facts().textContent!
-    expect(f).toContain('200')
-    expect(f).toContain('+100.0%')
-    expect(f).toMatch(/^.*total/i)
-    expect(f).not.toMatch(/views · /i)
-    expect(f).toMatch(/best daysep 13per day/i)
-    expect(f).toMatch(/per day50/i)
-  })
-
-  it('CRITICAL: picking a tab shows THAT series over the counted days only', () => {
-    setup()
-    const tabs = screen.getByRole('tablist', { name: 'Facts for' })
-    fireEvent.click(within(tabs).getByRole('tab', { name: 'Visitors' }))
-    // 50 visitors over 2 counted days → 25, not 12.5 over four.
-    expect(facts().textContent).toMatch(/total50/i)
-    expect(facts().textContent).toMatch(/per day25/i)
-    fireEvent.click(within(tabs).getByRole('tab', { name: 'Bots' }))
-    expect(facts().textContent).toContain('2.0%')
-  })
-
-  it('CRITICAL: an overlay compares against the prior window only once that window was wholly counted', () => {
+  it('CRITICAL: the change on the prior window sits under per day; a cut-over line compares only once that window was wholly counted', () => {
     // Window 2026-09-10..13, so the prior one is 09-06..09-09. Counted from 09-12:
     // the prior window has no counted days at all, and "+400%" against it would be
     // 2 counted days against 0. Nothing is printed.
     const partial = setup('7', 4, { ...prevTotals, visitors: 10 })
-    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Visitors' }))
-    expect(facts().textContent).not.toMatch(/%|prior/i)
+    expect(factOf('views')!.textContent).toMatch(/per day\s*50▲ 100\.0% vs prior 4d/i)
+    expect(factOf('visitors')!.querySelector('[data-growth]')).toBeNull()
     partial.unmount()
     // Counted from before the prior window started: both are whole, and 50 vs 10 prints.
     setup('7', 4, { ...prevTotals, visitors: 10 }, '2026-09-01')
-    fireEvent.click(within(screen.getByRole('tablist', { name: 'Facts for' })).getByRole('tab', { name: 'Visitors' }))
-    expect(facts().textContent).toMatch(/\+400\.0%/)
+    expect(factOf('visitors')!.textContent).toMatch(/▲ 400\.0%/)
   })
 
-  it('withholds the views change when the prior window had nothing, and drops it entirely for all time', () => {
+  it('prints no change when the prior window had nothing, and none at all for all time', () => {
     const noPrior = render(
       <MetricExplorer metrics={metrics} timeline={timeline} prevTotals={{ ...prevTotals, views: 0 }} windowKey="7" days={4} />,
     )
-    expect(within(noPrior.getByRole('region', { name: 'Facts' })).getByText(/no prior 4d/i)).toBeTruthy()
+    expect(noPrior.container.querySelector('[data-fact="views"] [data-growth]')).toBeNull()
+    expect(within(noPrior.getByRole('region', { name: 'Numbers' })).queryByText(/no prior/i)).toBeNull()
     noPrior.unmount()
     setup('all', 74)
-    expect(facts().textContent).toMatch(/all time/i)
-    expect(facts().textContent).not.toMatch(/prior|%/i)
+    expect(numbers().querySelector('[data-growth]')).toBeNull()
+    expect(numbers().textContent).not.toMatch(/prior|%/i)
   })
 
   it('CRITICAL: the window switch sits on the same row and navigates by URL, where the server reads it', () => {
