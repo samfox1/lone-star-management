@@ -9,8 +9,9 @@ import { ProfilePhotoControl, type LibraryPhoto } from './photo-picker'
  * The Profile page's photo row (PROFILE_TOOL_PLAN.md): the round tile and its Images picker
  * (photo-picker.tsx). A server component, so the page renders it as a slot and it reads its own
  * rows: the profile photo now, and the artist's Images exactly as the Images page lists them
- * (purpose gallery_image, newest first). Both reads are RLS-scoped to the caller's artists, and
- * the page's own gate has already 404'd a non-owner.
+ * (purpose gallery_image, newest first). Both reads start alongside the page's own owner check
+ * (for speed, 2026-10-05), so they do not wait for it: they are RLS-scoped to the caller's
+ * artists, so a non-owner reads nothing, and the page still 404s them.
  *
  * Two profile rows can exist from before the slot held one; the site shows the first by sort
  * order, so this does too.
