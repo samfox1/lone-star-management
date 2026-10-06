@@ -137,6 +137,12 @@ describe('what may be cached', () => {
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: null }).deps))).toBe(true)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: { searchAnalytics: async () => ({ ok: false, reason: 'google_stats', status: 429 }) } }).deps))).toBe(false)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', fakes({ google: { searchAnalytics: () => new Promise(() => {}) } }).deps))).toBe(false)
+    // Google answered all but the search-by-day request: shown, but not kept, so the ranking line
+    // is asked for again next time instead of missing for six hours.
+    const noDays = fakes({ google: { searchAnalytics: async (_site, req) => (req.dimensions?.length === 2 ? { ok: false, reason: 'google_stats', status: 500 } : { ok: true, value: { rows: [{ keys: req.dimensions?.length ? ['2026-10-01'] : [], clicks: 1, impressions: 4, position: 2 }], firstIncompleteDate: null } }) } })
+    const partial = await askSearchStats(ARTIST, '28d', noDays.deps)
+    expect(partial.google.state).toBe('ok')
+    expect(isCacheable(partial)).toBe(false)
     expect(isCacheable(await askSearchStats(ARTIST, '28d', { ...fakes().deps, readRegistered: async () => Promise.reject(new Error('db')) }))).toBe(false)
   })
 

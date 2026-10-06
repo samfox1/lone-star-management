@@ -65,6 +65,9 @@ export type SearchStats = {
   coverage: { from: string; to: string } | null
   /** The first preliminary day (Google), or null. */
   preliminaryFrom: string | null
+  /** A part Google could be done without was refused (GOOGLE_OPTIONAL_PARTS): the rest is shown,
+   *  and the answer is not kept, so the missing part is asked for again next time. */
+  incomplete?: true
 }
 
 export const COULDNT_ASK = ['not_registered', 'no_key', 'quota', 'error', 'timeout'] as const
@@ -220,6 +223,10 @@ function searchDayRows(rows: { key: string | null; date: string | null; impressi
 export const GOOGLE_PARTS = ['total', 'date', 'query', 'searchDay'] as const
 export type GooglePart = (typeof GOOGLE_PARTS)[number]
 export type GoogleAnswers = Record<GooglePart, GoogleResult<GoogleSearchAnswer>>
+/** The parts Google's answer can stand without: the search-by-day rows only feed the ranking
+ *  line, and they are the heaviest request (review, 2026-10-06: one refusal there used to throw
+ *  away every number). */
+export const GOOGLE_OPTIONAL_PARTS: readonly GooglePart[] = ['searchDay']
 
 const ROW_LIMIT: Record<GooglePart, number> = { total: 1, date: 1000, query: TOP, searchDay: 25000 }
 const DIMENSIONS: Record<GooglePart, GoogleSearchRequest['dimensions']> = {
@@ -235,7 +242,7 @@ export function googleRequests(p: SearchPeriod): Record<GooglePart, GoogleSearch
 const firstKey = (r: GoogleSearchRow) => r.keys[0] ?? null
 
 export function normaliseGoogle(period: SearchPeriod, a: GoogleAnswers): EngineStats {
-  const fail = failed('google', period, GOOGLE_PARTS.map((part) => a[part]))
+  const fail = failed('google', period, GOOGLE_PARTS.filter((part) => !GOOGLE_OPTIONAL_PARTS.includes(part)).map((part) => a[part]))
   if (fail) return fail
   const rows = (part: GooglePart) => (a[part] as { ok: true; value: GoogleSearchAnswer }).value.rows
   const total = rows('total')[0]
@@ -257,7 +264,8 @@ export function normaliseGoogle(period: SearchPeriod, a: GoogleAnswers): EngineS
       totals,
       series,
       queries,
-      searchDays: searchDayRows(rows('searchDay').map((r) => ({ key: r.keys[0] ?? null, date: r.keys[1] ?? null, impressions: r.impressions, position: r.position })), period),
+      searchDays: a.searchDay.ok ? searchDayRows(rows('searchDay').map((r) => ({ key: r.keys[0] ?? null, date: r.keys[1] ?? null, impressions: r.impressions, position: r.position })), period) : [],
+      ...(a.searchDay.ok ? {} : { incomplete: true as const }),
       unlisted: unlistedOf(totals, queries),
       coverage: coverageOf(series),
       preliminaryFrom,

@@ -10,6 +10,7 @@ import { SourceGlyph } from '@/components/ui/source-glyphs'
 import { TimelineChart, type ChartPin, type Series } from '@/components/ui/timeline-chart'
 import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
+import { searchPeriodAction } from './actions'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { modalCardNarrowClass } from '@/components/ui/ui'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
@@ -46,10 +47,9 @@ import { Segmented } from '../../../../segmented'
  * Every word and line comes from lib/manager-tools/seo/ (search-model, search-board,
  * search-spot, ai-visits); this file only lays them out. Nothing here asks Google or Bing.
  */
-export function SearchTab({ answer, answers, name, ai }: {
+export function SearchTab({ artistId, answer, name, ai }: {
+  artistId: string
   answer: SearchStatsAnswer
-  /** Every period's answer (the page asks for all), for the seen / clicked chart's own period. */
-  answers: Record<SearchPeriodKey, SearchStatsAnswer>
   name: string
   ai: AiVisit[]
 }) {
@@ -146,7 +146,7 @@ export function SearchTab({ answer, answers, name, ai }: {
             {/* An engine beside one that answered, which itself has nothing, says so only by the
                 dot on its button (Sam, 2026-10-06: "I also dont want seeing this row"). */}
             <SpotSection key={`spot-${view}-${answer.period.key}`} view={view} stats={stats} name={name} answer={answer} onToggle={toggleEngine} />
-            <ReachSection answers={answers} startPeriod={answer.period.key} />
+            <ReachSection artistId={artistId} answer={answer} />
             <div className="mt-14 grid gap-11 min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[1024px]:gap-x-12">
               <Searched view={view} stats={stats} both={both} />
               <SentByAi ai={ai} />
@@ -288,11 +288,30 @@ function NameSearches({ view, stats, engines, name }: { view: EngineView; stats:
  * for it, it can just stay at 0"). An engine on shows its lines and numbers; the last one on stays
  * on, so the chart is never empty. Clicks a toggle too.
  */
-function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKey, SearchStatsAnswer>; startPeriod: SearchPeriodKey }) {
+function ReachSection({ artistId, answer }: { artistId: string; answer: SearchStatsAnswer }) {
   const [on, setOn] = useState<SearchEngineId[]>(['google', 'bing'])
-  const [period, setPeriod] = useState<SearchPeriodKey>(startPeriod)
+  const [period, setPeriod] = useState<SearchPeriodKey>(answer.period.key)
   const [clicks, setClicks] = useState(true)
-  const a = answers[period]
+  // The page's period comes with the page; another is asked for when it is clicked
+  // (actions.ts), kept here once it has come, and the chart stays on the last one it has while
+  // it loads.
+  const [loaded, setLoaded] = useState<Partial<Record<SearchPeriodKey, SearchStatsAnswer>>>({ [answer.period.key]: answer })
+  const [shown, setShown] = useState<SearchPeriodKey>(answer.period.key)
+  const [failed, setFailed] = useState(false)
+  const [loading, startLoading] = useTransition()
+  const choose = (p: SearchPeriodKey) => {
+    setPeriod(p)
+    setFailed(false)
+    if (loaded[p]) { setShown(p); return }
+    startLoading(async () => {
+      const r = await searchPeriodAction(artistId, p).catch(() => ({ error: 'failed' }))
+      if ('answer' in r) {
+        setLoaded((cur) => ({ ...cur, [p]: r.answer }))
+        setShown(p)
+      } else setFailed(true)
+    })
+  }
+  const a = loaded[shown]!
   const board = reachBoard(on, { google: a.google, bing: a.bing })
   const lines = board.lines.filter((l) => clicks || l.metric !== 'clicks')
   const both = new Set(board.lines.map((l) => l.engine)).size > 1
@@ -324,7 +343,7 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
             label="Period of this chart"
             options={(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => ({ key: p, label: p }))}
             value={period}
-            onChange={setPeriod}
+            onChange={choose}
           />
         </div>
       </div>
@@ -336,8 +355,10 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
         ))}
         <SquareCheck label="Clicks" on={clicks} onToggle={() => setClicks((c) => !c)} tone={both ? 'ink' : 'grey'} />
       </div>
-      <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart key={`${period}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
+      {failed ? <p data-reach-failed className={cx(MONO_META, 'mt-4')}>Couldn&apos;t load {period} just now. Pick it again to retry.</p> : null}
+      {!board.lines.length ? <p data-reach-empty className={cx(MONO_META, 'mt-4')}>No numbers for this period yet.</p> : null}
+      <div aria-busy={loading} className={cx('mt-4 grid gap-8 transition-opacity duration-150 lg:grid-cols-[minmax(0,1fr)_200px]', loading && 'opacity-50')}>
+        <TimelineChart key={`${shown}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
         <FactsColumn facts={facts} label="Seen and clicked, in numbers" />
       </div>
     </section>

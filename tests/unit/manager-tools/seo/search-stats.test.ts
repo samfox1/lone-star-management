@@ -31,6 +31,7 @@ import { describe, expect, it } from 'vitest'
 import { bingClient, type BingDay, type BingResult, type BingTopRow } from '@/lib/search-engines/bing'
 import { googleClient, type GoogleResult, type GoogleSearchAnswer } from '@/lib/search-engines/google'
 import {
+  GOOGLE_OPTIONAL_PARTS,
   GOOGLE_PARTS,
   SEARCH_PERIODS,
   couldntAsk,
@@ -171,6 +172,25 @@ describe('Google: every search, day by day', () => {
   })
 })
 
+describe('Google: a part it can do without', () => {
+  // The search-by-day request is the heaviest (up to 25,000 rows) and only feeds the ranking line.
+  // If it alone is refused, Google's totals, days and searches still show (the review, 2026-10-06:
+  // one failed request used to throw all of Google's answer away), marked incomplete so the
+  // answer is not kept and the line is asked for again next time.
+  it('CRITICAL: the search-by-day request alone refused keeps every other number, with no spot rows, marked incomplete', async () => {
+    const answers = await skeenGoogle()
+    const r = normaliseGoogle(P3M, { ...answers, searchDay: { ok: false, reason: 'google_stats', status: 500 } })
+    if (r.state !== 'ok') throw new Error(r.state)
+    expect(r.stats.totals.clicks).toBe(15)
+    expect(r.stats.queries).toHaveLength(3)
+    expect(r.stats.searchDays).toEqual([])
+    expect(r.stats.incomplete).toBe(true)
+    const whole = normaliseGoogle(P3M, answers)
+    if (whole.state !== 'ok') throw new Error(whole.state)
+    expect(whole.stats.incomplete).toBeUndefined()
+  })
+})
+
 describe('Google: the edges', () => {
   const row = (keys: string[], clicks: number, impressions: number, position: number | null = 2) => ({ keys, clicks, impressions, position })
   // Every part from the registry (a hand-list here missed `searchDay` when it was added): a total
@@ -248,7 +268,7 @@ describe('Google: the edges', () => {
   it('says quota or error, with no numbers, when Google refuses', () => {
     const fail = (status: number, detail?: string) => ({ ok: false as const, reason: 'google_stats' as const, status, detail })
     const base = answers({})
-    for (const part of GOOGLE_PARTS) {
+    for (const part of GOOGLE_PARTS.filter((p) => !GOOGLE_OPTIONAL_PARTS.includes(p))) {
       const r = normaliseGoogle(P28, { ...base, [part]: fail(500) })
       expect(r, part).toEqual({ engine: 'google', state: 'error', period: P28, reason: 'google_stats', status: 500 })
     }

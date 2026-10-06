@@ -139,6 +139,8 @@ export async function askSearchStats(artistId: string, key: SearchPeriodKey, dep
 const PASSING = new Set<EngineStats['state']>(['quota', 'error', 'timeout'])
 export const isCacheable = (a: SearchStatsAnswer) =>
   !(a.google.state === 'not_registered' && a.bing.state === 'not_registered') && !PASSING.has(a.google.state) && !PASSING.has(a.bing.state)
+  // Shown, but not kept: a part was missing (search-stats.ts GOOGLE_OPTIONAL_PARTS).
+  && !(a.google.state === 'ok' && a.google.stats.incomplete)
 
 /** The real deps: the service client and the server's keys (a missing key is that engine's
  *  null). Loaded lazily, so nothing registered reads no key. Refuses under vitest. */

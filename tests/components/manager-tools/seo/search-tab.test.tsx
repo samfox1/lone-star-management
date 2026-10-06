@@ -23,7 +23,7 @@
  *           snapshot (2026-10-02) in search-stats.ts's own types, Bing's numbers made up.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SearchTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/search/search-tab'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import type { EngineStats, SearchPeriod, SearchStats } from '@/lib/manager-tools/seo/search-stats'
@@ -33,6 +33,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: nav.push, refresh: nav.refresh }),
   usePathname: () => '/artists/a1/tools/seo/search',
   useSearchParams: () => nav.params,
+}))
+
+// The lower chart's other period comes through its server action (search/actions.ts), stubbed here.
+const action = vi.hoisted(() => ({ next: null as null | { answer: unknown } | { error: string } }))
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/search/actions', () => ({
+  searchPeriodAction: vi.fn(async () => action.next),
 }))
 
 afterEach(() => {
@@ -101,7 +107,10 @@ const threeMonths = (a: SearchStatsAnswer): SearchStatsAnswer => {
     : { ...a.google, period: P3M }
   return { ...a, period: P3M, google: g as EngineStats, bing: { ...a.bing, ...(a.bing.state === 'ok' ? {} : { period: P3M }) } as EngineStats }
 }
-const show = (a: SearchStatsAnswer) => render(<SearchTab answer={a} answers={{ '28d': a, '3m': threeMonths(a) }} name="Skeen" ai={AI} />)
+const show = (a: SearchStatsAnswer) => {
+  action.next = { answer: threeMonths(a) }
+  return render(<SearchTab artistId="a1" answer={a} name="Skeen" ai={AI} />)
+}
 const header = () => screen.getByRole('group', { name: 'Engine' })
 const lower = () => screen.getByRole('group', { name: 'Engines on this chart' })
 const drawn = () => [...document.querySelectorAll('[data-series]')].map((g) => g.getAttribute('data-series'))
@@ -252,12 +261,35 @@ describe('the switches', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Seen and clicked on Google' })).toBeTruthy()
   })
 
-  // The lower chart's own period switches its numbers at once, without leaving the page.
-  it('the seen / clicked chart\'s own period shows that period\'s numbers, with no trip to the server', () => {
+  // The lower chart's own period: the page brought one; another is asked for once through the
+  // server action when clicked (the page no longer waits on every period), without leaving the page.
+  it('CRITICAL: the seen / clicked chart\'s other period is asked for once when clicked, and shows that period\'s numbers', async () => {
+    const { searchPeriodAction } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/search/actions')
     show(answer(ok(GOOGLE), ok(BING)))
-    fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '3m' }))
-    expect(facts('Seen and clicked')[0]).toMatch(/^Google seen112/) // the 3-month answer's numbers
+    expect(searchPeriodAction).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '3m' }))
+    })
+    await waitFor(() => expect(facts('Seen and clicked')[0]).toMatch(/^Google seen112/)) // the 3-month answer's numbers
+    expect(searchPeriodAction).toHaveBeenCalledWith('a1', '3m')
     expect(nav.push).not.toHaveBeenCalled()
+    // Back and forth again: already here, not asked again.
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '28d' }))
+      fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '3m' }))
+    })
+    expect(searchPeriodAction).toHaveBeenCalledTimes(1)
+  })
+
+  // A refused period keeps the chart on what it had and says so.
+  it('a period that can\'t be loaded keeps the last numbers and says so', async () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    action.next = { error: 'Artist not found.' }
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '3m' }))
+    })
+    await waitFor(() => expect(document.querySelector('[data-reach-failed]')).not.toBeNull())
+    expect(facts('Seen and clicked')[0]).toMatch(/^Google seen56/)
   })
 
   // Turning Clicks off removes the clicks lines and their numbers.
