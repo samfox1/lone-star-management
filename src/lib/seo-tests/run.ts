@@ -238,9 +238,13 @@ function otherSpelling(origin: string): string | null {
 
 /**
  * Open the other spelling ONCE, as a person's browser, following it only within the site (www or
- * bare, http or https): its final answer and where it landed. With no final answer (a redirect to
- * another site, which is not followed, or a hop that didn't answer), `to` is where the last
- * redirect pointed, else null. Never throws (guardedFetch never does).
+ * bare, http or https). `status` is the SPELLING'S OWN first answer (the 308 that sends it home,
+ * or the 200 of a spelling that serves its own copy), never the page it was sent on to: the
+ * "Page address and tags" card reads it as the redirect's kind ("308 permanent"). `to` is set only
+ * when that first answer was a redirect: where it landed within the site, else (a redirect to
+ * another site, which is not followed, or a hop that didn't answer) where the last redirect
+ * pointed, else null. A spelling that answers itself has `to: null` ("opens on its own"). Never
+ * throws (guardedFetch never does).
  */
 export async function checkOtherHost(origin: string, opts: GatherOptions = {}): Promise<SeoCrawl['otherHost']> {
   const url = otherSpelling(origin)
@@ -248,9 +252,13 @@ export async function checkOtherHost(origin: string, opts: GatherOptions = {}): 
   // Never the global fetch (lib/net-guard); the run's signal ends it with the run.
   const base = pickTransport(opts.fetcher)
   let pointedAt: string | null = null
+  // The spelling's own answer: guardedFetch reports only the LAST hop's, which for a redirect home
+  // is home's 200. undefined = no hop answered yet.
+  let first: number | null | undefined
   const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
     const signal = init?.signal && opts.signal ? AbortSignal.any([init.signal, opts.signal]) : (init?.signal ?? opts.signal)
     const res = await base(input, { ...init, signal })
+    if (first === undefined) first = typeof res.status === 'number' ? res.status : null
     try {
       const loc = res.headers?.get?.('location')
       pointedAt = loc ? new URL(loc, String(input)).toString() : null
@@ -260,7 +268,9 @@ export async function checkOtherHost(origin: string, opts: GatherOptions = {}): 
     return res
   }) as typeof fetch
   const r = await guardedFetch(url, { fetcher, userAgent: BROWSER_UA, timeoutMs: OTHER_HOST_TIMEOUT_MS, maxBytes: 1024, as: 'bytes', allow: (u) => sameSite(u, origin) })
-  return { url, status: r.status, to: r.finalUrl ?? pointedAt }
+  const status = first ?? r.status
+  const redirected = status !== null && status >= 300 && status < 400
+  return { url, status, to: redirected ? (r.finalUrl ?? pointedAt) : null }
 }
 
 /* ── the crawl: is it listed on Google / Bing? ──────────────────────────────────────── */

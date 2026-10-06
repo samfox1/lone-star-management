@@ -695,18 +695,21 @@ describe('checkOtherHost: the real check, on a fake web', () => {
   const W = 'https://www.skeen.example'
   const BARE = 'https://skeen.example'
 
-  // www → asks the bare spelling ONCE, as a person's browser, follows it home, and records where it landed.
-  it('asks the bare spelling once for a www site, and records where it sent us', async () => {
+  // www → asks the bare spelling ONCE, as a person's browser, follows it home, and records where it
+  // landed. `status` is the SPELLING'S OWN answer (the 308), not home's 200: the card reads it as
+  // the redirect's kind ("308 permanent"), so home's 200 would show "answered 200" with no mark.
+  it('asks the bare spelling once for a www site, and records its own redirect and where it sent us', async () => {
     const web = fakeSite({ [`${BARE}/`]: { status: 308, location: `${W}/` }, [`${W}/`]: '<html>home</html>' })
-    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: 200, to: `${W}/` })
+    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: 308, to: `${W}/` })
     expect(web.calls.filter((c) => c.url === `${BARE}/`)).toHaveLength(1)
     expect(web.calls.every((c) => c.ua === BROWSER_UA)).toBe(true)
   })
 
-  // A bare site: its www spelling. One that answers itself (no redirect) says so: `to` is itself.
-  it('asks the www spelling for a bare site; a spelling that answers itself names itself', async () => {
+  // A bare site: its www spelling. One that answers itself (no redirect) sends nobody anywhere:
+  // `to` is null, so the card says "opens on its own", never "→ <the same address>" in red.
+  it('asks the www spelling for a bare site; a spelling that answers itself goes nowhere', async () => {
     const web = fakeSite({ [`${W}/`]: '<html>a second copy</html>' })
-    expect(await checkOtherHost(BARE, { fetcher: web })).toEqual({ url: `${W}/`, status: 200, to: `${W}/` })
+    expect(await checkOtherHost(BARE, { fetcher: web })).toEqual({ url: `${W}/`, status: 200, to: null })
   })
 
   // Only www.<name> ↔ <name>: a sub-domain, a name we can't tell is the bare domain, an
@@ -719,23 +722,24 @@ describe('checkOtherHost: the real check, on a fake web', () => {
   // www.<name> is always clear, whatever <name> is.
   it('drops www from any name', async () => {
     const web = fakeSite({ 'https://skeen.co.uk/': { status: 301, location: 'https://www.skeen.co.uk/' }, 'https://www.skeen.co.uk/': '<html></html>' })
-    expect(await checkOtherHost('https://www.skeen.co.uk', { fetcher: web })).toMatchObject({ url: 'https://skeen.co.uk/', to: 'https://www.skeen.co.uk/' })
+    expect(await checkOtherHost('https://www.skeen.co.uk', { fetcher: web })).toEqual({ url: 'https://skeen.co.uk/', status: 301, to: 'https://www.skeen.co.uk/' })
   })
 
-  // A spelling that sends visitors to ANOTHER site is not followed; where it pointed is kept.
-  it('does not follow it to another site, and names where it pointed', async () => {
+  // A spelling that sends visitors to ANOTHER site is not followed; its own answer and where it
+  // pointed are kept.
+  it('does not follow it to another site, and names its answer and where it pointed', async () => {
     const web = fakeSite({ [`${BARE}/`]: { status: 302, location: 'https://parked-domains.example/lander' } })
-    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: null, to: 'https://parked-domains.example/lander' })
+    expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: 302, to: 'https://parked-domains.example/lander' })
     expect(web.calls.map((c) => c.url)).toEqual([`${BARE}/`])
   })
 
   // No answer: no status, nowhere; asked once, never retried. Sent home, and home didn't answer:
-  // where it was sent is still a fact.
-  it('no answer: nulls, asked once; a redirect that then got no answer keeps where it pointed', async () => {
+  // the spelling's own redirect and where it was sent are still facts.
+  it('no answer: nulls, asked once; a redirect that then got no answer keeps its answer and where it pointed', async () => {
     const web = fakeSite({ [`${BARE}/`]: { fail: true } })
     expect(await checkOtherHost(W, { fetcher: web })).toEqual({ url: `${BARE}/`, status: null, to: null })
     expect(web.calls).toHaveLength(1)
     const home = fakeSite({ [`${BARE}/`]: { status: 301, location: `${W}/` }, [`${W}/`]: { fail: true } })
-    expect(await checkOtherHost(W, { fetcher: home })).toEqual({ url: `${BARE}/`, status: null, to: `${W}/` })
+    expect(await checkOtherHost(W, { fetcher: home })).toEqual({ url: `${BARE}/`, status: 301, to: `${W}/` })
   })
 })
