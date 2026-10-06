@@ -13,8 +13,8 @@ import { SquareCheck } from '@/components/ui/square-check'
 import { PortalModal } from '@/components/ui/portal-modal'
 import { modalCardNarrowClass } from '@/components/ui/ui'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
-import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { SEARCH_PERIODS, type EngineStats, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
+import { ENGINE_NAME, LIST_SHOWN, SPOT_HINT, NAME_SEARCHES_WORDS, REACH_SEARCHES_WORDS, bareNameWords, countWords, privateWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { isBareName, nameSearches, nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
@@ -28,8 +28,8 @@ import { Segmented } from '../../../../segmented'
  * stuff on the main analytics page"). The Analytics page's look: one title, the same chart, its
  * numbers on the right.
  *
- *   the title     "HOW SKEEN SHOWS UP ON GOOGLE", in capitals; beside it the engines (Both ·
- *                 Google · Bing, glyphs) and the period. Both live in the address (`?e=`, `?p=`):
+ *   the title     "HOW SKEEN SHOWS UP ON GOOGLE", in capitals; beside it the engines (Google and
+ *                 Bing as word toggles, both on to start) and the period. Both live in the address (`?e=`, `?p=`):
  *                 the engine is only a view (history.pushState, no server trip); the period is new
  *                 numbers (a navigation; the page reads `p`).
  *   your spot     where the site sits when someone searches the artist's NAME, day by day, #1 at
@@ -93,6 +93,14 @@ export function SearchTab({ answer, answers, name, ai }: {
     startTransition(() => router.push(href(view, p), { scroll: false }))
   }
   const askAgain = () => startTransition(() => router.refresh())
+  // The title's engines are two toggles, both on to start (Sam, 2026-10-06: "I dont want bing and
+  // google with a both button, they should both have toggle-able selectors … Both default on"). On
+  // both is the view 'both'; the last one on stays on. The view still lives in `?e=`.
+  const toggleEngine = (e: SearchEngineId) => {
+    const other: SearchEngineId = e === 'google' ? 'bing' : 'google'
+    if (view === 'both') chooseView(other)
+    else if (view !== e) chooseView('both')
+  }
 
   const engines = enginesOf(view)
   const stats: Partial<Record<SearchEngineId, SearchStats>> = {}
@@ -121,9 +129,9 @@ export function SearchTab({ answer, answers, name, ai }: {
           <p data-intro className={INTRO}>{searchIntro(view)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div role="group" aria-label="Engine" className="flex items-center gap-1">
-            {ENGINE_VIEWS.map((e) => (
-              <EngineButton key={e} engine={e} on={view === e} dot={e === 'both' ? null : engineDot(answer[e])} onClick={() => chooseView(e)} />
+          <div role="group" aria-label="Engine" className="flex items-center gap-5">
+            {(['google', 'bing'] as const).map((e) => (
+              <EngineCheck key={e} engine={e} on={engines.includes(e)} status={answer[e]} onToggle={() => toggleEngine(e)} />
             ))}
           </div>
           <Segmented
@@ -297,9 +305,9 @@ function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKe
           <p className={INTRO}>{reachIntro(on)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div role="group" aria-label="Engines on this chart" className="flex items-center gap-1">
+          <div role="group" aria-label="Engines on this chart" className="flex items-center gap-5">
             {(['google', 'bing'] as const).map((e) => (
-              <EngineButton key={e} engine={e} on={on.includes(e)} dot={engineDot(a[e])} onClick={() => toggle(e)} />
+              <EngineCheck key={e} engine={e} on={on.includes(e)} status={a[e]} onToggle={() => toggle(e)} />
             ))}
           </div>
           <Segmented
@@ -386,34 +394,23 @@ function WindowNote({ data, children }: { data: string; children: ReactNode }) {
   return <p data-note-line={data} className="mt-4 rounded-lg bg-surface px-3 py-2.5 text-[14px] leading-snug text-ink-muted">{children}</p>
 }
 
-/** An engine's glyph as a button (Both shows the two glyphs): ink when on, faint when off, the
- *  amber / red dot when the engine has nothing yet or couldn't be asked. */
-function EngineButton({ engine, on, dot, onClick }: { engine: EngineView; on: boolean; dot: { tone: 'pending' | 'red'; label: string } | null; onClick: () => void }) {
-  const name = engine === 'both' ? 'Both' : ENGINE_NAME[engine]
+/** An engine as a word toggle: the square check, the name ("the whole word", Sam 2026-10-06, in
+ *  place of the G and b glyphs), and the amber / red dot when it has nothing yet or couldn't be
+ *  asked, named on hover. */
+function EngineCheck({ engine, on, status, onToggle }: { engine: SearchEngineId; on: boolean; status: EngineStats; onToggle: () => void }) {
+  const dot = engineDot(status)
   return (
-    <button
-      type="button"
-      aria-pressed={on}
-      aria-label={name}
-      onClick={onClick}
-      className={cx('relative flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 transition-colors', on ? 'text-ink' : 'text-ink-faint hover:text-ink', FOCUS_RING_OFFSET)}
-    >
-      {engine === 'both' ? (
-        <>
-          <SourceGlyph source="google" size={14} />
-          <SourceGlyph source="bing" size={14} />
-        </>
-      ) : (
-        <SourceGlyph source={engine} size={17} />
-      )}
-      {dot ? (
-        <>
-          <span aria-hidden data-dot={dot.tone} className={cx('absolute right-0.5 top-1 h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
-          <span className="sr-only">, {dot.label}</span>
-        </>
+    <SquareCheck
+      label={ENGINE_NAME[engine]}
+      on={on}
+      onToggle={onToggle}
+      after={dot ? (
+        <span className="relative flex">
+          <span aria-hidden data-dot={dot.tone} className={cx('h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
+          <HoverLabel label={dot.label} />
+        </span>
       ) : null}
-      <HoverLabel label={engine === 'both' ? 'Google and Bing' : dot ? `${name} · ${dot.label}` : name} />
-    </button>
+    />
   )
 }
 

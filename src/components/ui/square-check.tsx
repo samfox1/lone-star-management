@@ -1,13 +1,15 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 
 /**
  * A line's on / off switch above a chart: a small square check beside its name, ONE control (a
  * label forwarding to a separate button fired twice), not a button drawn around the text (Sam,
- * 2026-09-13). The Analytics toggles and the Search page's Clicks.
+ * 2026-09-13). The Analytics toggles and the Search page's engines and Clicks. `after` sits after
+ * the name (an engine's status dot).
  */
-export function SquareCheck({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+export function SquareCheck({ label, on, onToggle, after }: { label: string; on: boolean; onToggle: () => void; after?: ReactNode }) {
   return (
     <button
       type="button"
@@ -31,6 +33,7 @@ export function SquareCheck({ label, on, onToggle }: { label: string; on: boolea
         )}
       </span>
       <span>{label}</span>
+      {after}
     </button>
   )
 }

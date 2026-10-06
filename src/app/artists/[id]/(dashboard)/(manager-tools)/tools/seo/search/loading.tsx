@@ -1,4 +1,3 @@
-import { SourceGlyph } from '@/components/ui/source-glyphs'
 import { SEARCH_PERIODS, type SearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
 
 /**
@@ -17,10 +16,13 @@ export default function Loading() {
       <div aria-hidden className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <span className="h-[18px] w-72 rounded bg-hairline-soft" />
         <div className="flex items-center gap-x-6">
-          <div className="flex items-center gap-3 text-ink-faint">
-            <span className="flex gap-1"><SourceGlyph source="google" size={14} /><SourceGlyph source="bing" size={14} /></span>
-            <SourceGlyph source="google" size={17} />
-            <SourceGlyph source="bing" size={17} />
+          <div className="flex items-center gap-5 font-space text-xs text-ink">
+            {['Google', 'Bing'].map((name) => (
+              <span key={name} className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded-[3px] bg-ink" />
+                {name}
+              </span>
+            ))}
           </div>
           <div className="flex rounded-lg border border-hairline p-0.5 font-space text-xs text-ink-muted">
             {(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => (
