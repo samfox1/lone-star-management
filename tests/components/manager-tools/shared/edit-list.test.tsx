@@ -195,6 +195,24 @@ describe('the +', () => {
     expect(document.activeElement).toBe(plus())
   })
 
+  // The add field has its own latch (busyRef in AddField), and FeaturedChips and SupportActs lean
+  // on it alone. validate() cannot stand in for it: both presses read the same pre-render items,
+  // so the second sees no repeat. Both presses go in ONE act(): after a single click React would
+  // re-render and the second press would never reach the latch (AGENTS.md rule 5).
+  it('CRITICAL: Enter and ✓ in one tick add ONCE (the latch is a ref)', async () => {
+    let release!: () => void
+    onAdd.mockImplementationOnce(() => new Promise<void>((r) => (release = r)) as never)
+    mount()
+    fireEvent.click(plus())
+    fireEvent.change(addField(), { target: { value: 'once@x.com' } })
+    await act(async () => {
+      fireEvent.keyDown(addField(), { key: 'Enter' })
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    })
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    await act(async () => release())
+  })
+
   it('CRITICAL: a refused add says why and keeps what was typed', async () => {
     mount()
     fireEvent.click(plus())

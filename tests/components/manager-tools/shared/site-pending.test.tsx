@@ -8,6 +8,8 @@
  *           STRICT, and lives in site-riser.test.tsx.
  * Covers:   • a waiting link edit (what Connections makes) raises the bar, saying so
  *           • nothing waiting: the bar stays down
+ *           • STRICT, a permission: a caller who does not own the artist is refused BEFORE the
+ *             fallback read, which uses the service role and so sees every artist
  * Not here: what Publish ships, and in what order (site-riser.test.tsx); the diff itself
  *           (diffUnpublished, the publish suites).
  * Fixtures: the unpublished diff, the ownership gate, the Supabase client, the publish
@@ -17,6 +19,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { SitePendingBar } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_ui/site-pending'
 import { diffUnpublished, type UnpublishedDiff } from '@/lib/content'
+import { dashboardDiff, requireArtist } from '@/app/artists/[id]/(dashboard)/_data'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => ({})) }))
 vi.mock('@/lib/content', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/content')>()), diffUnpublished: vi.fn() }))
@@ -29,7 +32,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 afterEach(() => {
   cleanup()
-  vi.clearAllMocks()
+  // RESET, not clear: the refusal test queues a failing fresh read that the gate stops it
+  // from ever using, and a leftover "once" would hand the next test that failure first.
+  vi.resetAllMocks()
 })
 
 type Part = Partial<{ added: number; edited: number; deleted: number; dirty: boolean }>
@@ -54,5 +59,17 @@ describe('the site Publish bar (SitePendingBar)', () => {
     vi.mocked(diffUnpublished).mockResolvedValueOnce(diff())
     render(await SitePendingBar({ artistId: 'a1' }))
     expect(down()).toBe(true)
+  })
+
+  // The fallback (dashboardDiff) reads with the service role, which RLS does not filter. So the
+  // ownership gate must run first: a non-owner whose fresh read fails must be refused, never
+  // handed the service-role read. The fresh read FAILS here and the fallback has a diff to give,
+  // so without the gate the bar would render for a non-owner and this goes red.
+  it('a caller who does not own the artist is refused before the service-role fallback', async () => {
+    vi.mocked(requireArtist).mockRejectedValueOnce(new Error('NEXT_NOT_FOUND'))
+    vi.mocked(diffUnpublished).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(dashboardDiff).mockResolvedValueOnce(diff({ edited: 1, dirty: true }))
+    await expect(SitePendingBar({ artistId: 'a1' })).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(dashboardDiff).not.toHaveBeenCalled()
   })
 })
