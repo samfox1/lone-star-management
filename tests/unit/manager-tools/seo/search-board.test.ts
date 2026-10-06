@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest'
 import { aiVisits } from '@/lib/manager-tools/seo/ai-visits'
 import { reachBoard, spotBoard, weekGrowth } from '@/lib/manager-tools/seo/search-board'
-import type { SearchDay, SearchDayRow, SearchPeriod, SearchStats } from '@/lib/manager-tools/seo/search-stats'
+import type { EngineStats, SearchDay, SearchDayRow, SearchPeriod, SearchStats } from '@/lib/manager-tools/seo/search-stats'
 
 const P28: SearchPeriod = { key: '28d', days: 28, start: '2026-09-05', end: '2026-10-02' }
 const day = (date: string, clicks: number, impressions: number, final = true): SearchDay => ({ date, clicks, impressions, final })
@@ -74,10 +74,20 @@ describe('spotBoard — your spot when someone searches your name', () => {
   })
 })
 
-describe('reachBoard — how often the site was seen in search, and clicked', () => {
-  // One engine: seen in ink, clicks in grey, by day.
-  it('CRITICAL: one engine: seen (ink) then clicks (grey) by day, the days still counting marked', () => {
-    const b = reachBoard('google', { google: GOOGLE })
+describe('both, with one engine answered', () => {
+  // Both with one engine answering looks exactly like that engine alone.
+  it('draws only the engine that answered — the other is no line, not a line of zeros — and reads as that engine alone', () => {
+    expect(spotBoard('both', { google: GOOGLE }, 'Skeen')).toEqual(spotBoard('google', { google: GOOGLE }, 'Skeen'))
+  })
+})
+
+describe('reachBoard — how often the site was seen in search, and clicked, for the engines switched on', () => {
+  const ok = (stats: SearchStats): EngineStats => ({ engine: stats.engine, state: 'ok', stats })
+  const none = (engine: 'google' | 'bing'): EngineStats => ({ engine, state: 'no_data', period: P28 })
+
+  // One engine on: seen in ink, clicks in grey, by day.
+  it('CRITICAL: one engine on: seen (ink) then clicks (grey) by day, the days still counting marked', () => {
+    const b = reachBoard(['google'], { google: ok(GOOGLE), bing: ok(BING) })
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
     expect(b.lines).toEqual([
       { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], tone: 'ink' },
@@ -86,9 +96,9 @@ describe('reachBoard — how often the site was seen in search, and clicked', ()
     expect(b.partialFrom).toBe(1)
   })
 
-  // Both: Google's and Bing's numbers stay apart, never summed into one line.
-  it('CRITICAL: both: never added together — each engine its own seen and clicks lines, engine by colour, clicks heavier', () => {
-    const b = reachBoard('both', { google: GOOGLE, bing: BING })
+  // Both on: Google's and Bing's numbers stay apart, never summed into one line.
+  it('CRITICAL: both on: never added together — each engine its own seen and clicks lines, engine by colour, clicks heavier', () => {
+    const b = reachBoard(['google', 'bing'], { google: ok(GOOGLE), bing: ok(BING) })
     expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
     expect(b.lines.map((l) => [l.key, l.label, l.tone, l.thick ?? false, l.values])).toEqual([
       ['google-seen', 'Google seen', 'ink', false, [null, 23, 14, 19]],
@@ -99,17 +109,34 @@ describe('reachBoard — how often the site was seen in search, and clicked', ()
     expect(b.partialFrom).toBe(2) // Google's first day still being counted, on the shared row of days
   })
 
+  // An engine with nothing yet stays at 0 beside the other (Sam, 2026-10-06: "it can just stay at 0").
+  it('CRITICAL: an engine switched on with nothing yet is a line at zero across the days — not missing', () => {
+    const b = reachBoard(['google', 'bing'], { google: ok(GOOGLE), bing: none('bing') })
+    expect(b.lines.map((l) => [l.key, l.values])).toEqual([
+      ['google-seen', [23, 14, 19]], ['bing-seen', [0, 0, 0]], ['google-clicks', [6, 5, 4]], ['bing-clicks', [0, 0, 0]],
+    ])
+  })
+
+  // Alone with nothing yet, the zero line runs the whole period.
+  it('alone with nothing yet: zero across every day of the period', () => {
+    const b = reachBoard(['bing'], { google: ok(GOOGLE), bing: none('bing') })
+    expect(b.days).toHaveLength(28)
+    expect(b.days[0]).toBe('2026-09-05')
+    expect(b.days[27]).toBe('2026-10-02')
+    expect(b.lines.every((l) => l.values.every((v) => v === 0))).toBe(true)
+  })
+
+  // An engine switched off, or one Tapir couldn't ask, draws nothing; nothing on, nothing drawn.
+  it('an engine switched off, or one that could not be asked, draws nothing', () => {
+    expect(reachBoard(['google'], { google: ok(GOOGLE), bing: ok(BING) }).lines.map((l) => l.engine)).toEqual(['google', 'google'])
+    const broke: EngineStats = { engine: 'bing', state: 'error', period: P28 }
+    expect(reachBoard(['google', 'bing'], { google: ok(GOOGLE), bing: broke }).lines.map((l) => l.key)).toEqual(['google-seen', 'google-clicks'])
+    expect(reachBoard([], { google: ok(GOOGLE), bing: ok(BING) })).toEqual({ days: [], lines: [], partialFrom: undefined })
+  })
+
   // Bing has no unfinished days, so nothing is dotted.
   it('an engine counting nothing still (Bing never does) marks no day', () => {
-    expect(reachBoard('bing', { bing: BING }).partialFrom).toBeUndefined()
-  })
-})
-
-describe('both, with one engine answered', () => {
-  // Both with one engine answering looks exactly like that engine alone.
-  it('draws only the engine that answered — the other is no line, not a line of zeros — and reads as that engine alone', () => {
-    expect(reachBoard('both', { google: GOOGLE })).toEqual(reachBoard('google', { google: GOOGLE }))
-    expect(spotBoard('both', { google: GOOGLE }, 'Skeen')).toEqual(spotBoard('google', { google: GOOGLE }, 'Skeen'))
+    expect(reachBoard(['bing'], { bing: ok(BING) }).partialFrom).toBeUndefined()
   })
 })
 

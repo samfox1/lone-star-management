@@ -1,7 +1,7 @@
 import { dayDelta } from '@/lib/chart'
 import { ENGINE_NAME, alignDays, enginesOf, type EngineView } from './search-model'
 import { nameSpot } from './search-spot'
-import type { SearchEngineId, SearchStats } from './search-stats'
+import type { EngineStats, SearchEngineId, SearchPeriod, SearchStats } from './search-stats'
 
 /**
  * What the Search page draws (mock r12, Sam 2026-10-06), as data: the days along the bottom,
@@ -45,27 +45,44 @@ export function spotBoard(view: EngineView, stats: Partial<Record<SearchEngineId
   return { days, lines, partialFrom: firstPartial(days, per.map((x) => stats[x.e]!)) }
 }
 
-/** Seen in search and clicked, by day: each engine over its own days (search-model.ts `alignDays`). */
-export function reachBoard(view: EngineView, stats: Partial<Record<SearchEngineId, SearchStats>>): Board {
-  const engines = enginesOf(view).filter((e) => stats[e])
-  const both = engines.length > 1
-  const pairs = alignDays(Object.fromEntries(engines.map((e) => [e, stats[e]!.series])))
+/**
+ * Seen in search and clicked, by day, for the engines SWITCHED ON (the chart's own Google / Bing
+ * toggles, Sam 2026-10-06), each over its own days (search-model.ts `alignDays`). An engine
+ * switched on with nothing yet (a new site, `no_data`) is a line at zero across the board's days,
+ * or across the whole period when no engine has any ("If data isnt available yet for it, it can
+ * just stay at 0"); one Tapir couldn't ask draws nothing: a zero there would be a guess.
+ */
+export function reachBoard(on: readonly SearchEngineId[], answers: Partial<Record<SearchEngineId, EngineStats>>): Board {
+  const order = (['google', 'bing'] as const).filter((e) => on.includes(e))
+  const withData = order.filter((e) => answers[e]?.state === 'ok')
+  const zero = order.filter((e) => answers[e]?.state === 'no_data')
+  const drawn = order.filter((e) => withData.includes(e) || zero.includes(e))
+  const series = (e: SearchEngineId) => (answers[e] as { state: 'ok'; stats: SearchStats }).stats.series
+  const pairs = alignDays(Object.fromEntries(withData.map((e) => [e, series(e)])))
+  const days = pairs.length ? pairs.map((p) => p.date) : zero.length ? periodDays((answers[zero[0]] as { period: SearchPeriod }).period) : []
+  const both = drawn.length > 1
   const lines: BoardLine[] = []
   for (const metric of ['seen', 'clicks'] as const) {
-    for (const e of engines) {
+    for (const e of drawn) {
       const field = metric === 'seen' ? 'impressions' : 'clicks'
       lines.push({
         key: `${e}-${metric}`, engine: e, metric,
         label: both ? `${ENGINE_NAME[e]} ${metric}` : metric === 'seen' ? `Seen in ${ENGINE_NAME[e]}` : `Clicks from ${ENGINE_NAME[e]}`,
-        values: pairs.map((p) => p[e]?.[field] ?? null),
+        values: zero.includes(e) ? days.map(() => 0) : pairs.map((p) => p[e]?.[field] ?? null),
         tone: both ? TONE[e] : metric === 'seen' ? 'ink' : 'grey',
         ...(both && metric === 'clicks' ? { thick: true } : {}),
       })
     }
   }
-  const days = pairs.map((p) => p.date)
-  const partial = pairs.findIndex((p) => engines.some((e) => p[e] && !p[e]!.final))
+  const partial = pairs.findIndex((p) => withData.some((e) => p[e] && !p[e]!.final))
   return { days, lines, partialFrom: partial === -1 ? undefined : partial }
+}
+
+/** Every day of a period, first to last. */
+function periodDays(p: SearchPeriod): string[] {
+  const out: string[] = []
+  for (let t = Date.parse(`${p.start}T00:00:00Z`); t <= Date.parse(`${p.end}T00:00:00Z`); t += 86_400_000) out.push(new Date(t).toISOString().slice(0, 10))
+  return out
 }
 
 const WEEK = 7

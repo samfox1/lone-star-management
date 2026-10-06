@@ -98,7 +98,18 @@ const answer = (google: EngineStats, bing: EngineStats): SearchStatsAnswer => ({
   bing,
 })
 const AI = [{ name: 'ChatGPT', visitors: 2 }, { name: 'Gemini', visitors: 0 }, { name: 'Perplexity', visitors: 0 }]
-const show = (a: SearchStatsAnswer) => render(<SearchTab answer={a} name="Skeen" ai={AI} />)
+/** The page passes every period's answer; the 3-month one here is the same numbers marked 3m,
+ *  with Google's seen doubled so a switch of the lower chart's period shows. */
+const threeMonths = (a: SearchStatsAnswer): SearchStatsAnswer => {
+  const P3M: SearchPeriod = { key: '3m', days: 90, start: '2026-07-05', end: '2026-10-02' }
+  const g = a.google.state === 'ok'
+    ? { ...a.google, stats: { ...a.google.stats, period: P3M, series: a.google.stats.series.map((d) => ({ ...d, impressions: d.impressions * 2 })) } }
+    : { ...a.google, period: P3M }
+  return { ...a, period: P3M, google: g as EngineStats, bing: { ...a.bing, ...(a.bing.state === 'ok' ? {} : { period: P3M }) } as EngineStats }
+}
+const show = (a: SearchStatsAnswer) => render(<SearchTab answer={a} answers={{ '28d': a, '3m': threeMonths(a) }} name="Skeen" ai={AI} />)
+const header = () => screen.getByRole('group', { name: 'Engine' })
+const lower = () => screen.getByRole('group', { name: 'Engines on this chart' })
 const drawn = () => [...document.querySelectorAll('[data-series]')].map((g) => g.getAttribute('data-series'))
 const facts = (region: string) => [...screen.getByRole('region', { name: `${region}, in numbers` }).querySelectorAll('[data-fact]')].map((f) => f.textContent)
 
@@ -140,11 +151,15 @@ describe('Bing with no numbers yet', () => {
   it('says “usually within 2 weeks” for a new site on its own; beside Google, only a dot', () => {
     const a = answer(ok(GOOGLE), { engine: 'bing', state: 'no_data', period: PERIOD })
     show(a)
-    // Beside Google's numbers: no note row (Sam, 2026-10-06), only the amber dot on Bing's button,
-    // and the page reads as Google alone: Google's lines only.
+    // Beside Google's numbers: no note row (Sam, 2026-10-06), only the amber dot on Bing's button.
+    // The ranking reads as Google alone; the seen / clicked chart keeps Bing on, at zero.
     expect(document.querySelector('[data-note-engine="bing"]')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
-    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
+    expect(within(header()).getByRole('button', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
+    expect(drawn()).toEqual(['google-spot', 'google-seen', 'bing-seen', 'google-clicks', 'bing-clicks'])
+    expect(facts('Seen and clicked')).toEqual([
+      expect.stringMatching(/^Google seen56/), expect.stringMatching(/^Bing seen0/),
+      expect.stringMatching(/^Google clicks15/), expect.stringMatching(/^Bing clicks0/),
+    ])
     cleanup()
     // On its own, Bing says so in full.
     nav.params = new URLSearchParams('e=bing')
@@ -173,22 +188,43 @@ describe('couldn’t ask', () => {
 })
 
 describe('the switches', () => {
-  // An engine shows at once (no server trip) and goes in the address; a period is new numbers,
-  // so it navigates, keeping the engine.
+  // The title's engine shows at once (no server trip) and goes in the address; its period is new
+  // numbers, so it navigates, keeping the engine. The lower chart keeps its own engines.
   it('Google shows Google alone and goes in the address; 3 months navigates with p=3m', () => {
     const push = vi.spyOn(window.history, 'pushState')
     show(answer(ok(GOOGLE), ok(BING)))
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('both')
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Google' }))
+      fireEvent.click(within(header()).getByRole('button', { name: 'Google' }))
     })
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('google')
     expect(push).toHaveBeenCalledWith(null, '', '/artists/a1/tools/seo/search?e=google')
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('How Skeen shows up on Google')
-    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
-    expect(screen.getByRole('button', { name: 'Google' }).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '3m' }))
+    expect(drawn()).toEqual(['google-spot', 'google-seen', 'bing-seen', 'google-clicks', 'bing-clicks'])
+    expect(within(header()).getByRole('button', { name: 'Google' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(within(screen.getByRole('group', { name: 'Period' })).getByRole('button', { name: '3m' }))
     expect(nav.push).toHaveBeenCalledWith('/artists/a1/tools/seo/search?e=google&p=3m', { scroll: false })
+  })
+
+  // The lower chart's own toggles: both start on; an engine off takes its lines and numbers away;
+  // the last one on stays on (Sam, 2026-10-06).
+  it('CRITICAL: the seen / clicked chart\'s own Google and Bing toggles — both on to start, the last one stays on', () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    expect(within(lower()).getAllByRole('button').map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'true'])
+    fireEvent.click(within(lower()).getByRole('button', { name: 'Bing' }))
+    expect(drawn()).toEqual(['google-spot', 'bing-spot', 'google-seen', 'google-clicks'])
+    expect(facts('Seen and clicked')).toEqual([expect.stringMatching(/^Seen56/), expect.stringMatching(/^Clicks15/)])
+    fireEvent.click(within(lower()).getByRole('button', { name: 'Google' }))
+    expect(within(lower()).getByRole('button', { name: 'Google' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('heading', { level: 2, name: 'Seen and clicked on Google' })).toBeTruthy()
+  })
+
+  // The lower chart's own period switches its numbers at once, without leaving the page.
+  it('the seen / clicked chart\'s own period shows that period\'s numbers, with no trip to the server', () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Period of this chart' })).getByRole('button', { name: '3m' }))
+    expect(facts('Seen and clicked')[0]).toMatch(/^Google seen112/) // the 3-month answer's numbers
+    expect(nav.push).not.toHaveBeenCalled()
   })
 
   // Turning Clicks off removes the clicks lines and their numbers.

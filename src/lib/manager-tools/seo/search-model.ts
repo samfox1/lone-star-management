@@ -57,11 +57,11 @@ export function searchIntro(view: EngineView, name: string): string {
 
 /** The seen and clicked chart's own header and sentence (Sam, 2026-10-06: "Have a header and
  *  description for the chart below"). */
-export function reachTitle(view: EngineView): string {
-  return `Seen and clicked ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`}`
+export function reachTitle(on: readonly SearchEngineId[]): string {
+  return `Seen and clicked ${on.length === 1 ? `on ${ENGINE_NAME[on[0]]}` : 'in search'}`
 }
-export function reachIntro(view: EngineView): string {
-  const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
+export function reachIntro(on: readonly SearchEngineId[]): string {
+  const where = on.length === 1 ? ENGINE_NAME[on[0]] : 'Google and Bing'
   return `Seen is how many times ${where} showed your site in its results. Clicks are how many times someone clicked through to it. Dotted days are still being counted.`
 }
 

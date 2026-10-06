@@ -1,4 +1,4 @@
-import { isSearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
+import { SEARCH_PERIODS, isSearchPeriodKey, type SearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
 import { requireArtist } from '../../../../_data'
 import { loadAiVisits, loadSearchStats } from './load'
 import { SearchTab } from './search-tab'
@@ -17,7 +17,10 @@ export default async function SeoSearchPage({ params, searchParams }: { params: 
   const [{ id }, sp] = await Promise.all([params, searchParams])
   const key = isSearchPeriodKey(sp.p) ? sp.p : '28d'
   const artist = await requireArtist(id)
-  const answer = await loadSearchStats(id, key)
-  const ai = await loadAiVisits(id, answer.period)
-  return <SearchTab answer={answer} name={artist.name} ai={ai} />
+  // Every period at once: the seen / clicked chart switches its own period without a trip here
+  // (Sam, 2026-10-06: "its own total time buttons"). Each is cached six hours (load.ts).
+  const keys = Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]
+  const answers = Object.fromEntries(await Promise.all(keys.map(async (k) => [k, await loadSearchStats(id, k)] as const))) as Record<SearchPeriodKey, Awaited<ReturnType<typeof loadSearchStats>>>
+  const ai = await loadAiVisits(id, answers[key].period)
+  return <SearchTab answer={answers[key]} answers={answers} name={artist.name} ai={ai} />
 }

@@ -44,7 +44,13 @@ import { Segmented } from '../../../../segmented'
  * Every word and line comes from lib/manager-tools/seo/ (search-model, search-board,
  * search-spot, ai-visits); this file only lays them out. Nothing here asks Google or Bing.
  */
-export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; name: string; ai: AiVisit[] }) {
+export function SearchTab({ answer, answers, name, ai }: {
+  answer: SearchStatsAnswer
+  /** Every period's answer (the page asks for all), for the seen / clicked chart's own period. */
+  answers: Record<SearchPeriodKey, SearchStatsAnswer>
+  name: string
+  ai: AiVisit[]
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -105,35 +111,9 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div role="group" aria-label="Engine" className="flex items-center gap-1">
-            {ENGINE_VIEWS.map((e) => {
-              const dot = e === 'both' ? null : engineDot(answer[e])
-              return (
-                <button
-                  key={e}
-                  type="button"
-                  aria-pressed={view === e}
-                  aria-label={e === 'both' ? 'Both' : ENGINE_NAME[e]}
-                  onClick={() => chooseView(e)}
-                  className={cx('relative flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 transition-colors', view === e ? 'text-ink' : 'text-ink-faint hover:text-ink', FOCUS_RING_OFFSET)}
-                >
-                  {e === 'both' ? (
-                    <>
-                      <SourceGlyph source="google" size={14} />
-                      <SourceGlyph source="bing" size={14} />
-                    </>
-                  ) : (
-                    <SourceGlyph source={e} size={17} />
-                  )}
-                  {dot ? (
-                    <>
-                      <span aria-hidden data-dot={dot.tone} className={cx('absolute right-0.5 top-1 h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
-                      <span className="sr-only">, {dot.label}</span>
-                    </>
-                  ) : null}
-                  <HoverLabel label={e === 'both' ? 'Google and Bing' : dot ? `${ENGINE_NAME[e]} · ${dot.label}` : ENGINE_NAME[e]} />
-                </button>
-              )
-            })}
+            {ENGINE_VIEWS.map((e) => (
+              <EngineButton key={e} engine={e} on={view === e} dot={e === 'both' ? null : engineDot(answer[e])} onClick={() => chooseView(e)} />
+            ))}
           </div>
           <Segmented
             label="Period"
@@ -152,7 +132,7 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
             {/* An engine beside one that answered, which itself has nothing, says so only by the
                 dot on its button (Sam, 2026-10-06: "I also dont want seeing this row"). */}
             <SpotSection key={`spot-${view}-${answer.period.key}`} view={view} stats={stats} name={name} added={answer.added} />
-            <ReachSection key={`reach-${view}-${answer.period.key}`} view={view} stats={stats} />
+            <ReachSection answers={answers} startPeriod={answer.period.key} />
             <div className="mt-14 grid gap-11 min-[1024px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] min-[1024px]:gap-x-12">
               <Searched view={view} stats={stats} both={both} />
               <SentByAi ai={ai} />
@@ -219,12 +199,22 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
   )
 }
 
-/** SEEN, CLICKS: how often the site was seen in search and clicked; Clicks a toggle. */
-function ReachSection({ view, stats }: { view: EngineView; stats: Partial<Record<SearchEngineId, SearchStats>> }) {
+/**
+ * SEEN, CLICKS: how often the site was seen in search and clicked, with its OWN Google / Bing
+ * toggles and its own period (Sam, 2026-10-06: "allow the second one to have its own google/bing
+ * toggle and its own total time buttons … They both start default on. If data isnt available yet
+ * for it, it can just stay at 0"). An engine on shows its lines and numbers; the last one on stays
+ * on, so the chart is never empty. Clicks a toggle too.
+ */
+function ReachSection({ answers, startPeriod }: { answers: Record<SearchPeriodKey, SearchStatsAnswer>; startPeriod: SearchPeriodKey }) {
+  const [on, setOn] = useState<SearchEngineId[]>(['google', 'bing'])
+  const [period, setPeriod] = useState<SearchPeriodKey>(startPeriod)
   const [clicks, setClicks] = useState(true)
-  const board = reachBoard(view, stats)
+  const a = answers[period]
+  const board = reachBoard(on, { google: a.google, bing: a.bing })
   const lines = board.lines.filter((l) => clicks || l.metric !== 'clicks')
   const both = new Set(board.lines.map((l) => l.engine)).size > 1
+  const toggle = (e: SearchEngineId) => setOn((cur) => (cur.includes(e) ? (cur.length > 1 ? cur.filter((x) => x !== e) : cur) : [...cur, e]))
   const facts: Fact[] = lines.map((l) => {
     const readings = l.values.filter((v): v is number => v !== null)
     const total = readings.reduce((n, v) => n + v, 0)
@@ -235,12 +225,27 @@ function ReachSection({ view, stats }: { view: EngineView; stats: Partial<Record
       growth: g === null ? null : { dir: g > 0.0005 ? 'up' : g < -0.0005 ? 'down' : 'flat', size: growthSize(g), tail: `since ${dayLabel(board.days[0])}` },
     }
   })
-  const clicksLabel = both || !board.lines.length ? 'Clicks' : `Clicks from ${ENGINE_NAME[board.lines[0].engine]}`
+  const clicksLabel = on.length === 1 ? `Clicks from ${ENGINE_NAME[on[0]]}` : 'Clicks'
   return (
     <section aria-label="Seen and clicked" className="mt-14">
-      <div className="max-w-[640px]">
-        <h2 className={TITLE}>{reachTitle(view)}</h2>
-        <p className={INTRO}>{reachIntro(view)}</p>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 max-w-[640px]">
+          <h2 className={TITLE}>{reachTitle(on)}</h2>
+          <p className={INTRO}>{reachIntro(on)}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div role="group" aria-label="Engines on this chart" className="flex items-center gap-1">
+            {(['google', 'bing'] as const).map((e) => (
+              <EngineButton key={e} engine={e} on={on.includes(e)} dot={engineDot(a[e])} onClick={() => toggle(e)} />
+            ))}
+          </div>
+          <Segmented
+            label="Period of this chart"
+            options={(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => ({ key: p, label: p }))}
+            value={period}
+            onChange={setPeriod}
+          />
+        </div>
       </div>
       <div className="mt-4 flex items-center">
         <SquareCheck label={clicksLabel} on={clicks} onToggle={() => setClicks((c) => !c)} />
@@ -249,10 +254,41 @@ function ReachSection({ view, stats }: { view: EngineView; stats: Partial<Record
         <ChartLegend series={seriesOf(lines)} />
       </div>
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
+        <TimelineChart key={`${period}-${on.join()}`} points={points(board.days)} height={CHART_H - 40} series={seriesOf(lines)} partialFrom={board.partialFrom} legend={false} className="min-w-0" />
         <FactsColumn facts={facts} label="Seen and clicked, in numbers" />
       </div>
     </section>
+  )
+}
+
+/** An engine's glyph as a button (Both shows the two glyphs): ink when on, faint when off, the
+ *  amber / red dot when the engine has nothing yet or couldn't be asked. */
+function EngineButton({ engine, on, dot, onClick }: { engine: EngineView; on: boolean; dot: { tone: 'pending' | 'red'; label: string } | null; onClick: () => void }) {
+  const name = engine === 'both' ? 'Both' : ENGINE_NAME[engine]
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-label={name}
+      onClick={onClick}
+      className={cx('relative flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 transition-colors', on ? 'text-ink' : 'text-ink-faint hover:text-ink', FOCUS_RING_OFFSET)}
+    >
+      {engine === 'both' ? (
+        <>
+          <SourceGlyph source="google" size={14} />
+          <SourceGlyph source="bing" size={14} />
+        </>
+      ) : (
+        <SourceGlyph source={engine} size={17} />
+      )}
+      {dot ? (
+        <>
+          <span aria-hidden data-dot={dot.tone} className={cx('absolute right-0.5 top-1 h-1.5 w-1.5 rounded-full', dot.tone === 'red' ? 'bg-accent-red' : 'bg-status-pending')} />
+          <span className="sr-only">, {dot.label}</span>
+        </>
+      ) : null}
+      <HoverLabel label={engine === 'both' ? 'Google and Bing' : dot ? `${name} · ${dot.label}` : name} />
+    </button>
   )
 }
 
