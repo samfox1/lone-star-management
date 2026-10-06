@@ -19,16 +19,38 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createAnalytics,
+  isAutomatedBrowser,
   isInternalReferrer,
+  isPageShown,
   type AnalyticsDeps,
   type LandingMemory,
 } from '../../../packages/site-bridge/src/analytics'
+
+/** A document whose visibility a test controls (jsdom's own is always visible). */
+function fakeDoc(visibilityState = 'visible', prerendering = false) {
+  const listeners = new Map<string, Set<() => void>>()
+  return {
+    visibilityState,
+    prerendering,
+    addEventListener: (type: string, fn: () => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set())
+      listeners.get(type)!.add(fn)
+    },
+    removeEventListener: (type: string, fn: () => void) => void listeners.get(type)?.delete(fn),
+    fire(type: string) {
+      for (const fn of [...(listeners.get(type) ?? [])]) fn()
+    },
+    listening: () => [...listeners.values()].reduce((n, s) => n + s.size, 0),
+  }
+}
 
 function wired({
   href = 'https://www.skeenmusic.com/tour',
   referrer = 'https://l.instagram.com/',
   memory = new Set<string>() as LandingMemory,
   slug = 'skeen',
+  doc = fakeDoc(),
+  nav = {} as AnalyticsDeps['navigator'],
 } = {}) {
   const fetchSpy = vi.fn((_url: string, _init: RequestInit) =>
     Promise.resolve(new Response(null, { status: 204 })),
@@ -38,13 +60,13 @@ function wired({
   const make = (s = slug) =>
     createAnalytics(
       { supabaseUrl: 'https://proj.supabase.co', anonKey: 'anon', slug: s },
-      { fetch: fetchSpy as unknown as typeof fetch, location: loc, referrer: () => referrer, landingMemory: memory } as AnalyticsDeps,
+      { fetch: fetchSpy as unknown as typeof fetch, location: loc, referrer: () => referrer, landingMemory: memory, document: doc, navigator: nav } as AnalyticsDeps,
     )
   const views = () =>
     fetchSpy.mock.calls
       .map(([, init]) => JSON.parse(init.body as string) as { type: string; slug: string })
       .filter((b) => b.type === 'view')
-  return { a: make(), make, views, fetchSpy }
+  return { a: make(), make, views, fetchSpy, doc }
 }
 
 describe('landing', () => {
@@ -103,7 +125,7 @@ describe('landing', () => {
     const make = () =>
       createAnalytics(
         { supabaseUrl: 'https://proj.supabase.co', anonKey: 'anon', slug: 'shared-default-slug' },
-        { fetch: fetchSpy as unknown as typeof fetch, location: loc, referrer: () => '' },
+        { fetch: fetchSpy as unknown as typeof fetch, location: loc, referrer: () => '', document: fakeDoc() },
       )
     make().landing()
     make().landing()
@@ -146,6 +168,106 @@ describe('landing', () => {
   })
 })
 
+// A LANDING IS A PAGE SOMEONE SAW. Measured 2026-10-05 against PostHog (Skeen, Sep 18 to
+// Oct 4): PostHog recorded about 1 view we lacked in 1,000, and we recorded ~120 it never
+// did. Of the views PostHog never saw, 1% were followed by a click; of all views, 33%.
+// Those were pages nobody looked at: a link opened in a background tab and closed unread,
+// Safari preloading a typed address, a prerender. PostHog's script waits for
+// `visibilityState === "visible"` before its page view (read from the shipped array.js,
+// 2026-10-05); the door now waits too. The view is stamped when the page is SHOWN.
+describe('a landing counts when the page is shown', () => {
+  it('CRITICAL: a page loaded in a hidden tab sends nothing until it is shown, then one view', () => {
+    const { a, views, doc } = wired({ doc: fakeDoc('hidden') })
+    a.landing()
+    expect(views()).toHaveLength(0)
+    doc.visibilityState = 'visible'
+    doc.fire('visibilitychange')
+    expect(views()).toHaveLength(1)
+  })
+
+  it('CRITICAL: a prerender nobody opens sends nothing; opening it sends one view', () => {
+    const { a, views, doc } = wired({ doc: fakeDoc('hidden', true) })
+    a.landing()
+    doc.fire('visibilitychange') // still hidden, still prerendering
+    expect(views()).toHaveLength(0)
+    doc.visibilityState = 'visible'
+    doc.prerendering = false
+    doc.fire('prerenderingchange')
+    expect(views()).toHaveLength(1)
+  })
+
+  it('a page still prerendering is not shown, even if it reads visible', () => {
+    const { a, views } = wired({ doc: fakeDoc('visible', true) })
+    a.landing()
+    expect(views()).toHaveLength(0)
+  })
+
+  it('hiding and showing the tab again does not count again, and stops listening', () => {
+    const { a, views, doc } = wired({ doc: fakeDoc('hidden') })
+    a.landing()
+    doc.visibilityState = 'visible'
+    doc.fire('visibilitychange')
+    doc.fire('prerenderingchange')
+    doc.visibilityState = 'hidden'
+    doc.fire('visibilitychange')
+    doc.visibilityState = 'visible'
+    doc.fire('visibilitychange')
+    expect(views()).toHaveLength(1)
+    expect(doc.listening()).toBe(0)
+  })
+
+  it('StrictMode calling landing() twice while hidden still counts once when shown', () => {
+    const { make, views, doc } = wired({ doc: fakeDoc('hidden') })
+    make().landing()
+    make().landing()
+    doc.visibilityState = 'visible'
+    doc.fire('visibilitychange')
+    expect(views()).toHaveLength(1)
+  })
+})
+
+// A ROBOT IS NOT A FAN. `navigator.webdriver` is true in Selenium, Puppeteer and Playwright
+// whatever user agent they claim, and PostHog drops every event from such a browser (the
+// same array.js read). Our door only sees the user agent, so a robot dressed as Chrome got
+// through. Clicks too: a scripted click is no more a fan's than a scripted view.
+describe('automated browsers report nothing', () => {
+  it('CRITICAL: navigator.webdriver sends no view and no click', () => {
+    const { a, fetchSpy } = wired({ nav: { webdriver: true } })
+    a.landing()
+    a.track('link_click', { label: 'Spotify' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('a HeadlessChrome brand sends nothing', () => {
+    const { a, fetchSpy } = wired({ nav: { userAgentData: { brands: [{ brand: 'Chromium' }, { brand: 'HeadlessChrome' }] } } })
+    a.landing()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('reads the browser\'s own navigator when none is injected', () => {
+    // Every real site takes this path; every other test injects one.
+    const fetchSpy = vi.fn((_url: string, _init: RequestInit) => Promise.resolve(new Response(null, { status: 204 })))
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true })
+    try {
+      createAnalytics(
+        { supabaseUrl: 'https://proj.supabase.co', anonKey: 'anon', slug: 'skeen' },
+        { fetch: fetchSpy as unknown as typeof fetch, location: { href: 'https://www.skeenmusic.com/', pathname: '/', hostname: 'www.skeenmusic.com' }, referrer: () => '', landingMemory: new Set(), document: fakeDoc() },
+      ).landing()
+    } finally {
+      delete (navigator as { webdriver?: boolean }).webdriver
+    }
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('an ordinary browser still reports', () => {
+    for (const nav of [{ webdriver: false }, { userAgentData: { brands: [{ brand: 'Google Chrome' }] } }, {}]) {
+      const { a, views } = wired({ nav })
+      a.landing()
+      expect(views(), JSON.stringify(nav)).toHaveLength(1)
+    }
+  })
+})
+
 describe('isInternalReferrer', () => {
   it.each([
     ['https://www.skeenmusic.com/', 'www.skeenmusic.com', true],
@@ -166,5 +288,25 @@ describe('isInternalReferrer', () => {
     // A referrer with no hostname of its own (a file, an extension page) would otherwise
     // "equal" an empty page host.
     expect(isInternalReferrer('file:///Users/fan/index.html', '')).toBe(false)
+  })
+})
+
+describe('the two checks on odd inputs', () => {
+  it('no visibility API at all (not a browser) counts as shown', () => {
+    expect(isPageShown(undefined)).toBe(true)
+    expect(isPageShown({ addEventListener: () => {}, removeEventListener: () => {} })).toBe(true)
+    expect(isPageShown({ visibilityState: 'hidden', addEventListener: () => {}, removeEventListener: () => {} })).toBe(false)
+  })
+
+  it('no navigator, no brands, or a navigator that throws is not automated', () => {
+    expect(isAutomatedBrowser(undefined)).toBe(false)
+    expect(isAutomatedBrowser({ userAgentData: {} })).toBe(false)
+    expect(isAutomatedBrowser({ userAgentData: { brands: [{}] } })).toBe(false)
+    const hostile = {
+      get userAgentData(): never {
+        throw new Error('extension')
+      },
+    }
+    expect(isAutomatedBrowser(hostile)).toBe(false)
   })
 })

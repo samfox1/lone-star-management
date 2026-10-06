@@ -310,9 +310,67 @@ export function isInternalReferrer(referrer: string, host: string): boolean {
   }
 }
 
+/** The slice of `document` that says whether anyone can see the page. */
+export type PageVisibility = {
+  visibilityState?: string;
+  /** Chrome's prerender: the page runs before anyone has gone to it. */
+  prerendering?: boolean;
+  addEventListener: (type: string, listener: () => void) => void;
+  removeEventListener: (type: string, listener: () => void) => void;
+};
+
+/** The slice of `navigator` that says a program, not a person, is driving the browser. */
+export type AutomationSignals = {
+  webdriver?: boolean;
+  userAgentData?: { brands?: ReadonlyArray<{ brand?: string }> };
+};
+
+/**
+ * Is a person looking at this page? Not a background tab, not a page Safari preloaded
+ * while an address was typed, not a Chrome prerender. Measured against PostHog on
+ * 2026-10-05: views from pages like these were followed by a click 1% of the time, against
+ * 33% for views overall. No visibility API at all (not a browser) counts as shown.
+ */
+export function isPageShown(doc: PageVisibility | undefined): boolean {
+  if (!doc || doc.visibilityState === undefined) return true;
+  return doc.visibilityState === "visible" && !doc.prerendering;
+}
+
+/**
+ * Selenium, Puppeteer and Playwright set `navigator.webdriver` whatever user agent they
+ * claim, so a robot dressed as Chrome gets past the door's user-agent check. Headless
+ * Chrome also names itself in its brands. PostHog drops both (its array.js, 2026-10-05).
+ */
+export function isAutomatedBrowser(nav: AutomationSignals | undefined): boolean {
+  if (!nav) return false;
+  if (nav.webdriver === true) return true;
+  try {
+    return Boolean(nav.userAgentData?.brands?.some((b) => /headless/i.test(b?.brand ?? "")));
+  } catch {
+    return false;
+  }
+}
+
+/** Run `fn` once, the first moment the page is shown: now, or on the change that shows it. */
+function whenShown(doc: PageVisibility | undefined, fn: () => void): void {
+  if (!doc || isPageShown(doc)) return fn();
+  const check = () => {
+    if (!isPageShown(doc)) return;
+    doc.removeEventListener("visibilitychange", check);
+    doc.removeEventListener("prerenderingchange", check);
+    fn();
+  };
+  doc.addEventListener("visibilitychange", check);
+  doc.addEventListener("prerenderingchange", check);
+}
+
 export type AnalyticsDeps = {
   /** Injected so tests can watch the wire without a network. Defaults to global fetch. */
   fetch?: typeof fetch;
+  /** Defaults to the browser's. A landing waits until it says the page is shown. */
+  document?: PageVisibility;
+  /** Defaults to the browser's. An automated browser reports nothing. */
+  navigator?: AutomationSignals;
   /** Defaults to the browser's. */
   location?: { href: string; pathname: string; hostname?: string };
   /** Defaults to `document.referrer`. */
@@ -343,6 +401,8 @@ export function createAnalytics(
   if (!doFetch || !loc) return inert();
   const referrer =
     deps.referrer ?? (() => (typeof document !== "undefined" ? document.referrer : ""));
+  const doc = deps.document ?? (typeof document !== "undefined" ? document : undefined);
+  const nav = deps.navigator ?? (typeof navigator !== "undefined" ? navigator : undefined);
 
   const url = `${config.supabaseUrl.replace(/\/+$/, "")}/functions/v1/event`;
 
@@ -351,6 +411,7 @@ export function createAnalytics(
     // editor's own network tab quiet while a manager works. The same call decides local
     // development and preview deploys — see `isReportableContext`.
     if (!isReportableContext({ hostname: hostnameOf(loc), pathname: loc.pathname }, config.environment)) return;
+    if (isAutomatedBrowser(nav)) return;
     try {
       void doFetch(url, {
         method: "POST",
@@ -382,7 +443,9 @@ export function createAnalytics(
       // preview, localhost) must not use up the page's landing.
       if (!isReportableContext({ hostname: hostnameOf(loc), pathname: loc.pathname }, config.environment)) return;
       memory.add(config.slug);
-      send("view");
+      // Remembered now, sent when someone sees the page: a hidden tab that is closed unread
+      // was never a visit, and the view is stamped with the moment it became one.
+      whenShown(doc, () => send("view"));
     },
     track: send,
     attrs: trackAttrs,

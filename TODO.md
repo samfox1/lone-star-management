@@ -141,9 +141,14 @@ store domain + storefront token entry keeps working. Setup steps are in
       Remove (today an uninstall deletes the connection row and leaves its already-revoked
       token in Vault).
 
-## Delete the PostHog cross-check — ON OR AFTER 2026-10-15 (added 2026-09-18)
+## Delete the PostHog cross-check — ON HOLD (added 2026-09-18, held 2026-10-05)
 
-The whole apparatus is **scheduled for deletion**, and `stryker.config.json` says so twice.
+**Held, not due.** Sam, 2026-10-05, wants it kept as an ongoing accuracy check: "I want to try
+to continuously improve and search for new ways to be more accurate with analytics." The
+score, findings and next ideas live in `ANALYTICS_ACCURACY.md`. Nothing below comes out until
+Sam says so. The rest of this entry is the record of what would go.
+
+The whole apparatus was **scheduled for deletion**, and `stryker.config.json` says so twice.
 The 30-day window opened 2026-09-15, so the decision point is **2026-10-15**. Written down
 with a date because an unwatched scheduled deletion becomes permanent furniture, and this
 one is 2,398 lines — more than half of it test.

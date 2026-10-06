@@ -28,6 +28,7 @@ import {
   hogqlQueries,
   normalizeHost,
   oursSide,
+  parseFirstDay,
   parseHogQL,
   posthogSide,
   rankCorrelation,
@@ -115,6 +116,41 @@ describe('comparisonWindow', () => {
     expect(comparisonWindow(30, NOW).days).toHaveLength(30)
     expect(comparisonWindow(1, NOW).days).toEqual(['2026-09-16'])
     for (const bad of [0, 31, 2.5, NaN]) expect(() => comparisonWindow(bad, NOW)).toThrow(/1 and 30/)
+  })
+
+  // PostHog went live mid-day on 2026-09-17. The plain 30-day run (2026-10-05) read the nine
+  // days before it as PostHog zeros, called each an outlier and printed FAIL on a comparison
+  // that passed every criterion over the days PostHog existed.
+  it("starts the day AFTER PostHog's first day: before it PostHog has nothing, and that day is partial", () => {
+    const w = comparisonWindow(5, NOW, '2026-09-13')
+    expect(w.days).toEqual(['2026-09-14', '2026-09-15', '2026-09-16'])
+    expect(w.since).toBe('2026-09-14')
+    expect(w.until).toBe('2026-09-16')
+    expect(w.firstPostHogDay).toBe('2026-09-13')
+  })
+
+  it('leaves the window alone when PostHog started before it, or never (no data is exit 2 later)', () => {
+    expect(comparisonWindow(3, NOW, '2026-09-01')).toEqual(W)
+    expect(comparisonWindow(3, NOW, null)).toEqual(W)
+  })
+
+  it('refuses a window with no full PostHog day left in it', () => {
+    expect(() => comparisonWindow(3, NOW, '2026-09-16')).toThrow(/no full day/)
+  })
+})
+
+describe('parseFirstDay', () => {
+  it("reads PostHog's first day for the site", () => {
+    expect(parseFirstDay({ columns: ['first', 'n'], results: [['2026-09-17', 812]] })).toBe('2026-09-17')
+  })
+
+  it('is null when PostHog holds nothing for the site (min() of nothing is 1970-01-01)', () => {
+    expect(parseFirstDay({ columns: ['first', 'n'], results: [['1970-01-01', 0]] })).toBeNull()
+  })
+
+  it('throws on an error body or unexpected columns rather than guessing a day', () => {
+    expect(() => parseFirstDay({ detail: 'nope' })).toThrow(/no results/)
+    expect(() => parseFirstDay({ columns: ['n', 'first'], results: [[1, '2026-09-17']] })).toThrow(/columns/)
   })
 })
 
@@ -657,6 +693,62 @@ describe('the report', () => {
   })
 })
 
+// ONE NUMBER for "how close are we to PostHog" (Sam, 2026-10-05: "I want to be able to say
+// we are 90% similar or higher"). Each part is the overlap of the two counts: the smaller
+// over the larger for totals, the shared share for a breakdown (two pies laid on each
+// other). Reported, never gated: PostHog has blind spots of its own, so 100% is not the goal.
+describe('agreement', () => {
+  const src = (referrer_host: string, views: number): SourceRow => ({ source: 'other', referrer_host, views, visitors: 1 })
+  const place = (country: string, views: number): PlaceRow => ({ country, region: '', city: 'X', views, visitors: 1, lat: null, lon: null })
+
+  it('scores views, clicks, sources and countries by overlap, and averages them', () => {
+    const o = oursViews(
+      { [D1]: 100 },
+      {
+        typeTimeline: [{ day: D1, type: 'play', count: 10 }],
+        sources: [src('a.com', 50), src('b.com', 50)],
+        places: [place('US', 100)],
+      },
+    )
+    const p = ph({
+      daily: [...phViews({ [D1]: 80 }), [D1, 'play', 10, 0]],
+      referrers: [['a.com', 80], ['b.com', 20]],
+      countries: [['US', 50], ['DE', 50]],
+    })
+    const a = compare(oursSide(o), p, W).agreement
+    expect(a.views).toBeCloseTo(0.8)
+    expect(a.clicks).toBeCloseTo(1)
+    expect(a.sources).toBeCloseTo(0.7) // min(.5,.8) + min(.5,.2)
+    expect(a.countries).toBeCloseTo(0.5) // min(1,.5) + min(0,.5)
+    expect(a.overall).toBeCloseTo((0.8 + 1 + 0.7 + 0.5) / 4)
+  })
+
+  it('leaves out a part neither side has, instead of scoring it 0 or 100', () => {
+    const a = compare(oursSide(oursViews({ [D1]: 100 })), ph({ daily: phViews({ [D1]: 90 }) }), W).agreement
+    expect(a.clicks).toBeNull()
+    expect(a.sources).toBeNull()
+    expect(a.overall).toBeCloseTo(0.9)
+    const text = formatReport(compare(oursSide(oursViews({ [D1]: 100 })), ph({ daily: phViews({ [D1]: 90 }) }), W))
+    expect(text).toContain('clicks - · sources - · countries -')
+  })
+
+  it('scores a breakdown only one side has as 0, not as missing', () => {
+    const o = oursViews({ [D1]: 100 }, { places: [place('US', 100)] })
+    expect(compare(oursSide(o), ph({ daily: phViews({ [D1]: 100 }) }), W).agreement.countries).toBe(0)
+  })
+
+  it('prints one AGREEMENT line with each part', () => {
+    const text = formatReport(compare(oursSide(oursViews({ [D1]: 100 })), ph({ daily: phViews({ [D1]: 90 }) }), W))
+    expect(text).toMatch(/AGREEMENT 90% \(views 90%/)
+  })
+
+  it("says when the window was cut to start after PostHog's first day", () => {
+    const w: Window = { ...W, firstPostHogDay: '2026-09-13' }
+    const text = formatReport(compare(oursSide(oursViews({ [D1]: 100 })), ph({ daily: phViews({ [D1]: 90 }) }), w))
+    expect(text).toContain("PostHog's first day 2026-09-13")
+  })
+})
+
 describe('oursSide', () => {
   it('coerces reader counts to numbers (bigint can arrive as a string)', () => {
     const o = ours({ timeline: [{ day: D1, views: '12' as unknown as number, visitors: 3, bots: 0 }], typeTimeline: [{ day: D1, type: 'view', count: '12' as unknown as number }] })
@@ -786,6 +878,7 @@ describe('the edges each rule turns on', () => {
     })
     expect(formatReport(compare(oursSide(o), p, W))).toMatchInlineSnapshot(`
       "PostHog cross-check  2026-09-14..2026-09-16 (3 days, UTC, today excluded)
+      AGREEMENT 72% (views 44% · clicks 93% · sources 87% · countries 65%; reported, not gated)
       views ratio r = PostHog / ours = 0.44; a judged day must sit within ±25% of r
 
       day         views     ph  ratio         play   link_click ticket_click    buy_click  video_click   bots o/p  visitors(ours)  note

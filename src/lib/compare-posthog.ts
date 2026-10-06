@@ -57,19 +57,29 @@ export const QUERY_LIMIT = 10000
 
 /* ── The window ─────────────────────────────────────────────────────────────────── */
 
-export type Window = { since: string; until: string; days: string[] }
+/** `firstPostHogDay` is set only when it cut the window's start. */
+export type Window = { since: string; until: string; days: string[]; firstPostHogDay?: string }
 
 const DAY_MS = 86_400_000
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 
-/** N complete UTC days ending YESTERDAY. Today is partial on both sides and never compared. */
-export function comparisonWindow(days: number, nowMs: number): Window {
+/**
+ * N complete UTC days ending YESTERDAY. Today is partial on both sides and never compared.
+ *
+ * With `firstPostHogDay`, the window starts the day AFTER it: before it PostHog has nothing,
+ * and the day itself is partial (the mirror went live mid-day). Without the cut, the plain
+ * 30-day run read Skeen's nine pre-PostHog days as outliers and printed FAIL (2026-10-05).
+ */
+export function comparisonWindow(days: number, nowMs: number, firstPostHogDay?: string | null): Window {
   if (!Number.isInteger(days) || days < 1 || days > LIMITS.maxDays) {
     throw new Error(`--days must be a whole number between 1 and ${LIMITS.maxDays}`)
   }
   const today = Math.floor(nowMs / DAY_MS) * DAY_MS
-  const list = Array.from({ length: days }, (_, i) => isoDay(today - (days - i) * DAY_MS))
-  return { since: list[0], until: list[list.length - 1], days: list }
+  const all = Array.from({ length: days }, (_, i) => isoDay(today - (days - i) * DAY_MS))
+  const list = firstPostHogDay ? all.filter((d) => d > firstPostHogDay) : all
+  if (!list.length) throw new Error(`PostHog's first day is ${firstPostHogDay}, so there is no full day of it to compare yet`)
+  const cut = list.length < all.length
+  return { since: list[0], until: list[list.length - 1], days: list, ...(cut ? { firstPostHogDay: firstPostHogDay! } : {}) }
 }
 
 /* ── PostHog: the queries ───────────────────────────────────────────────────────── */
@@ -144,6 +154,26 @@ export function hogqlQueries(slug: string, w: Window, bots: boolean): Record<Que
       `AND event IN (${list(COMPARED_CLICK_TYPES)}) AND properties.entity_id IS NOT NULL${human} ` +
       `GROUP BY ev, entity_id ORDER BY n DESC LIMIT ${QUERY_LIMIT}`,
   }
+}
+
+/** The first UTC day PostHog holds anything for the site. `n` tells "none" apart from
+ *  ClickHouse's min() of nothing, which is 1970-01-01 rather than null. */
+export function firstDayQuery(slug: string): string {
+  if (!SLUG.test(slug)) throw new Error(`Not an artist slug: ${JSON.stringify(slug)}`)
+  return `SELECT min(toDate(toTimeZone(timestamp, 'UTC'))) AS first, count() AS n FROM events WHERE properties.site = '${slug}'`
+}
+
+/** PostHog's first day for the site, or null when it holds nothing. */
+export function parseFirstDay(json: unknown): string | null {
+  const body = (json ?? {}) as { results?: unknown; columns?: unknown; detail?: unknown }
+  if (!Array.isArray(body.results)) {
+    throw new Error(`PostHog first day: no results in the response${body.detail ? ` (${String(body.detail)})` : ''}`)
+  }
+  if (!Array.isArray(body.columns) || body.columns.join(',') !== 'first,n') {
+    throw new Error(`PostHog first day: expected columns first,n, got ${String(body.columns)}`)
+  }
+  const [first, n] = (body.results[0] ?? []) as unknown[]
+  return Number(n) > 0 ? String(first) : null
 }
 
 export type HogQLRows = Record<string, unknown>[]
@@ -320,8 +350,40 @@ export type Report = {
   bots: { ours: { day: string; bots: number }[]; ph: { day: string; bots: number }[] | null }
   sources: { rows: { host: string; ours: number; ph: number; flag: 'missing-ph' | 'missing-ours' | null }[]; droppedSameSite: string[]; flagged: number }
   countries: { ours: Ranked[]; ph: Ranked[]; rankCorrelation: number | null; top5Overlap: number; warning: string | null }
+  agreement: Agreement
   criteria: Criterion[]
   verdict: string
+}
+
+/* ── Agreement: one number for "how close are we" ──────────────────────────────── */
+
+/** Each part 0..1, or null when neither side has anything for it. Reported, never gated:
+ *  PostHog has blind spots of its own, so 100% is not the goal (Sam, 2026-10-05, asked for
+ *  one number to quote). */
+export type Agreement = { views: number | null; clicks: number | null; sources: number | null; countries: number | null; overall: number | null }
+
+const total = (m: Map<string, number>) => [...m.values()].reduce((n, v) => n + v, 0)
+
+/** The smaller count over the larger. */
+function countOverlap(a: number, b: number): number | null {
+  const hi = Math.max(a, b)
+  return hi ? Math.min(a, b) / hi : null
+}
+
+/** How much two breakdowns cover each other: Σ min(share), two pies laid on each other. */
+function shareOverlap(a: Map<string, number>, b: Map<string, number>): number | null {
+  const ta = total(a)
+  const tb = total(b)
+  if (!ta && !tb) return null
+  if (!ta || !tb) return 0
+  let s = 0
+  for (const k of new Set([...a.keys(), ...b.keys()])) s += Math.min((a.get(k) ?? 0) / ta, (b.get(k) ?? 0) / tb)
+  return s
+}
+
+function agreement(parts: Omit<Agreement, 'overall'>): Agreement {
+  const known = Object.values(parts).filter((x): x is number => x !== null)
+  return { ...parts, overall: known.length ? known.reduce((n, x) => n + x, 0) / known.length : null }
 }
 
 /** Per key: what one side has beyond the other. Never netted across keys. */
@@ -448,6 +510,12 @@ export function compare(o: OursSide, p: PhSide, w: Window): Report {
       top5Overlap: phTop.slice(0, 5).filter((c) => top5.has(c.code)).length,
       warning,
     },
+    agreement: agreement({
+      views: countOverlap(sumO, sumP),
+      clicks: countOverlap(clicks.oursTotal, clicks.phTotal),
+      sources: shareOverlap(o.referrers, p.referrers),
+      countries: shareOverlap(o.countries, p.countries),
+    }),
     criteria,
     verdict,
   }
@@ -469,6 +537,12 @@ export function formatReport(r: Report): string {
 
   const out: string[] = []
   out.push(`PostHog cross-check  ${w.since}..${w.until} (${w.days.length} days, UTC, today excluded)`)
+  if (w.firstPostHogDay) out.push(`starts the day after PostHog's first day ${w.firstPostHogDay} (a partial day; nothing before it)`)
+  const ag = r.agreement
+  const whole = (x: number | null) => (x === null ? '-' : `${Math.round(x * 100)}%`)
+  out.push(
+    `AGREEMENT ${whole(ag.overall)} (views ${whole(ag.views)} · clicks ${whole(ag.clicks)} · sources ${whole(ag.sources)} · countries ${whole(ag.countries)}; reported, not gated)`,
+  )
   out.push(`views ratio r = PostHog / ours = ${fixed(r.views.ratio)}; a judged day must sit within ±${LIMITS.viewBand * 100}% of r`)
   out.push('')
   const head = ['day'.padEnd(10), 'views'.padStart(6), 'ph'.padStart(6), 'ratio'.padStart(6)]

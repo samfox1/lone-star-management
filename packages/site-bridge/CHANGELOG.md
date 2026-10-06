@@ -79,6 +79,26 @@ Nothing yet.
 
 ---
 
+## 0.46.0 — a view is a page someone saw
+
+*Built 2026-10-05; not yet published. Each site redeploys WITHOUT build cache to pick it up.*
+
+**Site action: none.** `landing()` keeps its name and its call site. Two rules change what it
+counts, both taken from PostHog's own script after the cross-check (2026-10-05, Skeen, Sep 18
+to Oct 4) found PostHog missing ~1 view of ours in 1,000 while we held ~120 it never saw:
+
+- **A landing waits until the page is shown.** A link opened in a background tab and closed
+  unread, a page Safari preloaded while an address was typed, a Chrome prerender: none is a
+  visit. Of the views PostHog never saw, 1% were followed by a click; of all views, 33%. The
+  view is stamped when the page becomes visible, not when it loaded.
+- **An automated browser reports nothing**, views or clicks: `navigator.webdriver`, or a
+  `HeadlessChrome` brand. The door's user-agent check cannot see a robot dressed as Chrome.
+
+Expect a site's view count to drop by a few percent the day it adopts this. That is the fix,
+not a fault: the views that go were pages nobody looked at.
+
+---
+
 ## 0.45.0 — each page in the sitemap gets its own date
 
 *Built 2026-09-30; not yet published. Each site redeploys WITHOUT build cache to pick it up.*

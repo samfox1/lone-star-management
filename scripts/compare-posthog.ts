@@ -29,9 +29,11 @@ import {
   compare,
   comparisonWindow,
   exitCode,
+  firstDayQuery,
   formatReport,
   hogqlQueries,
   oursSide,
+  parseFirstDay,
   parseHogQL,
   posthogSide,
   type HogQLRows,
@@ -64,7 +66,7 @@ function parseArgs(argv: string[]) {
   return { slug, days, json }
 }
 
-async function runHogQL(name: QueryName, query: string): Promise<HogQLRows> {
+async function postHogQL(name: string, query: string): Promise<unknown> {
   const key = process.env.POSTHOG_PERSONAL_API_KEY
   const project = process.env.POSTHOG_PROJECT_ID
   const host = (process.env.POSTHOG_HOST || 'https://us.posthog.com').replace(/\/+$/, '')
@@ -75,7 +77,11 @@ async function runHogQL(name: QueryName, query: string): Promise<HogQLRows> {
   })
   const body = await res.json().catch(() => null)
   if (!res.ok) throw new Error(`PostHog ${name}: HTTP ${res.status} ${JSON.stringify(body)}`)
-  return parseHogQL(body, name)
+  return body
+}
+
+async function runHogQL(name: QueryName, query: string): Promise<HogQLRows> {
+  return parseHogQL(await postHogQL(name, query), name)
 }
 
 async function readPostHog(slug: string, w: Window) {
@@ -134,15 +140,21 @@ async function readOurs(slug: string, w: Window): Promise<OursRaw> {
 
 async function main() {
   const { slug, days, json } = parseArgs(process.argv.slice(2))
-  let w: Window
+  let firstQuery = ''
   try {
-    w = comparisonWindow(days, Date.now())
-    hogqlQueries(slug, w, true) // validates the slug before anything is fetched
+    firstQuery = firstDayQuery(slug) // validates the slug before anything is fetched
   } catch (e) {
     die((e as Error).message)
   }
   if (!process.env.POSTHOG_PERSONAL_API_KEY || !process.env.POSTHOG_PROJECT_ID) {
     die('POSTHOG_PERSONAL_API_KEY / POSTHOG_PROJECT_ID missing from .env.local.')
+  }
+  // The window starts the day after PostHog's first day for this site (see comparisonWindow).
+  let w: Window
+  try {
+    w = comparisonWindow(days, Date.now(), parseFirstDay(await postHogQL('first day', firstQuery)))
+  } catch (e) {
+    die((e as Error).message)
   }
 
   // PostHog FIRST, ours second: a click PostHog holds has already reached our door, so the
