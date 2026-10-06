@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
-import { axisTicks, dayLabel, monotoneSegments, niceCeil, smoothPath, type Pt } from '@/lib/chart'
+import { axisTicks, dayLabel, monotoneSegments, niceCeil, rankFloor, rankTicks, smoothPath, type Pt } from '@/lib/chart'
 import { Icon, type IconName } from './icons'
 
 /**
@@ -34,21 +34,32 @@ import { Icon, type IconName } from './icons'
  * over the plot, a dotted guide down to its day on its line, and a card naming it on hover or
  * focus. A pin shows only while its line is drawn; marks that would touch step right.
  *
+ * The Search page draws on it too: `scale="rank"` puts #1 at the TOP (a spot, where smaller is
+ * better), `dots` marks every reading, `endMark` rides the end of the first line (the artist's
+ * initial), a value of null is a day the line has nothing (an engine with no numbers yet), and
+ * `partialFrom` draws every gap into a day still being counted dotted (Google's last ~2 days,
+ * or today). A `faded` line sits back, a `thick` one forward (Search: seen thin, clicks thick).
+ *
  * The drawing is in the plot's own pixels (measured), so circles stay round and
  * text never stretches; until it is measured (and in jsdom, which lays nothing out)
  * it assumes 600 wide.
  */
 export type TimelinePoint = { day: string; views: number; visitors: number; bots?: number }
-export type SeriesColor = 'accent' | 'accent-red' | 'ink' | 'chart-4' | 'chart-5'
+export type SeriesColor = 'accent' | 'accent-red' | 'ink' | 'grey' | 'chart-4' | 'chart-5'
 /** A moment marked above the lines: its day, the line it sits on, its glyph and its words. */
 export type ChartPin = { day: string; series: string; icon: IconName; title: string; note?: string }
 export type Series = {
   key: string
   label: string
-  values: number[]
+  /** One per point; null where this line has nothing that day (not drawn, never a zero). */
+  values: (number | null)[]
   color: SeriesColor
   /** First day this series was counted; earlier days are not drawn. */
   since?: string
+  /** Sits back (half strength). */
+  faded?: boolean
+  /** Drawn heavier. */
+  thick?: boolean
 }
 
 const PAD_TOP = 8
@@ -63,14 +74,18 @@ const PIN_GAP = 30
  *  joined, not as a streak (Sam, 2026-09-13: "the dots should be connected"). */
 const MIN_LINE_POINTS = 4
 const FALLBACK_W = 600
-const TEXT: Record<SeriesColor, string> = { accent: 'text-accent', 'accent-red': 'text-accent-red', ink: 'text-ink', 'chart-4': 'text-chart-4', 'chart-5': 'text-chart-5' }
-export const SWATCH: Record<SeriesColor, string> = { accent: 'bg-accent', 'accent-red': 'bg-accent-red', ink: 'bg-ink', 'chart-4': 'bg-chart-4', 'chart-5': 'bg-chart-5' }
+const TEXT: Record<SeriesColor, string> = { accent: 'text-accent', 'accent-red': 'text-accent-red', ink: 'text-ink', grey: 'text-ink-faint', 'chart-4': 'text-chart-4', 'chart-5': 'text-chart-5' }
+export const SWATCH: Record<SeriesColor, string> = { accent: 'bg-accent', 'accent-red': 'bg-accent-red', ink: 'bg-ink', grey: 'bg-ink-faint', 'chart-4': 'bg-chart-4', 'chart-5': 'bg-chart-5' }
 
 export function TimelineChart({
   points,
   height = 260,
   series,
-  partialLast = false,
+  partialFrom,
+  scale = 'count',
+  dots = false,
+  endMark,
+  format = (v: number) => v.toLocaleString('en-US'),
   legendEnd,
   legend = true,
   pins,
@@ -80,8 +95,17 @@ export function TimelineChart({
   height?: number
   /** Defaults to views alone. */
   series?: Series[]
-  /** The last day is today, still being counted: its gap is drawn dotted. */
-  partialLast?: boolean
+  /** The first point still being counted (today; Google's last ~2 days): every gap into it and
+   *  after it is drawn dotted. */
+  partialFrom?: number
+  /** 'rank': a spot axis, #1 at the top. */
+  scale?: 'count' | 'rank'
+  /** A dot on every reading. */
+  dots?: boolean
+  /** Rides the last point of the first line (the artist's initial on the Search spot line). */
+  endMark?: ReactNode
+  /** How a value reads in the hover readout. */
+  format?: (v: number) => string
   /** Anything that belongs at the right end of the legend row. */
   legendEnd?: ReactNode
   /** false: the caller draws the legend itself (ChartLegend), e.g. on a row wider than the chart. */
@@ -115,19 +139,24 @@ export function TimelineChart({
     : [{ key: 'views', label: 'Views', values: points.map((p) => p.views), color: 'accent' }]
   const h = height
   const firstIdx = (s: Series) => (s.since ? points.findIndex((p) => p.day >= s.since!) : 0)
-  const counted = (s: Series, i: number) => { const f = firstIdx(s); return f >= 0 && i >= f }
+  const counted = (s: Series, i: number) => { const f = firstIdx(s); return f >= 0 && i >= f && s.values[i] != null }
   const valueAt = (s: Series, i: number) => s.values[i] ?? 0
-  const peak = Math.max(0, ...all.flatMap((s) => points.map((_, i) => (counted(s, i) ? valueAt(s, i) : 0))))
-  const finalTop = niceCeil(peak)
-  const top = useTweened(finalTop)
+  const rank = scale === 'rank'
+  const readings = all.flatMap((s) => points.flatMap((_, i) => (counted(s, i) ? [valueAt(s, i)] : [])))
+  // The scale's far end: the top of a count axis, the floor (lowest spot) of a rank axis. It
+  // glides when it changes.
+  const finalExtent = rank ? rankFloor(readings) : niceCeil(Math.max(0, ...readings))
+  const extent = useTweened(finalExtent)
   const x = (i: number) => (points.length < 2 ? w / 2 : (i / (points.length - 1)) * w)
   const padTop = pins?.length ? PIN_BAND : PAD_TOP
-  const y = (v: number) => padTop + (1 - v / top) * (h - padTop)
-  const ptsOf = (s: Series): Pt[] => points.map((_, i) => i).filter((i) => counted(s, i)).map((i) => [x(i), y(valueAt(s, i))])
+  const y = (v: number) => (rank ? padTop + ((v - 1) / (extent - 1)) * (h - padTop) : padTop + (1 - v / extent) * (h - padTop))
+  const tickValues = rank ? rankTicks(finalExtent).filter((t) => t < finalExtent) : axisTicks(finalExtent)
+  const tickLabel = (t: number) => (rank ? `#${t}` : String(t))
+  const idxOf = (s: Series) => points.map((_, i) => i).filter((i) => counted(s, i))
+  const ptsOf = (s: Series): Pt[] => idxOf(s).map((i) => [x(i), y(valueAt(s, i))])
   const tickEvery = points.length > 60 ? 7 : 1
   const ticks = points.map((_, i) => i).filter((i) => i % tickEvery === 0)
   const lastIdx = points.length - 1
-  const dotted = partialLast && points.length >= 2
 
   // The pins whose line is drawn and whose day is in view, left to right, each mark stepped
   // clear of the one before it.
@@ -162,10 +191,10 @@ export function TimelineChart({
 
       <div className="flex gap-3">
         <div aria-hidden className="relative w-8 shrink-0 font-space text-[10px] tabular-nums text-ink-faint" style={{ height }}>
-          {axisTicks(finalTop).map((t) => (
-            <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: y(t) }}>{t}</span>
+          {tickValues.map((t) => (
+            <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: y(t) }}>{tickLabel(t)}</span>
           ))}
-          <span className="absolute right-0 -translate-y-1/2" style={{ top: h }}>0</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: h }}>{rank ? `#${finalExtent}` : 0}</span>
         </div>
 
         <div
@@ -183,7 +212,7 @@ export function TimelineChart({
           }}
         >
           <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height, overflow: 'visible' }} aria-hidden="true">
-            {axisTicks(finalTop).map((t) => (
+            {tickValues.map((t) => (
               <line key={t} x1={0} y1={y(t)} x2={w} y2={y(t)} className="stroke-hairline" strokeWidth={1} />
             ))}
             <line x1={0} y1={h} x2={w} y2={h} className="stroke-ink-faint" opacity={0.6} strokeWidth={1} />
@@ -192,12 +221,13 @@ export function TimelineChart({
               const pts = ptsOf(s)
               if (!pts.length) return null
               const segs = monotoneSegments(pts)
-              const start = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`
-              // Today's gap, dotted, when this line reaches today.
-              const partial = dotted && counted(s, lastIdx) && segs.length > 0
-              const solid = [start, ...(partial ? segs.slice(0, -1) : segs)].join(' ')
-              const tail = partial ? `M${pts[pts.length - 2][0].toFixed(1)},${pts[pts.length - 2][1].toFixed(1)} ${segs[segs.length - 1]}` : null
-              const withDots = n > 0 && pts.length < MIN_LINE_POINTS
+              const at_ = (k: number) => `M${pts[k][0].toFixed(1)},${pts[k][1].toFixed(1)}`
+              // The gaps into a day still being counted, and every gap after, dotted.
+              const k = partialFrom === undefined ? -1 : idxOf(s).findIndex((i) => i >= partialFrom)
+              const cut = k === -1 ? segs.length : Math.max(0, k - 1)
+              const solid = [at_(0), ...segs.slice(0, cut)].join(' ')
+              const tail = cut < segs.length ? `${at_(cut)} ${segs.slice(cut).join(' ')}` : null
+              const withDots = dots || (n > 0 && pts.length < MIN_LINE_POINTS)
               const fillId = `${gid}-fill`
               return (
                 <g
@@ -206,6 +236,7 @@ export function TimelineChart({
                   data-mark={withDots ? 'line+dots' : 'line'}
                   data-points={pts.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')}
                   className={TEXT[s.color]}
+                  opacity={s.faded ? 0.5 : undefined}
                 >
                   {n === 0 && (
                     <>
@@ -225,11 +256,11 @@ export function TimelineChart({
                     className="chart-draw"
                     pathLength={1}
                     d={solid}
-                    fill="none" stroke="currentColor" strokeWidth={2}
+                    fill="none" stroke="currentColor" strokeWidth={s.thick ? 2.6 : 2}
                     strokeLinecap="round" strokeLinejoin="round"
                   />
                   {tail && (
-                    <path data-today d={tail} className="chart-fade" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeDasharray="0.5 5" />
+                    <path data-today d={tail} className="chart-fade" fill="none" stroke="currentColor" strokeWidth={s.thick ? 2.6 : 2} strokeLinecap="round" strokeDasharray="0.5 5" />
                   )}
                   {withDots && pts.map(([cx_, cy]) => <circle key={cx_} cx={cx_} cy={cy} r={3} fill="currentColor" />)}
                 </g>
@@ -238,9 +269,9 @@ export function TimelineChart({
 
             {/* Where each line ends: a dot on its last counted day. */}
             <g data-ends>
-              {all.map((s) => {
+              {all.map((s, n) => {
                 const pts = ptsOf(s)
-                if (pts.length < MIN_LINE_POINTS) return null
+                if (pts.length < MIN_LINE_POINTS || (n === 0 && endMark)) return null
                 const [ex, ey] = pts[pts.length - 1]
                 return <circle key={s.key} className={cx(TEXT[s.color], 'chart-fade')} cx={ex} cy={ey} r={3.5} fill="currentColor" stroke="var(--color-paper)" strokeWidth={1.5} />
               })}
@@ -262,6 +293,17 @@ export function TimelineChart({
               </g>
             )}
           </svg>
+
+          {endMark && (() => {
+            const pts = all.length ? ptsOf(all[0]) : []
+            if (!pts.length) return null
+            const [ex, ey] = pts[pts.length - 1]
+            return (
+              <div data-end-mark aria-hidden className="chart-fade pointer-events-none absolute z-[4] -translate-x-1/2 -translate-y-1/2" style={{ left: (ex / w) * 100 + '%', top: ey }}>
+                {endMark}
+              </div>
+            )
+          })()}
 
           {marks.map(({ p, bx }, n) => (
             <button
@@ -308,7 +350,7 @@ export function TimelineChart({
                 <span key={s.key} className="inline-flex items-center gap-1.5 font-bold tabular-nums">
                   <span aria-hidden className={cx('h-[7px] w-[7px] rounded-[2px]', SWATCH[s.color])} />
                   <span className="sr-only">{s.label} </span>
-                  {counted(s, at) ? valueAt(s, at).toLocaleString('en-US') : '—'}
+                  {counted(s, at) ? format(valueAt(s, at)) : '—'}
                 </span>
               ))}
             </div>

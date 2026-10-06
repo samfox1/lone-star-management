@@ -1,7 +1,7 @@
 // The numbers a chart decides before it draws: where the axis tops out, what
 // "up 28%" means on hover, and how a day is named.
 import { describe, expect, it } from 'vitest'
-import { axisTicks, dayDelta, dayLabel, monotoneSegments, niceCeil, smoothPath, weekdayLabel } from '@/lib/chart'
+import { axisTicks, dayDelta, dayLabel, monotoneSegments, niceCeil, rankFloor, rankTicks, smoothPath, weekdayLabel } from '@/lib/chart'
 
 describe('niceCeil', () => {
   it('lands the axis top on a number a person can read back', () => {
@@ -192,5 +192,22 @@ describe('weekdayLabel', () => {
     expect(weekdayLabel('2026-10-04')).toBe('Sun, Oct 4')
     expect(weekdayLabel('2026-12-31')).toBe('Thu, Dec 31')
     expect(weekdayLabel('2027-01-01')).toBe('Fri, Jan 1')
+  })
+})
+
+describe('a spot axis (#1 at the top)', () => {
+  it('CRITICAL: the floor is the spot below the lowest one held, never above #3 (a site at #1 or #2 still has room to fall)', () => {
+    expect(rankFloor([1.2, 1.4])).toBe(3)
+    expect(rankFloor([2.3, 2.9])).toBe(4) // 2.9 + a quarter → 3.15 → #4
+    expect(rankFloor([2.7])).toBe(3) // 2.7 + 0.25 = 2.95 → #3
+    expect(rankFloor([7.8])).toBe(9)
+    expect(rankFloor([])).toBe(3)
+  })
+  it('names every spot up to six, then every second, then every fifth — always from #1', () => {
+    expect(rankTicks(3)).toEqual([1, 2, 3])
+    expect(rankTicks(6)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(rankTicks(9)).toEqual([1, 2, 4, 6, 8])
+    expect(rankTicks(12)).toEqual([1, 2, 4, 6, 8, 10, 12])
+    expect(rankTicks(31)).toEqual([1, 5, 10, 15, 20, 25, 30])
   })
 })

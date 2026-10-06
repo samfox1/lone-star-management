@@ -235,7 +235,7 @@ describe('TimelineChart', () => {
       { day: '2026-09-12', views: 30, visitors: 0 }, { day: '2026-09-13', views: 5, visitors: 0 },
     ]
     it('CRITICAL: the last gap is drawn dotted, apart from the solid line, which stops a day short', () => {
-      const { container } = render(<TimelineChart points={four} height={100} partialLast />)
+      const { container } = render(<TimelineChart points={four} height={100} partialFrom={3} />)
       const solid = container.querySelector('[data-series="views"] [data-line]')!.getAttribute('d')!
       const tail = container.querySelector('[data-series="views"] [data-today]')!.getAttribute('d')!
       expect(solid.match(/C/g)).toHaveLength(2) // two of the three gaps
@@ -272,6 +272,35 @@ describe('TimelineChart', () => {
       expect(screen.getByRole('tooltip').textContent).toMatch(/visitors counted from here\s*sep 12 · and bots filtered/i)
       fireEvent.blur(marks[1])
       expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+  })
+
+  describe('for Search', () => {
+    const days = ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02'].map((day) => ({ day, views: 0, visitors: 0 }))
+    it('CRITICAL: a spot axis puts #1 at the TOP — a better (smaller) spot is drawn higher — down to a floor of at least #3', () => {
+      const { container } = render(<TimelineChart points={days} height={100} scale="rank" series={[S('spot', [2.6, 2.0, 1.4, 1.0], 'ink')]} />)
+      const y = ysOf(container, 'spot')
+      expect(y[3]).toBeCloseTo(8, 5) // #1: the top of the plot
+      expect(y[0]).toBeCloseTo(8 + ((2.6 - 1) / (3 - 1)) * 92, 5) // floor #3 at the bottom
+      expect(y[2]).toBeLessThan(y[1])
+      expect(screen.getByText('#1')).toBeTruthy()
+      expect(screen.getByText('#3')).toBeTruthy()
+    })
+    it('a day a line has nothing (null) is no point on it — not a zero', () => {
+      const { container } = render(<TimelineChart points={days} height={100} series={[S('seen', [4, null, 6, 8])]} />)
+      expect(pointsOf(container, 'seen')).toHaveLength(3)
+    })
+    it('every gap into a day still being counted is dotted, however many such days there are', () => {
+      const { container } = render(<TimelineChart points={days} height={100} partialFrom={2} series={[S('seen', [4, 5, 6, 8])]} />)
+      expect(container.querySelector('[data-series="seen"] [data-line]')!.getAttribute('d')!.match(/C/g)).toHaveLength(1)
+      expect(container.querySelector('[data-series="seen"] [data-today]')!.getAttribute('d')!.match(/C/g)).toHaveLength(2)
+    })
+    it('the end mark rides the first line\'s last point', () => {
+      const { container } = render(<TimelineChart points={days} height={100} scale="rank" endMark={<span>S</span>} series={[S('spot', [2.6, 2.0, 1.4, 1.0], 'ink')]} />)
+      const mark = container.querySelector('[data-end-mark]') as HTMLElement
+      expect(mark.textContent).toBe('S')
+      expect(mark.style.left).toBe('100%')
+      expect(parseFloat(mark.style.top)).toBeCloseTo(8, 5)
     })
   })
 })

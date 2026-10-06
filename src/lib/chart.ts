@@ -124,3 +124,18 @@ export function weekdayLabel(day: string): string {
   const [y, m, d] = day.split('-').map(Number)
   return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${dayLabel(day)}`
 }
+
+/** The bottom of a spot axis (#1 at the top): the whole spot below the lowest one held, with a
+ *  quarter of a place to spare, and never above #3, so a site at #1 still has room to fall. */
+export function rankFloor(spots: readonly number[]): number {
+  return Math.max(3, Math.ceil(Math.max(1, ...spots) + 0.25))
+}
+
+/** The spots a spot axis names, from #1 down to its floor: every one up to six, then every
+ *  second, then every fifth (plus #1, the one that matters). */
+export function rankTicks(floor: number): number[] {
+  const step = floor <= 6 ? 1 : floor <= 12 ? 2 : 5
+  const ticks = [1]
+  for (let t = step; t <= floor; t += step) if (t > 1) ticks.push(t)
+  return ticks
+}

@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { METRICS, OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, growthSize } from '@/lib/format'
-import { ChartLegend, SWATCH, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { ChartLegend, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
+import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { analyticsPins, type PinKind } from '@/lib/analytics-pins'
 import type { IconName } from '@/components/ui/icons'
 import { AllDays } from '@/components/ui/analytics-sheets'
@@ -43,8 +44,6 @@ const COLOR: Record<string, SeriesColor> = { views: 'accent', visitors: 'accent-
 const META = Object.fromEntries(METRICS.map((m) => [m.key, m])) as Record<MetricKey, (typeof METRICS)[number]>
 /** Each kind of pin's glyph. */
 const PIN_ICON: Record<PinKind, IconName> = { counting: 'user', busiest: 'bolt', bots: 'robot' }
-/** The number's size for how many lines share the column: one or two big, five small. */
-const SIZE = [52, 52, 52, 40, 32, 26]
 
 export function MetricExplorer({
   metrics,
@@ -105,7 +104,6 @@ export function MetricExplorer({
   const pins: ChartPin[] = analyticsPins({ days: days_, views: byKey.views?.series ?? [], bots: byKey.bots?.series ?? [], countedSince })
     .map((p) => ({ day: p.day, series: p.series, icon: PIN_ICON[p.kind], title: p.title, note: p.note }))
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
-  const tight = drawn.length >= 4
 
   return (
     <div className={className}>
@@ -162,65 +160,20 @@ export function MetricExplorer({
           the column is laid absolutely in its cell, so however many lines are on it
           adds no height of its own. Keyed by the window, so a new window draws on. */}
       <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
-        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialLast={partialLast} legend={false} pins={pins} className="min-w-0" />
+        <TimelineChart key={windowKey} points={timeline} height={400} series={series} partialFrom={partialLast ? timeline.length - 1 : undefined} legend={false} pins={pins} className="min-w-0" />
 
-        <div role="region" aria-label="Numbers" className="relative min-h-0">
-          <dl className="flex flex-col text-right lg:absolute lg:inset-0">
-            {drawn.map((m, i) => {
-              const f = factsFor(m)
-              const t = f.delta === null ? null : formatTrend(f.delta)
-              return (
-                <div
-                  key={m.key}
-                  data-fact={m.key}
-                  className={cx('flex flex-1 flex-col items-end justify-center border-hairline', i > 0 && 'border-t', tight ? 'py-1' : 'py-2.5')}
-                >
-                  <dt className="flex items-center gap-1.5 font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
-                    {drawn.length > 1 && <span aria-hidden className={cx('inline-block h-[3px] w-3.5 rounded-full', SWATCH[COLOR[m.key] ?? 'ink'])} />}
-                    {META[m.key].short}
-                  </dt>
-                  <dd className={cx('font-space font-bold leading-none tracking-[-0.02em] tabular-nums text-ink', tight ? 'mt-1' : 'mt-1.5')} style={{ fontSize: SIZE[drawn.length] ?? 22 }}>
-                    <CountUp value={f.total} />
-                  </dd>
-                  <dd className={cx('font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint', tight ? 'mt-0.5' : 'mt-1.5')}>
-                    Per day <span className="text-[12px] font-bold tracking-normal text-ink">{perDay(f.perDay)}</span>
-                  </dd>
-                  {t && (
-                    <dd data-growth className={cx('font-space text-[10px] uppercase tracking-[0.1em] text-ink-faint', tight ? 'mt-0.5' : 'mt-1')}>
-                      {t.dir !== 'flat' && <span className="text-ink">{t.dir === 'up' ? '▲ ' : '▼ '}</span>}
-                      <span className="text-[12px] font-bold tracking-normal text-ink">{growthSize(f.delta!)}</span>
-                      {' '}{tight ? `vs ${days}d` : `vs prior ${days}d`}
-                    </dd>
-                  )}
-                </div>
-              )
-            })}
-          </dl>
-        </div>
+        <FactsColumn facts={drawn.map((m): Fact => {
+          const f = factsFor(m)
+          const t = f.delta === null ? null : formatTrend(f.delta)
+          return {
+            key: m.key, label: META[m.key].short, swatch: COLOR[m.key] ?? 'ink', value: f.total,
+            sub: { label: 'Per day', value: perDay(f.perDay) },
+            growth: t && { dir: t.dir, size: growthSize(f.delta!), tail: `vs prior ${days}d`, tailShort: `vs ${days}d` },
+          }
+        })} />
       </div>
     </div>
   )
 }
 
 const perDay = (n: number) => (n >= 10 ? Math.round(n).toLocaleString('en-US') : n.toFixed(1))
-
-const motionOn = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && typeof requestAnimationFrame === 'function'
-  && window.matchMedia('(prefers-reduced-motion: no-preference)').matches
-
-/** A total that counts up to its value when it first shows or changes; still under reduced motion. */
-function CountUp({ value }: { value: number }) {
-  const [shown, setShown] = useState(value)
-  useEffect(() => {
-    if (!motionOn()) return
-    const t0 = performance.now()
-    let id = 0
-    const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3
-      setShown(Math.round(value * e))
-      if (k < 1) id = requestAnimationFrame(step)
-    }
-    id = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(id)
-  }, [value])
-  return <>{(motionOn() ? shown : value).toLocaleString('en-US')}</>
-}
