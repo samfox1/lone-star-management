@@ -12,7 +12,7 @@ import { FactsColumn, type Fact } from '@/components/ui/facts-column'
 import { SquareCheck } from '@/components/ui/square-check'
 import type { SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
 import { SEARCH_PERIODS, type SearchEngineId, type SearchPeriodKey, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
-import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, countWords, engineDot, engineNote, engineViewOf, enginesOf, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
+import { ENGINE_NAME, ENGINE_VIEWS, LIST_SHOWN, SPOT_HINT, countWords, engineDot, engineNote, engineViewOf, enginesOf, reachIntro, reachTitle, searchIntro, searchTitle, sideBySideRows, spotWords, type EngineNote, type EngineView } from '@/lib/manager-tools/seo/search-model'
 import { nameSpot, searchTrend, spotFacts } from '@/lib/manager-tools/seo/search-spot'
 import { reachBoard, spotBoard, weekGrowth, type BoardLine } from '@/lib/manager-tools/seo/search-board'
 import type { AiVisit } from '@/lib/manager-tools/seo/ai-visits'
@@ -100,8 +100,8 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
     <div data-search-view={view}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 max-w-[640px]">
-          <h1 className="font-space text-[15px] font-bold uppercase tracking-[0.12em] text-ink">{searchTitle(view, name)}</h1>
-          <p data-intro className="mt-2 text-[13px] leading-relaxed text-ink-muted">{searchIntro(view, name)}</p>
+          <h1 className={TITLE}>{searchTitle(view, name)}</h1>
+          <p data-intro className={INTRO}>{searchIntro(view, name)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div role="group" aria-label="Engine" className="flex items-center gap-1">
@@ -166,6 +166,10 @@ export function SearchTab({ answer, name, ai }: { answer: SearchStatsAnswer; nam
 
 /* ── the charts ─────────────────────────────────────────────────────────────────────── */
 
+/** Each chart's header and its sentence: capitals in mono, then plain words. */
+const TITLE = 'font-space text-[15px] font-bold uppercase tracking-[0.12em] text-ink'
+const INTRO = 'mt-2 text-[13px] leading-relaxed text-ink-muted'
+
 const CHART_H = 380
 const points = (days: string[]) => days.map((day) => ({ day, views: 0, visitors: 0 }))
 const seriesOf = (lines: BoardLine[]): Series[] =>
@@ -201,9 +205,9 @@ function SpotSection({ view, stats, name, added }: { view: EngineView; stats: Pa
   })
   const initial = name.trim().charAt(0).toUpperCase() || '·'
   return (
-    <section aria-label="Your spot" className="mt-8">
+    <section aria-label="Your spot" className="mt-5">
       <ChartLegend series={seriesOf(board.lines)} />
-      <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
+      <div className="mt-1 grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
         <TimelineChart
           points={points(board.days)} height={CHART_H} series={seriesOf(board.lines)} scale="rank" dots
           partialFrom={board.partialFrom} format={spot} legend={false} pins={pins} className="min-w-0"
@@ -234,7 +238,11 @@ function ReachSection({ view, stats }: { view: EngineView; stats: Partial<Record
   const clicksLabel = both || !board.lines.length ? 'Clicks' : `Clicks from ${ENGINE_NAME[board.lines[0].engine]}`
   return (
     <section aria-label="Seen and clicked" className="mt-14">
-      <div className="flex items-center">
+      <div className="max-w-[640px]">
+        <h2 className={TITLE}>{reachTitle(view)}</h2>
+        <p className={INTRO}>{reachIntro(view)}</p>
+      </div>
+      <div className="mt-4 flex items-center">
         <SquareCheck label={clicksLabel} on={clicks} onToggle={() => setClicks((c) => !c)} />
       </div>
       <div className="mt-4">

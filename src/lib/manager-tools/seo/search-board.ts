@@ -27,7 +27,7 @@ function firstPartial(days: string[], drawn: SearchStats[]): number | undefined 
   return i === -1 ? undefined : i
 }
 
-/** "Your spot on Google": each engine's spot when someone searches the artist's name
+/** The ranking: each engine's spot when someone searches the artist's name
  *  (search-spot.ts `nameSpot`), on one row of days; null where an engine has no reading. */
 export function spotBoard(view: EngineView, stats: Partial<Record<SearchEngineId, SearchStats>>, name: string): Board {
   const per = enginesOf(view)
@@ -38,7 +38,8 @@ export function spotBoard(view: EngineView, stats: Partial<Record<SearchEngineId
   const both = per.length > 1
   const days = [...new Set(per.flatMap((x) => [...x.points.keys()]))].sort()
   const lines = per.map(({ e, points }): BoardLine => ({
-    key: `${e}-spot`, engine: e, label: both ? ENGINE_NAME[e] : `Your spot on ${ENGINE_NAME[e]}`,
+    // "Google ranking" (Sam, 2026-10-06), one engine or both.
+    key: `${e}-spot`, engine: e, label: `${ENGINE_NAME[e]} ranking`,
     values: days.map((d) => points.get(d) ?? null), tone: both ? TONE[e] : 'ink',
   }))
   return { days, lines, partialFrom: firstPartial(days, per.map((x) => stats[x.e]!)) }

@@ -45,7 +45,7 @@ describe('spotBoard — your spot when someone searches your name', () => {
   it('CRITICAL: one engine: its name searches\' spot by day, a reach search left out, the days still counting marked', () => {
     const b = spotBoard('google', { google: GOOGLE }, 'Skeen')
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
-    expect(b.lines).toEqual([{ key: 'google-spot', engine: 'google', label: 'Your spot on Google', values: [2, 1.5, 1], tone: 'ink' }])
+    expect(b.lines).toEqual([{ key: 'google-spot', engine: 'google', label: 'Google ranking', values: [2, 1.5, 1], tone: 'ink' }])
     expect(b.partialFrom).toBe(1)
   })
 
@@ -54,8 +54,8 @@ describe('spotBoard — your spot when someone searches your name', () => {
     const b = spotBoard('both', { google: GOOGLE, bing: BING }, 'Skeen')
     expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
     expect(b.lines.map((l) => [l.key, l.label, l.tone, l.values])).toEqual([
-      ['google-spot', 'Google', 'ink', [null, 2, 1.5, 1]],
-      ['bing-spot', 'Bing', 'grey', [3, null, null, null]],
+      ['google-spot', 'Google ranking', 'ink', [null, 2, 1.5, 1]],
+      ['bing-spot', 'Bing ranking', 'grey', [3, null, null, null]],
     ])
     expect(b.partialFrom).toBe(2)
   })

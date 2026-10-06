@@ -48,11 +48,21 @@ export function searchTitle(view: EngineView, name: string): string {
   return `How ${name} shows up ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`}`
 }
 
-/** What the charts below the title show, in a sentence (Sam, 2026-10-06: "add a little more
- *  explanation about whats going on in these charts"). */
+/** What the ranking chart under the title shows (Sam, 2026-10-06: "add a little more explanation
+ *  about whats going on in these charts"). */
 export function searchIntro(view: EngineView, name: string): string {
   const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
-  return `Your spot is where your site ranks when someone searches “${name}” on ${where} (#1 is the top result). Below it: how often your site was shown in search, and how often people clicked through.`
+  return `Where your site shows up when someone searches “${name}” on ${where}, day by day. #1 is the top result, so the higher the line, the better.`
+}
+
+/** The seen and clicked chart's own header and sentence (Sam, 2026-10-06: "Have a header and
+ *  description for the chart below"). */
+export function reachTitle(view: EngineView): string {
+  return `Seen and clicked ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`}`
+}
+export function reachIntro(view: EngineView): string {
+  const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
+  return `Seen is how many times ${where} showed your site in its results. Clicks are how many times someone clicked through to it. Dotted days are still being counted.`
 }
 
 
