@@ -54,7 +54,24 @@ describe('parsePressQuotes (read path — must never throw)', () => {
       { quote: 'Great.', source: 'NME', url: ' nme.com/review ' },
       { quote: 'Loud.', source: 'Mixmag', url: 'www.mixmag.net' },
       { quote: 'Kept.', source: 'P4K', url: 'http://p4k.com/a' },
-    ]).map((q) => q.url)).toEqual(['https://nme.com/review', 'https://www.mixmag.net', 'http://p4k.com/a'])
+      // A colon later in the path is not a scheme: only one at the very start is.
+      { quote: 'Wiki.', source: '', url: 'en.wikipedia.org/wiki/Talk:Skeen' },
+    ]).map((q) => q.url)).toEqual([
+      'https://nme.com/review',
+      'https://www.mixmag.net',
+      'http://p4k.com/a',
+      'https://en.wikipedia.org/wiki/Talk:Skeen',
+    ])
+  })
+
+  it('a link that already has a scheme (in any case), a path or an anchor is kept exactly as typed', () => {
+    // Only a BARE address gets https://. A scheme typed in capitals is still a scheme, or the
+    // link would become https://HTTPS://…; a path or an anchor is a place on our own site.
+    expect(cleanPressQuotes([
+      { quote: 'Loud.', source: 'NME', url: 'HTTPS://nme.com/x' },
+      { quote: 'Ours.', source: '', url: '/press' },
+      { quote: 'Here.', source: '', url: '#quotes' },
+    ]).map((q) => q.url)).toEqual(['HTTPS://nme.com/x', '/press', '#quotes'])
   })
 
   it('nulls a dangerous url but keeps the quote', () => {
