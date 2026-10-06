@@ -1,6 +1,6 @@
 // The code window's two server actions: what they send, and that only `{ status }` comes back.
 /**
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions.ts
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions.ts
  *           (sendEmailCodeAction, confirmEmailCodeAction)
  * Feature:  confirming an address (EMAIL_CONFIRM_PLAN.md §3)
  * Tier:     STRICT (AGENTS.md "Test depth"): the session's token goes to the Edge Function, and
@@ -25,7 +25,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({ auth: { getSession: async () => ({ data: { session } }) }, rpc })),
 }))
 
-const { sendEmailCodeAction, confirmEmailCodeAction } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions')
+const { sendEmailCodeAction, confirmEmailCodeAction } = await import('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions')
 
 const fetchSpy = vi.fn()
 beforeEach(() => {

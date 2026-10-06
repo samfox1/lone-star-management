@@ -12,9 +12,9 @@ import { CAPS_LABEL, EDIT_TARGET, EYEBROW, MONO_META } from './styles'
  * seo_variants_20260929_r10.html), drawn once for every list that opens: the AI test's results
  * (tools/seo/test/test-row.tsx), How crawlers see your site (test/crawl-section.tsx), since
  * Batch 2 (Sam 2026-10-02, prototypes/batch2_compare_20261002.html §1, "A") the Profiles tab's
- * three lists (tools/seo/profiles/), and since Batch 3 (prototypes/batch3_20261002.html) the
- * enquiry kinds under Settings › Email (enquiries/kind-rows.tsx). Lived in tools/seo/_ui until
- * that second tool used it.
+ * three lists (tools/seo/profiles/), and since Batch 3 (prototypes/batch3_20261002.html) other
+ * tools' lists: Connections, the Press kit and the Overview. Lived in tools/seo/_ui until that
+ * second tool used it.
  *
  *   a group:  mono caps title · a count on the right (when there is one), then its rows
  *   a row:    a full-width button (mark · name · value · chevron); open, it turns grey

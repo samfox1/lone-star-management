@@ -11,8 +11,8 @@ import { RowIcon } from './row-icon'
  * A CLICK-TO-EDIT LIST (Sam, 2026-10-02, Settings › Email: "when I click on a submitted email,
  * then I can edit it or delete it. The delete icon appears after I click on it, same with the
  * edit. I want minimal stuff on the screen"; "Dont say add email. Have it be a plus (+)"; "I dont
- * like the border around the container"). Lifted from enquiries/kind-rows.tsx (2026-10-05) so
- * every list of short user-written items works the same way.
+ * like the border around the container"). Lifted from Settings › Email's kind-rows.tsx
+ * (2026-10-05) so every list of short user-written items works the same way.
  *
  *   at rest        each item is its text alone, a button (so a keyboard reaches it: Tab, Enter)
  *   click / Enter  the item becomes an underline field in the same type, with ✓, a trash (when

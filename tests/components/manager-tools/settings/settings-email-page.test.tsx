@@ -12,7 +12,7 @@ import EmailSettingsPage from '@/app/artists/[id]/(dashboard)/(manager-tools)/se
 vi.mock('@/app/artists/[id]/(dashboard)/_data', () => ({
   requireArtist: vi.fn(async () => ({ id: 'a1', name: 'Lone Pine' })),
 }))
-vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions', () => ({
   addEnquiryKindAction: vi.fn(),
   saveEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(),

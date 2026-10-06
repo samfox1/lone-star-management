@@ -33,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }))
 
-const load = () => import('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions')
+const load = () => import('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions')
 
 beforeEach(() => {
   rows = []

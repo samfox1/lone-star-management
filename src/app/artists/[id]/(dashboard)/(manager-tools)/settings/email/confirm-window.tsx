@@ -16,9 +16,9 @@ import {
   sendMessage,
 } from '@/lib/enquiries/confirm'
 import { clockTime } from '@/lib/manager-tools/format'
-import { CardModal } from '../../card-modal'
-import { RowIcon } from '../_ui/row-icon'
-import { MONO_META } from '../_ui/styles'
+import { CardModal } from '../../../card-modal'
+import { RowIcon } from '../../_ui/row-icon'
+import { MONO_META } from '../../_ui/styles'
 import { confirmEmailCodeAction, sendEmailCodeAction } from './actions'
 
 /**

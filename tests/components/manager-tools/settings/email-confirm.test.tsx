@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Settings › Email: add an address, its code is sent, the window asks for it, six digits confirm it.
 /**
- * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/kind-rows.tsx,
- *           enquiries/confirm-window.tsx
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows.tsx,
+ *           settings/email/confirm-window.tsx
  * Feature:  confirming an address before enquiries go to it (EMAIL_CONFIRM_PLAN.md §3, mock
  *           prototypes/email_confirm_20261005.html)
  * Tier:     LIGHT (AGENTS.md "Test depth"): a UI flow still being designed, so ONE test of the
@@ -14,22 +14,22 @@
  *           • six typed digits → confirmEmailCodeAction(artist, address, code) → the window
  *             closes and the address is an ordinary, click-to-edit one
  * Not here: the slot rules and status words (tests/unit/manager-tools/enquiries/
- *           email-confirm.test.ts); the actions (email-code-actions.test.ts); the list rules
- *           with confirmation off (kind-rows.test.tsx).
+ *           email-confirm.test.ts); the actions (tests/unit/manager-tools/settings/
+ *           email-code-actions.test.ts); the list rules with confirmation off (kind-rows.test.tsx).
  * Fixtures: every server action is mocked; the list save echoes what it was sent.
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/kind-rows'
+import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows'
 import {
   confirmEmailCodeAction,
   sendEmailCodeAction,
   setEnquiryRecipientsAction,
-} from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
+} from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions'
 import { clockTime } from '@/lib/manager-tools/format'
 
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
-vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions', () => ({
   addEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(),
   saveEnquiryKindAction: vi.fn(),

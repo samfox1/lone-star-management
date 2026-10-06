@@ -5,12 +5,12 @@ import { Icon } from '@/components/ui/icons'
 import { ICON_BOLD } from '@/components/ui/icon-hover'
 import { cx } from '@/lib/cx'
 import { emailKey, type ConfirmState } from '@/lib/enquiries/confirm'
-import { useConfirm } from '../../confirm-dialog'
-import { toast } from '../../toast'
-import { EditList } from '../_ui/edit-list'
-import { FOCUS_RING } from '../_ui/focus-ring'
-import { LEDGER_ROW_GRID, LedgerSection } from '../_ui/ledger'
-import { HoverLabel, RowIcon } from '../_ui/row-icon'
+import { useConfirm } from '../../../confirm-dialog'
+import { toast } from '../../../toast'
+import { EditList } from '../../_ui/edit-list'
+import { FOCUS_RING } from '../../_ui/focus-ring'
+import { LEDGER_ROW_GRID, LedgerSection } from '../../_ui/ledger'
+import { HoverLabel, RowIcon } from '../../_ui/row-icon'
 import {
   deleteEnquiryKindAction,
   saveEnquiryKindAction,

@@ -17,20 +17,20 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/kind-rows'
+import { KindRows } from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows'
 import {
   deleteEnquiryKindAction,
   saveEnquiryKindAction,
   sendEmailCodeAction,
   setEnquiryRecipientsAction,
-} from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
+} from '@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions'
 import type { EnquiryKindRow } from '@/lib/enquiries/kinds'
 import { toast } from '@/app/artists/[id]/(dashboard)/toast'
 
 // Mocked so the KIND of each toast can be asserted (a refusal once wore the success tick).
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 
-vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
+vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions', () => ({
   addEnquiryKindAction: vi.fn(),
   deleteEnquiryKindAction: vi.fn(async () => ({})),
   saveEnquiryKindAction: vi.fn(),

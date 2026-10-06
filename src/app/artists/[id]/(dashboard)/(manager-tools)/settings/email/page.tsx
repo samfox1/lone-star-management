@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { toKindRows, type RawKindRow } from '@/lib/enquiries/kinds'
 import { confirmStateFrom } from '@/lib/enquiries/confirm'
 import { requireArtist } from '../../../_data'
-import { KindRows } from '../../enquiries/kind-rows'
+import { KindRows } from './kind-rows'
 
 export const metadata = { title: 'Email — Settings — Lone Star Management' }
 

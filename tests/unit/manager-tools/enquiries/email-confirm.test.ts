@@ -18,7 +18,7 @@
  *           Equivalent mutants left (Stryker, 2026-10-05, 98.3%): enterDigits' `length === 2`
  *           (one digit typed over another gives that digit either way), and confirmStateFrom's
  *           `: []` (any non-array rows confirm nothing either way).
- * Not here: the window itself (tests/components/manager-tools/enquiries/email-confirm.test.tsx);
+ * Not here: the window itself (tests/components/manager-tools/settings/email-confirm.test.tsx);
  *           the SQL rules behind the statuses (tests/integration/enquiries/).
  * Fixtures: none.
  */
