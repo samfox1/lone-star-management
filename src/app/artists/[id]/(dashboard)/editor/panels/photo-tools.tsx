@@ -25,6 +25,7 @@ import { budgetFor, budgetSlotKey, type AssetBudget, type AssetBudgets } from '@
 import { UploadField } from '../../upload-field'
 import { ProfilePhotoUploader } from '../../profile-photo-uploader'
 import { toast } from '../../toast'
+import { useConfirm } from '../../confirm-dialog'
 import { setImageFieldAction } from '../../actions'
 
 /* ── The Images panel ────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ const galleryTarget = (id: string): SelectTarget => ({ kind: 'item', assetType: 
  * The hero image and profile photo are ONE fixed image apiece — positions the template
  * SETS, not an arrangement the artist builds (that's the custom slots below). Each tile is
  * the same size as the custom slots; Replace uploads a new file (portaled modal, so it
- * never resizes the grid), Remove clears the field. The write routes by the field's
+ * never resizes the grid), Remove asks, then clears the field. The write routes by the field's
  * manifest target (setImageFieldAction). */
 function ImageFieldTools({
   fields,
@@ -113,8 +114,14 @@ function ImageFieldTile({
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
   useDismiss(editing, () => setEditing(false))
+  const { ask, dialog } = useConfirm()
 
   async function remove() {
+    // Remove ASKS. A click on the tile opens this menu over the whole tile (Sam, 2026-10-05:
+    // the row is the target), so the second click of a double-click lands on Remove. The hero
+    // URL has no library to pick it from again, and Revert cannot bring back a removed profile
+    // photo. A click in the question closes the menu (useDismiss); the remove carries on here.
+    if (!(await ask(`Remove the ${field.label.toLowerCase()}?`, { action: 'Remove' }))) return
     setRemoving(true)
     // The field's target rides along: for a CUSTOM site the server has no manifest to
     // look it up in (it is validated there, not trusted).
@@ -128,6 +135,7 @@ function ImageFieldTile({
 
   return (
     <div>
+      {dialog}
       <span className={cx(CONTROL_LABEL, 'mb-0.5 block truncate text-[9px]')}>{field.label}</span>
       {preview ? (
         <SelectableTile
