@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from './icons'
-import { ICON_HOVER } from './icon-hover'
+import { NAV_HOVER } from './icon-hover'
 
 export type NavItem = {
   label: string
@@ -47,7 +47,7 @@ export function AppShell({
                 item.active
                   ? 'text-accent'
                   : // Colour and stroke only, no grey box (Sam, 2026-10-02), as the dashboard's nav.
-                    `text-ink-muted ${ICON_HOVER} hover:[text-shadow:0_0_0.45px_currentColor]`,
+                    `text-ink-muted ${NAV_HOVER}`,
               )}
             >
               <Icon name={item.icon} />

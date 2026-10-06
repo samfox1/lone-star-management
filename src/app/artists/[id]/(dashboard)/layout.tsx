@@ -4,13 +4,12 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { isCustom } from '@/lib/custom-site'
 import { Icon } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
+import { ICON_GROUP_HOVER, ICON_HOVER } from '@/components/ui/icon-hover'
 import { Avatar, initials, StatusDot } from '@/components/ui/ui'
 import { ArtistNav } from './artist-tabs'
 import { dirtyBySeg } from './sections'
 import { dashboardDiff, requireArtist } from './_data'
 import { Toaster } from './toast'
-import { NAV_GROUP_HOVER } from './nav-hover'
 
 /** Today as YYYY-MM-DD, out of render so it isn't an impure call. */
 function todayIso(): string {
@@ -90,7 +89,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center border-b border-hairline bg-paper px-5 py-3.5 before:absolute before:inset-x-0 before:bottom-full before:h-screen before:bg-paper before:content-['']">
         {/* brand: back to roster + small avatar + name */}
         <Link href="/roster" title="Back to roster" className="group flex min-w-0 items-center gap-2">
-          <span className={`inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${NAV_GROUP_HOVER}`}>
+          <span className={`inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_GROUP_HOVER}`}>
             <Icon name="chevronLeft" size={18} />
           </span>
           <Avatar initials={initials(artist.name)} size={24} />

@@ -24,7 +24,7 @@ const OVERVIEW_SEG = 'tools'
  * every tool), no word buttons. The preview eye shows only for a template site: for a custom
  * site /preview draws Tapir's template, not the artist's real site.
  *
- * Tool rows are NAV, so they answer the pointer as the rail does (nav-hover.ts): the glyph and
+ * Tool rows are NAV, so they answer the pointer as the rail does (NAV_HOVER, icon-hover.ts): the glyph and
  * the chevron turn ink and the glyph gets bolder, with no grey box behind the row.
  */
 export function OverviewView({

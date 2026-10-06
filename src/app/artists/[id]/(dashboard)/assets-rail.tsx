@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { RAIL_LANE } from './rail'
-import { NAV_HOVER } from './nav-hover'
+import { NAV_HOVER } from '@/components/ui/icon-hover'
 
 type AssetKind = 'music' | 'photos' | 'videos'
 

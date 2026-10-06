@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { WORD_HOVER } from '@/components/ui/icon-hover'
 import { type ButtonVariant } from '@/components/ui/ui'
 import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
 
@@ -28,7 +29,7 @@ import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
  *  icons dont work on the confirmation … It should say Confirm or cancel"). Mono caps, the same
  *  size, so neither is the default by being the bigger target; hover = darker and a touch bolder
  *  (a same-colour hairline shadow, so the word doesn't widen). */
-export const ANSWER = `inline-flex h-9 items-center px-2 font-space text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:[text-shadow:0_0_0.45px_currentColor] ${FOCUS_RING}`
+export const ANSWER = `inline-flex h-9 items-center px-2 font-space text-[11px] font-bold uppercase tracking-[0.1em] transition-colors ${WORD_HOVER} ${FOCUS_RING}`
 
 /** EVERY DIALOG'S "CANCEL" is this word (Sam, 2026-10-05: no bordered Cancel anywhere): the
  *  question's own Cancel, grey until hovered. The way out never looks like the thing to press.

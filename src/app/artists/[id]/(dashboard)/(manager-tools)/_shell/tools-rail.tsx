@@ -12,7 +12,7 @@ import { usePathname } from 'next/navigation'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
 import { TOOLS, tabFor, toolFor, toolsFor, type Tool } from './tools-registry'
-import { NAV_HOVER } from '../../nav-hover'
+import { NAV_HOVER } from '@/components/ui/icon-hover'
 import { RAIL_LANE } from '../../rail'
 
 export { TOOLS, tabFor, toolFor, toolsFor }

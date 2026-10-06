@@ -1,7 +1,7 @@
 /**
  * HOW AN ICON ANSWERS THE POINTER (Sam, 2026-10-02): "I dont want the edit icons to have the
  * grey box around them on hover. I want them to get black and bold. Goes with all icons." The
- * nav got this first (nav-hover.ts builds on it); every icon button in the dashboard now does
+ * nav got this first (NAV_HOVER below builds on it); every icon button in the dashboard now does
  * the same: the glyph turns ink and its stroke thickens. No background, no box.
  *
  * Bolder without moving anything: CSS `stroke-width` on the svg beats the attribute Icon draws
@@ -21,6 +21,23 @@ export const ICON_HOVER = 'hover:text-ink not-disabled:hover:[&_svg]:[stroke-wid
 
 /** The same, for an icon that answers its parent's hover (`group`). */
 export const ICON_GROUP_HOVER = 'group-hover:text-ink group-hover:[&_svg]:[stroke-width:2.1]'
+
+/**
+ * A WORD that answers the pointer gets a little bolder: a hairline shadow in its own colour, not
+ * a heavier weight, because Space Mono has only 400 and 700 and a real weight change would widen
+ * the word and nudge what sits beside it. The nav's labels, the confirm dialog's answers and the
+ * Publish bar's Revert.
+ */
+export const WORD_HOVER = 'hover:[text-shadow:0_0_0.45px_currentColor]'
+
+/**
+ * HOW A NAV ITEM ANSWERS THE POINTER (Sam, 2026-10-02): the icon and its words turn black and
+ * get a little bolder; no grey box behind them ("i just want the icons and text to turn black",
+ * then "have it get a little bolder too"). The top bar, the tools rail and its sub-tab panel,
+ * the assets rail and the app shell's nav. It lived in the dashboard's route folder
+ * (nav-hover.ts) until 2026-10-05, where the app shell could not reach it and spelled it out.
+ */
+export const NAV_HOVER = `${ICON_HOVER} ${WORD_HOVER}`
 
 /**
  * EVERY EDIT PENCIL IS 14px (Sam, 2026-10-02: "these edit icons should be smaller across").
