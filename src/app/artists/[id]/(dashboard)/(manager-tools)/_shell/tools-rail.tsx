@@ -3,7 +3,7 @@
 /**
  * Manager tools as ONE admin dashboard (Sam, 2026-08-28): a side panel lists every
  * tool; the page beside it is the tool. Same language as the editor's inspector and the
- * assets rail — Space Mono, hairline border, accent-soft active row — so it reads as the
+ * assets rail — Space Mono, hairline border, the current tool in accent — so it reads as the
  * same app. Rendered by the dashboard layout on every tool route; nothing else changes:
  * the routes are what they were, the pages lose their copy-pasted "‹ Manager tools" links.
  */
@@ -62,12 +62,6 @@ export { TOOLS, tabFor, toolFor, toolsFor }
  * invalid, and top + bottom size the lane. Where round() works, the height wins over bottom.
  */
 export const RAIL_LANE = 'absolute top-0 bottom-0 h-[round(100%,1px)]'
-/**
- * The manager tools as a 84px icon rail — the ASSETS rail, one to one (Sam,
- * 2026-08-28: "mimic the side panel used on the assets page"). Icons stacked and
- * vertically centred, 10px mono labels, active = accent. Tool pages with sections (SEO /
- * GEO) put their sections in a pill row at the top of the page, not a second rail.
- */
 /**
  * The rail is thin on EVERY tool page and widens on hover (Sam, 2026-10-05: "When a manager
  * tools page is open, I would like the left panel to always be the thinner icon only look with
@@ -165,9 +159,9 @@ function ToolsRail({ artistId, active, tools = TOOLS }: { artistId: string; acti
 
 /**
  * The second panel: a tool's sub-tabs, beside the thin rail. Same language as the rail
- * (sticky, hairline, mono, accent when current) but TEXT ONLY — the rail beside it already
- * shows the tool's icon, and a second column of icons said nothing the first had not
- * (Sam, 2026-09-22: "I dont need icons on the right rail").
+ * (sticky, hairline, mono; the current tab in bold black, see below) but TEXT ONLY — the
+ * rail beside it already shows the tool's icon, and a second column of icons said nothing
+ * the first had not (Sam, 2026-09-22: "I dont need icons on the right rail").
  */
 function SubRail({ artistId, tool, activeSeg, railCount }: { artistId: string; tool: Tool; activeSeg: string; railCount: number }) {
   const tabs = tool.tabs ?? []

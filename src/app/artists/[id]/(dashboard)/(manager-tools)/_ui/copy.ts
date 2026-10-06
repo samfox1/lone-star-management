@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** How long a copy's check stays up. */
-export const FLASH_MS = 1400
+const FLASH_MS = 1400
 
 /**
  * Copy text: the async clipboard first, and when a browser refuses it (permissions, an

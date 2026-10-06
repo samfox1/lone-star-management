@@ -20,8 +20,8 @@ import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
  * returns to the closure that asked, the dialog unmounts with whatever owned it (no
  * orphaned question outliving a closed card), and a test renders nothing extra.
  *
- * The promise resolves FALSE on cancel, Escape, or a click outside — every way out that
- * is not the named action is a no. It never rejects: a caller writing
+ * The promise resolves FALSE on Cancel, Escape, or a click outside — every way out that
+ * is not Confirm is a no. It never rejects: a caller writing
  * `if (!(await ask(…))) return` must not need a try/catch to be safe.
  */
 /** Both answers are bare WORDS, no border (Sam, 2026-10-02: no bordered buttons, then "Those
@@ -40,7 +40,8 @@ export const CANCEL_WORD = `${ANSWER} text-ink-muted hover:text-ink disabled:opa
 export type ConfirmTone = Extract<ButtonVariant, 'danger' | 'solid'>
 
 export function useConfirm(): {
-  /** Ask, and resolve true only if the manager presses the named action. */
+  /** Ask, and resolve true only if the manager presses Confirm. The question names what
+   *  Confirm does; `action` is no longer shown (the answer always reads "Confirm"). */
   ask: (question: string, opts?: { action?: string; tone?: ConfirmTone }) => Promise<boolean>
   /** Render this wherever the asking component renders. */
   dialog: ReactNode
@@ -117,8 +118,9 @@ export function useConfirm(): {
           <button autoFocus type="button" onClick={() => settle(false)} className={CANCEL_WORD}>
             Cancel
           </button>
-          {/* Named for what it DOES — never an "OK" that could mean either half. */}
-          {/* Always "Confirm" (Sam): the question above already names what it does. */}
+          {/* Always "Confirm" against "Cancel" (Sam: "It should say Confirm or cancel"),
+              never an "OK" that could mean either half: the question above names what
+              Confirm does. */}
           <button type="button" onClick={() => settle(true)} className={`${ANSWER} ${pending.tone === 'danger' ? 'text-accent-red' : 'text-ink'}`}>
             Confirm
           </button>
