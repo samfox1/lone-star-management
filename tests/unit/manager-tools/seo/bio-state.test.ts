@@ -35,7 +35,6 @@ import {
   FACT_WORDS,
   RECHECK_AFTER_DAYS,
   RECHECK_AFTER_MS,
-  bioConnection,
   bioReads,
   bioRows,
   bioState,
@@ -264,7 +263,6 @@ describe('connectedBios', () => {
   // A label that drifts (in OUTSIDE_BIOS or in Connections) would drop a bio without a word.
   it('every outside bio names exactly one connection', () => {
     for (const b of OUTSIDE_BIOS) expect(CONNECTIONS.filter((d) => d.label === b.label), b.key).toHaveLength(1)
-    for (const b of OUTSIDE_BIOS) expect(bioConnection(b.label)?.label).toBe(b.label)
   })
 
   // Skeen's real links: seven bios, in OUTSIDE_BIOS order; the booking rows and the USB button are not profiles.
@@ -279,7 +277,7 @@ describe('connectedBios', () => {
     const links: { id: string; label: string; url: string; role: null }[] = []
     const artist: Record<string, string> = {}
     for (const b of OUTSIDE_BIOS) {
-      const def = bioConnection(b.label)!
+      const def = CONNECTIONS.find((d) => d.label === b.label)!
       if (def.social) links.push({ id: b.key, label: def.label, url: `${def.urlHint}someone`, role: null })
       else if (def.source?.idField) artist[def.source.idField] = 'someone'
     }

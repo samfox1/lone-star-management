@@ -3,9 +3,10 @@ import { plural } from '../format'
 
 const count = (d: { added: number; edited: number; deleted: number }) => d.added + d.edited + d.deleted
 
-/** What the SEO Publish bar says is waiting, in a few words: "Site text and 1 link changed".
- *  The same parts the bar ships (layout.tsx): the profile, the site text, the site's photos,
- *  and the links a test's fix can change. '' when nothing is. */
+/** What the site Publish bar (SEO / GEO, Profile, Connections, EPK) says is waiting, in a few
+ *  words: "Site text and 1 link changed". The same parts the bar ships (_ui/site-riser.tsx): the
+ *  profile, the site text, the site's photos, and the links a test's fix or a connection's edit
+ *  can change. '' when nothing is. */
 export function pendingMessage(diff: UnpublishedDiff): string {
   const parts: string[] = []
   if (diff.profile.dirty) parts.push('profile')

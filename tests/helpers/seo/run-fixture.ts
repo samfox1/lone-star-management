@@ -14,7 +14,7 @@
  *           • fixtureResults(over, scenario): the same with some tests forced (only to a status
  *             the engine can really give that test)
  *           • fixtureRun: a stored run around those results (a publish run, or a
- *             manual one); fixtureHistory: each test's last statuses, oldest first
+ *             manual one)
  *           • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500,
  *             trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
  * Not here: the engine's own tests (tests/unit/seo-tests/).
@@ -27,7 +27,7 @@ import { SEO_ENGINE } from '@/lib/seo-tests/engine'
 import { runAllTests } from '@/lib/seo-tests/run'
 import { FETCHING_BOTS } from '@/lib/seo-tests/bots'
 import { capResults, type StoredSeoRun } from '@/lib/seo-tests/store'
-import { SEO_TEST_IDS, type SeoEvidence, type SeoPageFetch, type SeoTestHistory, type SeoTestId, type SeoTestResult } from '@/lib/seo-tests/types'
+import type { SeoEvidence, SeoPageFetch, SeoTestId, SeoTestResult } from '@/lib/seo-tests/types'
 import { LONG_BIO, ORIGIN, aboutHtml, artistNode, evidence, graphBlock, healthyGraph, homeHtml, known } from '@tests/helpers/seo/page-fixture'
 
 export { ORIGIN }
@@ -157,15 +157,4 @@ export function fixtureRun(over: Partial<StoredSeoRun> = {}, results?: SeoTestRe
     note: null,
     ...over,
   }
-}
-
-/** Each test's last `n` statuses, oldest first, ending in the run's own. */
-export function fixtureHistory(results: SeoTestResult[] = fixtureResults(), n = 8): Record<SeoTestId, SeoTestHistory> {
-  const day = (i: number) => new Date(Date.parse(RAN_AT) - (n - 1 - i) * 7 * 86_400_000).toISOString()
-  return Object.fromEntries(
-    SEO_TEST_IDS.map((id) => {
-      const status = results.find((r) => r.id === id)?.status ?? 'pass'
-      return [id, Array.from({ length: n }, (_, i) => ({ ranAt: day(i), status }))]
-    }),
-  ) as Record<SeoTestId, SeoTestHistory>
 }

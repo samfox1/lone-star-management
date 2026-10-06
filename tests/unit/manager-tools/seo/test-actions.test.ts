@@ -9,7 +9,8 @@
  * Covers:   • signed out, or not this artist's manager: refused before anything is read, run or written
  *           • "Test again" is a MANUAL run written by the service role in the manager's name
  *           • a refusal (limit, cool-down, busy) comes back as a reason + seconds beside the sentence
- *           • reading the Test tab: table missing = "off", any other failure = "error", else "ready"
+ *           • reading the Test tab (what the tab polls while another run goes): a failed read
+ *             is "error" with a sentence, else "ready" with the latest run and any run going
  *           • the Apple fix changes only this artist's Apple link, through the Connections door,
  *             as a draft, only when the latest run OFFERS it, with the address worked out from
  *             the link as it is NOW
@@ -74,7 +75,7 @@ function world() {
         ? { id: 'apple', status: 'fail', value: 'Norway store', sentence: 's', evidence: [], action: { kind: 'fix', fix: 'apple-storefront', label: 'Fix' } }
         : { id: 'apple', status: 'pass', value: 'US store', sentence: 's', evidence: [] }
       const row = { id: 'run-1', artist_id: A, ran_at: '2026-09-28T21:00:00Z', trigger: 'manual', status: 'done', summary: { apple: apple.status }, results: [apple] }
-      // One row for a `maybeSingle` read; a list for the history read and the probe.
+      // One row for a `maybeSingle` read (the latest run), none for the running one.
       if (c.terminal === 'maybeSingle') return { data: c.filters.some(([, col, v]) => col === 'status' && v === 'running') ? null : row }
       return { data: [row] }
     }
@@ -147,35 +148,23 @@ describe('Test again', () => {
   })
 })
 
-describe('reading the Test tab: "not switched on" is its own state', () => {
-  // Not switched on: the table missing (migration not pushed) is "off", not an error.
-  it('CRITICAL: the table not being there yet (migration not pushed) is state "off", not an error', async () => {
-    const m = await actions()
-    for (const err of [
-      { code: 'PGRST205', message: "Could not find the table 'public.seo_test_runs' in the schema cache" },
-      { code: '42P01', message: 'relation "public.seo_test_runs" does not exist' },
-    ]) {
-      h.runsError = err
-      expect(await m.readSeoTestsAction(A), err.code).toEqual({ ok: true, state: 'off' })
-    }
-  })
-
-  // Any other failed read is "error" with a plain sentence, never "off" or "never tested".
-  it('CRITICAL: any other read failure is state "error" with a plain sentence, never "off" or "never tested"', async () => {
+describe('reading the Test tab', () => {
+  // A failed read (here the latest run's, denied: there is no probe before it any more) is
+  // "error" with a plain sentence, never "never tested".
+  it('CRITICAL: a failed read is state "error" with a plain sentence, never "never tested"', async () => {
     h.runsError = { code: '42501', message: 'permission denied for table seo_test_runs' }
     const m = await actions()
     expect(await m.readSeoTestsAction(A)).toEqual({ ok: false, state: 'error', error: 'Couldn’t read the test results.' })
   })
 
-  // Switched on: "ready" with the latest run, the history dots and any run in progress.
-  it('switched on: state "ready" with the latest run, the history dots and any run in progress', async () => {
+  // A good read: "ready" with the latest run and any run in progress, in two reads (no probe,
+  // no history).
+  it('a good read: state "ready" with the latest run and any run in progress, in two reads', async () => {
     const m = await actions()
     const out = await m.readSeoTestsAction(A)
     expect(out).toMatchObject({ ok: true, state: 'ready', running: null })
-    if (out.ok && out.state === 'ready') {
-      expect(out.latest?.id).toBe('run-1')
-      expect(out.history.apple.map((d) => d.status)).toEqual(['fail'])
-    }
+    if (out.ok && out.state === 'ready') expect(out.latest?.id).toBe('run-1')
+    expect(fake.calls.filter((c) => c.table === 'seo_test_runs')).toHaveLength(2)
   })
 })
 

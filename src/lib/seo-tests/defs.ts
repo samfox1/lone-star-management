@@ -8,6 +8,12 @@
  */
 import type { SeoTestDef, SeoTestGroup, SeoTestId } from './types'
 
+/** The wait after a manual run before "Test again" may start another. Mirrors the migration,
+ *  for the page's countdown and copy; the database is the authority. Here and not in store.ts
+ *  (the service-role module) so the browser-side test model can read it without importing the
+ *  store. */
+export const SEO_MANUAL_COOLDOWN_S = 60
+
 /** The tests whose answer does not come from reading the artist's site: `mb` asks MusicBrainz
  *  about the artist, `youtube` reads their YouTube channel. Every other test reads the site's
  *  pages, robots.txt, sitemap or files. */

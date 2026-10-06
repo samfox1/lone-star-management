@@ -22,14 +22,15 @@
  *             a passing row has no "what to do"; keyboard use; a deep link (?open=) opens its row
  *           • the actions: https-only outside links; the fix (and its refusal)
  *           • evidence is text
- *           • the quiet states: tests not on, couldn't read, another run going (and we look
- *             again), cool-down, a failed run, the lines under the header
+ *           • the quiet states: couldn't read, another run going (we look again with the small
+ *             read, one at a time, and render the page once when it is over), cool-down, a
+ *             failed run, the lines under the header
  * Not here: the counts, headline, evidence rows and refusal rules themselves
  *           (tests/unit/manager-tools/seo/test-tab-model.test.ts); the actions on the server
  *           (tests/unit/manager-tools/seo/test-actions.test.ts); how the drawings move (decoration,
  *           checked by eye).
  * Fixtures: runs from the REAL engine over made-up sites (tests/helpers/seo/run-fixture.ts), so every
- *           expectation is DERIVED from those results, never a sentence copied from them; the two
+ *           expectation is DERIVED from those results, never a sentence copied from them; the three
  *           actions and the router are mocks; notices are found by their `data-notice` key, not
  *           their words.
  */
@@ -40,23 +41,29 @@ import { SEO_TEST_IDS, type SeoTestId, type SeoTestResult } from '@/lib/seo-test
 import { TestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab'
 import type { TestTabData } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
 import { editHref, leadOf, runHeadline, sentenceOf } from '@/lib/manager-tools/seo/test-model'
-import { applySeoFixAction, runSeoTestsAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions'
+import { applySeoFixAction, readSeoTestsAction, runSeoTestsAction } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions'
 import { Toaster } from '@/app/artists/[id]/(dashboard)/toast'
-import { HOSTILE_IMG, HOSTILE_SCRIPT, ORIGIN, engineResults, fixtureHistory, fixtureResults, fixtureRun, type Scenario } from '@tests/helpers/seo/run-fixture'
+import { HOSTILE_IMG, HOSTILE_SCRIPT, ORIGIN, engineResults, fixtureResults, fixtureRun, type Scenario } from '@tests/helpers/seo/run-fixture'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions', () => ({
   runSeoTestsAction: vi.fn(),
   applySeoFixAction: vi.fn(),
+  readSeoTestsAction: vi.fn(),
 }))
 const refresh = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }), usePathname: () => '/artists/a1/tools/seo/test' }))
+// One router object for every render, as Next's useRouter gives: the poll's effect depends on it,
+// so a new object per render (the clock re-renders every second) would restart the poll forever.
+const router = { refresh }
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/artists/a1/tools/seo/test' }))
 
 const runMock = vi.mocked(runSeoTestsAction)
 const fixMock = vi.mocked(applySeoFixAction)
+const readMock = vi.mocked(readSeoTestsAction)
 
 beforeEach(() => {
   runMock.mockReset()
   fixMock.mockReset()
+  readMock.mockReset()
   refresh.mockReset()
 })
 afterEach(() => {
@@ -68,7 +75,6 @@ const LONG_AGO = '2026-01-01T00:00:00.000Z'
 const ready = (latest: ReturnType<typeof fixtureRun> | null = fixtureRun(), over: Partial<Extract<TestTabData, { state: 'ready' }>> = {}): TestTabData => ({
   state: 'ready',
   latest,
-  history: fixtureHistory(latest?.results),
   running: null,
   ...over,
 })
@@ -236,8 +242,9 @@ describe('the actions', () => {
     expect(screen.queryByRole('link', { name: 'Evil' })).toBeNull()
     expect(document.querySelector('a[href^="javascript"]')).toBeNull()
   })
-  // The fix: the wrench calls applySeoFixAction, the card confirms it, and a refresh raises the Publish bar.
-  it('fix: the wrench makes the change, confirms it, and refreshes so the Publish bar rises', async () => {
+  // The fix: the wrench calls applySeoFixAction for this artist and fix, and the card confirms it.
+  // (The Publish bar rises from the action's own revalidation; no refresh on top.)
+  it('fix: the wrench makes the change for this artist, and the card confirms it', async () => {
     const rs = engineResults('needsWork')
     const r = firstWith(rs, (x) => x.action?.kind === 'fix')
     const label = r.action!.label
@@ -247,7 +254,6 @@ describe('the actions', () => {
     fireEvent.click(screen.getByRole('button', { name: label }))
     await vi.waitFor(() => expect(within(card(r.id)).getByRole('status')).toBeTruthy())
     expect(fixMock).toHaveBeenCalledWith('a1', 'apple-storefront')
-    expect(refresh).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: label })).toBeNull()
   })
   // A refused fix says why (the server's words, in a toast) and leaves the wrench to try again.
@@ -282,24 +288,40 @@ describe('evidence is text', () => {
 })
 
 describe('the quiet states', () => {
-  // Tests not switched on: nothing to press, no rows. Couldn't read: a way to try again that refreshes.
-  it('not on yet: nothing to press; couldn’t read: "Try again" refreshes', () => {
-    show({ state: 'off' })
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(rowButtons()).toHaveLength(0)
-    cleanup()
+  // Couldn't read: no rows, and a way to try again that refreshes.
+  it('couldn’t read: no rows, and "Try again" refreshes', () => {
     show({ state: 'error' })
+    expect(rowButtons()).toHaveLength(0)
     fireEvent.click(screen.getByRole('button', { name: /^try again$/i }))
     expect(refresh).toHaveBeenCalled()
   })
-  // Another run going (a publish's): the running view with its one "already running" line, no rows, and we look again every few seconds.
-  it('another run going: the running view, its notice, and a look again every few seconds', () => {
+  // Another run going (a publish's): the running view with its one "already running" line and no
+  // rows. Every few seconds the small read looks again (never a page render); when it says the run
+  // is over, the page renders ONCE and the looking stops.
+  it('another run going: the running view, the small read every few seconds, one render when it is over', async () => {
     vi.useFakeTimers()
-    show(ready(fixtureRun({ ranAt: LONG_AGO }), { running: { ranAt: '2026-01-01T00:10:00.000Z', trigger: 'publish' } }))
+    const going = { ranAt: '2026-01-01T00:10:00.000Z', trigger: 'publish' as const }
+    readMock.mockResolvedValueOnce({ ok: true, state: 'ready', latest: null, running: going }).mockResolvedValue({ ok: true, state: 'ready', latest: null, running: null })
+    show(ready(fixtureRun({ ranAt: LONG_AGO }), { running: going }))
     expect(notice('busy')).not.toBeNull()
     expect(rowButtons()).toHaveLength(0)
-    act(() => vi.advanceTimersByTime(5000))
-    expect(refresh).toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(readMock).toHaveBeenCalledWith('a1')
+    expect(refresh).not.toHaveBeenCalled() // still going: no render
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(refresh).toHaveBeenCalledTimes(1) // over: one render
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(readMock).toHaveBeenCalledTimes(2) // and the looking stopped
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+  // A slow read is waited for, never stacked: one read in flight at a time.
+  it('another run going: a slow read is waited for, never stacked', async () => {
+    vi.useFakeTimers()
+    readMock.mockReturnValue(new Promise(() => {}))
+    show(ready(fixtureRun({ ranAt: LONG_AGO }), { running: { ranAt: '2026-01-01T00:10:00.000Z', trigger: 'publish' } }))
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(readMock).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
   })
   // A cool-down refusal (read from its reason) counts down, with Test again off.
   it('cool-down: the countdown shows and Test again is off', async () => {

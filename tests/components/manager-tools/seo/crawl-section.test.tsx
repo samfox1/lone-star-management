@@ -13,8 +13,8 @@
  *           answer, types.ts SeoCrawl.listing).
  * Covers:   • no crawl (none yet, null, a later shape version): no section at all
  *           • a healthy crawl: five rows above the groups, all fine, and each card's key facts
- *             (the file and every crawler, the sitemap's pages, each canonical, every visit,
- *             Google's and Bing's answers)
+ *             (the file and every crawler, the sitemap's pages, the other spelling's permanent
+ *             redirect home, each canonical, every visit, Google's and Bing's answers)
  *           • a blocked crawler: the robots.txt row is red, and the crawler's row shows its rule
  *           • not registered with Google or Bing: no answers, and the links to their own tools
  *           • a page Google answered and doesn't list gets "Ask Google"; a listed page doesn't
@@ -22,7 +22,7 @@
  * Not here: the rules behind each mark and value (tests/unit/manager-tools/seo/crawl-model.test.ts);
  *           the rest of the tab (test-tab.test.tsx); how it looks (checked by screenshot).
  * Fixtures: healthyCrawl() (tests/helpers/seo/crawl-fixture.ts), its crawler list derived from bots.ts; the tab's
- *           run from tests/helpers/seo/run-fixture.ts; the two actions and the router are mocks.
+ *           run from tests/helpers/seo/run-fixture.ts; the tab's actions and the router are mocks.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -30,13 +30,15 @@ import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import type { SeoCrawl } from '@/lib/seo-tests/types'
 import { TestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/test-tab'
 import type { TestTabData } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
-import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, requestIndexingHref, type CrawlRowId } from '@/lib/manager-tools/seo/crawl-model'
+import { BING_WEBMASTER, CRAWL_ROWS, SEARCH_CONSOLE, listingFace, redirectWord, requestIndexingHref, type CrawlRowId } from '@/lib/manager-tools/seo/crawl-model'
+import { shortLink } from '@/lib/manager-tools/format'
 import { ORIGIN, PAGES, healthyCrawl, withBot } from '@tests/helpers/seo/crawl-fixture'
-import { fixtureHistory, fixtureRun } from '@tests/helpers/seo/run-fixture'
+import { fixtureRun } from '@tests/helpers/seo/run-fixture'
 
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test-actions', () => ({
   runSeoTestsAction: vi.fn(),
   applySeoFixAction: vi.fn(),
+  readSeoTestsAction: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => '/artists/a1/tools/seo/test' }))
 
@@ -45,7 +47,7 @@ afterEach(cleanup)
 /** The done step of the tab around a run carrying `crawl` (absent when undefined). */
 function show(crawl: unknown) {
   const latest = fixtureRun(crawl === undefined ? {} : { crawl: crawl as SeoCrawl })
-  const data: TestTabData = { state: 'ready', latest, history: fixtureHistory(latest.results), running: null }
+  const data: TestTabData = { state: 'ready', latest, running: null }
   return render(<TestTab artistId="a1" data={data} currentSite={ORIGIN} artistName="Skeen" />)
 }
 
@@ -109,10 +111,18 @@ describe('a healthy crawl', () => {
     for (const p of PAGES) expect(states(pages.querySelector(`[data-page="${p}"]`)!)).toEqual(['ok'])
   })
 
-  // Page address and tags: every page's canonical is itself, and nothing says "don't list".
-  it('the tags card: each canonical is itself, and no noindex', () => {
-    show(healthyCrawl())
+  // Page address and tags: the other spelling sends visitors home for good (the 308 a run
+  // stores as the spelling's own first answer, run.ts checkOtherHost), every page's canonical is
+  // itself, and nothing says "don't list".
+  it('the tags card: the other spelling redirects home for good, each canonical is itself, and no noindex', () => {
+    const crawl = healthyCrawl()
+    show(crawl)
     const card = open('tags')
+    const address = part(card, 'address')
+    expect(address.textContent).toContain(shortLink(crawl.otherHost!.url))
+    expect(address.textContent).toContain(`→ ${shortLink(crawl.otherHost!.to)}`)
+    expect(address.textContent).toContain(redirectWord(crawl.otherHost!.status))
+    expect(states(address)).toEqual(['ok'])
     for (const p of PAGES) expect(states(part(card, 'canonical').querySelector(`[data-page="${p}"]`)!)).toEqual(['ok'])
     expect(states(part(card, 'noindex'))).toEqual(['ok'])
   })

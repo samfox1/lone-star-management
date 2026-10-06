@@ -16,7 +16,8 @@
  *             hands the password to publishAction
  * Not here: the words (tests/unit/manager-tools/overview/); publishAction's gate
  *           (tests/unit/publish/password-gate.test.ts); looks (screenshots).
- * Fixtures: a clean diff from PUBLISHABLE's keys. Mocked: publishAction, the router.
+ * Fixtures: a clean diff from PUBLISHABLE's keys. Mocked: publishAction, the pathname (no router:
+ *           publishAction's own revalidation re-renders the page, so the bar never refreshes it).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -26,8 +27,7 @@ import { toolsFor } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_shell/
 import { publishAction } from '@/app/artists/[id]/(dashboard)/actions'
 
 vi.mock('@/app/artists/[id]/(dashboard)/actions', () => ({ publishAction: vi.fn(async () => ({ ok: true })) }))
-const refresh = vi.fn()
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }), usePathname: () => '/artists/a1/tools' }))
+vi.mock('next/navigation', () => ({ usePathname: () => '/artists/a1/tools' }))
 
 afterEach(() => {
   cleanup()
@@ -89,6 +89,6 @@ describe('the Overview', () => {
     fireEvent.change(within(dialog).getByPlaceholderText('Your password'), { target: { value: 'hunter2' } })
     await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' })))
     await waitFor(() => expect(publishAction).toHaveBeenCalledWith('a1', 'hunter2'))
-    expect(refresh).toHaveBeenCalled()
+    expect(publishAction).toHaveBeenCalledTimes(1)
   })
 })

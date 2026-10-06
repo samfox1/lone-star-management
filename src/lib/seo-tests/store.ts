@@ -19,10 +19,8 @@
  * READERS take the manager's own client (RLS: their artists only).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoCrawl, type SeoRunReach, type SeoRunTrigger, type SeoTestHistory, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
-
-/** Mirrors the migration, for tests and copy. The database is the authority. */
-export const SEO_MANUAL_COOLDOWN_S = 60
+import { SEO_MANUAL_COOLDOWN_S } from './defs'
+import { SEO_TEST_IDS, SEO_TEST_STATUSES, isScored, type SeoCrawl, type SeoRunReach, type SeoRunTrigger, type SeoTestId, type SeoTestResult, type SeoTestRun, type SeoTestStatus } from './types'
 
 /** Every status the contract has, `na` included (types.ts derives the list from the union). */
 const isStatus = (v: unknown): v is SeoTestStatus => typeof v === 'string' && (SEO_TEST_STATUSES as readonly string[]).includes(v)
@@ -126,22 +124,21 @@ function reachOf(v: unknown): SeoRunReach | null {
 
 /**
  * The answers that mean the database turned the call WITH a crawl down, so nothing was written:
- *   PGRST202  no seo_test_finish takes `p_crawl` (20261001120000 not pushed yet)
- *   42883     the same, from Postgres when PostgREST's schema cache is behind
  *   23514     a CHECK refused it (seo_test_runs_crawl: not an object, or over 64 KB)
  *   22P02 / 22P05  jsonb refused a character in it (a lone surrogate, a NUL)
+ * (PGRST202 / 42883, "no seo_test_finish takes `p_crawl`", left with the fallbacks once
+ * 20261001120000 was pushed: a missing function is now a real failure, not a crawl to drop.)
  */
-const CRAWL_REFUSED = new Set(['PGRST202', '42883', '23514', '22P02', '22P05'])
+const CRAWL_REFUSED = new Set(['23514', '22P02', '22P05'])
 
 /**
  * Finish a running run with its results: one call to `seo_test_finish` (service role). `true`
  * back means a RUNNING run was finished; `false` (abandoned, pruned, already finished) is not
  * reported as saved.
  *
- * The crawl rides along as `p_crawl` (capped by `capCrawl`), and only when there is one: a
- * database from before 20261001120000 has no such argument. It is extra, never the run: when
- * the database REFUSES the call with a crawl (`CRAWL_REFUSED`: that migration not pushed yet, or
- * a crawl the table refuses), the run is finished again without it, so its results are never
+ * The crawl rides along as `p_crawl` (capped by `capCrawl`), and only when there is one. It is
+ * extra, never the run: when the database REFUSES the call with a crawl (`CRAWL_REFUSED`: a
+ * crawl the table refuses), the run is finished again without it, so its results are never
  * lost to the crawl. A refused call changes nothing (the function is one statement), so the
  * second call is the only write. Any other error (a dropped connection, a timeout) is NOT
  * retried: the first call may have finished the run, and a second would find it no longer
@@ -458,47 +455,16 @@ export type StoredSeoRun = SeoTestRun & {
   publishedAt: string | null
   note: string | null
   /** What the run saw (types.ts SeoCrawl); null for a run from before 20261001 or one that
-   *  couldn't look. Only the full-run reader fills it. */
+   *  couldn't look. */
   crawl?: SeoCrawl | null
 }
 
-/** A finished run without its results: what history dots and the timeline read. */
-export type SeoRunSummary = Omit<StoredSeoRun, 'results'> & { statuses: Partial<Record<SeoTestId, SeoTestStatus>> }
-
-const SUMMARY_COLS = 'id, artist_id, ran_at, finished_at, trigger, site_url, passed, total, summary, site_fresh, published_at, note, reach'
-/** The full run adds its results and its crawl (the history reads neither). */
-const RUN_COLS = `${SUMMARY_COLS}, results, crawl`
-/** The same read on a table without the crawl column (before 20261001120000 is pushed). */
-const RUN_COLS_NO_CRAWL = `${SUMMARY_COLS}, results`
-
-/** Postgres's "no such column" (42703), as PostgREST passes it through. */
-const missingColumn = (e: { code?: string | null; message?: string | null } | null) => !!e && (e.code === '42703' || /column .* does not exist/i.test(e.message ?? ''))
+/** Every column the page reads, results and crawl included. */
+const RUN_COLS = 'id, artist_id, ran_at, finished_at, trigger, site_url, passed, total, site_fresh, published_at, note, reach, results, crawl'
 
 type Row = Record<string, unknown>
 
 const TRIGGERS: readonly SeoRunTrigger[] = ['manual', 'publish', 'scheduled']
-
-function summaryOf(row: Row): SeoRunSummary {
-  const raw = row.summary && typeof row.summary === 'object' && !Array.isArray(row.summary) ? (row.summary as Record<string, unknown>) : {}
-  const statuses: Partial<Record<SeoTestId, SeoTestStatus>> = {}
-  for (const [id, status] of Object.entries(raw)) if (isTestId(id) && isStatus(status)) statuses[id] = status
-  const trigger = TRIGGERS.find((t) => t === row.trigger) ?? 'manual'
-  return {
-    id: String(row.id),
-    artistId: String(row.artist_id ?? ''),
-    ranAt: String(row.ran_at ?? ''),
-    finishedAt: typeof row.finished_at === 'string' ? row.finished_at : null,
-    trigger,
-    siteUrl: typeof row.site_url === 'string' ? row.site_url : '',
-    passed: Number(row.passed ?? 0),
-    total: Number(row.total ?? 0),
-    siteFresh: typeof row.site_fresh === 'boolean' ? row.site_fresh : null,
-    publishedAt: typeof row.published_at === 'string' ? row.published_at : null,
-    note: typeof row.note === 'string' ? row.note : null,
-    reach: reachOf(row.reach),
-    statuses,
-  }
-}
 
 const optText = (v: unknown) => v === undefined || typeof v === 'string'
 
@@ -528,52 +494,37 @@ function resultsOf(raw: unknown): SeoTestResult[] {
 }
 
 function runOf(row: Row): StoredSeoRun {
-  const { statuses: _statuses, ...rest } = summaryOf(row)
-  void _statuses
-  return { ...rest, results: resultsOf(row.results), crawl: crawlOf(row.crawl) }
+  return {
+    id: String(row.id),
+    artistId: String(row.artist_id ?? ''),
+    ranAt: String(row.ran_at ?? ''),
+    finishedAt: typeof row.finished_at === 'string' ? row.finished_at : null,
+    trigger: TRIGGERS.find((t) => t === row.trigger) ?? 'manual',
+    siteUrl: typeof row.site_url === 'string' ? row.site_url : '',
+    passed: Number(row.passed ?? 0),
+    total: Number(row.total ?? 0),
+    siteFresh: typeof row.site_fresh === 'boolean' ? row.site_fresh : null,
+    publishedAt: typeof row.published_at === 'string' ? row.published_at : null,
+    note: typeof row.note === 'string' ? row.note : null,
+    reach: reachOf(row.reach),
+    results: resultsOf(row.results),
+    crawl: crawlOf(row.crawl),
+  }
 }
 
 /** The newest FINISHED run, or null when the artist has never been tested. Throws when the
  *  read fails: "never tested" and "couldn't read" must not look the same. */
 export async function latestRun(supabase: SupabaseClient, artistId: string): Promise<StoredSeoRun | null> {
-  const read = (cols: string) =>
-    supabase.from('seo_test_runs').select(cols).eq('artist_id', artistId).eq('status', 'done').order('ran_at', { ascending: false }).limit(1).maybeSingle()
-  let { data, error } = await read(RUN_COLS)
-  // The crawl column arrives with a migration; until it is live, the page reads the run without it
-  // rather than saying "couldn't read" (the code can run before the database has the column).
-  if (missingColumn(error)) ({ data, error } = await read(RUN_COLS_NO_CRAWL))
-  if (error) throw new Error(`seo_test_runs: ${error.message}`)
-  return data ? runOf(data as unknown as Row) : null
-}
-
-/** The newest finished runs, newest first, without their results. Throws when the read fails. */
-export async function recentRuns(supabase: SupabaseClient, artistId: string, limit = 10): Promise<SeoRunSummary[]> {
   const { data, error } = await supabase
     .from('seo_test_runs')
-    .select(SUMMARY_COLS)
+    .select(RUN_COLS)
     .eq('artist_id', artistId)
     .eq('status', 'done')
     .order('ran_at', { ascending: false })
-    .limit(limit)
+    .limit(1)
+    .maybeSingle()
   if (error) throw new Error(`seo_test_runs: ${error.message}`)
-  return ((data ?? []) as Row[]).map(summaryOf)
-}
-
-/**
- * Each test's last `limit` results, OLDEST first (the dots read left to right). Every test id
- * is present; a test a run did not record (it did not exist yet) is simply absent from that
- * run's dots, never shown as a fail.
- */
-export async function historyFor(supabase: SupabaseClient, artistId: string, limit = 8): Promise<Record<SeoTestId, SeoTestHistory>> {
-  const runs = (await recentRuns(supabase, artistId, limit)).slice().reverse()
-  const out = Object.fromEntries(SEO_TEST_IDS.map((id) => [id, [] as SeoTestHistory])) as Record<SeoTestId, SeoTestHistory>
-  for (const run of runs) {
-    for (const id of SEO_TEST_IDS) {
-      const status = run.statuses[id]
-      if (status) out[id].push({ ranAt: run.ranAt, status })
-    }
-  }
-  return out
+  return data ? runOf(data as unknown as Row) : null
 }
 
 /** The run in progress, if any (a publish's run waits for the site in the background). A
@@ -597,37 +548,21 @@ export async function currentRun(supabase: SupabaseClient, artistId: string, now
   }
 }
 
-/* ── the Test tab's read, with "not switched on" as its own state ──────────────────── */
-
-/** PostgREST's "no such table" (PGRST205) and Postgres's own (42P01): the seo_test_runs
- *  migration is not pushed yet. Anything else is a real read failure. */
-export function isMissingTable(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
-  if (!error) return false
-  if (error.code === 'PGRST205' || error.code === '42P01') return true
-  return /could not find the table|relation .* does not exist/i.test(error.message ?? '')
-}
+/* ── the Test tab's read ────────────────────────────────────────────────────────────── */
 
 /**
- * What the Test tab shows: `off` (testing isn't switched on: the table is not there yet),
- * `error` (couldn't read), or `ready` (`latest: null` there means never tested). Never throws.
- * RLS-scoped; the caller has already checked the manager owns the artist.
+ * What the Test tab shows: `error` (couldn't read) or `ready` (`latest: null` there means never
+ * tested). Never throws. RLS-scoped; the caller has already checked the manager owns the artist.
  */
-export type SeoTestTab =
-  | { state: 'off' }
-  | { state: 'error' }
-  | { state: 'ready'; latest: StoredSeoRun | null; history: Record<SeoTestId, SeoTestHistory>; running: { ranAt: string; trigger: SeoRunTrigger } | null }
+export type SeoTestTab = { state: 'error' } | { state: 'ready'; latest: StoredSeoRun | null; running: { ranAt: string; trigger: SeoRunTrigger } | null }
 
 export async function readTestTab(supabase: SupabaseClient, artistId: string): Promise<SeoTestTab> {
   try {
-    // One tiny read tells "not switched on" from "couldn't read". Not a HEAD request: a HEAD
-    // answer has no body, so it would carry no error code to tell by.
-    const probe = await supabase.from('seo_test_runs').select('id').eq('artist_id', artistId).limit(1)
-    if (probe.error) return isMissingTable(probe.error) ? { state: 'off' } : { state: 'error' }
-    const [latest, history, running] = await Promise.all([latestRun(supabase, artistId), historyFor(supabase, artistId), currentRun(supabase, artistId)])
-    return { state: 'ready', latest, history, running }
-  } catch (e) {
-    // latestRun / historyFor throw "seo_test_runs: <message>": a table dropped between the probe
-    // and the read is still "off"; anything else is a failed read.
-    return isMissingTable({ message: e instanceof Error ? e.message : String(e) }) ? { state: 'off' } : { state: 'error' }
+    const [latest, running] = await Promise.all([latestRun(supabase, artistId), currentRun(supabase, artistId)])
+    return { state: 'ready', latest, running }
+  } catch {
+    // latestRun throws on any failed read (currentRun swallows its own): "couldn't read", never
+    // "never tested".
+    return { state: 'error' }
   }
 }

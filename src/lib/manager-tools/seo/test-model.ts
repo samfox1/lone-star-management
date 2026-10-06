@@ -5,25 +5,20 @@
  *
  * COUNTS (Sam's header, round 2: "19 of 24 tests pass" · "5 need you"; M is every test in
  * SEO_TEST_IDS that applies, 25 since YouTube):
- *   pass       status 'pass'                        → the "Passing" filter
- *   need you   status 'fail'                        → the "Needs you" filter
- *   unknown    "couldn't check": NOT a pass and not a fail; said beside the score and given
- *              its own filter, "Couldn't check", so every row sits in exactly one filter
- *   na         "doesn't apply": left out of both sides of "N of M" (types.ts SeoTestStatus);
- *              shown only under All
- * So pass + need + couldn't = the score's M, and All = M + doesn't-apply.
- * (Since 2026-09-29 the tab itself shows no filter, only All: `groupsFor(results, 'all')`. The
- * filter rules stay here, tested, for whatever next lists the tests by status.)
+ *   pass       status 'pass'
+ *   need you   status 'fail'
+ *   unknown    "couldn't check": NOT a pass and not a fail; said beside the score
+ *   na         "doesn't apply": left out of both sides of "N of M" (types.ts SeoTestStatus)
+ * So pass + need + couldn't = the score's M. (The status filters went 2026-09-29: the tab lists
+ * every row, so `groupsFor` takes no filter.)
  * Derived from `results`, never from the row's stored `passed` / `total`: the stored total counts
  * `na` results, and the page must not.
  */
-import { SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
-import { SEO_MANUAL_COOLDOWN_S, type StoredSeoRun } from '@/lib/seo-tests/store'
+import { SEO_MANUAL_COOLDOWN_S, SEO_TEST_DEFS, SEO_TEST_GROUPS, SITE_FREE_TESTS } from '@/lib/seo-tests/defs'
+import type { StoredSeoRun } from '@/lib/seo-tests/store'
 import type { SeoRunReach, SeoTestAction, SeoTestDef, SeoTestGroup, SeoTestId, SeoTestResult, SeoTestStatus } from '@/lib/seo-tests/types'
 import { clockTime, plural, shortDay } from '../format'
 import { SEO_EDIT_TARGETS } from './sections'
-
-export type TestFilter = 'all' | 'need' | 'pass' | 'unknown'
 
 export type RunCounts = { pass: number; fail: number; unknown: number; na: number; applicable: number }
 
@@ -37,20 +32,6 @@ export function countResults(results: readonly SeoTestResult[]): RunCounts {
     if (r.status !== 'na') c.applicable++
   }
   return c
-}
-
-const FILTER_STATUS: Record<Exclude<TestFilter, 'all'>, SeoTestStatus> = { need: 'fail', pass: 'pass', unknown: 'unknown' }
-
-export function matchesFilter(result: SeoTestResult | null, filter: TestFilter): boolean {
-  if (filter === 'all') return true
-  return !!result && result.status === FILTER_STATUS[filter]
-}
-
-/** What an emptied filter says instead of a blank page. */
-export const EMPTY_FILTER: Record<Exclude<TestFilter, 'all'>, string> = {
-  need: 'Nothing needs you',
-  pass: 'Nothing passing yet',
-  unknown: 'Every test could be checked',
 }
 
 /* ── the headline: ONE helper for every place a run is summed up ────────────────────── */
@@ -135,22 +116,18 @@ export type TestRow = { def: SeoTestDef; result: SeoTestResult | null }
 export type TestGroupView = { id: SeoTestGroup; label: string; rows: TestRow[]; pass: number; applicable: number }
 
 /**
- * The four groups in page order (defs.ts), each with its rows under the filter and its count
- * over ALL its rows ("9 of 10" does not change with the filter). A group the filter empties is
- * left out. A test the run has no result for (it did not exist yet, or its result was dropped
- * as malformed) still gets its row, with no result: it is never shown as a pass or a fail.
+ * The four groups in page order (defs.ts), each with every one of its rows and its count ("9 of
+ * 10"). A test the run has no result for (it did not exist yet, or its result was dropped as
+ * malformed) still gets its row, with no result: it is never shown as a pass or a fail.
  */
-export function groupsFor(results: readonly SeoTestResult[], filter: TestFilter): TestGroupView[] {
+export function groupsFor(results: readonly SeoTestResult[]): TestGroupView[] {
   const byId = new Map<SeoTestId, SeoTestResult>()
   for (const r of results) if (!byId.has(r.id)) byId.set(r.id, r)
-  const out: TestGroupView[] = []
-  for (const g of SEO_TEST_GROUPS) {
-    const all: TestRow[] = SEO_TEST_DEFS.filter((d) => d.group === g.id).map((def) => ({ def, result: byId.get(def.id) ?? null }))
-    const counts = countResults(all.flatMap((r) => (r.result ? [r.result] : [])))
-    const rows = all.filter((r) => matchesFilter(r.result, filter))
-    if (rows.length) out.push({ id: g.id, label: g.label, rows, pass: counts.pass, applicable: counts.applicable })
-  }
-  return out
+  return SEO_TEST_GROUPS.map((g) => {
+    const rows: TestRow[] = SEO_TEST_DEFS.filter((d) => d.group === g.id).map((def) => ({ def, result: byId.get(def.id) ?? null }))
+    const counts = countResults(rows.flatMap((r) => (r.result ? [r.result] : [])))
+    return { id: g.id, label: g.label, rows, pass: counts.pass, applicable: counts.applicable }
+  })
 }
 
 /** The bold words in front of a result's sentence. A pass reads plain. */
@@ -313,35 +290,19 @@ export function clockText(seconds: number): string {
 
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
-function dayWord(at: Date, now: Date, locale?: string): { word: string; relative: boolean } {
-  if (sameDay(at, now)) return { word: 'today', relative: true }
+function dayWord(at: Date, now: Date, locale?: string): string {
+  if (sameDay(at, now)) return 'today'
   const y = new Date(now)
   y.setDate(now.getDate() - 1)
-  if (sameDay(at, y)) return { word: 'yesterday', relative: true }
-  return { word: shortDay(at, { locale, now }), relative: false }
+  if (sameDay(at, y)) return 'yesterday'
+  return shortDay(at, { locale, now })
 }
 
 /** "today at 9:14 PM", "yesterday at 6:00 AM", "Sep 21 at 9:14 PM". '' for a bad date. */
 export function whenText(iso: string, now: Date, locale?: string): string {
   const at = new Date(iso)
   if (!Number.isFinite(at.getTime())) return ''
-  return `${dayWord(at, now, locale).word} at ${clockTime(at, locale)}`
-}
-
-/** A history dot's label: "Today, 9:14 PM · passed". */
-export function dotText(iso: string, status: SeoTestStatus, now: Date, locale?: string): string {
-  const at = new Date(iso)
-  if (!Number.isFinite(at.getTime())) return STATUS_WORD[status]
-  const { word, relative } = dayWord(at, now, locale)
-  const day = relative ? word.charAt(0).toUpperCase() + word.slice(1) : word
-  return `${day}, ${clockTime(at, locale)} · ${STATUS_WORD[status]}`
-}
-
-const STATUS_WORD: Record<SeoTestStatus, string> = {
-  pass: 'passed',
-  fail: 'needed you',
-  unknown: 'couldn’t check',
-  na: 'didn’t apply',
+  return `${dayWord(at, now, locale)} at ${clockTime(at, locale)}`
 }
 
 /* ── checking it yourself: other tools, under "What we saw" ─────────────────────────── */

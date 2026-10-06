@@ -13,7 +13,6 @@
  * or a name: a payload that tried would be refused (42501) or restamped.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isMissingTable } from '@/lib/seo-tests/store'
 import { BIO_ITEMS } from './bios'
 
 /**
@@ -32,16 +31,12 @@ export function isProfileItem(x: unknown): x is ProfileItem {
 }
 
 /**
- * The artist's marks. `{}` while the migration is not pushed (the table is missing: PostgREST
- * PGRST205, or Postgres 42P01), so the Profiles tab works before the push and just shows
- * nothing marked. Any other failure THROWS: "couldn't read" must not look like "not sent".
+ * The artist's marks. Any failure THROWS: "couldn't read" must not look like "not sent". (The
+ * "table missing = nothing marked" fallback left once both migrations were pushed.)
  */
 export async function readProfileMarks(supabase: SupabaseClient, artistId: string): Promise<ProfileMarks> {
   const { data, error } = await supabase.from('profile_marks').select('item, done_at').eq('artist_id', artistId)
-  if (error) {
-    if (isMissingTable(error)) return {}
-    throw new Error(`profile_marks: ${error.message}`)
-  }
+  if (error) throw new Error(`profile_marks: ${error.message}`)
   const marks: ProfileMarks = {}
   // done_at is NOT NULL with a default, so every row carries one.
   for (const row of (data ?? []) as { item: unknown; done_at: string }[]) {
@@ -79,14 +74,11 @@ export async function setProfileMark(
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isProfileItem(item)) return { ok: false, error: 'Unknown item.' }
-  const fail = (error: { code?: string; message?: string }) =>
-    isMissingTable(error)
-      ? { ok: false, error: 'Marking is not switched on yet.' }
-      : { ok: false, error: done ? 'Could not save the mark.' : 'Could not clear the mark.' }
+  const fail = () => ({ ok: false, error: done ? 'Could not save the mark.' : 'Could not clear the mark.' })
 
   if (!done) {
     const { error } = await supabase.from('profile_marks').delete().eq('artist_id', artistId).eq('item', item)
-    return error ? fail(error) : { ok: true }
+    return error ? fail() : { ok: true }
   }
 
   const re = await supabase
@@ -95,11 +87,11 @@ export async function setProfileMark(
     .eq('artist_id', artistId)
     .eq('item', item)
     .select('item')
-  if (re.error) return fail(re.error)
+  if (re.error) return fail()
   if ((re.data?.length ?? 0) > 0) return { ok: true }
 
   const { error } = await supabase
     .from('profile_marks')
     .upsert({ artist_id: artistId, item }, { onConflict: 'artist_id,item', ignoreDuplicates: true })
-  return error ? fail(error) : { ok: true }
+  return error ? fail() : { ok: true }
 }

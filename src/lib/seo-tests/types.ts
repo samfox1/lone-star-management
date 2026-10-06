@@ -357,7 +357,9 @@ export type SeoCrawl = {
     /** Each VISITING crawler's answer, by SeoBot key: the status, null = no answer. */
     visits: Record<string, number | null>
   }[]
-  /** The site's other spelling (apex ↔ www) and where it sends a visitor; null = not checked. */
+  /** The site's other spelling (apex ↔ www): `status` is the spelling's OWN first answer (a 308,
+   *  or a 200 when it serves the site itself), `to` where its redirect led, null when it did not
+   *  redirect. null as a whole = not checked. */
   otherHost: { url: string; status: number | null; to: string | null } | null
   /** Whether Google and Bing list the opened pages. A provider is null when the site isn't
    *  registered with it (site_verifications, verified), so it couldn't be asked. Bing has no
@@ -390,6 +392,3 @@ export type SeoTestRun = {
    *  or a run whose own code broke before it could look. */
   reach?: SeoRunReach | null
 }
-
-/** The last results of one test, oldest first, for the history dots. */
-export type SeoTestHistory = { ranAt: string; status: SeoTestStatus }[]

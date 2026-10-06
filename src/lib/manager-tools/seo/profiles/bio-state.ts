@@ -14,7 +14,7 @@
  * PURE: no DB, no React. The Profiles page reads the rows and passes them in (bios-load.ts).
  */
 import type { ARTIST_SNAPSHOT } from '@/lib/content'
-import { CONNECTIONS, buildConnectionRows, type ConnectionDef, type LinkRowLike } from '@/lib/connections'
+import { buildConnectionRows, type ConnectionDef, type LinkRowLike } from '@/lib/connections'
 import type { IntegrationArtist } from '@/lib/integrations-registry'
 import type { SeoTestId } from '@/lib/seo-tests/types'
 import { shortDay } from '../../format'
@@ -184,11 +184,6 @@ export function changedWords(fields: readonly BioFact[]): string {
 
 /** An outside bio the artist has: its platform is connected (Connections). */
 export type ConnectedBio = { key: OutsideBio; label: string; edit: string; def: ConnectionDef; url: string | null }
-
-/** The connection an outside bio belongs to, by its label (bios.ts and Connections share it). */
-export function bioConnection(label: string): ConnectionDef | undefined {
-  return CONNECTIONS.find((d) => d.label === label)
-}
 
 /**
  * The outside bios the artist has, in OUTSIDE_BIOS order: each one whose platform is connected,

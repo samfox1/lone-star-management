@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { publishAction } from '../../actions'
 import { PublishRiser } from '../_ui/publish-riser'
 
@@ -9,19 +8,10 @@ import { PublishRiser } from '../_ui/publish-riser'
  * every other tool uses (publish-riser.tsx), up only while something waits. It replaced the
  * standing "Publish all" button, and publishes what that did: everything (`publishAction`,
  * password-gated server-side). `message` is waitingMessage(diff); '' keeps the bar down.
+ *
+ * No router.refresh() after: publishAction revalidates the layout (publishGated), so its answer
+ * already carries the fresh page. A refresh on top rendered it twice.
  */
 export function OverviewRiser({ artistId, message }: { artistId: string; message: string }) {
-  const router = useRouter()
-  return (
-    <PublishRiser
-      dirty={message !== ''}
-      message={message}
-      noun="site"
-      onPublish={async (password) => {
-        const res = await publishAction(artistId, password)
-        if (res.ok) router.refresh()
-        return res
-      }}
-    />
-  )
+  return <PublishRiser dirty={message !== ''} message={message} noun="site" onPublish={(password) => publishAction(artistId, password)} />
 }

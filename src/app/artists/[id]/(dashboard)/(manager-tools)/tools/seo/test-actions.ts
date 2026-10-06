@@ -118,10 +118,10 @@ export async function applySeoFixAction(artistId: string, fix: SeoFix): Promise<
 }
 
 /**
- * The Test tab: `store.readTestTab` behind the ownership gate. `state` says which of three things
- * the page is looking at: `off` (testing isn't switched on yet: the seo_test_runs migration is not
- * pushed), `error` (couldn't read, with the sentence), or `ready` (the latest run, each test's
- * history dots, a run in progress; `latest: null` = never tested).
+ * The Test tab's read, `store.readTestTab`, behind the ownership gate: `error` (couldn't read,
+ * with the sentence) or `ready` (the latest run and a run in progress; `latest: null` = never
+ * tested). The tab polls it while another run is going (test-tab.tsx), so waiting costs two
+ * small reads a tick instead of a whole page render.
  */
 export async function readSeoTestsAction(
   artistId: string,

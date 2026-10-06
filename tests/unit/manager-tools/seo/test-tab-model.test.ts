@@ -1,16 +1,16 @@
 /**
  * The Test tab's rules: every count, headline, word and link the manager reads there, and how
- * the tab tells "not switched on yet" from "couldn't read" from "never tested".
+ * the tab tells "couldn't read" from "never tested".
  *
  * Code:     src/lib/manager-tools/seo/test-model.ts,
- *           test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
+ *           test/load.ts (loadTestTab), lib/seo-tests/store.ts (readTestTab)
  * Feature:  SEO / GEO page · AI test tab (the headline, the counts and the words), every SEO
  *           test (SEO_TEST_IDS) in its four groups
  * Tier:     STRICT (AGENTS.md "Test depth"): the counts ("19 of 25", "5 need you"), the headline
  *           and the hrefs a stored result can reach are what the manager is told is true.
  * Covers:   • counts: `na` left out of both sides of "N of M"; an unknown status counts nowhere
- *           • groups and the filter: four groups in page order, each row in exactly one filter,
- *             and the three add up to the score; a test with no result is never a pass
+ *           • groups: four groups in page order, every row in its group, each group's count; a
+ *             test with no result is never a pass
  *           • the headline: a site that didn't answer is one sentence (from the run's `reach`
  *             first, then the statuses); no site, none apply, nothing checked each have words
  *           • the words: each status's lead, times in the manager's day
@@ -18,8 +18,8 @@
  *             cool-down, and a refusal read from its reason (words only for an older server)
  *           • where an action can go: https or nothing; the "check it yourself" links; every
  *             pencil lands on a real tab or route
- *           • reading the tab: the table missing is "off", a failed read is "error", an empty
- *             table is "never tested"
+ *           • reading the tab: a failed read (a denied one included) is "error", an empty table
+ *             is "never tested"
  *           • the open row's card: evidence as plain strings, a repeated label said once; the
  *             running clock
  * Not here: drawing the tab (tests/components/manager-tools/seo/test-tab.test.tsx); the server
@@ -30,18 +30,15 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SEO_TEST_DEFS, SEO_TEST_GROUPS } from '@/lib/seo-tests/defs'
-import { SEO_MANUAL_COOLDOWN_S } from '@/lib/seo-tests/store'
+import { SEO_MANUAL_COOLDOWN_S, SEO_TEST_DEFS, SEO_TEST_GROUPS } from '@/lib/seo-tests/defs'
 import { SEO_TEST_IDS, type SeoTestResult } from '@/lib/seo-tests/types'
 import {
-  EMPTY_FILTER,
   checkItYourself,
   classifyRunError,
   clockText,
   evidenceRows,
   cooldownEnd,
   countResults,
-  dotText,
   editHref,
   groupsFor,
   hasNoSite,
@@ -55,7 +52,6 @@ import {
   showStale,
   siteChanged,
   leadOf,
-  matchesFilter,
   safeHttps,
   secondsLeft,
   sentenceOf,
@@ -64,7 +60,6 @@ import {
 import { SEO_EDIT_TARGETS, SEO_SECTIONS, seoTabSeg } from '@/lib/manager-tools/seo/sections'
 import { TOOLS } from '@/app/artists/[id]/(dashboard)/(manager-tools)/_shell/tools-registry'
 import { loadTestTab } from '@/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/test/load'
-import { isMissingTable } from '@/lib/seo-tests/store'
 import { SCENARIO_NAMES, engineResults, fixtureResults } from '@tests/helpers/seo/run-fixture'
 
 describe('counts', () => {
@@ -88,11 +83,11 @@ describe('counts', () => {
   })
 })
 
-describe('groups and the filter', () => {
-  // Groups: four in page order, each counting ALL its rows whatever the filter.
-  it('four groups in page order, each counting ALL its rows whatever the filter', () => {
+describe('groups', () => {
+  // Groups: four in page order, every row in its group, each counting its passes over what applies.
+  it('four groups in page order, every row in its group, each counting its passes over what applies', () => {
     const rs = fixtureResults({ genre: { status: 'na' } })
-    const all = groupsFor(rs, 'all')
+    const all = groupsFor(rs)
     expect(all.map((g) => g.id)).toEqual(SEO_TEST_GROUPS.map((g) => g.id))
     for (const g of all) {
       const defs = SEO_TEST_DEFS.filter((d) => d.group === g.id)
@@ -101,36 +96,20 @@ describe('groups and the filter', () => {
       expect(g.pass).toBe(mine.filter((r) => r.status === 'pass').length)
       expect(g.applicable).toBe(mine.filter((r) => r.status !== 'na').length)
     }
-    const need = groupsFor(rs, 'need')
-    for (const g of need) {
-      expect(g.rows.every((r) => r.result?.status === 'fail')).toBe(true)
-      expect(g.pass).toBe(all.find((x) => x.id === g.id)!.pass) // the count does not move
-    }
-  })
-  // The filters: every scored row in exactly one, and the three add up to the score (every scenario).
-  it('CRITICAL: every scored row is in exactly ONE filter, and the three add up to the score', () => {
+    // The groups' counts add up to the score, in every scenario.
     for (const s of SCENARIO_NAMES) {
-      const rs = engineResults(s)
-      const ids = (f: 'need' | 'pass' | 'unknown') => groupsFor(rs, f).flatMap((g) => g.rows.map((r) => r.def.id))
-      const [need, pass, unknown] = [ids('need'), ids('pass'), ids('unknown')]
-      expect(need.sort(), s).toEqual(rs.filter((r) => r.status === 'fail').map((r) => r.id).sort())
-      expect(pass.sort(), s).toEqual(rs.filter((r) => r.status === 'pass').map((r) => r.id).sort())
-      expect(unknown.sort(), s).toEqual(rs.filter((r) => r.status === 'unknown').map((r) => r.id).sort())
-      expect(new Set([...need, ...pass, ...unknown]).size, s).toBe(need.length + pass.length + unknown.length)
-      expect(need.length + pass.length + unknown.length, s).toBe(countResults(rs).applicable)
+      const gs = groupsFor(engineResults(s))
+      const c = countResults(engineResults(s))
+      expect(gs.reduce((n, g) => n + g.pass, 0), s).toBe(c.pass)
+      expect(gs.reduce((n, g) => n + g.applicable, 0), s).toBe(c.applicable)
     }
-    // A group the filter empties is dropped; the page says so instead (EMPTY_FILTER).
-    expect(groupsFor(engineResults('visualArtist'), 'need')).toEqual([])
-    expect(EMPTY_FILTER.need).toBe('Nothing needs you')
-    expect(matchesFilter(null, 'need')).toBe(false)
-    expect(matchesFilter(null, 'all')).toBe(true)
   })
-  // A missing result keeps its row, with no result, and is never a pass.
+  // A missing result keeps its row, with no result, and is never counted a pass.
   it('a test the run has no result for still has its row, with no result (never a pass)', () => {
     const rs = fixtureResults().filter((r) => r.id !== 'alt')
-    const row = groupsFor(rs, 'all').flatMap((g) => g.rows).find((r) => r.def.id === 'alt')!
-    expect(row.result).toBeNull()
-    expect(groupsFor(rs, 'pass').flatMap((g) => g.rows).some((r) => r.def.id === 'alt')).toBe(false)
+    const group = groupsFor(rs).find((g) => g.rows.some((r) => r.def.id === 'alt'))!
+    expect(group.rows.find((r) => r.def.id === 'alt')!.result).toBeNull()
+    expect(group.pass).toBe(rs.filter((r) => r.status === 'pass' && group.rows.some((x) => x.def.id === r.id)).length)
   })
 })
 
@@ -223,7 +202,6 @@ describe('the words', () => {
     expect(whenText(new Date(2026, 8, 21, 9, 14).toISOString(), now, 'en-US')).toBe('Sep 21 at 9:14 AM')
     expect(whenText(new Date(2025, 8, 21, 9, 14).toISOString(), now, 'en-US')).toBe('Sep 21, 2025 at 9:14 AM')
     expect(whenText('not a date', now)).toBe('')
-    expect(dotText(new Date(2026, 8, 28, 21, 14).toISOString(), 'fail', now, 'en-US')).toBe('Today, 9:14 PM · needed you')
   })
 })
 
@@ -312,21 +290,12 @@ function fake(result: { data: unknown; error: { code?: string; message?: string 
   return { from: () => chain } as unknown as SupabaseClient
 }
 
-describe('reading the tab: "not switched on" vs "couldn\'t read" vs "never tested"', () => {
-  // "No such table": PostgREST's and Postgres's words for it, and nothing else (a denied read is not "off").
-  it('knows PostgREST’s and Postgres’s "no such table", and nothing else', () => {
-    expect(isMissingTable({ code: 'PGRST205', message: "Could not find the table 'public.seo_test_runs' in the schema cache" })).toBe(true)
-    expect(isMissingTable({ code: '42P01', message: 'relation "public.seo_test_runs" does not exist' })).toBe(true)
-    expect(isMissingTable({ message: "seo_test_runs: Could not find the table 'public.seo_test_runs' in the schema cache" })).toBe(true)
-    expect(isMissingTable({ code: '42501', message: 'permission denied for table seo_test_runs' })).toBe(false)
-    expect(isMissingTable({ code: 'PGRST301', message: 'JWT expired' })).toBe(false)
-    expect(isMissingTable(null)).toBe(false)
-  })
-
-  // The table missing (the migration isn't pushed) is "off"; a denied read is "error"; an empty table is "never tested".
-  it('CRITICAL: the table missing is "off", a denied or broken read is "error", an empty table is "never tested"', async () => {
-    expect(await loadTestTab(fake({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }), 'a1')).toEqual({ state: 'off' })
+describe('reading the tab: "couldn\'t read" vs "never tested"', () => {
+  // A denied or broken read is "error" (the table missing too: both migrations are pushed, so
+  // that is a broken read now, not "not switched on"); an empty table is "never tested".
+  it('CRITICAL: a denied or broken read is "error", an empty table is "never tested"', async () => {
     expect(await loadTestTab(fake({ data: null, error: { code: '42501', message: 'permission denied' } }), 'a1')).toEqual({ state: 'error' })
+    expect(await loadTestTab(fake({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }), 'a1')).toEqual({ state: 'error' })
     const ok = await loadTestTab(fake({ data: null, error: null }), 'a1')
     expect(ok.state).toBe('ready')
     expect(ok.state === 'ready' && ok.latest).toBeNull()

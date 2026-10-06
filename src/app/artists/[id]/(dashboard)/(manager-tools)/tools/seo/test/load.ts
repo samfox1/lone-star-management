@@ -2,8 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { readTestTab, type SeoTestTab } from '@/lib/seo-tests/store'
 
 /**
- * What the Test tab reads: `store.readTestTab` ("not switched on" vs "couldn't read" vs "never
- * tested"), plus whether the newest attempt FAILED. That last read is local until the store has
+ * What the Test tab reads: `store.readTestTab` ("couldn't read" vs "never tested" vs a run),
+ * plus whether the newest attempt FAILED. That last read is local until the store has
  * one (the report asks); then this file can go.
  *
  * Only called after `requireArtist` (the ownership gate) on the page; every read is RLS-scoped.

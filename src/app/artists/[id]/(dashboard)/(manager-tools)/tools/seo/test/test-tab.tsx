@@ -10,7 +10,7 @@ import type { SeoTestId } from '@/lib/seo-tests/types'
 import { toast } from '../../../../toast'
 import { CAPS_TITLE, EYEBROW, FOCUS_RING_OFFSET } from '../../../_ui/styles'
 import { useSeeded } from '../../../_ui/use-seeded'
-import { applySeoFixAction, runSeoTestsAction } from '../test-actions'
+import { applySeoFixAction, readSeoTestsAction, runSeoTestsAction } from '../test-actions'
 import { useMounted, useNow } from '../_ui/clock'
 import { DisclosureGroup } from '../../../_ui/disclosure'
 import { CrawlSection } from './crawl-section'
@@ -52,11 +52,10 @@ import { rowButtonId, TestRowItem, type RowContext } from './test-row'
  *            and their marks pop; a page load shows them still.
  *
  * Everything shown is a READ of a stored run (lib/seo-tests/store.ts). THE OTHER STATES, each
- * real: tests not on yet (the table isn't there); couldn't read; cool-down; the run failed (now,
- * or the last attempt before a reload); no site connected, and the site didn't answer (each said
- * ONCE, in the header, with no score and no rows); none apply; a run after a publish that could
- * not confirm the site had caught up (for an hour); a run over 30 days old; a run of an address
- * the artist's site no longer has.
+ * real: couldn't read; cool-down; the run failed (now, or the last attempt before a reload); no
+ * site connected, and the site didn't answer (each said ONCE, in the header, with no score and no
+ * rows); none apply; a run after a publish that could not confirm the site had caught up (for an
+ * hour); a run over 30 days old; a run of an address the artist's site no longer has.
  */
 
 const COPY = {
@@ -66,8 +65,6 @@ const COPY = {
   again: 'Test again',
   bios: (n: number) => `Outside bios · ${n} to check`,
   retry: 'Try again',
-  off: 'Site tests are coming soon',
-  offSub: 'Nothing for you to do.',
   readFailed: 'Couldn’t read the test results',
   testing: 'Testing your site…',
   busy: 'A test is already running. It will show here when it finishes.',
@@ -81,7 +78,9 @@ const COPY = {
   moved: (was: string, now: string) => `These results are for ${was}, an old address. Test again to check ${now}.`,
 }
 
-/** How often a run someone else started is looked for again, and for how long at most. */
+/** How often a run someone else started is looked for again, and for how long at most. Each
+ *  look is the small read (readSeoTestsAction), not a page render; the page renders once, when
+ *  the run is over. */
 const POLL_MS = 5000
 const POLL_FOR_MS = 5 * 60_000
 
@@ -110,7 +109,7 @@ const COLUMN = 'mx-auto w-full max-w-[660px] pt-7'
 const MIDDLE = 'flex min-h-[max(420px,calc(100vh-260px))] flex-col items-center justify-center text-center'
 const HEADLINE = 'mt-2.5 text-[30px] font-semibold leading-[1.12] tracking-[-0.025em] text-ink max-[560px]:text-[26px]'
 
-type View = 'off' | 'error' | 'start' | 'running' | 'done'
+type View = 'error' | 'start' | 'running' | 'done'
 type Notice = { key: string; text: string; tone?: 'red'; live?: boolean }
 
 export function TestTab({
@@ -171,16 +170,39 @@ export function TestTab({
   const coolS = now == null ? 0 : secondsLeft(cooldownAt, now)
   const canRun = ready != null && siteConnected && !running && !busy && coolS === 0
 
-  // Someone else's run (a publish's, another tab's): look again every few seconds, for a while.
+  // Someone else's run (a publish's, another tab's): look again every few seconds, for a while,
+  // with the small read. When it says nothing is running (or can't say), the page renders ONCE
+  // (router.refresh: the new run, the Publish bar) and the looking stops. A new running run in
+  // that render (`serverRun` changed) starts it again. One read at a time: a slow answer is
+  // waited for, never stacked.
+  const serverRunAt = serverRun?.ranAt ?? null
   useEffect(() => {
     if (!busy) return
-    const tick = setInterval(() => router.refresh(), POLL_MS)
-    const stop = setTimeout(() => clearInterval(tick), POLL_FOR_MS)
-    return () => {
+    let over = false
+    let inFlight = false
+    const end = () => {
+      over = true
       clearInterval(tick)
       clearTimeout(stop)
     }
-  }, [busy, router])
+    const look = async () => {
+      if (inFlight || over) return
+      inFlight = true
+      try {
+        const res = await readSeoTestsAction(artistId)
+        if (over || (res.ok && res.running)) return
+      } catch {
+        if (over) return
+      } finally {
+        inFlight = false
+      }
+      end()
+      router.refresh()
+    }
+    const tick = setInterval(() => void look(), POLL_MS)
+    const stop = setTimeout(end, POLL_FOR_MS)
+    return end
+  }, [busy, serverRunAt, artistId, router])
 
   // `?open=`: bring the opened row into view once, under the sticky header (scroll-mt on the row).
   useEffect(() => {
@@ -198,14 +220,15 @@ export function TestTab({
     try {
       const res = await runSeoTestsAction(artistId)
       if (res.ok) {
+        // The action revalidated the layout, so its own answer already re-rendered the page
+        // (the next read, the Publish bar): no router.refresh() on top, which rendered it twice.
         if (res.run) setLatest(res.run)
         setFixed(new Set())
-        router.refresh() // the next read, and the Publish bar
       } else {
         const why = classifyRunError(res)
         if (why.kind === 'cooldown') setRefusedUntil(clickedAt() + why.retryInS * 1000)
         else setRefusal(why)
-        if (why.kind === 'busy') router.refresh()
+        if (why.kind === 'busy') router.refresh() // a refusal revalidates nothing: show the run that is going
       }
     } catch {
       setRefusal({ kind: 'failed', error: COPY.failed })
@@ -221,9 +244,10 @@ export function TestTab({
     setFixing(id)
     try {
       const res = await applySeoFixAction(artistId, which)
+      // The Publish bar rises on its own: the fix saved through updateContentAction, which
+      // revalidated the layout, so the action's answer carried the fresh page.
       if (res.ok) {
         setFixed((s) => new Set(s).add(id))
-        router.refresh() // the Publish bar rises: the fix is a draft until published
       } else {
         toast(res.error, 'error')
       }
@@ -238,7 +262,7 @@ export function TestTab({
   /* ── which step the page is on ── */
   const results = latest?.results ?? []
   const head = latest ? runHeadline(latest) : null
-  const view: View = data.state === 'off' ? 'off' : data.state === 'error' ? 'error' : running || busy ? 'running' : !latest || !head ? 'start' : 'done'
+  const view: View = data.state === 'error' ? 'error' : running || busy ? 'running' : !latest || !head ? 'start' : 'done'
   const showRows = view === 'done' && !!head && rowsAreResults(head)
 
   // A run that lands while this page is open (ours, or one we waited for) is revealed: its rows
@@ -327,19 +351,15 @@ export function TestTab({
   // The drawings' page: the site's own address (or a stand-in when there is none) and name.
   const host = hostOf(currentSite) || 'yoursite.com'
 
-  if (view === 'off' || view === 'error') {
+  if (view === 'error') {
     return (
       <div className={COLUMN}>
         <div ref={topRef} className={MIDDLE}>
           <div className={EYEBROW}>{COPY.title}</div>
-          <h2 className={HEADLINE}>{view === 'off' ? COPY.off : COPY.readFailed}</h2>
-          {view === 'off' ? (
-            <p className="mt-2 font-space text-[12px] text-ink-muted">{COPY.offSub}</p>
-          ) : (
-            <div className="mt-[18px]">
-              <QuietLink icon="refresh" label={COPY.retry} muted onClick={() => router.refresh()} />
-            </div>
-          )}
+          <h2 className={HEADLINE}>{COPY.readFailed}</h2>
+          <div className="mt-[18px]">
+            <QuietLink icon="refresh" label={COPY.retry} muted onClick={() => router.refresh()} />
+          </div>
         </div>
       </div>
     )
@@ -382,7 +402,7 @@ export function TestTab({
     )
   }
 
-  const groups = showRows ? groupsFor(results, 'all') : []
+  const groups = showRows ? groupsFor(results) : []
   return (
     <div className={COLUMN}>
       <header ref={topRef} className="flex min-h-[200px] flex-col items-center justify-center text-center">

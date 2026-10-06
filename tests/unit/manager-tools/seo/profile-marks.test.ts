@@ -1,6 +1,6 @@
 /**
- * Profile marks without a database: which items exist, reading the marks before and after the
- * migration is pushed, and the server action refusing bad input before it opens a session.
+ * Profile marks without a database: which items exist, reading and writing the marks, and the
+ * server action refusing bad input before it opens a session.
  *
  * Code:     src/lib/manager-tools/seo/profiles/marks.ts (PROFILE_ITEMS, isProfileItem,
  *           readProfileMarks, setProfileMark), src/lib/manager-tools/seo/profiles/bios.ts
@@ -14,20 +14,21 @@
  *             list as the table's CHECK (read from the migrations, so they cannot drift)
  *           • OUTSIDE_BIOS: unique keys, every edit link an https URL
  *           • isProfileItem accepts exactly PROFILE_ITEMS (every bio item included)
- *           • readProfileMarks: rows by item; `{}` while the table is missing (PGRST205, 42P01);
- *             any other error throws
+ *           • readProfileMarks: rows by item; any error throws (a missing table included: both
+ *             migrations are pushed, so the old "nothing marked yet" fallback is gone)
  *           • setProfileMark: marking an item already marked RE-CONFIRMS it (an update the
  *             table's trigger stamps); a first mark inserts artist_id + item; a refused
  *             re-confirm (42501 included) is a failure, never a fall back to the insert; undo
- *             is filtered by artist AND item; a refused write is never `ok`; an unknown item
- *             never reaches the table
+ *             is filtered by artist AND item; a refused write (a missing table included) is
+ *             never `ok`, and says save or clear; an unknown item never reaches the table
  *           • markProfileItemAction: an unknown item or a non-boolean flag never reaches the
  *             session; a good call writes artist_id + item only (the database stamps the rest)
  * Not here: RLS, grants, the CHECK and the stamping trigger in a real database
  *           (tests/integration/manager-tools/seo/profile-marks.test.ts).
  * Fixtures: the PGRST205 body is the hosted project's real answer for this table before the
- *           push (fetched 2026-09-30); items derived from PROFILE_ITEMS / OUTSIDE_BIOS, never
- *           hand-listed; the CHECK's list read from the migration files themselves.
+ *           push (fetched 2026-09-30), kept to prove it is now an error like any other; items
+ *           derived from PROFILE_ITEMS / OUTSIDE_BIOS, never hand-listed; the CHECK's list read
+ *           from the migration files themselves.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -161,23 +162,18 @@ describe('readProfileMarks', () => {
     expect(reads).toEqual([['profile_marks', 'artist_id', 'a1']])
   })
 
-  // Before the push the tab must still render, with nothing marked.
-  it('returns {} while the table does not exist yet (PGRST205 and 42P01)', async () => {
+  // A failed read must not look like "not sent yet", or the manager sends the email twice. A
+  // missing table too: the migrations are pushed, so it means something broke.
+  it('throws on any error, a missing table included', async () => {
+    const denied = { code: '42501', message: 'permission denied for table profile_marks' }
+    await expect(readProfileMarks(reading({ data: null, error: denied }), 'a1')).rejects.toThrow(/permission denied/)
     const pgrst205 = {
       code: 'PGRST205',
       details: null,
       hint: "Perhaps you meant the table 'public.profiles'",
       message: "Could not find the table 'public.profile_marks' in the schema cache",
     }
-    const pg42p01 = { code: '42P01', message: 'relation "public.profile_marks" does not exist' }
-    expect(await readProfileMarks(reading({ data: null, error: pgrst205 }), 'a1')).toEqual({})
-    expect(await readProfileMarks(reading({ data: null, error: pg42p01 }), 'a1')).toEqual({})
-  })
-
-  // A failed read must not look like "not sent yet", or the manager sends the email twice.
-  it('throws on any other error', async () => {
-    const denied = { code: '42501', message: 'permission denied for table profile_marks' }
-    await expect(readProfileMarks(reading({ data: null, error: denied }), 'a1')).rejects.toThrow(/permission denied/)
+    await expect(readProfileMarks(reading({ data: null, error: pgrst205 }), 'a1')).rejects.toThrow(/profile_marks/)
   })
 })
 
@@ -272,18 +268,15 @@ describe('setProfileMark', () => {
     expect(calls).toEqual([{ table: 'profile_marks', op: 'delete', args: [['artist_id', 'a1'], ['item', item]] }])
   })
 
-  // "Sent" shown for a mark that was never stored is how the email goes out twice, or never.
-  it('a refused write is a failure with a reason, never a success', async () => {
+  // "Sent" shown for a mark that was never stored is how the email goes out twice, or never. A
+  // missing table is refused like anything else (no "not switched on yet" since the push).
+  it('a refused write is a failure that says save or clear, never a success', async () => {
     const [item] = PROFILE_ITEMS
     const denied = { code: '42501', message: 'new row violates row-level security policy for table "profile_marks"' }
     const missing = { code: 'PGRST205', message: "Could not find the table 'public.profile_marks' in the schema cache" }
-    for (const done of [true, false]) {
-      const refused = await setProfileMark(writing(denied).client, 'a1', item, done)
-      expect(refused.ok).toBe(false)
-      expect(refused.error).toBeTruthy()
-      expect(refused.error).not.toMatch(/not switched on/)
-      const off = await setProfileMark(writing(missing).client, 'a1', item, done)
-      expect(off).toEqual({ ok: false, error: expect.stringMatching(/not switched on/) })
+    for (const error of [denied, missing]) {
+      expect(await setProfileMark(writing(error).client, 'a1', item, true), error.code).toEqual({ ok: false, error: 'Could not save the mark.' })
+      expect(await setProfileMark(writing(error).client, 'a1', item, false), error.code).toEqual({ ok: false, error: 'Could not clear the mark.' })
     }
   })
 

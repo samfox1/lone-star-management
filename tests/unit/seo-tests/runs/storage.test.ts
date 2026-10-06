@@ -3,7 +3,7 @@
  * results are capped before they are stored, and reading back never passes junk to the page.
  *
  * Code:     src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), capCrawl,
- *           crawlOf, latestRun, historyFor, recentRuns, currentRun, seoScore)
+ *           crawlOf, latestRun, currentRun, seoScore)
  * Feature:  Test runs · storage (the seo_test_runs table), every SEO test (SEO_TEST_IDS)
  * Tier:     STRICT (AGENTS.md "Test depth"): stored data the live page reads back, and a stored
  *           `outside` link the page renders (a javascript: link would be stored XSS).
@@ -13,13 +13,13 @@
  *           • what is stored is capped in BYTES, as the table measures (multi-byte text included), a
  *             cut never leaves half a character, and an `outside` link survives only if https
  *           • a stored result is shown only if it has the whole shape; a failed read throws
- *             ("couldn't read" is not "never tested"); history is oldest first with every test id
+ *             ("couldn't read" is not "never tested"), a missing column included
  *           • a run left "running" over 5 minutes is abandoned, not "running"
  *           • `na` is kept everywhere and left out of the score on both sides
  *           • the crawl (what a run saw): sent as `p_crawl` only whole (v:1, every field), made
  *             storable (no NUL, no half emoji), cut under the table's 64 KB in the stated order
  *             (robots text, then sitemap pages, then opened pages, else nothing), never costing the
- *             run its results, and read back only whole
+ *             run its results when the table refuses it, and read back only whole
  * Not here: the database's own rules (cool-down, busy, limits, retention, immutability, the crawl's
  *           64 KB check): the migrations, pinned in tests/integration/seo-tests/seo-test-runs.test.ts;
  *           running the tests (runs/running.test.ts); building the crawl (run.ts).
@@ -28,7 +28,7 @@
  *           `realCrawl` is a crawl as a run makes one, built from the crawler registry (bots.ts).
  */
 import { describe, expect, it } from 'vitest'
-import { CRAWL_MAX_BYTES, capCrawl, capResult, capResults, claimRun, crawlOf, currentRun, failRun, finishRun, historyFor, latestRun, recentRuns, seoScore } from '@/lib/seo-tests/store'
+import { CRAWL_MAX_BYTES, capCrawl, capResult, capResults, claimRun, crawlOf, currentRun, failRun, finishRun, latestRun, seoScore } from '@/lib/seo-tests/store'
 import { FETCHING_BOTS, SEO_BOTS } from '@/lib/seo-tests/bots'
 import { SEO_TEST_IDS, SEO_TEST_STATUSES, type SeoCrawl, type SeoTestResult, type SeoTestStatus } from '@/lib/seo-tests/types'
 import { fakeClient, type Reply } from '@tests/helpers/fake-client'
@@ -202,41 +202,18 @@ describe('capResult counts BYTES, as the table does', () => {
 })
 
 describe('readers', () => {
-  // History: oldest first per test, every test present, and a status the page doesn't know is dropped.
-  it('CRITICAL: history is OLDEST first per test, every id present, unknown statuses dropped', async () => {
-    const f = fakeClient(() => ({
-      data: [row('r3', '2026-09-28T03:00:00Z', { title: 'pass', bio: 'fail' }), row('r2', '2026-09-27T03:00:00Z', { title: 'fail', bio: 'weird' }), row('r1', '2026-09-26T03:00:00Z', { title: 'unknown' })],
-    }))
-    const h = await historyFor(f.client, A, 8)
-    expect(Object.keys(h).sort()).toEqual([...SEO_TEST_IDS].sort())
-    expect(h.title.map((d) => d.status)).toEqual(['unknown', 'fail', 'pass'])
-    expect(h.bio.map((d) => d.status)).toEqual(['fail'])
-    expect(h.card).toEqual([])
-    const read = f.calls[0]
-    expect(read.filters).toContainEqual(['eq', 'status', 'done'])
-    expect(read.filters).toContainEqual(['limit', 8, undefined])
-  })
-
-  // A failed read throws, so the page says "couldn't read" rather than "never tested".
-  it('latestRun throws when the read fails: "couldn\'t read" must not look like "never tested"', async () => {
-    const f = fakeClient(() => ({ error: { message: 'permission denied for table seo_test_runs' } }))
-    await expect(latestRun(f.client, A)).rejects.toThrow()
-    expect(await latestRun(fakeClient(() => ({ data: null })).client, A)).toBeNull()
-  })
-
-  // Before the crawl column exists (the migration not pushed yet), the page must keep working:
-  // the read tries again without it. Any other failure still throws.
-  it('latestRun reads without the crawl when that column doesn’t exist yet', async () => {
-    const run = row('r1', '2026-09-28T03:00:00Z', {})
-    const f = fakeClient((call) => (String(call.cols).includes('crawl') ? { error: { code: '42703', message: 'column seo_test_runs.crawl does not exist' } } : { data: { ...run, results: [] } }))
-    const got = await latestRun(f.client, A)
-    expect(got?.id).toBe('r1')
-    expect(got?.crawl ?? null).toBeNull()
-    expect(f.calls).toHaveLength(2)
-    expect(String(f.calls[1].cols)).not.toContain('crawl')
-    const other = fakeClient(() => ({ error: { code: '42501', message: 'permission denied for table seo_test_runs' } }))
-    await expect(latestRun(other.client, A)).rejects.toThrow()
-    expect(other.calls).toHaveLength(1)
+  // A failed read throws, so the page says "couldn't read" rather than "never tested". A missing
+  // column too: 20261001120000 is pushed, so there is no read "without the crawl" to fall back
+  // to any more, and a second read would only hide that something broke.
+  it('latestRun throws when the read fails (a missing column included), in ONE read: "couldn\'t read" must not look like "never tested"', async () => {
+    for (const error of [{ code: '42501', message: 'permission denied for table seo_test_runs' }, { code: '42703', message: 'column seo_test_runs.crawl does not exist' }]) {
+      const f = fakeClient(() => ({ error }))
+      await expect(latestRun(f.client, A), error.code).rejects.toThrow()
+      expect(f.calls, error.code).toHaveLength(1)
+    }
+    const f = fakeClient(() => ({ data: null }))
+    expect(await latestRun(f.client, A)).toBeNull()
+    expect(f.calls[0].filters).toContainEqual(['eq', 'status', 'done'])
   })
 
   // Shape: a stored result the page can't draw (a missing field, an unknown test, not an object) is dropped, never shown; `na` is kept.
@@ -262,16 +239,12 @@ describe('readers', () => {
   })
 
   // Reach read back: as stored, or null for older runs, no site, or junk.
-  it('CRITICAL: readers hand the page `reach` as stored, or null (older runs, no site, junk)', async () => {
+  it('CRITICAL: the reader hands the page `reach` as stored, or null (older runs, no site, junk)', async () => {
     const at = (reach: unknown) => latestRun(fakeClient(() => ({ data: { ...row('r1', '2026-09-28T03:00:00Z', {}), reach, results: [] } })).client, A)
     expect((await at({ state: 'refused', status: 403 }))?.reach).toEqual({ state: 'refused', status: 403 })
     expect((await at(null))?.reach).toBeNull()
     expect((await at(undefined))?.reach).toBeNull()
     expect((await at({ state: 'refused', status: 403, error: { x: 1 } }))?.reach).toBeNull()
-    const f = fakeClient(() => ({ data: [{ ...row('r1', '2026-09-28T03:00:00Z', {}), reach: { state: 'no-answer', status: null } }] }))
-    const [summary] = await recentRuns(f.client, A, 5)
-    expect(summary.reach).toEqual({ state: 'no-answer', status: null })
-    expect(String(f.calls[0].cols)).toContain('reach')
   })
 
   // Abandoned runs: a run "running" for over 5 minutes is dead, so the page must not wait on it.
@@ -293,11 +266,11 @@ describe('`na` (does not apply): kept, shown, and left out of the score on both 
     expect(of()).toEqual({ passed: 0, total: 0 })
   })
 
-  // Every status is kept (derived from SEO_TEST_STATUSES), so a new status can't silently vanish from the history.
-  it('every status the contract has is one the readers keep (derived, not hand-listed)', async () => {
-    const summary = Object.fromEntries(SEO_TEST_STATUSES.map((st, i) => [SEO_TEST_IDS[i], st]))
-    const h = await historyFor(fakeClient(() => ({ data: [row('r1', '2026-09-28T03:00:00Z', summary)] })).client, A, 8)
-    SEO_TEST_STATUSES.forEach((st, i) => expect(h[SEO_TEST_IDS[i]].map((d) => d.status)).toEqual([st]))
+  // Every status is kept (derived from SEO_TEST_STATUSES), so a new status can't silently vanish from the page.
+  it('every status the contract has is one the reader keeps (derived, not hand-listed)', async () => {
+    const results = SEO_TEST_STATUSES.map((status, i) => ({ id: SEO_TEST_IDS[i], status, value: 'v', sentence: 's', evidence: [] }))
+    const run = await latestRun(fakeClient(() => ({ data: { ...row('r1', '2026-09-28T03:00:00Z', {}), results } })).client, A)
+    expect(run?.results.map((r) => r.status)).toEqual([...SEO_TEST_STATUSES])
   })
 })
 
@@ -377,8 +350,7 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
     expect(args[0].p_results).toEqual(r)
   })
 
-  // No crawl, no argument: a database from before the crawl migration has no `p_crawl`, and a
-  // finish that named it would be refused there (PGRST202).
+  // No crawl, no argument: there is nothing to store, and nothing for the table to refuse.
   it('without a crawl (absent, null or junk) `p_crawl` is not sent at all', async () => {
     for (const crawl of [undefined, null, { ...realCrawl(), v: 2 }]) {
       const { args } = await finishWith(crawl)
@@ -386,10 +358,10 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
     }
   })
 
-  // The crawl is extra, never the run: when the finish WITH one fails, the run is finished again
-  // without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
-  it('CRITICAL: when the finish WITH a crawl fails (not pushed yet, or refused), the run is finished again without it: its results are never lost', async () => {
-    const refused = (args: Record<string, unknown>): Reply => ('p_crawl' in args ? { error: { code: 'PGRST202', message: 'Could not find the function public.seo_test_finish' } } : { data: true })
+  // The crawl is extra, never the run: when the table refuses the finish WITH one, the run is
+  // finished again without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
+  it('CRITICAL: when the table refuses the finish WITH a crawl, the run is finished again without it: its results are never lost', async () => {
+    const refused = (args: Record<string, unknown>): Reply => ('p_crawl' in args ? { error: { code: '23514', message: 'new row violates check constraint "seo_test_runs_crawl"' } } : { data: true })
     const { out, args } = await finishWith(realCrawl(), refused)
     expect(out).toEqual({ ok: true })
     expect(args).toHaveLength(2)
@@ -405,14 +377,15 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
   // dropped connection, a timeout) may have finished the run with its crawl: a second call would
   // find it no longer running, and the artist would be told the results weren't saved.
   it('CRITICAL: the finish is sent again without the crawl only when the database refused it, never after a lost answer', async () => {
-    for (const code of ['PGRST202', '23514', '22P02', '22P05']) {
+    for (const code of ['23514', '22P02', '22P05']) {
       const { out, args } = await finishWith(realCrawl(), (a) => ('p_crawl' in a ? { error: { code, message: 'refused' } } : { data: true }))
       expect(out, code).toEqual({ ok: true })
       expect(args, code).toHaveLength(2)
     }
     // supabase-js reports a dropped connection as code '' ("TypeError: fetch failed"); 57014 is a
-    // statement cut off by its timeout.
-    for (const error of [{ code: '', message: 'TypeError: fetch failed' }, { message: 'AbortError: The operation was aborted.' }, { code: '57014', message: 'canceling statement due to statement timeout' }]) {
+    // statement cut off by its timeout. PGRST202 ("no seo_test_finish takes p_crawl") meant the
+    // migration was not pushed; it is, so that answer is a real failure now, not a crawl to drop.
+    for (const error of [{ code: '', message: 'TypeError: fetch failed' }, { message: 'AbortError: The operation was aborted.' }, { code: '57014', message: 'canceling statement due to statement timeout' }, { code: 'PGRST202', message: 'Could not find the function public.seo_test_finish' }]) {
       const { out, args } = await finishWith(realCrawl(), (a) => ('p_crawl' in a ? { error } : { data: false }))
       expect(out, error.message).toMatchObject({ ok: false })
       expect(args, error.message).toHaveLength(1)
@@ -528,8 +501,8 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
   })
 
   // The page reads the crawl back only whole: as stored, or null for a run from before crawls and
-  // for junk. The full-run read asks for it; the history read (many rows) never does.
-  it('CRITICAL: latestRun hands the page the crawl as stored, or null (older runs, junk); only the full-run read selects it', async () => {
+  // for junk.
+  it('CRITICAL: latestRun hands the page the crawl as stored, or null (older runs, junk)', async () => {
     const at = async (crawl: unknown) => {
       const f = fakeClient(() => ({ data: { ...row('r1', '2026-09-28T03:00:00Z', {}), results: [], crawl } }))
       return { run: await latestRun(f.client, A), cols: String(f.calls[0].cols) }
@@ -541,8 +514,5 @@ describe('the crawl (what a run saw): stored only whole, under the table\'s 64 K
     expect((await at(null)).run?.crawl).toBeNull()
     expect((await at({ ...realCrawl(), v: 2 })).run?.crawl).toBeNull()
     expect((await at({ ...realCrawl(), pages: [{ path: '/' }] })).run?.crawl).toBeNull()
-    const f = fakeClient(() => ({ data: [] }))
-    await recentRuns(f.client, A, 5)
-    expect(String(f.calls[0].cols)).not.toMatch(/\bcrawl\b/)
   })
 })
