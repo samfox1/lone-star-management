@@ -10,12 +10,12 @@ import {
   codeFrom,
   codeIsDead,
   codeMessage,
-  clockTime,
   countdown,
   enterDigits,
   secondsLeft,
   sendMessage,
 } from '@/lib/enquiries/confirm'
+import { clockTime } from '@/lib/manager-tools/format'
 import { CardModal } from '../../card-modal'
 import { RowIcon } from '../_ui/row-icon'
 import { MONO_META } from '../_ui/styles'
@@ -58,9 +58,10 @@ export function ConfirmWindow({
   /** Send a code as it opens: always (the address was just added), or 'unless-live' (a click on
    *  a blue address: not over a code sent within its 15 minutes). */
   sendOnOpen: boolean | 'unless-live'
-  /** When the last code went to this address on this visit (ms), for the countdown. */
+  /** When the last code went to this address (ms): this visit's sends, or the loader's live code. */
   sentAt?: number
-  /** A send went out at this time, or did not after all (undefined: no wait before the next). */
+  /** A code went out at this time (only once the server says 'sent'), or none is live any more
+   *  (undefined: a failed email, whose send replaced the code before it). */
   onSent: (at: number | undefined) => void
   onConfirmed: () => void
   onRemove: () => void
@@ -72,8 +73,13 @@ export function ConfirmWindow({
   const [dead, setDead] = useState(false)
   /** Does this window send as it opens? Decided once, here, where reading the clock is allowed. */
   const [sendsNow] = useState(() => (sendOnOpen === 'unless-live' ? !codeIsLive(sentBefore, Date.now()) : sendOnOpen))
-  /** When the last code went: now, if this window sends as it opens. */
-  const [sentAt, setSentAt] = useState(() => (sendsNow ? Date.now() : sentBefore))
+  /** When the last code REALLY went: set only once the server says 'sent' (review, 2026-10-06: a
+   *  refused or failed send showed "Sent at" for an email that never went). The header's time and
+   *  the expiry line read it. */
+  const [sentAt, setSentAt] = useState(sentBefore)
+  /** When a send was last asked for: the 60 s countdown runs from it whatever came back, because
+   *  the server counts a failed email as a send too and refuses another within the minute. */
+  const [waitFrom, setWaitFrom] = useState(() => (sendsNow ? Date.now() : sentBefore))
   const [now, setNow] = useState(() => Date.now())
   const inputs = useRef<(HTMLInputElement | null)[]>([])
   const checking = useRef(false)
@@ -81,7 +87,7 @@ export function ConfirmWindow({
   /** The send on open happens once, however often the effect runs (StrictMode runs it twice). */
   const opened = useRef(false)
 
-  const left = secondsLeft(sentAt, now)
+  const left = secondsLeft(waitFrom, now)
 
   // The countdown ticks only while there is one.
   useEffect(() => {
@@ -108,25 +114,29 @@ export function ConfirmWindow({
   function sendAgain() {
     if (sending.current) return
     const at = Date.now()
-    setSentAt(at)
+    setWaitFrom(at)
     setNow(at)
-    onSent(at)
-    void send(true)
+    void send(at, true)
   }
 
-  /** Ask the function to mail a code, and say what came of it. `fresh`: a resend, whose new
-   *  code empties the slots (the first send leaves alone what is already being typed). */
-  async function send(fresh = false) {
+  /** Ask the function to mail a code (asked for at `at`), and say what came of it. `fresh`: a
+   *  resend, whose new code empties the slots (the first send leaves alone what is already being
+   *  typed). */
+  async function send(at: number, fresh = false) {
     if (sending.current) return
     sending.current = true
     try {
       const { status } = await sendEmailCodeAction(artistId, email)
       if (status === 'confirmed') return onConfirmed()
-      // A failure that never reached the rate limit leaves nothing to wait for.
-      if (status === 'error' || status === 'not_allowed' || status === 'not_listed') {
-        setSentAt(undefined)
-        onSent(undefined)
+      if (status === 'sent') {
+        setSentAt(at)
+        onSent(at)
       }
+      // The database made a new code before the email failed, so the one before is dead too:
+      // nothing is live, and the next click on the blue address sends.
+      if (status === 'send_failed') onSent(undefined)
+      // A failure that never reached the rate limit leaves nothing to wait for.
+      if (status === 'error' || status === 'not_allowed' || status === 'not_listed') setWaitFrom(undefined)
       setNote(sendMessage(status))
       if (status === 'sent' && fresh) {
         setDead(false)
@@ -134,8 +144,7 @@ export function ConfirmWindow({
         focusSlot(0)
       }
     } catch {
-      setSentAt(undefined)
-      onSent(undefined)
+      setWaitFrom(undefined)
       setNote(sendMessage('error'))
     } finally {
       sending.current = false
@@ -146,10 +155,7 @@ export function ConfirmWindow({
     if (opened.current) return
     opened.current = true
     focusSlot(0)
-    if (sendsNow) {
-      onSent(sentAt)
-      void send()
-    }
+    if (sendsNow) void send(waitFrom ?? Date.now())
     // Once, on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -210,7 +216,7 @@ export function ConfirmWindow({
         <p className="mt-0.5 text-[13px] leading-5 text-ink-muted">
           Sent to <span className="break-all font-space text-[12.5px] text-ink">{email}</span>
           {/* When, so the newest email is the one to read from: each send replaces the code. */}
-          {sentAt !== undefined ? ` at ${clockTime(sentAt)}` : null}
+          {sentAt !== undefined ? ` at ${clockTime(new Date(sentAt))}` : null}
         </p>
       </div>
 

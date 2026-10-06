@@ -10,6 +10,7 @@
  * Covers:   • add → the list is saved → sendEmailCodeAction(artist, address) → the window shows
  *             "Sent to <address>" with the first slot focused
  *           • the address waits (the code-window button) while the window is open
+ *           • a failed send claims no send time and leaves no live code: the next click sends
  *           • six typed digits → confirmEmailCodeAction(artist, address, code) → the window
  *             closes and the address is an ordinary, click-to-edit one
  * Not here: the slot rules and status words (tests/unit/manager-tools/enquiries/
@@ -25,6 +26,7 @@ import {
   sendEmailCodeAction,
   setEnquiryRecipientsAction,
 } from '@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions'
+import { clockTime } from '@/lib/manager-tools/format'
 
 vi.mock('@/app/artists/[id]/(dashboard)/toast', () => ({ toast: vi.fn() }))
 vi.mock('@/app/artists/[id]/(dashboard)/(manager-tools)/enquiries/actions', () => ({
@@ -178,5 +180,40 @@ describe('adding an address', () => {
 
     expect(send).toHaveBeenCalledWith('a1', 'jo@x.com')
     expect(within(row()).getByRole('button', { name: 'jo@x.com: enter the code' })).toBeTruthy()
+  })
+
+  // A send counts only once the server says it went (review, 2026-10-06). A failed email gets no
+  // send time, and leaves no code to wait on: the database replaced the one before it as it
+  // tried, so the next click on the blue address must send, not open on a dead code.
+  it('a failed send claims no send time, and the next click sends again', async () => {
+    const before = Date.now() - 2 * 60_000
+    send.mockResolvedValueOnce({ status: 'send_failed' })
+    render(
+      <KindRows
+        artistId="a1"
+        confirm={{ confirmed: [], liveCodes: { 'ross@x.com': before } }}
+        kinds={[{ id: 'k-booking', slug: 'booking', label: 'Booking', description: null, sortOrder: 0, recipients: [{ id: 'r1', email: 'ross@x.com', label: null }] }]}
+      />,
+    )
+    const blue = () => within(row()).getByRole('button', { name: 'ross@x.com: enter the code' })
+
+    // Its code from before this visit is live: the window opens on it.
+    await act(async () => {
+      fireEvent.click(blue())
+    })
+    expect(send).not.toHaveBeenCalled()
+    const win = screen.getByRole('dialog', { name: 'Enter the code' })
+    await act(async () => {
+      fireEvent.click(within(win).getByRole('button', { name: 'Send again' }))
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+    // Still the time of the last email that went, never the one that failed.
+    expect(win.textContent).toContain(`at ${clockTime(new Date(before))}`)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await act(async () => {
+      fireEvent.click(blue())
+    })
+    expect(send).toHaveBeenCalledTimes(2)
   })
 })

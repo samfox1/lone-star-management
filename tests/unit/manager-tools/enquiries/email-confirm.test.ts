@@ -13,8 +13,8 @@
  *           • the code exists only when all six slots hold a digit
  *           • each status's one quiet line; locked/expired are the dead ones
  *           • the 60 s countdown
- *           • the loader: a missing function switches the feature off, any other error shows
- *             every address waiting, rows give the confirmed ones
+ *           • the loader: any error, a missing function included, shows every address
+ *             waiting; rows give the confirmed ones
  *           Equivalent mutants left (Stryker, 2026-10-05, 98.3%): enterDigits' `length === 2`
  *           (one digit typed over another gives that digit either way), and confirmStateFrom's
  *           `: []` (any non-array rows confirm nothing either way).
@@ -37,11 +37,11 @@ import {
   sendMessage,
   sendStatus,
   codeStatus,
-  clockTime,
   kindWords,
   type CodeStatus,
   type SendStatus,
 } from '@/lib/enquiries/confirm'
+import { clockTime } from '@/lib/manager-tools/format'
 
 describe('the six slots', () => {
   // A paste keeps only digits and at most six: the email prints "482 913", a mail app may copy
@@ -98,7 +98,7 @@ describe('what the server said', () => {
   it('each code status says why; the dead ones end the code', () => {
     expect(codeMessage('confirmed')).toBeNull()
     const sentAt = Date.parse('2026-10-05T22:23:42Z')
-    expect(codeMessage('expired', sentAt)).toContain(clockTime(sentAt + 15 * 60 * 1000))
+    expect(codeMessage('expired', sentAt)).toContain(clockTime(new Date(sentAt + 15 * 60 * 1000)))
     expect(codeMessage('replaced')).toMatch(/earlier email/)
     for (const s of ['locked', 'locked_today', 'expired'] as const) expect(codeIsDead(s), s).toBe(true)
     for (const s of ['wrong', 'replaced', 'error'] as const) expect(codeIsDead(s), s).toBe(false)

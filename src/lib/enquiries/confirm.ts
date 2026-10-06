@@ -8,6 +8,7 @@
  * (20261006120000_email_confirmations.sql). Nothing here decides who receives anything: an
  * address the dashboard draws as confirmed is still routed only if the database says so.
  */
+import { clockTime } from '@/lib/manager-tools/format'
 
 /** Digits in a code (begin_email_confirmation mints six). */
 export const CODE_LENGTH = 6
@@ -80,11 +81,6 @@ export function sendStatus(value: unknown): SendStatus | 'error' {
   return SEND_STATUSES.find((s) => s === value) ?? 'error'
 }
 
-/** "5:38 PM": a time a person can match to an email's timestamp. */
-export function clockTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
 /**
  * The window's quiet line after a code is checked: WHY it was refused and what to do next (Sam,
  * 2026-10-05: "Please provide clear error messaging to help me understand why", after Ross's code
@@ -106,7 +102,7 @@ export function codeMessage(status: CodeStatus | 'error', sentAt?: number): stri
     case 'expired':
       return sentAt === undefined
         ? 'This code ran out (codes last 15 minutes). Send a new one with the arrow below.'
-        : `This code ran out at ${clockTime(sentAt + CODE_LIFE_MS)} (codes last 15 minutes). Send a new one with the arrow below.`
+        : `This code ran out at ${clockTime(new Date(sentAt + CODE_LIFE_MS))} (codes last 15 minutes). Send a new one with the arrow below.`
     default:
       return 'Couldn’t check that code. Try again.'
   }
