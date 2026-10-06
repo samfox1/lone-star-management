@@ -13,6 +13,8 @@
  *                Until they are seen, whatever ends the run (not there in time, Ctrl-C via
  *                `signal`, a call that throws) puts the rows back as they were: a typo or the
  *                wrong artist must not keep holding the address.
+ *                Once they are seen, a row this run didn't refresh (Bing gave no code) that is
+ *                left at an OLD address is removed: it would still read as registered there.
  *   6. Connect   the site is attached to the artist only now, after THIS artist's Google code
  *                was seen on it. Before verify: the live page is the proof, verify only asks
  *                Google and Bing to look too.
@@ -190,6 +192,17 @@ export async function registerSite(artistId: string, address: string, deps: Regi
     if (!live) await putBack(notLive ? 'not_live' : undefined)
   }
   say({ step: 'tags live on the site', ok: true })
+
+  // A row this run didn't refresh (Bing gave no code, or isn't set up) left at ANOTHER address
+  // still reads as registered there: the Search tab and the AI test would ask that engine about
+  // the site the artist left, and unique(provider, site_url) would keep the old address blocked
+  // for every other artist. Only now, with THIS address proven live, does it go. At the same
+  // address it stays: the engine just didn't answer this run.
+  const left = [...before.values()].filter((r) => !providers.includes(r.provider) && r.site_url !== siteUrl)
+  if (left.length) {
+    await deps.store.remove(artistId, left.map((r) => r.provider))
+    say({ step: `removed ${left.map((r) => `${r.provider} at ${r.site_url}`).join(', ')}`, ok: true })
+  }
 
   // 6. Connect, now that this artist's Google code is on the site.
   const origin = siteUrl.replace(/\/$/, '')

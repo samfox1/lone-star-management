@@ -20,7 +20,8 @@
  *             a refused verify un-verifies a row verified before; verified-but-sitemap-refused is
  *             verified with the reason kept
  *           • Bing not set up or giving no code: left out, never stored without a code; a moved
- *             address resets verification
+ *             address resets verification; a Bing row left at the old address is removed, only
+ *             once the new address is live
  *           • an already-connected artist isn't rewritten (slash, case); anyone else is connected;
  *             the live check reads real <meta> tags (never data-name / data-content) and ignores
  *             ones without a name or content
@@ -348,6 +349,37 @@ describe('registerSite', () => {
     expect([...mem.rows.keys()]).toEqual(['google'])
     expect(out.steps.find((st) => st.step === 'bing code')).toMatchObject({ ok: false, reason: 'bing_code' })
     expect(mem.events).not.toContain('bing verify')
+  })
+
+  // Moved to a new address, and Bing gave no code this run (or isn't set up): the Bing row would
+  // still say "verified at the OLD address", so the Search tab and the AI test would ask Bing about
+  // a site the artist left, and unique(provider, site_url) would keep the old address blocked on
+  // Bing for every other artist. Once the new address is live it goes. At the SAME address it
+  // stays (Bing just didn't answer this run), and a run that never goes live touches nothing.
+  it('drops a Bing row left at the old address once the new one is live, and only then', async () => {
+    const OLD = 'https://old.example/'
+    const was = (site_url: string): Row[] => [
+      { provider: 'google', site_url, code: G, verified_at: 'earlier', error_code: null },
+      { provider: 'bing', site_url, code: B, verified_at: 'earlier', error_code: null },
+    ]
+    const noCode = (m: ReturnType<typeof memStore>, extra: Partial<RegisterDeps> = {}) =>
+      deps(m, { fetchHome: async () => (m.events.push('look'), page(G, null)), ...extra }, { bing: { code: () => ({ ok: false, reason: 'bing_code' }) } })
+    const notSetUp = (m: ReturnType<typeof memStore>, extra: Partial<RegisterDeps> = {}) => deps(m, { bing: null, fetchHome: async () => (m.events.push('look'), page(G, null)), ...extra })
+    for (const run of [noCode, notSetUp]) {
+      const moved = memStore({ rows: was(OLD) })
+      await registerSite(ARTIST, SITE, run(moved))
+      expect([...moved.rows.keys()], run.name).toEqual(['google'])
+      expect(moved.rows.get('google'), run.name).toMatchObject({ site_url: SITE, verified_at: 'now' })
+      expect(moved.events.indexOf('remove bing'), run.name).toBeGreaterThan(moved.events.indexOf('look'))
+
+      const same = memStore({ rows: was(SITE) })
+      await registerSite(ARTIST, SITE, run(same))
+      expect(same.rows.get('bing'), run.name).toEqual(was(SITE)[1])
+
+      const never = memStore({ rows: was(OLD) })
+      await registerSite(ARTIST, SITE, run(never, { fetchHome: async () => page(null, null) }))
+      expect(never.rows.get('bing'), run.name).toEqual(was(OLD)[1])
+    }
   })
 
   // Google's code is made for this site alone; Bing's is the same on every site of the account, so
