@@ -21,8 +21,9 @@ import { ringsOf } from '@/lib/analytics-sources'
  * The rings themselves — the two folds (Web search, Other) and the ranking —
  * come from `ringsOf` in lib/analytics-sources.ts, where they are pure and pinned.
  *
- * Every ring is the blue accent. Colour never carries identity here — the mark
- * does — so a filter that drops a source cannot repaint the survivors.
+ * Every ring is ink on the hairline track (Sam, 2026-10-06: "Source can stay black/grey").
+ * Colour never carries identity here — the mark does — so a filter that drops a source
+ * cannot repaint the survivors.
  */
 const R = 42
 const C = 2 * Math.PI * R
@@ -67,7 +68,7 @@ export function SourceRings({
                     <circle
                       data-arc
                       cx={50} cy={50} r={R} fill="none"
-                      stroke="currentColor" className="text-accent" strokeWidth={7}
+                      stroke="currentColor" className="text-ink" strokeWidth={7}
                       strokeDasharray={`${(s.share * C).toFixed(2)} ${C.toFixed(2)}`}
                       transform="rotate(-90 50 50)"
                     />

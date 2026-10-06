@@ -10,8 +10,9 @@ import { FOCUS_RING } from '@/components/ui/map-parts'
  * WHERE THEY ARE — the list beside the map. Two levels (Sam, 2026-09-14: "the broadest view is
  * country"): COUNTRIES, ranked by all their visitors, each saying how many major cities it has and
  * each a way in; and, inside a country, its MAJOR CITIES (lib/analytics-major-cities.ts), the places
- * worth touring: the city with its state under it, a bar for its share of the leader, visitors bold,
- * views quiet. Then the visitors no major city reaches as one quiet "Other places" row, and under the
+ * worth touring: the city with its state under it, visitors bold, views quiet. No bars: the list is
+ * ranked and shows its numbers, so a bar only said the same thing again (Sam, 2026-10-06: "you dont
+ * need to have the bar … it is sorted and shows number"). Then the visitors no major city reaches as one quiet "Other places" row, and under the
  * list a note saying how far a city reaches (Sam: "add a note that the cities include +x miles
  * around"). The country's name at the top is the way back out. The map and the globe follow the same
  * `country`, owned above in PlacesSection, and draw the same cities as dots.
@@ -39,7 +40,6 @@ export function CityTable({ countries, unlocated, majorCities, other, radiusMi, 
   if (countries.length === 0) return <p className={cx('font-space text-xs text-ink-faint', className)}>{empty}</p>
 
   const inside = country === null ? null : majorCities.filter((m) => m.country === country)
-  const max = (inside ?? countries).reduce((m, r) => Math.max(m, r.visitors), 1)
   const otherHere = country === null ? undefined : other[country]
 
   // The header is its OWN table above the scroll box (Sam: "keep the countries, visitors, views
@@ -60,7 +60,6 @@ export function CityTable({ countries, unlocated, majorCities, other, radiusMi, 
                   </button>
                 ) : 'Countries'}
               </th>
-              <th scope="col" className={HEAD} />
               <th scope="col" className={cx(HEAD, 'text-right')}>Visitors</th>
               <th scope="col" className={cx(HEAD, 'text-right')}>Views</th>
             </tr>
@@ -73,12 +72,12 @@ export function CityTable({ countries, unlocated, majorCities, other, radiusMi, 
           <tbody>
             {inside
               ? <>
-                  {inside.map((m) => <Row key={m.key} name={m.name} sub={m.region} visitors={m.visitors} views={m.views} share={m.visitors / max} />)}
+                  {inside.map((m) => <Row key={m.key} name={m.name} sub={m.region} visitors={m.visitors} views={m.views} />)}
                   {otherHere && <Row name="Other places" sub="" visitors={otherHere.visitors} views={otherHere.views} quiet />}
                 </>
               : <>
                   {countries.map((c) => (
-                    <Row key={c.code} name={c.name} sub={c.majorCities ? `${c.majorCities} ${c.majorCities === 1 ? 'city' : 'cities'}` : ''} visitors={c.visitors} views={c.views} share={c.visitors / max} onClick={() => onSelectCountry(c.code)} />
+                    <Row key={c.code} name={c.name} sub={c.majorCities ? `${c.majorCities} ${c.majorCities === 1 ? 'city' : 'cities'}` : ''} visitors={c.visitors} views={c.views} onClick={() => onSelectCountry(c.code)} />
                   ))}
                   {unlocated && <Row name="Not located" sub="" visitors={unlocated.visitors} views={unlocated.views} quiet />}
                 </>}
@@ -92,12 +91,11 @@ export function CityTable({ countries, unlocated, majorCities, other, radiusMi, 
   )
 }
 
-/** One column layout for both tables: name, bar, visitors, views. */
+/** One column layout for both tables: name, visitors, views. */
 function Cols() {
   return (
     <colgroup>
       <col />
-      <col style={{ width: '28%' }} />
       <col style={{ width: 64 }} />
       <col style={{ width: 64 }} />
     </colgroup>
@@ -107,7 +105,7 @@ function Cols() {
 const HEAD = 'pb-2 font-space text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint'
 const NUM = 'py-1.5 pl-4 text-right font-space text-[11px] tabular-nums'
 
-function Row({ name, sub, visitors, views, share, quiet, onClick }: { name: string; sub: string; visitors: number; views: number; share?: number; quiet?: boolean; onClick?: () => void }) {
+function Row({ name, sub, visitors, views, quiet, onClick }: { name: string; sub: string; visitors: number; views: number; quiet?: boolean; onClick?: () => void }) {
   const label = (
     <>
       <span className={cx('block truncate text-sm', quiet ? 'text-ink-faint' : 'text-ink')}>{name}</span>
@@ -120,13 +118,6 @@ function Row({ name, sub, visitors, views, share, quiet, onClick }: { name: stri
         {onClick
           ? <button type="button" onClick={(e) => { e.stopPropagation(); onClick() }} className={cx('block w-full rounded-sm text-left', FOCUS_RING)}>{label}</button>
           : label}
-      </td>
-      <td className="py-1.5">
-        {share !== undefined && (
-          <span className="block h-[7px] overflow-hidden rounded-full bg-track">
-            <span data-bar aria-hidden className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, share * 100)}%` }} />
-          </span>
-        )}
       </td>
       <td className={cx(NUM, quiet ? 'text-ink-faint' : 'font-bold text-ink')}>{visitors.toLocaleString('en-US')}</td>
       <td className={cx(NUM, quiet ? 'text-ink-faint' : 'text-ink-muted')}>{views.toLocaleString('en-US')}</td>

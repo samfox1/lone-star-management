@@ -45,9 +45,9 @@ const GLYPHS: Record<SourceKey, ReactNode> = {
     <><path d="M2.6 16.9 L9.7 7.1 H21.4 L14.3 16.9 Z" fill="currentColor"/></>
   ),
   google: (
-    // The G: a ring open at the upper right, its end cut flat on the midline, and
-    // the bar hanging from that line to the ring's outer edge.
-    <><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" strokeWidth="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor"/></>
+    // Google's own G, in one colour (Sam, 2026-10-06: "get the correct google icon"). Drawn
+    // on a full 24 grid, so it is scaled into the 2.4–21.6 box the other marks fill.
+    <><path transform="translate(2.4 2.4) scale(0.8)" d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="currentColor"/></>
   ),
   bing: (
     <><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor"/></>

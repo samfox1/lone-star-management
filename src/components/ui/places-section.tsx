@@ -12,12 +12,14 @@ import type { WorldMapData } from '@/lib/analytics-map'
  * draws them as dots; the country's name at the top of the list is the way out.
  *
  * The box sets the row's height; the list is laid absolutely in its cell from lg up so the cell adds
- * no height of its own and the list scrolls inside it.
+ * no height of its own and the list scrolls inside it. The list is narrow (270px, no bars) and the
+ * map takes the room, growing taller with it (Sam, 2026-10-06: "make the list less wide, make it
+ * taller, and make the map bigger so they still line up").
  */
 export function PlacesSection({ map }: { map: WorldMapData }) {
   const [country, setCountry] = useState<string | null>(null)
   return (
-    <div className="grid items-stretch gap-10 lg:grid-cols-[minmax(0,1fr)_440px]">
+    <div className="grid items-stretch gap-9 lg:grid-cols-[minmax(0,1fr)_270px]">
       <PlacesView map={map} country={country} onSelectCountry={setCountry} />
       <div className="relative min-h-0">
         <CityTable

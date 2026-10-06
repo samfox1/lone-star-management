@@ -31,19 +31,16 @@ const props = { countries: m.countries, unlocated: m.unlocated, majorCities: m.m
 const bodyRows = () => screen.getAllByRole('row').slice(1)
 const nameOf = (tr: HTMLElement) => within(tr).getAllByRole('cell')[0].textContent
 const cell = (tr: HTMLElement, i: number) => within(tr).getAllByRole('cell')[i].textContent
-const widthOf = (tr: HTMLElement) => (tr.querySelector('[data-bar]') as HTMLElement).style.width
 const NOTE = 'Each city includes visitors within 50 miles.'
 
 describe('CityTable — countries', () => {
   it('CRITICAL: the broadest view is countries, ranked by ALL their visitors, each saying how many major cities it has — Germany\'s one big city does not put it first', () => {
     render(<CityTable {...props} country={null} onSelectCountry={noop} />)
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Countries', '', 'Visitors', 'Views'])
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Countries', 'Visitors', 'Views'])
     const rows = bodyRows()
     expect(rows.map(nameOf)).toEqual(['United States3 cities', 'Germany1 city', 'United Kingdom1 city', 'France', 'Not located'])
-    expect(cell(rows[0], 2)).toBe('270') // 186 + 74 + 3 + 5 + 2: its Other places visitor counts too
-    expect(widthOf(rows[0])).toBe('100%')
-    expect(parseFloat(widthOf(rows[1]))).toBeCloseTo((200 / 270) * 100, 3)
-    expect(rows[4].querySelector('[data-bar]')).toBeNull()
+    expect(cell(rows[0], 1)).toBe('270') // 186 + 74 + 3 + 5 + 2: its Other places visitor counts too
+    expect(cell(rows[1], 1)).toBe('200')
     expect(screen.queryByText(NOTE)).toBeNull() // the note belongs to the city level
   })
 
@@ -67,15 +64,13 @@ describe('CityTable — countries', () => {
 })
 
 describe('CityTable — inside a country', () => {
-  it('CRITICAL: that country\'s MAJOR CITIES, state under each, the bar a share of the leader\'s visitors — then its Other places, quiet — and nothing of anywhere else', () => {
+  it('CRITICAL: that country\'s MAJOR CITIES, state under each, most visitors first — then its Other places, quiet — and nothing of anywhere else', () => {
     render(<CityTable {...props} country="US" onSelectCountry={noop} />)
     const rows = bodyRows()
     expect(rows.map(nameOf)).toEqual(['ChicagoIllinois', 'MadisonWisconsin', 'New YorkNew York', 'Other places'])
-    expect(widthOf(rows[0])).toBe('100%')
-    expect(parseFloat(widthOf(rows[1]))).toBeCloseTo((74 / 186) * 100, 3)
-    expect(cell(rows[2], 2)).toBe('8') // Newark and New York City, one row
-    expect(cell(rows[3], 2)).toBe('2')
-    expect(rows[3].querySelector('[data-bar]')).toBeNull()
+    expect(cell(rows[0], 1)).toBe('186')
+    expect(cell(rows[2], 1)).toBe('8') // Newark and New York City, one row
+    expect(cell(rows[3], 1)).toBe('2')
     expect(screen.queryByText('Not located')).toBeNull()
     expect(screen.queryByText('Berlin')).toBeNull()
     expect(screen.queryByText('Newark')).toBeNull()

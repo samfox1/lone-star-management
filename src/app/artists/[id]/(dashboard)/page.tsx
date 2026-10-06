@@ -115,21 +115,23 @@ export default async function OverviewPage({
         />
       </section>
 
-      {/* WHERE FROM and ON WHAT share a row from lg up (four 104px rings need
-          464px; below lg the two stack): the rings, one per source with its share
-          of everyone as the arc, beside the device waffle — mobile, tablet,
-          computer, which view of the site to build out (Sam, 2026-09-14). */}
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_440px]">
-        <section>
-          <KLabel>Source</KLabel>
-          <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
-        </section>
+      {/* ON WHAT and WHERE FROM share a row from lg up (four 104px rings need
+          464px; below lg the two stack): the device waffle — mobile, tablet,
+          computer, which view of the site to build out — beside the rings, one per
+          source with its share of everyone as the arc (Sam, 2026-09-14). Device on
+          the LEFT with room before it and a tighter gap after (Sam, 2026-10-06:
+          "switch source and device"; "give it some space to the left"). */}
+      <div className="grid gap-10 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-16">
         {/* The label sits at the top beside SOURCE; the waffle centres on the ring rows
             (Sam, 2026-09-14), so the grid stretches the section and the flex column
             gives the waffle the rest of the height. */}
-        <section className="lg:flex lg:flex-col lg:justify-self-end">
+        <section className="lg:flex lg:flex-col lg:pl-12">
           <KLabel>Device</KLabel>
           <DeviceSplit className="mt-3 lg:flex-1" shares={summarizeDevices(traffic.devices)} />
+        </section>
+        <section>
+          <KLabel>Source</KLabel>
+          <SourceRings className="mt-3" sources={summarizeSources(traffic.sources, traffic.prevSources, traffic.sourceActions)} />
         </section>
       </div>
 

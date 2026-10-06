@@ -13,12 +13,13 @@ import { DeviceGlyph } from '@/components/ui/device-glyphs'
  * its kind lights up as a block, the other kinds fade, its legend row stays
  * full, and a readout follows the pointer with the share (Sam, 2026-09-14:
  * "when I hover over a mobile square, I should see percent" … "remove the
- * percentage next to the type of device"). The colours are fixed per device — mobile the blue accent, tablet
- * the red accent, computer ink — so they never repaint between artists, and the
- * unclassified are the hairline grey so the grid stays honest about what the
- * three leave out.
+ * percentage next to the type of device"). The colours are fixed per device, ONE ink in three
+ * shades, darkest for the kind most people use: mobile ink, computer grey, tablet light grey (Sam,
+ * 2026-10-06: "keep it black and grey shades for now"; no blue, no green). They never repaint
+ * between artists, and the unclassified are the hairline grey so the grid stays honest about what
+ * the three leave out.
  */
-const CELL: Record<WaffleCell, string> = { mobile: 'bg-accent', tablet: 'bg-accent-red', desktop: 'bg-ink', other: 'bg-hairline' }
+const CELL: Record<WaffleCell, string> = { mobile: 'bg-ink', tablet: 'bg-[#d4d5d9]', desktop: 'bg-ink-faint', other: 'bg-hairline' }
 const LABEL: Record<WaffleCell, string> = Object.fromEntries([...DEVICE_KINDS.map((k) => [k.key, k.label]), ['other', 'Unclassified']]) as Record<WaffleCell, string>
 
 export function DeviceSplit({ shares, empty = 'No visits yet.', className }: { shares: DeviceShares; empty?: string; className?: string }) {
