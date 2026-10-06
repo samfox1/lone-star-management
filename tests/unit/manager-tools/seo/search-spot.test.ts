@@ -10,7 +10,8 @@
  *           • the searches the line is made of, shown under the chart (Sam, 2026-10-06: "some way
  *             to be more transparent about what we are showing"), and whether the bare name is one
  *           • the spot per day over those searches, weighted by how often each was seen
- *           • now (the last week), the average, and the climb (two whole weeks or none)
+ *           • now (the last seven days), the average, and the climb (first week against last, by
+ *             date, once two weeks apart)
  *           • one search's own trend
  * Not here: where the rows come from (search-stats.test.ts); drawing it (search-board.test.ts,
  *           the page test).
@@ -111,6 +112,26 @@ describe('spotFacts', () => {
       since: '2026-09-10',
     })
   })
+  // Bing's rows are weekly: "now" is its latest week (not the average of all of them), and the
+  // climb compares its first week with its last once they are two weeks apart (the review,
+  // 2026-10-06: counting readings made Bing's now equal its average and its climb never show).
+  it('CRITICAL: by the calendar, not by count — weekly readings: now is the latest week, the climb first week to last', () => {
+    const weekly = [
+      { date: '2026-09-07', spot: 20, seen: 5 }, { date: '2026-09-14', spot: 15, seen: 5 },
+      { date: '2026-09-21', spot: 10, seen: 5 }, { date: '2026-09-28', spot: 5, seen: 5 },
+    ]
+    const f = spotFacts(weekly)!
+    expect(f.now).toBe(5)
+    expect(f.average).toBe(12.5)
+    expect(f.climbed).toBe(15)
+  })
+
+  // A quiet artist searched now and then: "now" is the last seven DAYS, not the last seven readings.
+  it('CRITICAL: readings weeks apart — now is only what falls in the last seven days', () => {
+    const sparse = [{ date: '2026-08-01', spot: 9, seen: 50 }, { date: '2026-09-20', spot: 4, seen: 1 }, { date: '2026-09-27', spot: 2, seen: 1 }]
+    expect(spotFacts(sparse)!.now).toBe(2)
+  })
+
   // No climb until two whole weeks exist; a fall shows as a negative climb.
   it('CRITICAL: no climb until there are two whole weeks to compare; a fall is a negative climb; no days, no facts', () => {
     expect(spotFacts(Array.from({ length: 13 }, (_, i) => pt(i, 3 - i * 0.1)))!.climbed).toBeNull()

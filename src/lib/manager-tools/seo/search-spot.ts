@@ -40,26 +40,30 @@ export function nameSpot(rows: readonly SearchDayRow[], name: string): SpotPoint
 }
 
 /**
- * The numbers beside the line, each weighted by how often the site was seen that day:
- *   now      the last week of readings (one day alone swings: today, half counted, can be a
- *            single search at #4 — Skeen on 2026-10-06);
- *   average  every day;
- *   climbed  the first week against the last, in places gained (positive: higher), only once
- *            there are two whole weeks to compare (Sam: "if the data hasnt been collected long
- *            enough to see this, then remove it").
+ * The numbers beside the line, each weighted by how often the site was seen, and BY THE CALENDAR
+ * (the review, 2026-10-06: counting readings broke on Bing's weekly rows and on quiet artists):
+ *   now      the readings in the last seven days of the line (one day alone swings: today, half
+ *            counted, can be a single search at #4 — Skeen on 2026-10-06; Bing: its latest week);
+ *   average  every reading;
+ *   climbed  the first seven days against the last seven, in places gained (positive: higher),
+ *            only once the line spans two whole weeks (Sam: "if the data hasnt been collected
+ *            long enough to see this, then remove it").
  */
 export type SpotFacts = { now: number; average: number; climbed: number | null; since: string }
 
-const WEEK = 7
+const DAY_MS = 86_400_000
+const dayMs = (d: string) => Date.parse(`${d}T00:00:00Z`)
 const weighted = (ps: readonly SpotPoint[]) => ps.reduce((n, p) => n + p.spot * p.seen, 0) / ps.reduce((n, p) => n + p.seen, 0)
 
 export function spotFacts(points: readonly SpotPoint[]): SpotFacts | null {
   if (!points.length) return null
-  const now = weighted(points.slice(-WEEK))
+  const first = dayMs(points[0].date), last = dayMs(points[points.length - 1].date)
+  const now = weighted(points.filter((p) => dayMs(p.date) > last - 7 * DAY_MS))
+  const firstWeek = points.filter((p) => dayMs(p.date) < first + 7 * DAY_MS)
   return {
     now,
     average: weighted(points),
-    climbed: points.length >= 2 * WEEK ? weighted(points.slice(0, WEEK)) - now : null,
+    climbed: last - first >= 13 * DAY_MS ? weighted(firstWeek) - now : null,
     since: points[0].date,
   }
 }
