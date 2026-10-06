@@ -1,9 +1,22 @@
 // @vitest-environment jsdom
-// Settings → Email renders: one row per kind, each with its own addresses.
 /**
- * `/artists/[id]/settings/email` — one render through the page's own data plumbing, the
- * same discipline enquiries-page.test.tsx exists for: a server page with no render test is
- * a page whose data-order bugs only the browser finds.
+ * Settings › Email renders through its own data plumbing: one row per kind, each with its own
+ * addresses, confirmed or waiting.
+ *
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/page.tsx
+ * Feature:  Settings › Email (`/artists/[id]/settings/email`)
+ * Tier:     LIGHT (AGENTS.md "Test depth"): the page is still being designed. One render through
+ *           the page's own reads, the same discipline enquiries-page.test.tsx exists for: a server
+ *           page with no render test is a page whose data-order bugs only the browser finds.
+ * Covers:   • one row per kind, in the kinds' order
+ *           • each row shows its own kind's addresses (the embedded select reached the rows)
+ *           • each kind's description, and no line for one without
+ *           • an address the status call says is waiting shows as waiting
+ *           • a + on every kind
+ * Not here: what the rows do when clicked (kind-rows.test.tsx, email-confirm.test.tsx); how a
+ *           failed status read reads (tests/unit/manager-tools/enquiries/email-confirm.test.ts).
+ * Fixtures: the ownership gate and every server action are mocked; a fake client answers the kinds
+ *           query and email_confirmation_status (every address confirmed unless a test says not).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
@@ -81,12 +94,14 @@ const renderPage = async () => {
 }
 
 describe('/artists/[id]/settings/email', () => {
+  // The kinds arrive in the manager's order, one row each.
   it('CRITICAL: renders one row per kind, in order', async () => {
     await renderPage()
     const rows = [...document.querySelectorAll('[data-kind]')].map((r) => r.getAttribute('data-kind'))
     expect(rows).toEqual(['booking', 'demo', 'other'])
   })
 
+  // Each row gets its own kind's addresses from the one embedded query.
   it('CRITICAL: each row shows its own kind’s addresses, every one clickable', async () => {
     await renderPage()
     const row = (slug: string) => document.querySelector<HTMLElement>(`[data-kind="${slug}"]`)!
@@ -96,12 +111,14 @@ describe('/artists/[id]/settings/email', () => {
     expect(within(row('demo')).queryByText('agent@example.com')).toBeNull()
   })
 
+  // The description column reaches the rows; a kind without one shows no line.
   it('shows each kind’s own description, and no line for one without', async () => {
     await renderPage()
     expect(document.querySelector('[data-kind="booking"]')!.textContent).toContain('Booking line')
     expect(document.querySelector('[data-kind="other"]')!.textContent).not.toContain('For everything else')
   })
 
+  // The status call decides which addresses wait for a code; the rest stay ordinary.
   it('an address the status call says is waiting shows as waiting (blue, the code window), the rest as before', async () => {
     statusAnswer = { data: [{ email: 'agent@example.com', confirmed: true, waiting: false }, { email: 'ar@example.com', confirmed: false, waiting: true }], error: null }
     await renderPage()
@@ -110,6 +127,7 @@ describe('/artists/[id]/settings/email', () => {
     expect(within(row('booking')).getByRole('button', { name: 'agent@example.com' })).toBeTruthy()
   })
 
+  // Every kind can take one more address.
   it('offers a + on every kind', async () => {
     await renderPage()
     for (const label of ['Booking', 'Demo', 'Contact']) expect(screen.getByRole('button', { name: `Add email to ${label}` })).toBeTruthy()

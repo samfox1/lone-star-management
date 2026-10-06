@@ -42,6 +42,11 @@ export const STANDARD_AREAS: Area[] = [
     include: ['tests/components/manager-tools/profile/', 'tests/unit/manager-tools/profile/'],
   },
   {
+    title: 'Settings page',
+    about: 'The artist’s settings: General (the site’s address and the platform’s, read-only) and Email (who receives each kind of enquiry, and confirming each address with a code).',
+    include: ['tests/components/manager-tools/settings/', 'tests/unit/manager-tools/settings/'],
+  },
+  {
     title: 'SEO / GEO saved runs (database)',
     about: 'Check runs saved in the hosted database. These talk to the live project.',
     include: ['tests/integration/seo-tests/'],

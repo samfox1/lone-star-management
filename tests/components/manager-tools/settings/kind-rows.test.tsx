@@ -1,19 +1,27 @@
 // @vitest-environment jsdom
-// Settings › Email's rows: click an address to edit or remove it; one + adds a type, then an email.
 /**
- * KindRows (Sam, 2026-10-02). LIGHT tier for the look (it is still moving), but every save here
- * decides who receives enquiries, so each test asserts the ACTION and the exact list it got:
+ * Settings › Email's rows: each kind shows its own addresses; click one to edit or remove it, and
+ * a row's + adds one to that kind.
  *
- *   - a row shows its kind's OWN addresses and nothing else, every one clickable (Sam: "i should
- *     be able to edit/delete every email there"; no greyed, read-only address);
- *   - every save sends the WHOLE list (a partial one silently drops whoever it left out);
- *   - a refused address is never sent and stays where it was typed;
- *   - a row's + adds to THAT kind, and nothing is written before ✓;
- *   - clicking a kind's name edits its name and description together, and sends only what changed;
- *   - no kind is created from this page (Sam: "remove the ability to add new email types").
- *
- * That a kind then reaches ONLY its own list is pinned against the database in
- * tests/integration/enquiries/enquiry-recipients.test.ts and enquiry-door.test.ts.
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows.tsx
+ * Feature:  Settings › Email: who receives each kind of enquiry (Sam, 2026-10-02)
+ * Tier:     LIGHT (AGENTS.md "Test depth") for the look, which is still moving; but every save here
+ *           decides who receives enquiries, so each test asserts the ACTION and the exact list it
+ *           got.
+ * Covers:   • a row shows its kind's OWN addresses and nothing else, every one clickable (Sam: "i
+ *             should be able to edit/delete every email there"; no greyed, read-only address)
+ *           • every save sends the WHOLE list (a partial one silently drops whoever it left out)
+ *           • a refused address is never sent and stays where it was typed
+ *           • a row's + adds to THAT kind, and nothing is written before ✓
+ *           • clicking a kind's name edits its name and description together, and sends only
+ *             what changed
+ *           • no kind is created from this page (Sam: "remove the ability to add new email types")
+ * Not here: that a kind then reaches ONLY its own list (against the database:
+ *           tests/integration/enquiries/enquiry-recipients.test.ts and enquiry-door.test.ts); a
+ *           waiting address and its code window (email-confirm.test.tsx); the actions themselves
+ *           (tests/unit/manager-tools/settings/).
+ * Fixtures: every server action and the toast are mocked; the list save echoes the list back with
+ *           server ids; every address is confirmed, so each is click-to-edit.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -82,6 +90,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('the rows', () => {
+  // Each kind's own list, and only it: an address on the wrong row reads as a recipient it is not.
   it('CRITICAL: each row lists its OWN addresses, every one clickable, and nothing else', () => {
     renderRows([
       kind({ recipients: [{ id: 'r1', email: 'agent@x.com', label: null }] }),
@@ -96,6 +105,7 @@ describe('the rows', () => {
     expect(within(row('other')).queryByText(/@/)).toBeNull()
   })
 
+  // What a kind is FOR sits under its name, never its slug ("booking" under Booking was useless).
   it('shows each kind’s description under its name, never its slug; none when it has none', () => {
     renderRows([kind(), demo(), contact(), press()])
 
@@ -108,6 +118,7 @@ describe('the rows', () => {
 })
 
 describe('click an address', () => {
+  // Click-to-edit: the glyphs exist only while it is open, and Escape leaves without writing.
   it('shows its field, Save and Remove; Escape puts it back and saves nothing', () => {
     renderRows([demo([{ id: 'r1', email: 'ar@x.com', label: null }])])
     expect(within(row('demo')).queryByRole('button', { name: 'Remove ar@x.com' })).toBeNull()
@@ -146,6 +157,7 @@ describe('click an address', () => {
     expect(vi.mocked(sendEmailCodeAction)).toHaveBeenCalledWith('a1', 'a2@x.com')
   })
 
+  // A refused edit never reaches the server, and the typing is kept so it can be fixed.
   it('a refused address is not sent, says why, and stays in the field', async () => {
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: null }, { id: 'r2', email: 'b@x.com', label: null }])])
 
@@ -161,6 +173,7 @@ describe('click an address', () => {
     expect(within(row('demo')).getByRole('textbox', { name: 'Email' })).toHaveValue('B@X.COM')
   })
 
+  // Removing one address sends the rest of the list; an ordinary remove asks nothing.
   it('Remove sends the list without it, and asks nothing for an ordinary address', async () => {
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: null }, { id: 'r2', email: 'b@x.com', label: 'Mgr' }])])
 
@@ -173,6 +186,7 @@ describe('click an address', () => {
     expect(setList).toHaveBeenCalledWith('a1', 'k-demo', [{ id: 'r2', email: 'b@x.com', label: 'Mgr' }])
   })
 
+  // The last address asks first: without it, that kind has no one to email.
   it('removing a kind’s LAST address asks first, then sends the empty list', async () => {
     renderRows([demo([{ id: 'r1', email: 'only@x.com', label: null }])])
 
@@ -187,6 +201,7 @@ describe('click an address', () => {
     expect(setList).toHaveBeenCalledWith('a1', 'k-demo', [])
   })
 
+  // A refused save puts the list back as it was, and says why.
   it('puts the list back when the save is refused', async () => {
     setList.mockResolvedValueOnce({ error: 'A list holds at most 10 people.' })
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: null }, { id: 'r2', email: 'b@x.com', label: null }])])
@@ -200,6 +215,7 @@ describe('click an address', () => {
     expect(vi.mocked(toast)).toHaveBeenCalledWith('A list holds at most 10 people.', 'error')
   })
 
+  // One save per kind at a time: each sends the whole list, so a second could undo the first.
   it('lets only ONE save per kind be in flight — a remove and an add at once send once', async () => {
     // Each save sends the WHOLE list, so a second one racing the first would drop what the
     // first changed. AGENTS.md rule 5: both in ONE act() batch, so the latch (a ref) is tested.
@@ -223,6 +239,7 @@ describe('click an address', () => {
 })
 
 describe('a kind’s name', () => {
+  // A kind's name and description edit together, and only what changed is sent.
   it('click it to edit the name and description: Enter saves both, and the new line shows', async () => {
     renderRows([demo(), press()])
     open('demo', 'Demo')
@@ -248,6 +265,7 @@ describe('a kind’s name', () => {
     expect(saveKind).toHaveBeenLastCalledWith('a1', 'k-press', { description: 'For radio' })
   })
 
+  // Every kind but Contact can be deleted, after asking: Contact is where unknown purposes land.
   it('a kind can be deleted (after asking), except Contact, the fallback', async () => {
     renderRows([kind(), contact(), press()])
     // Each checked while ITS field is open (opening the next closes it: a click away).
@@ -270,12 +288,14 @@ describe('a kind’s name', () => {
 })
 
 describe('the row’s +', () => {
+  // A + on every row, and no way to add a kind (Sam: "remove the ability to add new email types").
   it('every row has one, and there is no way to add a kind here', () => {
     renderRows([kind(), demo(), contact()])
     for (const label of ['Booking', 'Demo', 'Contact']) expect(within(row(label === 'Contact' ? 'other' : label.toLowerCase())).getByRole('button', { name: `Add email to ${label}` })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /kind/i })).toBeNull()
   })
 
+  // The + adds to THAT kind's whole list, and the new address waits for its code.
   it('a row’s + adds the address to THAT kind’s whole list', async () => {
     renderRows([kind({ recipients: [{ id: 'r0', email: 'agent@x.com', label: null }] }), demo([{ id: 'r1', email: 'a@x.com', label: null }])])
 
@@ -295,6 +315,7 @@ describe('the row’s +', () => {
     expect(within(row('demo')).getByRole('button', { name: 'new@x.com: enter the code' })).toBeTruthy()
   })
 
+  // A refused add is not sent and stays typed; Escape then leaves without writing.
   it('a refused address is not sent and stays typed; Escape then writes nothing', async () => {
     renderRows([demo([{ id: 'r1', email: 'a@x.com', label: null }])])
 

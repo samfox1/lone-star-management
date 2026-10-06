@@ -1,6 +1,7 @@
-// The code window's pure half: the six slots, the statuses as words, the countdown, and what
-//   the loader's status call means.
 /**
+ * The code window's pure half: the six slots, the statuses as words, the countdown, and what the
+ * loader's status call means.
+ *
  * Code:     src/lib/enquiries/confirm.ts
  * Feature:  confirming an address before enquiries go to it (EMAIL_CONFIRM_PLAN.md §3, mock
  *           prototypes/email_confirm_20261005.html)

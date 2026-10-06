@@ -1,12 +1,22 @@
-// Saving or deleting a kind that matched no row says so, instead of "done".
 /**
- * `saveEnquiryKindAction` / `deleteEnquiryKindAction` — the zero-row case.
+ * Saving or deleting a kind that matched no row says so, instead of "done".
  *
- * AGENTS.md rule 3: an UPDATE or DELETE that RLS (or a stale id) filters to zero rows
- * returns `error: null`. Both actions used to read that as success, and the dashboard
- * then renamed (now: saved) or removed a kind that the database still held unchanged (review
- * 2026-09-23). The fake below answers every chain with the rows it is given, so the
- * only thing standing between "no rows" and "success" is the action's own check.
+ * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions.ts
+ *           (saveEnquiryKindAction, deleteEnquiryKindAction), through saveEnquiryKind
+ *           (src/lib/enquiries/kind-save.ts)
+ * Feature:  Settings › Email: a kind's name, description and delete
+ * Tier:     STRICT (AGENTS.md "Test depth"): a write that silently did nothing. AGENTS.md rule 3:
+ *           an UPDATE or DELETE that RLS (or a stale id) filters to zero rows returns
+ *           `error: null`. Both actions used to read that as success, and the dashboard then
+ *           saved or removed a kind the database still held unchanged (review 2026-09-23).
+ * Covers:   • save and delete report an error when no row matched; both succeed when it did
+ *           • a save writes only the checked fields and returns what it stored
+ *           • a bad description is refused before it reaches the database
+ * Not here: that the write really is row-filtered for another artist (against the database:
+ *           tests/integration/enquiries/enquiry-kind-description.test.ts).
+ * Fixtures: the ownership gate and next/cache are mocked; a fake client answers every chain with
+ *           the rows it is given, and rows only when `.select` asked for them (like PostgREST), so
+ *           the only thing standing between "no rows" and "success" is the action's own check.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,6 +51,7 @@ beforeEach(() => {
 })
 
 describe('kind writes that matched nothing', () => {
+  // A save that changed no row is an error, not "saved".
   it('save reports an error when no row changed', async () => {
     const { saveEnquiryKindAction } = await load()
     const res = await saveEnquiryKindAction('a1', 'k-gone', { label: 'Press', description: 'For radio' })
@@ -48,11 +59,13 @@ describe('kind writes that matched nothing', () => {
     expect(res.saved).toBeUndefined()
   })
 
+  // A delete that removed no row is an error, not "deleted".
   it('delete reports an error when no row went', async () => {
     const { deleteEnquiryKindAction } = await load()
     expect((await deleteEnquiryKindAction('a1', 'k-gone')).error).toBeTruthy()
   })
 
+  // With the row there, both succeed: the check is not simply always failing.
   it('both succeed when the row was there', async () => {
     rows = [{ id: 'k1' }]
     const { saveEnquiryKindAction, deleteEnquiryKindAction } = await load()
@@ -62,6 +75,7 @@ describe('kind writes that matched nothing', () => {
 })
 
 describe('saving a kind’s name and description', () => {
+  // Only the fields sent are written, trimmed, and the stored values come back.
   it('writes the checked fields only, and returns what it stored', async () => {
     rows = [{ id: 'k1' }]
     const { saveEnquiryKindAction } = await load()
@@ -69,6 +83,7 @@ describe('saving a kind’s name and description', () => {
     expect(updates).toEqual([{ description: 'For radio' }])
   })
 
+  // The action is callable with anything, so it checks the description itself.
   it('refuses a bad description BEFORE it reaches the database', async () => {
     // The action is callable with anything, not only from the dashboard's own field.
     rows = [{ id: 'k1' }]

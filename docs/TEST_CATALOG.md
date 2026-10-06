@@ -7,15 +7,16 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**90 test files · 1484 tests**
+**100 test files · 1533 tests**
 
-- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 32 files · 625 tests
-- [SEO / GEO page](#seo--geo-page) · 25 files · 337 tests
-- [Profile page](#profile-page) · 2 files · 22 tests
+- [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 611 tests
+- [SEO / GEO page](#seo--geo-page) · 25 files · 336 tests
+- [Profile page](#profile-page) · 6 files · 46 tests
+- [Settings page](#settings-page) · 7 files · 38 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 93 tests
-- [Search engines (Google and Bing)](#search-engines-google-and-bing) · 6 files · 115 tests
+- [Search engines (Google and Bing)](#search-engines-google-and-bing) · 6 files · 117 tests
 - [Stored logins](#stored-logins) · 2 files · 27 tests
 - [Eventbrite and YouTube sign-in](#eventbrite-and-youtube-sign-in) · 8 files · 144 tests
 - [Identity databases (MusicBrainz, Discogs, Wikidata)](#identity-databases-musicbrainz-discogs-wikidata) · 2 files · 23 tests
@@ -429,7 +430,7 @@ Proves the honesty rules hold across every test at once: a test that could not l
 - CRITICAL, rule 3: every row quoting a value only Tapir holds is labelled "in Tapir: …", in every test, so Tapir's data is never passed off as the site's.
 - CRITICAL, rule 3: no row labelled "in Tapir" quotes a value only the site holds.
 
-### tests/unit/seo-tests/how-crawlers-see-your-site/crawl.test.ts · 23 tests
+### tests/unit/seo-tests/how-crawlers-see-your-site/crawl.test.ts · 24 tests
 
 What the AI test's "How crawlers see your site" section is built from: robots.txt, the sitemap, each page's tags, and every crawler's visit, read by the engine's own rules.
 
@@ -461,6 +462,7 @@ What the AI test's "How crawlers see your site" section is built from: robots.tx
 - Every VISITING crawler's answer on each page, by its key; a crawler we have no visit for is null (no answer), never left out and never a guess.
 - Everything here came from the artist's site: it is kept as the exact text, never parsed, escaped or dropped here (the page renders it as text).
 - Missing or junk evidence is empty answers, never a throw (the run must still be stored).
+- The other spelling's `to` is whatever Location header it sent (up to ~16 KB): clipped like every other address here, so one runaway value can't fill the crawl's 64 KB.
 - A page row per opened path, even when a visit is missing: the fact is "no answer".
 
 ### tests/unit/seo-tests/looks-right-when-shared/link-preview.test.ts · 10 tests
@@ -633,30 +635,6 @@ After a publish, Tapir waits until the live site shows it, then tests the site o
 - `after` refusing (outside a request) must not throw into the publish.
 - The background job resolves even when everything under it fails.
 
-### tests/unit/seo-tests/runs/overview-data.test.ts · 13 tests
-
-The SEO / GEO Overview's data: failing tests most important first, a timeline of real publishes and runs only, and visit counts that are null (never 0) when they can't be read.
-
-- **Code:** src/lib/seo-tests/overview.ts (SEO_TEST_PRIORITY, failingInPriority, runChanges, buildTimeline, searchAndAiVisits, readSeoOverview)
-- **Tier:** STRICT (AGENTS.md "Test depth"): it decides what the manager is told needs them, and a 0 shown for a number we couldn't read would be untrue.
-- **Not here:** a page that draws this: the Overview tab that did was removed 2026-09-29; the module is kept for the stashed "AI visibility" page (TODO.md).
-
-**Tests**
-
-- One rank per test (derived), so a new test can't be missing from the to-do order.
-- The order: what needs the manager first, most important first; passes are not to-dos.
-- `na` is not failing: a test that doesn't apply is never a to-do.
-- Changes: each run is compared with the one before it, most important first.
-- The timeline: real publishes and runs only, inside the window, newest first; the first run has nothing to compare (null).
-- Site down: no to-dos that blame the site's settings; only a test that never reads the site stays.
-- Site down in the timeline: said once, not as 20 tests "now unknown"; the next run compares with the last one that reached it.
-- Visits: the same buckets as the Analytics page, so the two pages agree.
-- Unreadable analytics: null (shown as "—"), never 0; readable and empty is a real 0.
-- Unreadable publish history: no timeline at all, since half of one would hide publishes.
-- Unreadable runs: not "never tested"; nothing is listed as failing.
-- The window: the last 30 UTC days, today included, as the Analytics page counts them.
-- The main path: the latest run's failing tests in priority order, with its trigger and the last publish.
-
 ### tests/unit/seo-tests/runs/publish-hook.test.ts · 4 tests
 
 Every publish that changes a page's words schedules ONE SEO / GEO test run in the background, and ONE sitemap resend to Google; neither can fail or slow the publish.
@@ -721,18 +699,18 @@ Running the SEO / GEO tests: every one runs in order, one broken test never sink
 - A row that isn't a registration we can use (another provider, an address that isn't a registered https property) is never asked about.
 - Checked ONCE per run, for the origin the gather actually landed on.
 - A check that breaks or hangs is "not checked" (null), and nothing else about the run changes.
-- www → asks the bare spelling ONCE, as a person's browser, follows it home, and records where it landed.
-- A bare site: its www spelling. One that answers itself (no redirect) says so: `to` is itself.
+- www → asks the bare spelling ONCE, as a person's browser, follows it home, and records where it landed. `status` is the SPELLING'S OWN answer (the 308), not home's 200: the card reads it as the redirect's kind ("308 permanent"), so home's 200 would show "answered 200" with no mark.
+- A bare site: its www spelling. One that answers itself (no redirect) sends nobody anywhere: `to` is null, so the card says "opens on its own", never "→ <the same address>" in red.
 - Only www.<name> ↔ <name>: a sub-domain, a name we can't tell is the bare domain, an address or a port has no clear "other spelling", and nothing is fetched. _(one per row of a table)_
 - www.<name> is always clear, whatever <name> is.
-- A spelling that sends visitors to ANOTHER site is not followed; where it pointed is kept.
-- No answer: no status, nowhere; asked once, never retried. Sent home, and home didn't answer: where it was sent is still a fact.
+- A spelling that sends visitors to ANOTHER site is not followed; its own answer and where it pointed are kept.
+- No answer: no status, nowhere; asked once, never retried. Sent home, and home didn't answer: the spelling's own redirect and where it was sent are still facts.
 
-### tests/unit/seo-tests/runs/storage.test.ts · 32 tests
+### tests/unit/seo-tests/runs/storage.test.ts · 30 tests
 
 Storing and reading SEO / GEO test runs: the database's refusals come back in plain words, results are capped before they are stored, and reading back never passes junk to the page.
 
-- **Code:** src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), capCrawl, crawlOf, latestRun, historyFor, recentRuns, currentRun, seoScore)
+- **Code:** src/lib/seo-tests/store.ts (claimRun, finishRun, failRun, capResult(s), capCrawl, crawlOf, latestRun, currentRun, seoScore)
 - **Tier:** STRICT (AGENTS.md "Test depth"): stored data the live page reads back, and a stored `outside` link the page renders (a javascript: link would be stored XSS).
 - **Not here:** the database's own rules (cool-down, busy, limits, retention, immutability, the crawl's 64 KB check): the migrations, pinned in tests/integration/seo-tests/seo-test-runs.test.ts; running the tests (runs/running.test.ts); building the crawl (run.ts).
 
@@ -750,18 +728,16 @@ Storing and reading SEO / GEO test runs: the database's refusals come back in pl
 - The table's size check: one worst-case result per test (SEO_TEST_IDS) must fit, or the database refuses the whole run.
 - Bytes, not characters: CJK, emoji and escaped characters take more room than they look.
 - Half an emoji: a lone surrogate makes the database refuse the run, so a cut must never leave one.
-- History: oldest first per test, every test present, and a status the page doesn't know is dropped.
-- A failed read throws, so the page says "couldn't read" rather than "never tested".
-- Before the crawl column exists (the migration not pushed yet), the page must keep working: the read tries again without it. Any other failure still throws.
+- A failed read throws, so the page says "couldn't read" rather than "never tested". A missing column too: 20261001120000 is pushed, so there is no read "without the crawl" to fall back to any more, and a second read would only hide that something broke.
 - Shape: a stored result the page can't draw (a missing field, an unknown test, not an object) is dropped, never shown; `na` is kept.
 - Reach read back: as stored, or null for older runs, no site, or junk.
 - Abandoned runs: a run "running" for over 5 minutes is dead, so the page must not wait on it.
 - The score: passes over every status but `na`, the same rule the migration uses.
-- Every status is kept (derived from SEO_TEST_STATUSES), so a new status can't silently vanish from the history.
+- Every status is kept (derived from SEO_TEST_STATUSES), so a new status can't silently vanish from the page.
 - The witness every "null" below is measured against: the fixture IS a whole crawl, and a crawl that fits is stored exactly as the run made it.
 - The crawl reaches the database: one finish call carrying it as `p_crawl`, capped, with a field the page does not know dropped rather than stored.
-- No crawl, no argument: a database from before the crawl migration has no `p_crawl`, and a finish that named it would be refused there (PGRST202).
-- The crawl is extra, never the run: when the finish WITH one fails, the run is finished again without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
+- No crawl, no argument: there is nothing to store, and nothing for the table to refuse.
+- The crawl is extra, never the run: when the table refuses the finish WITH one, the run is finished again without it, so its results are kept. Without a crawl there is nothing to drop: no retry.
 - Sent again ONLY when the database REFUSED the call (nothing was written). A lost answer (a dropped connection, a timeout) may have finished the run with its crawl: a second call would find it no longer running, and the artist would be told the results weren't saved.
 - Not a crawl at all: never stored, never shown.
 - Step 1 of the size cap: the robots.txt text goes first (marked truncated: read, not kept), and when that is enough nothing else is cut.
@@ -769,7 +745,7 @@ Storing and reading SEO / GEO test runs: the database's refusals come back in pl
 - Step 3: then opened pages, from the end ("/" is first, so it goes last); every crawler's robots verdict is kept whatever else goes.
 - Too big even then (the verdicts alone): null, never an oversized crawl the table would refuse.
 - Postgres refuses a NUL or half an emoji inside jsonb, which would sink the whole finish (the results with it): each is replaced before it is sent; a whole emoji is kept.
-- The page reads the crawl back only whole: as stored, or null for a run from before crawls and for junk. The full-run read asks for it; the history read (many rows) never does.
+- The page reads the crawl back only whole: as stored, or null for a run from before crawls and for junk.
 
 ### tests/unit/seo-tests/runs/what-tapir-knows.test.ts · 15 tests
 
@@ -1029,7 +1005,7 @@ A healthy artist site (its html) and the evidence a run would gather from it. Ea
 Stored SEO / GEO runs for the page's tests, made by the REAL engine over made-up sites, so the page is tested against results the engine really gives.
 
 - **Code:** src/lib/seo-tests/engine.ts (SEO_ENGINE), run.ts (runAllTests), store.ts (capResults)
-- **What it provides:** • engineResults(scenario): one real result per test (SEO_TEST_IDS) for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun: a stored run around those results (a publish run, or a manual one); fixtureHistory: each test's last statuses, oldest first • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
+- **What it provides:** • engineResults(scenario): one real result per test (SEO_TEST_IDS) for a made-up site, capped as stored • fixtureResults(over, scenario): the same with some tests forced (only to a status the engine can really give that test) • fixtureRun: a stored run around those results (a publish run, or a manual one) • the scenarios: healthy, needsWork (Skeen-like), siteDown (timed out), site500, trainingBlocked, visualArtist (some tests `na`), hostile (html in the title)
 
 ### tests/unit/seo-tests/_found-fixtures.ts · support file
 
@@ -1100,7 +1076,7 @@ SEO / GEO › Profiles: the connected profiles and MusicBrainz rows, moved there
 - Five rows, first on the page (above every test group), each marked fine, and the count says so.
 - robots.txt: the file as sent, and every crawler bots.ts knows, allowed.
 - Sitemap: each page it lists, opened.
-- Page address and tags: every page's canonical is itself, and nothing says "don't list".
+- Page address and tags: the other spelling sends visitors home for good (the 308 a run stores as the spelling's own first answer, run.ts checkOtherHost), every page's canonical is itself, and nothing says "don't list".
 - Crawler visits: a cell per visiting crawler per page, and robots.txt-only names spanning the row.
 - Listed: Google's answer per page, Bing's visit per page, and no "go look yourself" links.
 - A crawler turned away by its own group: the row turns red, and that crawler shows the rule.
@@ -1171,7 +1147,7 @@ The SEO / GEO Search tab ("How fans find you"): each engine's numbers side by si
 - Google broke and Bing refused: each says it couldn't ask; only the error offers Try again, which re-renders the page (the loader asks again after an error).
 - An engine shows at once (no server trip) and goes in the address; a period is new numbers, so it navigates, keeping the engine.
 
-### tests/components/manager-tools/seo/test-tab.test.tsx · 20 tests
+### tests/components/manager-tools/seo/test-tab.test.tsx · 21 tests
 
 The SEO / GEO AI test tab: start, running and done, the card under an open row, its actions, evidence shown as plain text, and the quiet states (busy, cool-down, failed, no site...).
 
@@ -1193,11 +1169,12 @@ The SEO / GEO AI test tab: start, running and done, the card under an open row, 
 - Keyboard: Esc closes the open row and returns focus to it; the arrows move between rows.
 - A deep link (?open=) opens that test's row on arrival.
 - Outside links: a new tab, noopener, https only; a stored javascript: link renders nothing.
-- The fix: the wrench calls applySeoFixAction, the card confirms it, and a refresh raises the Publish bar.
+- The fix: the wrench calls applySeoFixAction for this artist and fix, and the card confirms it. (The Publish bar rises from the action's own revalidation; no refresh on top.)
 - A refused fix says why (the server's words, in a toast) and leaves the wrench to try again.
 - A hostile site's html shows as characters, never as elements (the engine really carried it).
-- Tests not switched on: nothing to press, no rows. Couldn't read: a way to try again that refreshes.
-- Another run going (a publish's): the running view with its one "already running" line, no rows, and we look again every few seconds.
+- Couldn't read: no rows, and a way to try again that refreshes.
+- Another run going (a publish's): the running view with its one "already running" line and no rows. Every few seconds the small read looks again (never a page render); when it says the run is over, the page renders ONCE and the looking stops.
+- A slow read is waited for, never stacked: one read in flight at a time.
 - A cool-down refusal (read from its reason) counts down, with Test again off.
 - A failed run: the server's sentence shows, and Test again stays on.
 - The lines under the header: a failed attempt after the latest run (after a reload), a run over 30 days old, a run of an old address.
@@ -1379,9 +1356,9 @@ The Profiles tab's Discogs and Wikidata checks ask the right thing, politely, an
 - Only the page the manager linked is read. Any spelling of the site counts (Discogs has `https://www.thebeatles.com/`); a page with no Sites (the other Skeen) is "site missing"; 404 is "no page there"; no link asks nothing; a 429 is "couldn't check".
 - The Beatles' real page lists https://www.facebook.com/thebeatles. A site at ANOTHER path on Facebook is not on it: the host alone would have said "lists your site".
 
-### tests/unit/manager-tools/seo/profile-marks.test.ts · 21 tests
+### tests/unit/manager-tools/seo/profile-marks.test.ts · 20 tests
 
-Profile marks without a database: which items exist, reading the marks before and after the migration is pushed, and the server action refusing bad input before it opens a session.
+Profile marks without a database: which items exist, reading and writing the marks, and the server action refusing bad input before it opens a session.
 
 - **Code:** src/lib/manager-tools/seo/profiles/marks.ts (PROFILE_ITEMS, isProfileItem, readProfileMarks, setProfileMark), src/lib/manager-tools/seo/profiles/bios.ts (OUTSIDE_BIOS, BIO_ITEMS), tools/seo/profiles/actions.ts (markProfileItemAction), and the newest `profile_marks_item_check` in supabase/migrations
 - **Tier:** STRICT (AGENTS.md "Test depth"): `item` arrives from the client and picks the row written; "not marked" must not be shown when the read actually failed; `edit` ends up in an href.
@@ -1396,14 +1373,13 @@ Profile marks without a database: which items exist, reading the marks before an
 - The one gate on the item name: the CHECK in the migration says the same.
 - Spelled out from the registry, so dropping the bios from PROFILE_ITEMS fails here too.
 - Only items the code knows reach the page; an unknown row is ignored, never shown.
-- Before the push the tab must still render, with nothing marked.
-- A failed read must not look like "not sent yet", or the manager sends the email twice.
+- A failed read must not look like "not sent yet", or the manager sends the email twice. A missing table too: the migrations are pushed, so it means something broke.
 - Ticking "updated" again must move the date: one update of THIS artist's row for THIS item, sending done_at alone (the only column managers may update), and no insert after it.
 - Nothing to re-confirm: insert artist_id + item only (the database stamps the rest), and ON CONFLICT DO NOTHING, so a double click racing the first insert is not an error.
 - 20261001160000 is live: a re-confirm refused for lack of the UPDATE grant (42501) is a failure, never a silent insert that reports "done" while the stamp stays put.
 - Any other failure of the re-confirm is a failure: inserting after it could report "done" for a stamp that did not move.
 - An undo that lost a filter would clear the item on every artist this manager runs.
-- "Sent" shown for a mark that was never stored is how the email goes out twice, or never.
+- "Sent" shown for a mark that was never stored is how the email goes out twice, or never. A missing table is refused like anything else (no "not switched on yet" since the push).
 - setProfileMark checks the item itself, so no caller can write a row the CHECK would refuse.
 - The witness for the refusals below: a good call DOES open the session and write, for every item the table accepts (the bios included): re-confirm first, then the first-mark insert of artist_id + item only.
 - The action's first gate: a bad item never opens a session or reaches a table.
@@ -1411,7 +1387,7 @@ Profile marks without a database: which items exist, reading the marks before an
 - Signed out: refused before any mark is read or written (RLS would also refuse, but then a cross-artist undo would report ok: the check is what keeps the answer honest).
 - Not this manager's artist (the owned read comes back empty): refused, nothing written.
 
-### tests/unit/manager-tools/seo/save-rules.test.ts · 52 tests
+### tests/unit/manager-tools/seo/save-rules.test.ts · 53 tests
 
 What each SEO / GEO field may store: the one save gate for the page-head words, the answers and the artist facts, what each rule refuses, and the paths that must NOT be able to write a fact.
 
@@ -1473,6 +1449,7 @@ What each SEO / GEO field may store: the one save gate for the page-head words, 
 - Only the fact columns: never slug, template, or any column a caller names.
 - The type is the registry only; genre and city are trimmed, capped at 120, blank clears.
 - The city follows the fact text rule: no markup, no control characters, no hidden marks.
+- The genre too: Profile refused markup in a genre before sending it, and the server took it from anyone who called the action directly. One rule now (genreError), on both sides.
 
 ### tests/unit/manager-tools/seo/search-model.test.ts · 17 tests
 
@@ -1502,7 +1479,7 @@ The Search tab's words: what the artist reads about their own search numbers, an
 - The engine in the address: the three views, anything else (junk, a prototype key) is Both.
 - The generated table is exactly i18n-iso-countries' alpha-3 → alpha-2 (a stale or hand-edited copy fails here), and Google's codes read as the Analytics page names them.
 
-### tests/unit/manager-tools/seo/search-stats-ask.test.ts · 8 tests
+### tests/unit/manager-tools/seo/search-stats-ask.test.ts · 9 tests
 
 Asking both engines for an artist's search numbers: only where the site is registered, both at once, inside a deadline, and never with the real keys from a test.
 
@@ -1518,7 +1495,8 @@ Asking both engines for an artist's search numbers: only where the site is regis
 - One engine registered; the other's key missing on the server; one that never answers.
 - The answer carries when each engine was registered (the Search tab's "added Sep 30"), and nothing when that engine isn't registered or the read failed.
 - A broken registration read or client builder is "couldn't ask", never a throw.
-- Answers (and the settled "not registered" / "no key") are kept for hours; a refusal, an error or a timeout is asked again next time.
+- Answers (and a settled "no key") are kept for hours; a refusal, an error or a timeout is asked again next time.
+- Registration runs from the CLI (scripts/site-register.ts), which can't clear the Next cache: a stored "Site not added yet" would outlive the registration by up to 6 hours. Nothing registered asks no engine (one service-role read), so it is never stored. One engine registered still is: otherwise a site with only Google would ask Google six times on every open (its quota is per site).
 - Tests load .env.local: the env-backed deps must refuse here, or a test could reach the real keys. A boolean, so a failure prints nothing of what came back.
 
 ### tests/unit/manager-tools/seo/search-stats.test.ts · 18 tests
@@ -1593,7 +1571,7 @@ The SEO / GEO page has five tabs on the rail, each with its own page, the tool o
 - The old Facts tab's address (bookmarks, old links) lands on Profile, which now holds the facts.
 - An old address and a test's pencil for the same setting land on the same tab and row.
 
-### tests/unit/manager-tools/seo/test-actions.test.ts · 11 tests
+### tests/unit/manager-tools/seo/test-actions.test.ts · 10 tests
 
 The SEO / GEO page's server actions check that the caller is signed in and manages the artist FIRST, then run the tests, apply a fix, or read the results.
 
@@ -1606,20 +1584,19 @@ The SEO / GEO page's server actions check that the caller is signed in and manag
 - Who is asking: every action refuses a signed-out caller and a stranger before touching anything else. _(one per row of a table)_
 - Test again: a manual run, written by the service role, read through the manager's own session.
 - Refusals: each comes back with its reason and seconds beside the sentence, so the page never reads the words. _(one per row of a table)_
-- Not switched on: the table missing (migration not pushed) is "off", not an error.
-- Any other failed read is "error" with a plain sentence, never "off" or "never tested".
-- Switched on: "ready" with the latest run, the history dots and any run in progress.
+- A failed read (here the latest run's, denied: there is no probe before it any more) is "error" with a plain sentence, never "never tested".
+- A good read: "ready" with the latest run and any run in progress, in two reads (no probe, no history).
 - The fix: only the Apple link, through the Connections door, left as a draft for the manager to publish.
 - Only when offered: the US store is right only for a US-based artist, so the test must have flagged it.
 - Now, not then: the new address is worked out from the link as it is now, never from the stored result.
 - The link rules still apply: their refusal stops the fix, in their words.
 - Nothing to fix, or an unknown fix: said plainly, nothing written.
 
-### tests/unit/manager-tools/seo/test-tab-model.test.ts · 28 tests
+### tests/unit/manager-tools/seo/test-tab-model.test.ts · 26 tests
 
-The Test tab's rules: every count, headline, word and link the manager reads there, and how the tab tells "not switched on yet" from "couldn't read" from "never tested".
+The Test tab's rules: every count, headline, word and link the manager reads there, and how the tab tells "couldn't read" from "never tested".
 
-- **Code:** src/lib/manager-tools/seo/test-model.ts, test/load.ts (loadTestTab), lib/seo-tests/store.ts (isMissingTable)
+- **Code:** src/lib/manager-tools/seo/test-model.ts, test/load.ts (loadTestTab), lib/seo-tests/store.ts (readTestTab)
 - **Tier:** STRICT (AGENTS.md "Test depth"): the counts ("19 of 25", "5 need you"), the headline and the hrefs a stored result can reach are what the manager is told is true.
 - **Not here:** drawing the tab (tests/components/manager-tools/seo/test-tab.test.tsx); the server action around the read (tests/unit/manager-tools/seo/test-actions.test.ts).
 
@@ -1627,9 +1604,8 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 
 - Counts: `na` is out of both sides of "N of M"; unknown is neither a pass nor a fail.
 - A malformed stored status counts nowhere, so it can never pass.
-- Groups: four in page order, each counting ALL its rows whatever the filter.
-- The filters: every scored row in exactly one, and the three add up to the score (every scenario).
-- A missing result keeps its row, with no result, and is never a pass.
+- Groups: four in page order, every row in its group, each counting its passes over what applies.
+- A missing result keeps its row, with no result, and is never counted a pass.
 - Site didn't answer (timed out, or error 500): one sentence, never a score, no rows.
 - The run's own `reach` comes first, and each way of not answering has its own words.
 - "Answered" wins over the statuses rule; an older run with no `reach` falls back to it; no site outranks all.
@@ -1648,8 +1624,7 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 - Outside links: https or nothing (javascript:, http:, data:, protocol-relative all refused).
 - "Check it yourself" links: beside the test they check, all https, on the tested address.
 - Every pencil lands on a real SEO tab or dashboard route.
-- "No such table": PostgREST's and Postgres's words for it, and nothing else (a denied read is not "off").
-- The table missing (the migration isn't pushed) is "off"; a denied read is "error"; an empty table is "never tested".
+- A denied or broken read is "error" (the table missing too: both migrations are pushed, so that is a broken read now, not "not switched on"); an empty table is "never tested".
 - WHAT WE SAW: consecutive rows with the same label show it once (repeat), a label that comes back later is said again.
 - Stored evidence is untrusted: anything that isn't a list reads as none, and each odd row becomes plain strings (never dropped silently mid-list, never an object).
 - The running clock reads minutes:seconds from whole seconds, and never goes below 0:00 (a browser clock behind the server's).
@@ -1658,7 +1633,34 @@ The Test tab's rules: every count, headline, word and link the manager reads the
 
 Who the artist is, on one page: the name, bio, type, genre, other names, the year they started and where they are based (the SEO/GEO Facts tab until 2026-10-02).
 
-### tests/components/manager-tools/profile/profile-view.test.tsx · 20 tests
+### tests/components/manager-tools/profile/photo-picker.test.tsx · 3 tests
+
+The Profile photo tile shows the + when empty, and a picked image is saved by its id.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/profile/photo-picker.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): the UI is new and still moving. One main path.
+- **Not here:** the write (tests/unit/manager-tools/profile/profile-photo.test.ts); the upload itself (the uploader's own tests); looks (screenshots)
+
+**Tests**
+
+- Round 3 of the mock: the + sits inside the empty circle.
+- The main path: pick → the action gets that photo's id → the tile shows it.
+- The upload tile and a pick can overlap: an upload that finishes while a pick is still saving used to land in Images and silently NOT become the profile photo. The later action wins.
+
+### tests/components/manager-tools/profile/profile-photo-uploader.test.tsx · 2 tests
+
+A profile photo uploaded from the Site & profile page or the editor's tile lands in Images too, then becomes the profile photo by that Images photo's id.
+
+- **Code:** src/app/artists/[id]/(dashboard)/profile-photo-uploader.tsx; src/app/artists/[id]/(dashboard)/editor/panels/photo-tools.tsx (the Profile photo tile)
+- **Tier:** LIGHT (AGENTS.md "Test depth"): the doors are new UI. One main path per door.
+- **Not here:** the write itself (tests/unit/manager-tools/profile/profile-photo.test.ts); a file two rows share surviving a delete (tests/unit/media/storage-gc-shared-file.test.ts) and the publish sweep (tests/unit/media/storage-gc-media.test.ts); the compression gate on the editor tile (tests/components/site-editor/editor-upload-gate.test.tsx).
+
+**Tests**
+
+- The Site & profile page: into Images first, then that Images photo becomes the profile photo.
+- The editor's tile: the same door, so a replaced photo stays in Images; never a write by path.
+
+### tests/components/manager-tools/profile/profile-view.test.tsx · 21 tests
 
 The Profile page: each row saves through its own gate, a value the gate would refuse shows the gate's own words and is never sent, the bio keeps its rules, and the nudge under it leads to the outside bios. Moved here with the SEO / GEO Facts tab (2026-10-02, PROFILE_TOOL_PLAN.md).
 
@@ -1687,7 +1689,48 @@ The Profile page: each row saves through its own gate, a value the gate would re
 - The bio test's pencil lands here: the row carries its id, and arriving opens the editor.
 - The bio saves to artists.bio; over the cap it is kept, refused and never sent (never cut).
 - The window is only the writing; its count reads "N / floor" below the AI test's floor, then just "N words" in ink.
+- The count is the AI test's own (seo-tests/match.ts wordCount): a spaced dash is not a word, so it cannot tip the window to "met" while the test still says the bio is under its floor.
 - After a Publish changed a fact, the Bio row says how many outside bios may be out of date, linking to SEO / GEO › Profiles.
+
+### tests/unit/manager-tools/profile/profile-actions.test.ts · 4 tests
+
+The Profile page's own two actions keep their guards on the server: the photo is set only for the artist's owner, and the name only when its rule passes, trimmed.
+
+- **Code:** src/app/artists/[id]/(dashboard)/profile-photo-actions.ts (setProfilePhotoAction), (manager-tools)/profile/actions.ts (saveArtistNameAction)
+- **Tier:** STRICT (AGENTS.md "Test depth"): an ownership gate and a validator on the server. Every component test mocks these modules away, so before this file deleting either guard turned nothing red.
+- **Not here:** the photo write itself (tests/unit/manager-tools/profile/profile-photo.test.ts); the name rule's cases (profile.test.ts); the rows that call these (tests/components/manager-tools/profile/).
+
+**Tests**
+
+- An owner's pick reaches the one photo write, once, with the artist and the Images row.
+- No session, or an artist RLS hides: an error, and the write is never reached. Without the gate a row-filtered write could answer "done" to someone it changed nothing for.
+- A blank or too-long name answers in the rule's own words before any client is made: the column has no CHECK, so this is the only thing between a direct call and a stored blank.
+- A good name is stored trimmed: the spaces a manager typed around it never reach the site.
+
+### tests/unit/manager-tools/profile/profile-photo.test.ts · 14 tests
+
+Setting, replacing and clearing the one profile photo writes one record, whichever door it comes through, and a write that fails half way never leaves the slot empty.
+
+- **Code:** src/lib/profile-photo.ts; src/lib/site-editor/save.ts (setImageField's media branch)
+- **Tier:** STRICT (AGENTS.md "Test depth"): it writes data the live site, the press kit and the outside profiles read, and a lost row can take the live photo with it on Publish.
+- **Not here:** the file a shared photo leaves behind on delete (tests/unit/media/storage-gc-shared-file.test.ts); the tile and picker (tests/components/manager-tools/profile/photo-picker.test.tsx); the upload doors (tests/components/manager-tools/profile/profile-photo-uploader.test.tsx).
+
+**Tests**
+
+- One slot: read what it holds, land the new row FIRST, then delete exactly the rows read.
+- The bug this guards (review of d558c8e): delete first, then a failed insert left the slot empty; the upload then removed the new file and a Publish took the live photo off the site.
+- The delete fails after a good insert: the new row is taken back out, so the old photo stays exactly as it was and the error is true.
+- Worst case, the undo fails too: two rows, never none. Every reader takes the first by sort order (the old one), so the caller is told the change did not take; the next save clears both.
+- Two overlapping saves each delete only the rows they read, so neither deletes the other's new row: two rows at worst, never an empty slot.
+- Old pages could leave two rows in the slot: the next replace leaves exactly one.
+- A clear leaves the slot empty and inserts nothing; the library photo stays.
+- The path comes from the browser on the upload doors: it must be this artist's own file.
+- "Make sure both write the same record": the editor's tile and the Profile page are one write.
+- The browser names a photo, never a path: the server reads the file from this artist's Images.
+- Another artist's photo (RLS hides it, or the artist filter misses it) or a logo: no row.
+- A read that failed is not "no photo": nothing is written and the reason comes back.
+- Re-picking the photo that is already there would make a new row with the same file: a change for the Publish bar to count that changes nothing.
+- A new pick over an old one is a replace, through the same insert-then-delete.
 
 ### tests/unit/manager-tools/profile/profile.test.ts · 2 tests
 
@@ -1701,6 +1744,125 @@ Profile's pure parts: the name's rule (one copy for the row and the action) and 
 
 - Something, and not too long; spaces around it don't count.
 - Only "may be out of date" counts; unread rows say nothing.
+
+## Settings page
+
+The artist’s settings: General (the site’s address and the platform’s, read-only) and Email (who receives each kind of enquiry, and confirming each address with a code).
+
+### tests/components/manager-tools/settings/email-confirm.test.tsx · 4 tests
+
+Settings › Email: add an address, its code is sent, the window asks for it, six digits confirm it.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows.tsx, settings/email/confirm-window.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): a UI flow still being designed, so ONE test of the main path. The look (blue, the key, the slots' underline) is checked by screenshot.
+- **Not here:** the slot rules and status words (tests/unit/manager-tools/enquiries/ email-confirm.test.ts); the actions (tests/unit/manager-tools/settings/ email-code-actions.test.ts); the list rules with confirmation off (kind-rows.test.tsx).
+
+**Tests**
+
+- The main path, end to end: the list saves, the code goes, the window asks, six digits confirm.
+- Sam, 2026-10-05: clicking a blue address sends its code, "and then the modal opens after". Not while a code is still live: that would replace the one being read out.
+- Sam, 2026-10-05: "forget it on removal". Taken off its only list, a confirmed address is forgotten here as in the database: added again, it waits and its code goes.
+- A send counts only once the server says it went (review, 2026-10-06). A failed email gets no send time, and leaves no code to wait on: the database replaced the one before it as it tried, so the next click on the blue address must send, not open on a dead code.
+
+### tests/components/manager-tools/settings/kind-rows.test.tsx · 14 tests
+
+Settings › Email's rows: each kind shows its own addresses; click one to edit or remove it, and a row's + adds one to that kind.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth") for the look, which is still moving; but every save here decides who receives enquiries, so each test asserts the ACTION and the exact list it got.
+- **Not here:** that a kind then reaches ONLY its own list (against the database: tests/integration/enquiries/enquiry-recipients.test.ts and enquiry-door.test.ts); a waiting address and its code window (email-confirm.test.tsx); the actions themselves (tests/unit/manager-tools/settings/).
+
+**Tests**
+
+- Each kind's own list, and only it: an address on the wrong row reads as a recipient it is not.
+- What a kind is FOR sits under its name, never its slug ("booking" under Booking was useless).
+- Click-to-edit: the glyphs exist only while it is open, and Escape leaves without writing.
+- Sam, 2026-10-05: "If a email has been deleted (hit the x on it to remove it), it should stop recieving emails." So an edit REPLACES the address where it stood: the old one is off the list at once (never kept until the new one confirms), and the new one waits for its code.
+- A refused edit never reaches the server, and the typing is kept so it can be fixed.
+- Removing one address sends the rest of the list; an ordinary remove asks nothing.
+- The last address asks first: without it, that kind has no one to email.
+- A refused save puts the list back as it was, and says why.
+- One save per kind at a time: each sends the whole list, so a second could undo the first.
+- A kind's name and description edit together, and only what changed is sent.
+- Every kind but Contact can be deleted, after asking: Contact is where unknown purposes land.
+- A + on every row, and no way to add a kind (Sam: "remove the ability to add new email types").
+- The + adds to THAT kind's whole list, and the new address waits for its code.
+- A refused add is not sent and stays typed; Escape then leaves without writing.
+
+### tests/components/manager-tools/settings/settings-email-page.test.tsx · 5 tests
+
+Settings › Email renders through its own data plumbing: one row per kind, each with its own addresses, confirmed or waiting.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/page.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): the page is still being designed. One render through the page's own reads, the same discipline enquiries-page.test.tsx exists for: a server page with no render test is a page whose data-order bugs only the browser finds.
+- **Not here:** what the rows do when clicked (kind-rows.test.tsx, email-confirm.test.tsx); how a failed status read reads (tests/unit/manager-tools/enquiries/email-confirm.test.ts).
+
+**Tests**
+
+- The kinds arrive in the manager's order, one row each.
+- Each row gets its own kind's addresses from the one embedded query.
+- The description column reaches the rows; a kind without one shows no line.
+- The status call decides which addresses wait for a code; the rest stay ordinary.
+- Every kind can take one more address.
+
+### tests/components/manager-tools/settings/settings-view.test.tsx · 1 test
+
+Settings · General: two ledger rows of plain text, and no email row.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/settings-view.tsx
+- **Tier:** LIGHT (AGENTS.md "Test depth"): a screen still being designed, so one test of what it shows.
+- **Not here:** which rows there are and how an address reads (tests/unit/manager-tools/settings/ settings.test.ts).
+
+**Tests**
+
+- Read-only text, and no email row to disagree with Settings › Email.
+
+### tests/unit/manager-tools/settings/email-code-actions.test.ts · 5 tests
+
+The code window's two server actions: what they send, and that only `{ status }` comes back.
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions.ts (sendEmailCodeAction, confirmEmailCodeAction)
+- **Tier:** STRICT (AGENTS.md "Test depth"): the session's token goes to the Edge Function, and a code must never reach the browser
+- **Not here:** the function and the SQL (tests/unit/enquiries/email-confirm-build.test.ts, tests/integration/enquiries/).
+
+**Tests**
+
+- The function is told who is asking by the session's own token, and which address (as one lower-case key: confirmation is per artist and address).
+- Only the status rides back: a code or token in the answer never reaches the browser.
+- No session, no call: nothing else could vouch for the manager.
+- Only six digits are ever tried: anything else would cost one of the five tries for nothing. _(one per row of a table)_
+- Six digits go, once, for the address as one lower-case key; the status comes back as said.
+
+### tests/unit/manager-tools/settings/kind-actions.test.ts · 5 tests
+
+Saving or deleting a kind that matched no row says so, instead of "done".
+
+- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions.ts (saveEnquiryKindAction, deleteEnquiryKindAction), through saveEnquiryKind (src/lib/enquiries/kind-save.ts)
+- **Tier:** STRICT (AGENTS.md "Test depth"): a write that silently did nothing. AGENTS.md rule 3: an UPDATE or DELETE that RLS (or a stale id) filters to zero rows returns `error: null`. Both actions used to read that as success, and the dashboard then saved or removed a kind the database still held unchanged (review 2026-09-23).
+- **Not here:** that the write really is row-filtered for another artist (against the database: tests/integration/enquiries/enquiry-kind-description.test.ts).
+
+**Tests**
+
+- A save that changed no row is an error, not "saved".
+- A delete that removed no row is an error, not "deleted".
+- With the row there, both succeed: the check is not simply always failing.
+- Only the fields sent are written, trimmed, and the stored values come back.
+- The action is callable with anything, so it checks the description itself.
+
+### tests/unit/manager-tools/settings/settings.test.ts · 4 tests
+
+The Settings · General rows: the two addresses, read as a person says them.
+
+- **Code:** src/lib/settings.ts (displayAddress, settingsRows)
+- **Tier:** LIGHT (AGENTS.md "Test depth"): words on a read-only screen. Pure, and in the mutation slice.
+- **Not here:** how the rows look (tests/components/manager-tools/settings/settings-view.test.tsx).
+
+**Tests**
+
+- An address reads as a person says it: no scheme, no www, no trailing slash.
+- Exactly two rows, and no email: it lives in Settings › Email now.
+- A custom site's own domain is Site; the platform page is Address.
+- A template site would show the same address twice, so it has no Site row.
 
 ## SEO / GEO saved runs (database)
 
@@ -1746,7 +1908,7 @@ What the SEO/GEO page keeps in the hosted database: the Profiles tab’s marks a
 
 In the real database, the Outside bios loader tells a fact a snapshot doesn't CARRY from one it carries as empty, so a fact joining the profile snapshot never marks every ticked bio stale.
 
-- **Code:** src/app/artists/[id]/(dashboard)/(manager-tools)/tools/seo/profiles/bios-load.ts (`data->f::text`, factsOf), src/lib/manager-tools/seo/profiles/bio-state.ts (factChanges)
+- **Code:** src/lib/manager-tools/seo/profiles/bios-load.ts (`data->f::text`, factsOf), src/lib/manager-tools/seo/profiles/bio-state.ts (factChanges)
 - **Tier:** STRICT (AGENTS.md "Test depth"): it decides what the artist is told to go and redo, and only the hosted PostgREST can say what `data->f` answers for a missing key (null, the same as a JSON null: the bug) and what `data->f::text` answers (null vs the text 'null').
 - **Not here:** every other factChanges rule (tests/unit/manager-tools/seo/bio-state.test.ts).
 
@@ -2062,7 +2224,7 @@ Tapir's robot account signs in to Google and registers a site: the exact calls, 
 - An answer with no inspection result at all is not "Google knows nothing": it is a failure.
 - Google refusing (a property the robot doesn't own, the daily quota) is its own reason.
 
-### tests/unit/search-engines/register.test.ts · 26 tests
+### tests/unit/search-engines/register.test.ts · 27 tests
 
 Registering a site runs its steps in order, stops safely, and never leaves a wrong artist holding a site.
 
@@ -2093,13 +2255,14 @@ Registering a site runs its steps in order, stops safely, and never leaves a wro
 - A site already on the Bing account: AddSite is refused (AlreadyExists), the code is still read.
 - Both refused: AddSite's reason is the one shown (it came first and explains the rest).
 - Bing's code refused (AddSite fine, no code): Bing is left out, never stored with no code.
+- Moved to a new address, and Bing gave no code this run (or isn't set up): the Bing row would still say "verified at the OLD address", so the Search tab and the AI test would ask Bing about a site the artist left, and unique(provider, site_url) would keep the old address blocked on Bing for every other artist. Once the new address is live it goes. At the SAME address it stays (Bing just didn't answer this run), and a run that never goes live touches nothing.
 - Google's code is made for this site alone; Bing's is the same on every site of the account, so another artist's page showing it proves nothing. No Google code (no key, or Google refused): nothing stored, Bing not asked, nothing connected.
 - A provider with no credentials is skipped entirely, and the other runs on its own.
 - Skeen is already connected at this address (the column has no trailing slash, or has one; any case): not rewritten.
 - Connected elsewhere, or on the built-in template at this address: connected to THIS site.
 - Six or seven looks in a minute: the wait for the tags never turns into a tight loop against the site.
 
-### tests/unit/search-engines/resubmit.test.ts · 5 tests
+### tests/unit/search-engines/resubmit.test.ts · 6 tests
 
 After a publish that changed a page's words, the sitemap is resent to Google: only for a site Tapir registered, never failing the publish.
 
@@ -2114,6 +2277,7 @@ After a publish that changed a page's words, the sitemap is resent to Google: on
 - It runs after a publish that is already live: a refusal or a throw anywhere is an outcome.
 - Scheduled for after the response; `after` refusing (outside a request) never reaches the publish; and what is logged is codes, never Google's words or an error's message.
 - Tests load .env.local: a test that forgot to inject its own clients must never read the hosted database or send the real key to Google. With no deps at all, the call ends as an outcome.
+- The ONE builder that reads Google's and Bing's keys refuses on its own, whichever wrapper forgets. A boolean, so a failure prints nothing of what came back (2026-09-30: a test printed part of the real Google key).
 
 ### tests/unit/search-engines/search-stats-calls.test.ts · 16 tests
 

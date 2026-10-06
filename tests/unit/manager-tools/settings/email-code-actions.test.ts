@@ -1,5 +1,6 @@
-// The code window's two server actions: what they send, and that only `{ status }` comes back.
 /**
+ * The code window's two server actions: what they send, and that only `{ status }` comes back.
+ *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/actions.ts
  *           (sendEmailCodeAction, confirmEmailCodeAction)
  * Feature:  confirming an address (EMAIL_CONFIRM_PLAN.md §3)

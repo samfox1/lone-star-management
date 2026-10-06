@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Settings › Email: add an address, its code is sent, the window asks for it, six digits confirm it.
 /**
+ * Settings › Email: add an address, its code is sent, the window asks for it, six digits confirm it.
+ *
  * Code:     src/app/artists/[id]/(dashboard)/(manager-tools)/settings/email/kind-rows.tsx,
  *           settings/email/confirm-window.tsx
  * Feature:  confirming an address before enquiries go to it (EMAIL_CONFIRM_PLAN.md §3, mock
