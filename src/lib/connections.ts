@@ -34,7 +34,7 @@ import {
   type IntegrationSection,
 } from './integrations-registry'
 import { isContactLink, looksLikeEmail } from './url'
-import { displayAddress } from './settings'
+import { displayAddress } from './manager-tools/format'
 import { CONNECT_METHODS, handleFromUrl, parseHandle, withArticle, type ConnectMethod } from './connect-methods'
 import { SERVICES, SHOPIFY_KEY } from '@/lib/manager-tools/connections/services'
 

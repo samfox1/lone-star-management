@@ -7,18 +7,9 @@
  * Pure. The page reads and passes in; the view renders what comes out.
  */
 import { publicSiteOrigin } from './custom-site'
+import { displayAddress } from './manager-tools/format'
 
 export type SettingsArtist = { name: string; slug: string; site_kind?: string | null; custom_site_url?: string | null }
-
-/** "skeenmusic.com" from "https://www.skeenmusic.com/" — an address as a person says it. */
-export function displayAddress(url: string | null | undefined): string {
-  if (!url) return ''
-  return url
-    .trim()
-    .replace(/^[a-z]+:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/+$/, '')
-}
 
 export type SettingsRow = { key: 'site' | 'address'; label: string; value: string }
 

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { displayAddress } from '@/lib/settings'
+import { displayAddress } from '@/lib/manager-tools/format'
 import { Icon } from '@/components/ui/icons'
 import type { ConnectionRow } from '@/lib/connections'
 import { toast } from '../../toast'

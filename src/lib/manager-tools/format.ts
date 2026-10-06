@@ -48,8 +48,9 @@ export function listWords(items: readonly string[], joiner: 'and' | 'or' = 'and'
 }
 
 /**
- * A web address as a person reads it, the ONE shortener (profiles, the crawl cards and the AI
- * test's evidence each had their own until 2026-10-02, prototypes/batch2_compare_20261002.html):
+ * A web address as a person reads it, on a page that lists addresses (profiles, the crawl cards
+ * and the AI test's evidence each had their own until 2026-10-02,
+ * prototypes/batch2_compare_20261002.html). A site's NAME, said aloud, is displayAddress below:
  *
  *   "https://www.skeenmusic.com/"        → "www.skeenmusic.com"   (the home page's lone / goes)
  *   "https://www.instagram.com/skeen/"   → "www.instagram.com/skeen/"   (a page's own slash stays)
@@ -67,6 +68,22 @@ export function shortLink(url: string | null | undefined): string {
   if (!m) return url
   const [, scheme, host, rest] = m
   return `${scheme.toLowerCase() === 'http' ? 'http://' : ''}${host}${rest === '/' ? '' : rest}`
+}
+
+/**
+ * "skeenmusic.com" from "https://www.skeenmusic.com/": an address as a person SAYS it, the
+ * site's name. Any scheme, a leading "www." and trailing slashes go. Settings › General's two
+ * addresses, the Overview's site, a Connections row and the editor's link rows (it lived in
+ * lib/settings.ts until 2026-10-05, when it moved here beside shortLink). shortLink keeps "www."
+ * because a crawl card compares two spellings of one host; a name said aloud has no "www.".
+ */
+export function displayAddress(url: string | null | undefined): string {
+  if (!url) return ''
+  return url
+    .trim()
+    .replace(/^[a-z]+:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/+$/, '')
 }
 
 /** What every tool says when a save fails and the server gave no reason. */

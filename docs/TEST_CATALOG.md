@@ -7,12 +7,12 @@ strictly (Tier), what it leaves to other files, and then one line per test (the 
 How the tests are organized, and the header every file opens with: [tests/README.md](../tests/README.md).
 A table test (`it.each`) counts once here and runs once per row.
 
-**100 test files · 1533 tests**
+**100 test files · 1532 tests**
 
 - [SEO / GEO checks: the engine](#seo--geo-checks-the-engine) · 31 files · 611 tests
 - [SEO / GEO page](#seo--geo-page) · 25 files · 336 tests
 - [Profile page](#profile-page) · 6 files · 46 tests
-- [Settings page](#settings-page) · 7 files · 38 tests
+- [Settings page](#settings-page) · 7 files · 37 tests
 - [SEO / GEO saved runs (database)](#seo--geo-saved-runs-database) · 1 file · 21 tests
 - [SEO / GEO page (database)](#seo--geo-page-database) · 2 files · 16 tests
 - [Safe fetching](#safe-fetching) · 6 files · 93 tests
@@ -1849,17 +1849,16 @@ Saving or deleting a kind that matched no row says so, instead of "done".
 - Only the fields sent are written, trimmed, and the stored values come back.
 - The action is callable with anything, so it checks the description itself.
 
-### tests/unit/manager-tools/settings/settings.test.ts · 4 tests
+### tests/unit/manager-tools/settings/settings.test.ts · 3 tests
 
 The Settings · General rows: the two addresses, read as a person says them.
 
-- **Code:** src/lib/settings.ts (displayAddress, settingsRows)
+- **Code:** src/lib/settings.ts (settingsRows)
 - **Tier:** LIGHT (AGENTS.md "Test depth"): words on a read-only screen. Pure, and in the mutation slice.
-- **Not here:** how the rows look (tests/components/manager-tools/settings/settings-view.test.tsx).
+- **Not here:** how the rows look (tests/components/manager-tools/settings/settings-view.test.tsx); displayAddress's rules one by one (tests/unit/manager-tools/format.test.ts).
 
 **Tests**
 
-- An address reads as a person says it: no scheme, no www, no trailing slash.
 - Exactly two rows, and no email: it lives in Settings › Email now.
 - A custom site's own domain is Site; the platform page is Address.
 - A template site would show the same address twice, so it has no Site row.

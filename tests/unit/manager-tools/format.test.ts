@@ -7,7 +7,7 @@
  * leap day, the same day a year apart).
  */
 import { describe, expect, it } from 'vitest'
-import { SAVE_FAILED, clockTime, listWords, minutesSeconds, plural, shortDay, shortLink } from '@/lib/manager-tools/format'
+import { SAVE_FAILED, clockTime, displayAddress, listWords, minutesSeconds, plural, shortDay, shortLink } from '@/lib/manager-tools/format'
 
 const DATES = [
   '2026-09-29T12:00:00Z',
@@ -60,7 +60,7 @@ describe('clockTime, plural, shortLink, SAVE_FAILED', () => {
   })
 
   /**
-   * ONE shortener for the three places that printed a web address three ways (profiles, the
+   * One shortener for the three places that printed a web address three ways (profiles, the
    * crawl cards, the AI test's evidence; prototypes/batch2_compare_20261002.html item 5, Sam
    * said yes 2026-10-02). The first seven rows are that comparison's table, its "Proposed"
    * column verbatim. `www.` stays because the crawl's Address card prints "skeenmusic.com →
@@ -109,6 +109,23 @@ describe('clockTime, plural, shortLink, SAVE_FAILED', () => {
  * refusal, the analytics "no plays … or video clicks". The copies' own expression is kept here as
  * the oracle, so a change to the word order (an Oxford comma, a lone item) goes red.
  */
+/** Moved here with displayAddress from settings.test.ts (2026-10-05): the Settings rows, the
+ *  Overview's site, Connections rows and the editor's links all print through it. */
+describe('displayAddress', () => {
+  // An address reads as a person says it: no scheme, no www, no trailing slash.
+  it('drops the scheme, www and a trailing slash — each rule on its own', () => {
+    // One input per rule, so a rule that stops working is the one test that goes red.
+    expect(displayAddress('https://skeenmusic.com')).toBe('skeenmusic.com') // scheme only
+    expect(displayAddress('HTTPS://skeenmusic.com')).toBe('skeenmusic.com') // any case
+    expect(displayAddress('www.skeenmusic.com')).toBe('skeenmusic.com') // www only
+    expect(displayAddress('skeenmusic.com//')).toBe('skeenmusic.com') // trailing slashes only
+    expect(displayAddress('  https://www.skeenmusic.com/  ')).toBe('skeenmusic.com') // all three, padded
+    expect(displayAddress('lonestar.site/skeen')).toBe('lonestar.site/skeen') // an inner slash stays
+    expect(displayAddress(null)).toBe('')
+    expect(displayAddress('')).toBe('')
+  })
+})
+
 describe('listWords reproduces the join it replaced', () => {
   const old = (xs: string[], joiner: string) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${joiner} ${xs[xs.length - 1]}`)
   const LISTS = [[], ['bio'], ['city', 'genre'], ['name', 'bio', 'genre'], ['a', 'b', 'c', 'd'], ['', 'x']]

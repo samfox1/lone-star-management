@@ -11,8 +11,7 @@
  */
 import { siteUnpublished, type SectionDiff, type UnpublishedDiff } from '@/lib/content'
 import { publicSiteOrigin } from '@/lib/custom-site'
-import { displayAddress } from '@/lib/settings'
-import { listWords, plural } from '../format'
+import { displayAddress, listWords, plural } from '../format'
 import { PROFILE_SEG } from '../profile/route'
 
 /** null: the count could not be read. The row then shows none, never a 0 it did not see. */

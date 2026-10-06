@@ -1,7 +1,7 @@
 /**
  * The Settings · General rows: the two addresses, read as a person says them.
  *
- * Code:     src/lib/settings.ts (displayAddress, settingsRows)
+ * Code:     src/lib/settings.ts (settingsRows)
  * Feature:  Settings · General (2026-09-13)
  * Tier:     LIGHT (AGENTS.md "Test depth"): words on a read-only screen. Pure, and in the
  *           mutation slice.
@@ -9,30 +9,16 @@
  *             Profile and email to Settings › Email, both 2026-10-02)
  *           • an address reads as a person says it (no scheme, no www, no trailing slash)
  *           • a template site has no Site row; with no app origin yet, Address is a bare path
- * Not here: how the rows look (tests/components/manager-tools/settings/settings-view.test.tsx).
+ * Not here: how the rows look (tests/components/manager-tools/settings/settings-view.test.tsx);
+ *           displayAddress's rules one by one (tests/unit/manager-tools/format.test.ts).
  * Fixtures: NEXT_PUBLIC_APP_URL is set per test and put back after.
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { displayAddress, settingsRows } from '@/lib/settings'
+import { settingsRows } from '@/lib/settings'
 
 const ORIGINAL_APP = process.env.NEXT_PUBLIC_APP_URL
 afterEach(() => {
   process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP
-})
-
-describe('displayAddress', () => {
-  // An address reads as a person says it: no scheme, no www, no trailing slash.
-  it('drops the scheme, www and a trailing slash — each rule on its own', () => {
-    // One input per rule, so a rule that stops working is the one test that goes red.
-    expect(displayAddress('https://skeenmusic.com')).toBe('skeenmusic.com') // scheme only
-    expect(displayAddress('HTTPS://skeenmusic.com')).toBe('skeenmusic.com') // any case
-    expect(displayAddress('www.skeenmusic.com')).toBe('skeenmusic.com') // www only
-    expect(displayAddress('skeenmusic.com//')).toBe('skeenmusic.com') // trailing slashes only
-    expect(displayAddress('  https://www.skeenmusic.com/  ')).toBe('skeenmusic.com') // all three, padded
-    expect(displayAddress('lonestar.site/skeen')).toBe('lonestar.site/skeen') // an inner slash stays
-    expect(displayAddress(null)).toBe('')
-    expect(displayAddress('')).toBe('')
-  })
 })
 
 describe('settingsRows', () => {
