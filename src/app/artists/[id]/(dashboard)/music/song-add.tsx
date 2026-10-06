@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalCardClass, modalOverlayClass, modalBackGlyphClass } from '@/components/ui/ui'
 import { Icon } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
 import { mediaUrl } from '@/lib/site'
 import { slugify } from '@/lib/slug'
@@ -477,7 +476,7 @@ export function SongAddButton({ artistId }: { artistId: string }) {
                     setError(null)
                   }}
                   aria-label="Back"
-                  className={`inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`}
+                  className={modalBackGlyphClass}
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>

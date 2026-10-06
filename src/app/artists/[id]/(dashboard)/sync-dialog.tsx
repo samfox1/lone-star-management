@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cx } from '@/lib/cx'
-import { modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { modalCardClass, modalOverlayClass, modalCornerGlyphClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { SECTION_SERVICE_NOUN, type SyncRunResult, type SyncSection, type SyncSource } from './sync-sections'
 import { ToolbarGlyph } from './create-modal'
 import { Icon } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
 
 // The types and the section vocabulary live in sync-sections, and the arrow points ONE
 // way: that module has no React and no 'use client', so this can read it while the pages
@@ -103,7 +102,7 @@ export function SyncDialog({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
-              className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+              className={`absolute right-3 top-3 ${modalCornerGlyphClass}`}
             >
               <Icon name="close" size={16} />
             </button>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
+import { modalCornerGlyphClass } from '@/components/ui/ui'
 import { RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { safeHref } from '@/lib/url'
 import { CardModal } from '../card-modal'
@@ -256,7 +256,7 @@ export function ReleaseCard({
             onClick={share}
             aria-label="Share"
             title="Share the release page"
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+            className={modalCornerGlyphClass}
           >
             <Icon name="share" size={16} />
           </button>

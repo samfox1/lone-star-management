@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/lib/cx'
 import { mediaThumbUrl, mediaUrl } from '@/lib/site'
 import { Icon } from '@/components/ui/icons'
-import { EDIT_GLYPH, ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
-import { modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { EDIT_GLYPH, ICON_BOLD } from '@/components/ui/icon-hover'
+import { modalOverlayClass, modalCardClass, modalCornerGlyphClass } from '@/components/ui/ui'
 import { useLockBodyScroll } from '@/components/ui/use-lock-body-scroll'
 import { EDIT_TARGET, REVEAL_ON_HOVER } from '../(manager-tools)/_ui/styles'
 import { HoverLabel, RowIcon } from '../(manager-tools)/_ui/row-icon'
@@ -386,7 +386,7 @@ export function LibraryPicker<T>({
             type="button"
             onClick={onCancel}
             aria-label="Close"
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+            className={modalCornerGlyphClass}
           >
             <Icon name="close" size={16} />
           </button>

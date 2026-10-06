@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, modalCardClass, modalOverlayClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalCardClass, modalOverlayClass, modalBackGlyphClass } from '@/components/ui/ui'
 import { Icon, type IconName } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
 import { createClient } from '@/lib/supabase/client'
 import { FileDropField, UploadError } from '../file-drop-field'
 import { useStorageUpload } from '../use-storage-upload'
@@ -174,7 +173,7 @@ export function VideoAddButton({ artistId }: { artistId: string }) {
                     setError(null)
                   }}
                   aria-label="Back"
-                  className={`inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`}
+                  className={modalBackGlyphClass}
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>

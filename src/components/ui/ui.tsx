@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { cx } from '@/lib/cx'
+import { ICON_HOVER } from './icon-hover'
 
 /* ── Button ──────────────────────────────────────────────────────────────── */
 export type ButtonVariant = 'solid' | 'accent' | 'ghost' | 'danger' | 'confirm'
@@ -66,6 +67,11 @@ export const modalCardWideClass = 'relative flex w-[880px] max-w-[94vw] flex-col
  *  title is kept only to say WHICH item is open (a song's name, a show's date and venue)
  *  or to ask a question nothing else asked (the upload gate). */
 export const modalTitleClass = 'text-[15px] font-semibold leading-snug tracking-[-0.01em] text-ink'
+/** A modal's corner glyph (× close, Analytics, Share): a round 32px target, colour and stroke
+ *  on hover, no box (icon-hover.ts). Written out at each corner until 2026-10-05. */
+export const modalCornerGlyphClass = `flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`
+/** An add flow's Back chevron, at the start of its title line: a 28px target. */
+export const modalBackGlyphClass = `inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`
 
 /* ── Avatar ──────────────────────────────────────────────────────────────── */
 export function Avatar({

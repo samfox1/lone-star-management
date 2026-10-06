@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { cx } from '@/lib/cx'
-import { buttonClass, inputClass, modalOverlayClass, modalCardClass } from '@/components/ui/ui'
+import { buttonClass, inputClass, modalOverlayClass, modalCardClass, modalBackGlyphClass } from '@/components/ui/ui'
 import { Icon, type IconName } from '@/components/ui/icons'
 import { FOCUS_RING } from './(manager-tools)/_ui/focus-ring'
 import { ICON_BOLD, ICON_HOVER } from '@/components/ui/icon-hover'
@@ -297,7 +297,7 @@ export function CreateModal({
                     setError(null)
                   }}
                   aria-label="Back"
-                  className={`inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-ink-muted transition-colors ${ICON_HOVER}`}
+                  className={modalBackGlyphClass}
                 >
                   <Icon name="chevronLeft" size={15} />
                 </button>

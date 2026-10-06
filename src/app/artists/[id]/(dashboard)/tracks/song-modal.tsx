@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { cx } from '@/lib/cx'
 import { Icon } from '@/components/ui/icons'
-import { ICON_HOVER } from '@/components/ui/icon-hover'
+import { modalCornerGlyphClass } from '@/components/ui/ui'
 import { RELEASE_TYPES, RELEASE_TYPE_LABEL, type ReleaseType } from '@/lib/releases'
 import { trackPlatforms, type TrackPlatformIds } from '@/lib/music'
 import { safeHref } from '@/lib/url'
@@ -210,7 +210,7 @@ export function SongModal({
               onClick={share}
               aria-label="Share"
               title="Share"
-              className={`flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors ${ICON_HOVER}`}
+              className={modalCornerGlyphClass}
             >
               <Icon name="share" size={16} />
             </button>
