@@ -18,7 +18,8 @@
  *           • each opened page: the canonical each visitor was given (absolute), noindex from the
  *             meta tag vs the header (the `allowed` test's rule, and never a different verdict
  *             from it), and each VISITING crawler's status
- *           • hostile text stays plain text; junk evidence never throws; otherHost / listing pass through
+ *           • hostile text stays plain text; junk evidence never throws; otherHost / listing pass
+ *             through, the other spelling's addresses clipped like every URL here
  * Not here: how the evidence is gathered (can-be-found/evidence.test.ts); what the tests
  *           conclude (the other folders); asking Google / Bing and the other spelling (runs/
  *           running.test.ts); storing and rendering the section (store / page tests).
@@ -337,6 +338,22 @@ describe('hostile and broken input', () => {
       expect(Array.isArray(c.pages) && Array.isArray(c.sitemap.pages)).toBe(true)
     }
     expect(buildCrawl({} as SeoEvidence, NONE).robots.bots.every((b) => b.verdict === 'unknown')).toBe(true)
+  })
+
+  // The other spelling's `to` is whatever Location header it sent (up to ~16 KB): clipped like
+  // every other address here, so one runaway value can't fill the crawl's 64 KB.
+  it('clips the other spelling’s addresses like every other URL', () => {
+    const runaway = `${SK}/${'a'.repeat(20_000)}`
+    const c = buildCrawl(evidence(), { otherHost: { url: runaway, status: 308, to: runaway }, listing: NONE.listing })
+    const cap = buildCrawl(evidence(), { otherHost: { url: `${SK}/`, status: 308, to: `${SK}/` }, listing: NONE.listing })
+    expect(cap.otherHost).toEqual({ url: `${SK}/`, status: 308, to: `${SK}/` })
+    for (const s of [c.otherHost!.url, c.otherHost!.to!]) {
+      expect(s.length).toBeLessThanOrEqual(500)
+      expect(s.startsWith(SK)).toBe(true)
+      expect(s.endsWith('…')).toBe(true)
+    }
+    expect(c.otherHost!.status).toBe(308)
+    expect(buildCrawl(evidence(), { otherHost: { url: `${SK}/`, status: 200, to: null }, listing: NONE.listing }).otherHost!.to).toBeNull()
   })
 
   // A page row per opened path, even when a visit is missing: the fact is "no answer".

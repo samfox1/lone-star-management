@@ -172,6 +172,13 @@ function pagesOf(e: SeoEvidence): SeoCrawl['pages'] {
 
 /* ── the whole section ──────────────────────────────────────────────────────────────── */
 
+/** The other spelling as found by the run, its addresses clipped like every other URL here: `to`
+ *  is whatever Location header that spelling sent, up to Node's ~16 KB header limit. */
+function otherHostOf(oh: SeoCrawl['otherHost'] | undefined): SeoCrawl['otherHost'] {
+  if (!oh) return null
+  return { url: clip(oh.url, URL_MAX), status: oh.status, to: oh.to === null ? null : clip(oh.to, URL_MAX) }
+}
+
 export function buildCrawl(evidence: SeoEvidence, extras: { otherHost: SeoCrawl['otherHost']; listing: SeoCrawl['listing'] }): SeoCrawl {
   const e = (evidence && typeof evidence === 'object' ? evidence : {}) as SeoEvidence
   return {
@@ -179,7 +186,7 @@ export function buildCrawl(evidence: SeoEvidence, extras: { otherHost: SeoCrawl[
     robots: safe(() => robotsOf(e), { url: '/robots.txt', status: null, text: null, truncated: false, bots: SEO_BOTS.map((bot) => botRow(bot, UNKNOWN)) }),
     sitemap: safe(() => sitemapOf(e), { ...NO_SITEMAP, pages: [] }),
     pages: safe(() => pagesOf(e), []),
-    otherHost: extras?.otherHost ?? null,
+    otherHost: safe(() => otherHostOf(extras?.otherHost), null),
     listing: { google: extras?.listing?.google ?? null, bing: extras?.listing?.bing ?? null },
   }
 }
