@@ -52,6 +52,7 @@
   .tg.on .dot { background: var(--mc); }
   .tg svg { width: 18px; height: 18px; }
   .unit { font-size: 14px; color: var(--ink-2); margin-top: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .unit:empty { display: none; }
   .board { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 36px; margin-top: 8px; align-items: start; }
   .chartwrap { position: relative; }
   svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
@@ -246,7 +247,7 @@ function countUp(el, text, delay) {
 /* ═══════════ numbers ═══════════ */
 const CAT = {
   // Search
-  spot: { c: 'var(--c1)', icon: 'podium', lab: 'Your spot', show: (v) => '#' + v.toFixed(1), unit: "Where Skeen's site sits in Google when someone searches the name. #1 is the very top." },
+  spot: { c: 'var(--c1)', icon: 'podium', lab: 'Your spot', show: (v) => '#' + v.toFixed(1), unit: '' },
   seen: { c: 'var(--c2)', icon: 'eye', lab: 'Seen in Google', short: 'Seen', show: num, phrase: "times Google showed Skeen's site (AI answers included)", unit: "How many times Google showed Skeen's site in results, AI answers included." },
   gclicks: { c: 'var(--c5)', icon: 'cursor', lab: 'Clicks from Google', short: 'Clicks', show: num, phrase: 'the clicks that brought people to the site', unit: "People who clicked through from Google to Skeen's site." },
   // Analytics
