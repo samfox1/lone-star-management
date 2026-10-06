@@ -166,6 +166,7 @@ describe('Google: every search, day by day', () => {
     ])
   })
 
+  // Rows outside the period, with no spot, seen zero times or with no words are dropped.
   it('CRITICAL: drops a row outside the period, one with no spot, and one whose search is not text', async () => {
     const answers = await skeenGoogle()
     const junk = await viaGoogle({ rows: [

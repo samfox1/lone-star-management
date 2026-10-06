@@ -119,6 +119,7 @@ describe('Both, side by side', () => {
     expect(rows).toEqual(['google:Googleskeen dj35#2.5', 'google:Googleskeen music4#2.3', 'bing:Bingskeen music8#1.5'])
   })
 
+  // Each engine's spot numbers sit beside the chart, and the day the site was added is pinned.
   it('the spot is "now" and the average beside each engine, #1 at the top; the day each site was added is pinned', () => {
     show(answer(ok(GOOGLE), ok(BING)))
     expect(facts('Your spot')).toEqual([expect.stringMatching(/^Google#2\.5Average #2\.5/), expect.stringMatching(/^Bing#1\.5Average #1\.5/)])
@@ -126,6 +127,7 @@ describe('Both, side by side', () => {
     expect(screen.getByText('#1')).toBeTruthy()
   })
 
+  // The AI list shows each assistant with its visits.
   it('fans sent by AI: each assistant and its visits', () => {
     show(answer(ok(GOOGLE), ok(BING)))
     expect([...document.querySelectorAll('[data-row="ai"]')].map((r) => r.textContent)).toEqual(['ChatGPT2', 'Gemini0', 'Perplexity0'])
@@ -188,6 +190,7 @@ describe('the switches', () => {
     expect(nav.push).toHaveBeenCalledWith('/artists/a1/tools/seo/search?e=google&p=3m', { scroll: false })
   })
 
+  // Turning Clicks off removes the clicks lines and their numbers.
   it('Clicks off takes the clicks lines and their numbers away', () => {
     show(answer(ok(GOOGLE), ok(BING)))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Clicks' }))

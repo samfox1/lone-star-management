@@ -1,5 +1,22 @@
-// What the Search page draws (mock r12): the "your spot" line per engine, the seen / clicks
-// lines, the numbers beside them, and who AI assistants sent. Pure: built from SearchStats.
+/**
+ * What the Search page draws: the spot line per engine, the seen and clicks lines, and who AI
+ * assistants sent.
+ *
+ * Code:     src/lib/manager-tools/seo/search-board.ts, src/lib/manager-tools/seo/ai-visits.ts
+ * Feature:  SEO / GEO page · Search tab, rebuilt from mock r12 (Sam, 2026-10-06; "both side by
+ *           side": Google and Bing on the same charts, never added together)
+ * Tier:     STRICT (AGENTS.md "Test depth"): these decide what the artist is told about their own
+ *           search audience.
+ * Covers:   • the spot board: one engine or both on one row of days, blank where an engine has
+ *             no reading, the unfinished days marked, colours by engine
+ *           • the seen / clicks board: never summed, clicks heavier beside both engines
+ *           • "Both" with one engine answering reads as that engine alone
+ *           • the week-against-week change: two whole weeks or nothing
+ *           • AI visits: by assistant, the big three always named
+ * Not here: the spot itself (search-spot.test.ts); the page's layout (tests/components/
+ *           manager-tools/seo/search-tab.test.tsx).
+ * Fixtures: small hand-made SearchStats in search-stats.ts's own types.
+ */
 import { describe, expect, it } from 'vitest'
 import { aiVisits } from '@/lib/manager-tools/seo/ai-visits'
 import { reachBoard, spotBoard, weekGrowth } from '@/lib/manager-tools/seo/search-board'
@@ -24,6 +41,7 @@ const BING = stats('bing', {
 })
 
 describe('spotBoard — your spot when someone searches your name', () => {
+  // One engine: only searches naming the artist make the line, and Google's unfinished days start the dotted part.
   it('CRITICAL: one engine: its name searches\' spot by day, a reach search left out, the days still counting marked', () => {
     const b = spotBoard('google', { google: GOOGLE }, 'Skeen')
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
@@ -31,6 +49,7 @@ describe('spotBoard — your spot when someone searches your name', () => {
     expect(b.partialFrom).toBe(1)
   })
 
+  // Both: one row of days, each engine its own line, blank where it has no reading.
   it('CRITICAL: both: each engine its own line on one row of days, null where it has nothing — Google ink, Bing grey', () => {
     const b = spotBoard('both', { google: GOOGLE, bing: BING }, 'Skeen')
     expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
@@ -41,11 +60,13 @@ describe('spotBoard — your spot when someone searches your name', () => {
     expect(b.partialFrom).toBe(2)
   })
 
+  // An unfinished day with no spot reading draws no dotted part.
   it('a day still being counted with no reading of the spot marks nothing', () => {
     const late = stats('google', { searchDays: [sd('skeen', '2026-09-29', 4, 2)], preliminaryFrom: '2026-10-01' })
     expect(spotBoard('google', { google: late }, 'Skeen').partialFrom).toBeUndefined()
   })
 
+  // No searches for the name: no line, and with none at all the chart is empty.
   it('an engine with no name searches draws no line; none at all is an empty board', () => {
     const quiet = stats('google', { searchDays: [sd('chicago dj', '2026-09-29', 5, 30)] })
     expect(spotBoard('google', { google: quiet }, 'Skeen')).toEqual({ days: [], lines: [], partialFrom: undefined })
@@ -54,6 +75,7 @@ describe('spotBoard — your spot when someone searches your name', () => {
 })
 
 describe('reachBoard — how often the site was seen in search, and clicked', () => {
+  // One engine: seen in ink, clicks in grey, by day.
   it('CRITICAL: one engine: seen (ink) then clicks (grey) by day, the days still counting marked', () => {
     const b = reachBoard('google', { google: GOOGLE })
     expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
@@ -64,6 +86,7 @@ describe('reachBoard — how often the site was seen in search, and clicked', ()
     expect(b.partialFrom).toBe(1)
   })
 
+  // Both: Google's and Bing's numbers stay apart, never summed into one line.
   it('CRITICAL: both: never added together — each engine its own seen and clicks lines, engine by colour, clicks heavier', () => {
     const b = reachBoard('both', { google: GOOGLE, bing: BING })
     expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
@@ -76,12 +99,14 @@ describe('reachBoard — how often the site was seen in search, and clicked', ()
     expect(b.partialFrom).toBe(2) // Google's first day still being counted, on the shared row of days
   })
 
+  // Bing has no unfinished days, so nothing is dotted.
   it('an engine counting nothing still (Bing never does) marks no day', () => {
     expect(reachBoard('bing', { bing: BING }).partialFrom).toBeUndefined()
   })
 })
 
 describe('both, with one engine answered', () => {
+  // Both with one engine answering looks exactly like that engine alone.
   it('draws only the engine that answered — the other is no line, not a line of zeros — and reads as that engine alone', () => {
     expect(reachBoard('both', { google: GOOGLE })).toEqual(reachBoard('google', { google: GOOGLE }))
     expect(spotBoard('both', { google: GOOGLE }, 'Skeen')).toEqual(spotBoard('google', { google: GOOGLE }, 'Skeen'))
@@ -89,11 +114,13 @@ describe('both, with one engine answered', () => {
 })
 
 describe('weekGrowth — the last week against the first', () => {
+  // The change needs two whole weeks to compare; from nothing it says nothing.
   it('CRITICAL: needs two whole weeks of readings; nothing to compare, nothing said', () => {
     expect(weekGrowth([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])).toBeNull() // 13 days
     expect(weekGrowth([...Array(7).fill(10), ...Array(7).fill(20)])).toBeCloseTo(1, 10) // 70 → 140: +100%
     expect(weekGrowth([...Array(7).fill(0), ...Array(7).fill(5)])).toBeNull() // from nothing: no percent
   })
+  // Blank days are not readings; the middle day of an odd count is in neither week.
   it('days a line has nothing do not count as readings, or as weeks', () => {
     expect(weekGrowth([null, null, ...Array(7).fill(10), ...Array(6).fill(5)])).toBeNull() // 13 readings
     expect(weekGrowth([null, ...Array(7).fill(10), 99, ...Array(7).fill(5)])).toBeCloseTo((35 - 70) / 70, 10) // the middle day is in neither week
@@ -102,6 +129,7 @@ describe('weekGrowth — the last week against the first', () => {
 
 describe('aiVisits — fans sent by AI assistants', () => {
   const src = (referrer_host: string, visitors: number, source = 'ai') => ({ source, referrer_host, views: visitors, visitors })
+  // Only AI visits count, an assistant's addresses add up, most first, the big three always listed.
   it('CRITICAL: AI rows only, by assistant (its several addresses together), most first; the big three always named', () => {
     expect(aiVisits([src('chatgpt.com', 4), src('chat.openai.com', 2), src('perplexity.ai', 1), src('instagram.com', 99, 'instagram'), src('claude.ai', 3)])).toEqual([
       { name: 'ChatGPT', visitors: 6 },
@@ -110,6 +138,7 @@ describe('aiVisits — fans sent by AI assistants', () => {
       { name: 'Gemini', visitors: 0 },
     ])
   })
+  // Every known AI address maps to its assistant's name, any capitals, with or without www.
   it('each assistant by its name, whatever address or capitals it came from', () => {
     const one = (host: string) => aiVisits([src(host, 1)]).find((r) => r.visitors === 1)!.name
     expect(['chatgpt.com', 'chat.openai.com', 'openai.com', 'www.ChatGPT.com'].map(one)).toEqual(['ChatGPT', 'ChatGPT', 'ChatGPT', 'ChatGPT'])
@@ -118,6 +147,7 @@ describe('aiVisits — fans sent by AI assistants', () => {
     expect(one('newbot.example')).toBe('newbot.example') // an assistant the list does not know yet keeps its address
   })
 
+  // No AI visits yet: the big three at zero; a visit with no address is Other AI.
   it('nobody yet: the big three at zero; an AI visit with no address is "Other AI"', () => {
     expect(aiVisits([])).toEqual([{ name: 'ChatGPT', visitors: 0 }, { name: 'Gemini', visitors: 0 }, { name: 'Perplexity', visitors: 0 }])
     expect(aiVisits([src('', 2)]).find((r) => r.name === 'Other AI')).toEqual({ name: 'Other AI', visitors: 2 })
