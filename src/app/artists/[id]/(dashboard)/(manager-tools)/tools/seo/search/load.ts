@@ -1,6 +1,8 @@
 import { unstable_cache } from 'next/cache'
 import { askSearchStats, isCacheable, searchStatsDepsFromEnv, type SearchStatsAnswer } from '@/lib/manager-tools/seo/search-stats-ask'
-import { couldntAsk, searchPeriod, type SearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
+import { couldntAsk, searchPeriod, type SearchPeriod, type SearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
+import { aiVisits, type AiVisit } from '@/lib/manager-tools/seo/ai-visits'
+import { createClient } from '@/lib/supabase/server'
 
 /** Six hours: Google adds a day's numbers about once a day, Bing its searches weekly, so opening
  *  the tab must not ask either engine again every time (Search Console's quota is per site). */
@@ -50,4 +52,17 @@ export async function loadSearchStats(artistId: string, key: SearchPeriodKey): P
     if (e instanceof NotCached) return e.answer
     return { period, askedAt: new Date().toISOString(), added: { google: null, bing: null }, google: couldntAsk('google', period, 'error'), bing: couldntAsk('bing', period, 'error') }
   }
+}
+
+/**
+ * "Fans sent by AI": the visitors AI assistants sent over the same days as the search numbers,
+ * from the analytics door's sources (lib/manager-tools/seo/ai-visits.ts names them). Read as the
+ * signed-in manager (RLS: their own artist only). A failed read fails the page, as on Analytics:
+ * a revoked grant must not read as "nobody came".
+ */
+export async function loadAiVisits(artistId: string, period: SearchPeriod): Promise<AiVisit[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('analytics_sources', { p_artist_id: artistId, p_since: period.start, p_until: period.end })
+  if (error) throw new Error(`analytics_sources: ${error.message}`)
+  return aiVisits(((data ?? []) as Record<string, unknown>[]).map((r) => ({ source: String(r.source ?? ''), referrer_host: String(r.referrer_host ?? ''), visitors: Number(r.visitors ?? 0) })))
 }

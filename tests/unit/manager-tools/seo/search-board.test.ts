@@ -1,0 +1,125 @@
+// What the Search page draws (mock r12): the "your spot" line per engine, the seen / clicks
+// lines, the numbers beside them, and who AI assistants sent. Pure: built from SearchStats.
+import { describe, expect, it } from 'vitest'
+import { aiVisits } from '@/lib/manager-tools/seo/ai-visits'
+import { reachBoard, spotBoard, weekGrowth } from '@/lib/manager-tools/seo/search-board'
+import type { SearchDay, SearchDayRow, SearchPeriod, SearchStats } from '@/lib/manager-tools/seo/search-stats'
+
+const P28: SearchPeriod = { key: '28d', days: 28, start: '2026-09-05', end: '2026-10-02' }
+const day = (date: string, clicks: number, impressions: number, final = true): SearchDay => ({ date, clicks, impressions, final })
+const sd = (key: string, date: string, impressions: number, position: number): SearchDayRow => ({ key, date, impressions, position })
+const stats = (engine: 'google' | 'bing', over: Partial<SearchStats>): SearchStats => ({
+  engine, period: P28, totals: { clicks: 0, impressions: 0, ctr: null, position: null }, series: [], queries: [], searchDays: [],
+  pages: [], countries: null, devices: null, unlisted: { clicks: 0, impressions: 0 }, coverage: null, preliminaryFrom: null, ...over,
+})
+
+const GOOGLE = stats('google', {
+  series: [day('2026-09-29', 6, 23), day('2026-09-30', 5, 14, false), day('2026-10-01', 4, 19, false)],
+  searchDays: [sd('skeen dj', '2026-09-29', 10, 2), sd('chicago dj', '2026-09-29', 50, 40), sd('skeen dj', '2026-09-30', 10, 1.5), sd('skeen', '2026-10-01', 4, 1)],
+  preliminaryFrom: '2026-09-30',
+})
+const BING = stats('bing', {
+  series: [day('2026-09-28', 1, 3), day('2026-09-29', 0, 2)],
+  searchDays: [sd('skeen', '2026-09-28', 5, 3)], // Bing's rows are weekly
+})
+
+describe('spotBoard — your spot when someone searches your name', () => {
+  it('CRITICAL: one engine: its name searches\' spot by day, a reach search left out, the days still counting marked', () => {
+    const b = spotBoard('google', { google: GOOGLE }, 'Skeen')
+    expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
+    expect(b.lines).toEqual([{ key: 'google-spot', engine: 'google', label: 'Your spot on Google', values: [2, 1.5, 1], tone: 'ink' }])
+    expect(b.partialFrom).toBe(1)
+  })
+
+  it('CRITICAL: both: each engine its own line on one row of days, null where it has nothing — Google ink, Bing grey', () => {
+    const b = spotBoard('both', { google: GOOGLE, bing: BING }, 'Skeen')
+    expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
+    expect(b.lines.map((l) => [l.key, l.label, l.tone, l.values])).toEqual([
+      ['google-spot', 'Google', 'ink', [null, 2, 1.5, 1]],
+      ['bing-spot', 'Bing', 'grey', [3, null, null, null]],
+    ])
+    expect(b.partialFrom).toBe(2)
+  })
+
+  it('a day still being counted with no reading of the spot marks nothing', () => {
+    const late = stats('google', { searchDays: [sd('skeen', '2026-09-29', 4, 2)], preliminaryFrom: '2026-10-01' })
+    expect(spotBoard('google', { google: late }, 'Skeen').partialFrom).toBeUndefined()
+  })
+
+  it('an engine with no name searches draws no line; none at all is an empty board', () => {
+    const quiet = stats('google', { searchDays: [sd('chicago dj', '2026-09-29', 5, 30)] })
+    expect(spotBoard('google', { google: quiet }, 'Skeen')).toEqual({ days: [], lines: [], partialFrom: undefined })
+    expect(spotBoard('both', { google: GOOGLE, bing: stats('bing', {}) }, 'Skeen').lines.map((l) => l.key)).toEqual(['google-spot'])
+  })
+})
+
+describe('reachBoard — how often the site was seen in search, and clicked', () => {
+  it('CRITICAL: one engine: seen (ink) then clicks (grey) by day, the days still counting marked', () => {
+    const b = reachBoard('google', { google: GOOGLE })
+    expect(b.days).toEqual(['2026-09-29', '2026-09-30', '2026-10-01'])
+    expect(b.lines).toEqual([
+      { key: 'google-seen', engine: 'google', metric: 'seen', label: 'Seen in Google', values: [23, 14, 19], tone: 'ink' },
+      { key: 'google-clicks', engine: 'google', metric: 'clicks', label: 'Clicks from Google', values: [6, 5, 4], tone: 'grey' },
+    ])
+    expect(b.partialFrom).toBe(1)
+  })
+
+  it('CRITICAL: both: never added together — each engine its own seen and clicks lines, engine by colour, clicks heavier', () => {
+    const b = reachBoard('both', { google: GOOGLE, bing: BING })
+    expect(b.days).toEqual(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'])
+    expect(b.lines.map((l) => [l.key, l.label, l.tone, l.thick ?? false, l.values])).toEqual([
+      ['google-seen', 'Google seen', 'ink', false, [null, 23, 14, 19]],
+      ['bing-seen', 'Bing seen', 'grey', false, [3, 2, null, null]],
+      ['google-clicks', 'Google clicks', 'ink', true, [null, 6, 5, 4]],
+      ['bing-clicks', 'Bing clicks', 'grey', true, [1, 0, null, null]],
+    ])
+    expect(b.partialFrom).toBe(2) // Google's first day still being counted, on the shared row of days
+  })
+
+  it('an engine counting nothing still (Bing never does) marks no day', () => {
+    expect(reachBoard('bing', { bing: BING }).partialFrom).toBeUndefined()
+  })
+})
+
+describe('both, with one engine answered', () => {
+  it('draws only the engine that answered — the other is no line, not a line of zeros — and reads as that engine alone', () => {
+    expect(reachBoard('both', { google: GOOGLE })).toEqual(reachBoard('google', { google: GOOGLE }))
+    expect(spotBoard('both', { google: GOOGLE }, 'Skeen')).toEqual(spotBoard('google', { google: GOOGLE }, 'Skeen'))
+  })
+})
+
+describe('weekGrowth — the last week against the first', () => {
+  it('CRITICAL: needs two whole weeks of readings; nothing to compare, nothing said', () => {
+    expect(weekGrowth([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])).toBeNull() // 13 days
+    expect(weekGrowth([...Array(7).fill(10), ...Array(7).fill(20)])).toBeCloseTo(1, 10) // 70 → 140: +100%
+    expect(weekGrowth([...Array(7).fill(0), ...Array(7).fill(5)])).toBeNull() // from nothing: no percent
+  })
+  it('days a line has nothing do not count as readings, or as weeks', () => {
+    expect(weekGrowth([null, null, ...Array(7).fill(10), ...Array(6).fill(5)])).toBeNull() // 13 readings
+    expect(weekGrowth([null, ...Array(7).fill(10), 99, ...Array(7).fill(5)])).toBeCloseTo((35 - 70) / 70, 10) // the middle day is in neither week
+  })
+})
+
+describe('aiVisits — fans sent by AI assistants', () => {
+  const src = (referrer_host: string, visitors: number, source = 'ai') => ({ source, referrer_host, views: visitors, visitors })
+  it('CRITICAL: AI rows only, by assistant (its several addresses together), most first; the big three always named', () => {
+    expect(aiVisits([src('chatgpt.com', 4), src('chat.openai.com', 2), src('perplexity.ai', 1), src('instagram.com', 99, 'instagram'), src('claude.ai', 3)])).toEqual([
+      { name: 'ChatGPT', visitors: 6 },
+      { name: 'Claude', visitors: 3 },
+      { name: 'Perplexity', visitors: 1 },
+      { name: 'Gemini', visitors: 0 },
+    ])
+  })
+  it('each assistant by its name, whatever address or capitals it came from', () => {
+    const one = (host: string) => aiVisits([src(host, 1)]).find((r) => r.visitors === 1)!.name
+    expect(['chatgpt.com', 'chat.openai.com', 'openai.com', 'www.ChatGPT.com'].map(one)).toEqual(['ChatGPT', 'ChatGPT', 'ChatGPT', 'ChatGPT'])
+    expect(['perplexity.ai', 'www.perplexity.ai', 'gemini.google.com', 'copilot.microsoft.com', 'claude.ai', 'you.com'].map(one))
+      .toEqual(['Perplexity', 'Perplexity', 'Gemini', 'Copilot', 'Claude', 'You.com'])
+    expect(one('newbot.example')).toBe('newbot.example') // an assistant the list does not know yet keeps its address
+  })
+
+  it('nobody yet: the big three at zero; an AI visit with no address is "Other AI"', () => {
+    expect(aiVisits([])).toEqual([{ name: 'ChatGPT', visitors: 0 }, { name: 'Gemini', visitors: 0 }, { name: 'Perplexity', visitors: 0 }])
+    expect(aiVisits([src('', 2)]).find((r) => r.name === 'Other AI')).toEqual({ name: 'Other AI', visitors: 2 })
+  })
+})

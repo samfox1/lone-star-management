@@ -1,5 +1,4 @@
 import { SourceGlyph } from '@/components/ui/source-glyphs'
-import { ENGINE_NAME, ENGINE_VIEWS, PERIOD_WORDS } from '@/lib/manager-tools/seo/search-model'
 import { SEARCH_PERIODS, type SearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
 
 /**
@@ -7,37 +6,32 @@ import { SEARCH_PERIODS, type SearchPeriodKey } from '@/lib/manager-tools/seo/se
  * 12 s deadline when one refuses or hangs, since those answers are never cached), and before this
  * a click on the tab left the old tab on screen with no sign anything was happening.
  *
- * Light on purpose: the switches row, dimmed as the tab dims a pending period switch, and empty
- * room the height of the numbers and the chart, so nothing jumps when they land. A `?p=` switch
- * keeps this segment's boundary (Next keys it without the search params), so the tab's own
+ * Light on purpose: the title row's switches, dimmed as the tab dims a pending period switch, and
+ * empty room the height of the two charts, so nothing jumps when they land. A `?p=` switch keeps
+ * this segment's boundary (Next keys it without the search params), so the tab's own
  * useTransition dimming runs there instead of this.
  */
 export default function Loading() {
   return (
     <div aria-busy className="opacity-50">
       <div aria-hidden className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-1">
-          {ENGINE_VIEWS.map((e) => (
-            <span key={e} className={SWITCH}>
-              {e === 'both' ? null : <SourceGlyph source={e} size={13} />}
-              {e === 'both' ? 'Both' : ENGINE_NAME[e]}
-            </span>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-1">
-          {(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => (
-            <span key={p} className={SWITCH}>
-              {PERIOD_WORDS[p]}
-            </span>
-          ))}
+        <span className="h-[18px] w-72 rounded bg-hairline-soft" />
+        <div className="flex items-center gap-x-6">
+          <div className="flex items-center gap-3 text-ink-faint">
+            <span className="flex gap-1"><SourceGlyph source="google" size={14} /><SourceGlyph source="bing" size={14} /></span>
+            <SourceGlyph source="google" size={17} />
+            <SourceGlyph source="bing" size={17} />
+          </div>
+          <div className="flex rounded-lg border border-hairline p-0.5 font-space text-xs text-ink-muted">
+            {(Object.keys(SEARCH_PERIODS) as SearchPeriodKey[]).map((p) => (
+              <span key={p} className="px-2.5 py-1">{p}</span>
+            ))}
+          </div>
         </div>
       </div>
-      {/* The four numbers, then the chart (150 px and its day axis). */}
-      <div className="mt-7 h-[86px]" />
-      <div className="mt-9 h-[176px]" />
+      {/* Your spot (380 px and its day axis), then seen and clicked (340 px). */}
+      <div className="mt-8 h-[430px]" />
+      <div className="mt-14 h-[420px]" />
     </div>
   )
 }
-
-/** search-tab.tsx's SWITCH, without the hover: nothing here is clickable yet. */
-const SWITCH = 'inline-flex items-center gap-[7px] whitespace-nowrap py-1.5 font-space text-[12px] tracking-[0.02em] text-ink-muted'

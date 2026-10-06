@@ -2,46 +2,31 @@
  * The Search tab's words: what the artist reads about their own search numbers, and how the two
  * engines sit side by side without being added together.
  *
- * Code:     src/lib/manager-tools/seo/search-model.ts, src/lib/manager-tools/seo/country-a3.ts
- * Feature:  SEO / GEO page · Search tab, "How fans find you" (Sam, 2026-10-02,
- *           prototypes/search_tab_20261002.html; "Both" side by side, Bing "usually" 2 weeks)
+ * Code:     src/lib/manager-tools/seo/search-model.ts
+ * Feature:  SEO / GEO page · Search tab (Sam, 2026-10-02; rebuilt from mock r12 2026-10-06:
+ *           "Both" side by side, Bing "usually" 2 weeks). The lines: search-board.test.ts,
+ *           search-spot.test.ts.
  * Tier:     STRICT (AGENTS.md "Test depth"): these words decide what the artist is told about
- *           their audience (a rounding must never say something false), and a page address from
- *           an engine ends up in a link.
- * Covers:   • click rate: never "0%" above zero, never "100%" below one, "—" with nothing seen;
- *             "1 in 4 clicked", "most clicked" above one in two, nothing at zero
- *           • the spot: one decimal, a whole number bare, "—" with none
- *           • the rare-searches line: each side only when above zero, "click" for one
+ *           their audience (a rounding must never say something false).
+ * Covers:   • the spot: one decimal, a whole number bare, "—" with none
  *           • side by side: one date axis from the first day either engine has to the last; an
- *             engine is null outside its own days (never a zero), a zero inside them; the chart's
- *             lines follow that axis and nothing is ever summed across engines
+ *             engine is null outside its own days (never a zero), a zero inside them
  *           • the lists side by side: each engine's own row, a search both list next to each
  *             other, busiest first
  *           • no numbers: a new site within the engine's usual wait (Bing 2 weeks) says "usually";
  *             older, or no date, says none in the period; every couldn't-ask state has words
- *           • a page row links only to http(s) without credentials; the country table matches
- *             i18n-iso-countries
+ *           • the engine switch reads ?e=
  * Not here: the numbers' shape (search-stats.test.ts); the page's layout (tests/components/
  *           manager-tools/seo/search-tab.test.tsx).
- * Fixtures: small hand-made answers in search-stats.ts's own types; the country table is checked
- *           against the i18n-iso-countries package it was generated from.
+ * Fixtures: small hand-made answers in search-stats.ts's own types.
  */
-import iso from 'i18n-iso-countries'
 import { describe, expect, it } from 'vitest'
-import { A3_TO_A2_TABLE, countryFromA3 } from '@/lib/manager-tools/seo/country-a3'
 import {
   ENGINE_VIEWS,
   alignDays,
-  barOf,
-  chartOf,
   engineNote,
   engineViewOf,
-  oneInWords,
-  pageWords,
-  rareWords,
-  rateWords,
   sideBySideRows,
-  sinceWords,
   spotWords,
 } from '@/lib/manager-tools/seo/search-model'
 import { COULDNT_ASK, couldntAsk, type SearchDay, type SearchPeriod, type SearchRow, type SearchStats } from '@/lib/manager-tools/seo/search-stats'
@@ -65,33 +50,6 @@ const stats = (engine: 'google' | 'bing', series: SearchDay[]): SearchStats => (
   preliminaryFrom: null,
 })
 
-describe('the click rate', () => {
-  // Skeen's real 15 of 59 reads 25%, and a rounding never flips a rate to a false 0% or 100%.
-  it('CRITICAL: a whole percent that never rounds to a false 0% or 100%', () => {
-    expect(rateWords(15 / 59)).toBe('25%')
-    expect(rateWords(0.2631578947368421)).toBe('26%')
-    expect(rateWords(null)).toBe('—')
-    expect(rateWords(0)).toBe('0%')
-    expect(rateWords(0.004)).toBe('<1%')
-    expect(rateWords(0.005)).toBe('1%')
-    expect(rateWords(0.996)).toBe('>99%')
-    expect(rateWords(1)).toBe('100%')
-  })
-
-  // The plain-words line under it: "1 in N" up to one in two; above that "most"; all is "all".
-  it('CRITICAL: "1 in 4 clicked", "most clicked" above one in two, nothing at zero', () => {
-    expect(oneInWords(0.2631578947368421)).toBe('1 in 4 clicked')
-    expect(oneInWords(0.5)).toBe('1 in 2 clicked')
-    expect(oneInWords(0.35)).toBe('1 in 3 clicked')
-    expect(oneInWords(0.001)).toBe('1 in 1,000 clicked')
-    expect(oneInWords(0.7)).toBe('most clicked')
-    expect(oneInWords(0.51)).toBe('most clicked')
-    expect(oneInWords(1)).toBe('all clicked')
-    expect(oneInWords(0)).toBeNull()
-    expect(oneInWords(null)).toBeNull()
-  })
-})
-
 describe('the average spot', () => {
   // One decimal; a whole number without ".0"; no spot is a dash, never "0".
   it('CRITICAL: one decimal, a whole number bare, "—" with none', () => {
@@ -102,18 +60,6 @@ describe('the average spot', () => {
     expect(spotWords(11.96)).toBe('12')
     expect(spotWords(null)).toBe('—')
     expect(spotWords(Number.NaN)).toBe('—')
-  })
-})
-
-describe('the rare-searches line', () => {
-  // What the list leaves out, said out loud; a zero side is left out, and nothing says nothing.
-  it('CRITICAL: each side only when above zero, "click" for one', () => {
-    expect(rareWords({ clicks: 3, impressions: 15 })).toBe('+ 3 clicks · 15 seen from rare searches')
-    expect(rareWords({ clicks: 1, impressions: 1 })).toBe('+ 1 click · 1 seen from rare searches')
-    expect(rareWords({ clicks: 0, impressions: 15 })).toBe('+ 15 seen from rare searches')
-    expect(rareWords({ clicks: 2, impressions: 0 })).toBe('+ 2 clicks from rare searches')
-    expect(rareWords({ clicks: 1200, impressions: 34000 })).toBe('+ 1,200 clicks · 34,000 seen from rare searches')
-    expect(rareWords({ clicks: 0, impressions: 0 })).toBeNull()
   })
 })
 
@@ -142,39 +88,6 @@ describe('side by side: one date axis', () => {
     expect(alignDays({ google: null, bing: [] })).toEqual([])
   })
 
-  // The chart beside both engines: one line per engine per number on that axis, each engine its
-  // own colour, the values the engine's own (never a sum), Seen under Clicks.
-  it('CRITICAL: the chart draws each engine’s own values on the shared axis, never summed', () => {
-    const c = chartOf('both', { google: stats('google', [day('2026-09-29', 6, 23), day('2026-09-30', 5, 14, false)]), bing: stats('bing', [day('2026-09-30', 1, 2)]) })
-    expect(c.days).toEqual(['2026-09-29', '2026-09-30'])
-    const by = Object.fromEntries(c.series.map((s) => [s.key, s]))
-    expect(c.series.map((s) => s.key)).toEqual(['google-impressions', 'bing-impressions', 'google-clicks', 'bing-clicks'])
-    expect(by['google-clicks'].values).toEqual([6, 5])
-    expect(by['bing-clicks'].values).toEqual([null, 1])
-    expect(by['bing-impressions'].values).toEqual([null, 2])
-    expect(by['google-clicks'].final).toEqual([true, false])
-    expect([by['google-clicks'].tone, by['bing-clicks'].tone]).toEqual(['accent', 'ink'])
-    expect(c.stillCounting).toBe(true)
-  })
-
-  // One engine: Clicks blue with its fill, Seen ink, the Analytics page's colours; an engine
-  // without numbers adds no line.
-  it('one engine: Clicks blue and filled, Seen ink; an engine with no numbers draws nothing', () => {
-    const c = chartOf('google', { google: stats('google', [day('2026-09-29', 6, 23)]) })
-    expect(c.series.map((s) => [s.key, s.tone, s.fill])).toEqual([
-      ['google-impressions', 'ink', false],
-      ['google-clicks', 'accent', true],
-    ])
-    expect(c.stillCounting).toBe(false)
-    expect(chartOf('both', { google: stats('google', [day('2026-09-29', 6, 23)]) }).series.every((s) => s.engine === 'google')).toBe(true)
-  })
-
-  // "Since Sep 29" only when the numbers start after the period does.
-  it('says "Since" only when the numbers start after the period', () => {
-    expect(sinceWords({ from: '2026-09-29' }, P28)).toBe('Since Sep 29')
-    expect(sinceWords({ from: '2026-09-05' }, P28)).toBeNull()
-    expect(sinceWords(null, P28)).toBeNull()
-  })
 })
 
 describe('the lists side by side', () => {
@@ -189,11 +102,6 @@ describe('the lists side by side', () => {
     expect(sideBySideRows({ google: null, bing: [row('a', 1, 1)] }).map((r) => r.engine)).toEqual(['bing'])
   })
 
-  // The bar: seen and clicks on the list's own scale; anything above zero shows a sliver.
-  it('the bar is on the list’s scale, with a sliver for anything above zero', () => {
-    expect(barOf({ clicks: 9, impressions: 35 }, 35)).toEqual({ seen: 100, clicks: (9 / 35) * 100 })
-    expect(barOf({ clicks: 0, impressions: 1 }, 200)).toEqual({ seen: 2, clicks: 0 })
-  })
 })
 
 describe('an engine with no numbers', () => {
@@ -232,33 +140,10 @@ describe('an engine with no numbers', () => {
   })
 })
 
-describe('page rows and the switches', () => {
-  // A page links only to http(s) with no credentials, checked again where it is drawn.
-  it('CRITICAL: a page row links only to http(s) without credentials', () => {
-    expect(pageWords('https://www.skeenmusic.com/')).toEqual({ name: 'Home', sub: 'skeenmusic.com/', href: 'https://www.skeenmusic.com/' })
-    expect(pageWords('https://www.skeenmusic.com/music/')).toEqual({ name: '/music', sub: 'skeenmusic.com/music/', href: 'https://www.skeenmusic.com/music/' })
-    expect(pageWords('https://skeenmusic.com/caf%C3%A9').name).toBe('/café')
-    expect(pageWords('javascript:alert(1)').href).toBeNull()
-    expect(pageWords('https://a:b@skeenmusic.com/').href).toBeNull()
-    expect(pageWords('not a url')).toEqual({ name: 'not a url', sub: '', href: null })
-  })
-
+describe('the switches', () => {
   // The engine in the address: the three views, anything else (junk, a prototype key) is Both.
   it('reads ?e= as one of the three views, anything else as Both', () => {
     for (const v of ENGINE_VIEWS) expect(engineViewOf(v)).toBe(v)
     for (const junk of [null, undefined, '', 'yahoo', '__proto__', 'constructor']) expect(engineViewOf(junk)).toBe('both')
-  })
-})
-
-describe('country names', () => {
-  // The generated table is exactly i18n-iso-countries' alpha-3 → alpha-2 (a stale or hand-edited
-  // copy fails here), and Google's codes read as the Analytics page names them.
-  it('CRITICAL: the alpha-3 table matches i18n-iso-countries', () => {
-    const table = Object.fromEntries(A3_TO_A2_TABLE.split(' ').map((p) => [p.slice(0, 3), p.slice(3)]))
-    const expected = Object.fromEntries(Object.keys(iso.getAlpha2Codes()).map((a2) => [iso.alpha2ToAlpha3(a2), a2]))
-    expect(table).toEqual(expected)
-    expect(countryFromA3('USA')).toBe('United States')
-    expect(countryFromA3('nld')).toBe('Netherlands')
-    expect(countryFromA3('ZZZ')).toBe('ZZZ')
   })
 })

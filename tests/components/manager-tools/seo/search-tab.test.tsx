@@ -54,7 +54,13 @@ const GOOGLE: SearchStats = {
     { date: '2026-09-30', clicks: 5, impressions: 14, final: false },
     { date: '2026-10-01', clicks: 4, impressions: 19, final: false },
   ],
-  searchDays: [],
+  // Skeen's real searches by day (2026-10-06 fixture), trimmed to the period's days.
+  searchDays: [
+    { key: 'skeen dj', date: '2026-09-29', impressions: 13, position: 2.15 },
+    { key: 'skeen music', date: '2026-09-29', impressions: 2, position: 3 },
+    { key: 'skeen dj', date: '2026-09-30', impressions: 11, position: 2.36 },
+    { key: 'skeen dj', date: '2026-10-01', impressions: 15, position: 2.93 },
+  ],
   queries: [
     { key: 'skeen dj', clicks: 9, impressions: 35, ctr: 0.257, position: 2.54 },
     { key: 'skeen music', clicks: 2, impressions: 4, ctr: 0.5, position: 2.25 },
@@ -73,7 +79,7 @@ const BING: SearchStats = {
   engine: 'bing',
   totals: { clicks: 3, impressions: 8, ctr: 0.375, position: 1.5 },
   series: [{ date: '2026-09-30', clicks: 3, impressions: 8, final: true }],
-  searchDays: [],
+  searchDays: [{ key: 'skeen music', date: '2026-09-28', impressions: 8, position: 1.5 }],
   queries: [{ key: 'skeen music', clicks: 3, impressions: 8, ctr: 0.375, position: 1.5 }],
   pages: [],
   countries: null,
@@ -91,47 +97,59 @@ const answer = (google: EngineStats, bing: EngineStats): SearchStatsAnswer => ({
   google,
   bing,
 })
-const show = (a: SearchStatsAnswer) => render(<SearchTab answer={a} />)
+const AI = [{ name: 'ChatGPT', visitors: 2 }, { name: 'Gemini', visitors: 0 }, { name: 'Perplexity', visitors: 0 }]
+const show = (a: SearchStatsAnswer) => render(<SearchTab answer={a} name="Skeen" ai={AI} />)
+const drawn = () => [...document.querySelectorAll('[data-series]')].map((g) => g.getAttribute('data-series'))
+const facts = (region: string) => [...screen.getByRole('region', { name: `${region}, in numbers` }).querySelectorAll('[data-fact]')].map((f) => f.textContent)
 
 describe('Both, side by side', () => {
-  // Each engine its own column with its OWN four numbers: Google's 15 and Bing's 3, never 18.
-  it('shows each engine’s own numbers in two columns, never added together', () => {
+  // Each engine its OWN lines and numbers: Google's and Bing's, never one summed line.
+  it('CRITICAL: each engine its own spot line, seen and clicks lines and numbers — never added together', () => {
     show(answer(ok(GOOGLE), ok(BING)))
-    const g = document.querySelector('[data-numbers="google"]') as HTMLElement
-    const b = document.querySelector('[data-numbers="bing"]') as HTMLElement
-    expect(within(g).getByText('15')).toBeTruthy()
-    expect(within(g).getByText('26%')).toBeTruthy()
-    expect(within(g).getByText('1 in 4 clicked')).toBeTruthy()
-    expect(within(b).getByText('3')).toBeTruthy()
-    expect(within(b).getByText('1.5')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('How Skeen shows up in search')
+    expect(drawn()).toEqual(['google-spot', 'bing-spot', 'google-seen', 'bing-seen', 'google-clicks', 'bing-clicks'])
+    expect(facts('Seen and clicked')).toEqual([
+      expect.stringMatching(/^Google seen56/), expect.stringMatching(/^Bing seen8/),
+      expect.stringMatching(/^Google clicks15/), expect.stringMatching(/^Bing clicks3/),
+    ])
     expect(screen.queryByText('18')).toBeNull()
-    // Google's Seen says it counts the AI answers; Bing's doesn't.
-    expect(g.querySelector('[data-ai-note]')).not.toBeNull()
-    expect(b.querySelector('[data-ai-note]')).toBeNull()
     // The searches list: each engine's own row, "skeen music" from both side by side (Google
-    // first), with an engine column.
+    // first), with an engine column; Seen and the spot.
     const rows = [...document.querySelectorAll('[data-row="query"]')].map((r) => `${r.getAttribute('data-engine')}:${r.textContent}`)
-    expect(rows).toEqual(['google:Googleskeen dj9352.5', 'google:Googleskeen music242.3', 'bing:Bingskeen music381.5'])
+    expect(rows).toEqual(['google:Googleskeen dj35#2.5', 'google:Googleskeen music4#2.3', 'bing:Bingskeen music8#1.5'])
+  })
+
+  it('the spot is "now" and the average beside each engine, #1 at the top; the day each site was added is pinned', () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    expect(facts('Your spot')).toEqual([expect.stringMatching(/^Google#2\.5Average #2\.5/), expect.stringMatching(/^Bing#1\.5Average #1\.5/)])
+    expect(screen.getByRole('button', { name: 'Site added to Google' })).toBeTruthy()
+    expect(screen.getByText('#1')).toBeTruthy()
+  })
+
+  it('fans sent by AI: each assistant and its visits', () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    expect([...document.querySelectorAll('[data-row="ai"]')].map((r) => r.textContent)).toEqual(['ChatGPT2', 'Gemini0', 'Perplexity0'])
   })
 })
 
 describe('Bing with no numbers yet', () => {
   // Skeen on 2026-10-02: Bing registered Sep 30 and answered with nothing. Beside Google's
-  // numbers in Both, and on its own in Bing, it says so; it is never a column of zeros.
+  // numbers in Both, and on its own in Bing, it says so; it is never a line of zeros.
   it('says “usually within 2 weeks” for a new site, beside Google and on its own', () => {
     const a = answer(ok(GOOGLE), { engine: 'bing', state: 'no_data', period: PERIOD })
     show(a)
-    const bing = document.querySelector('[data-engine-column="bing"]') as HTMLElement
+    const bing = document.querySelector('[data-note-engine="bing"]') as HTMLElement
     expect(within(bing).getByText('No numbers yet')).toBeTruthy()
     expect(bing.textContent).toContain('New siteadded Sep 30usually within 2 weeks')
-    expect(document.querySelector('[data-numbers="bing"]')).toBeNull()
+    // Beside one engine with numbers, it reads as that engine alone: Google's lines only.
+    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
     // The switch marks Bing with the amber dot.
-    expect(screen.getByRole('button', { name: /Bing, No numbers yet/ }).querySelector('[data-dot="pending"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Bing' }).querySelector('[data-dot="pending"]')).not.toBeNull()
     cleanup()
     nav.params = new URLSearchParams('e=bing')
     show(a)
     expect(document.querySelector('[data-note-engine="bing"]')?.textContent).toContain('No numbers yet')
-    expect(document.querySelector('[data-numbers]')).toBeNull()
+    expect(drawn()).toEqual([])
   })
 })
 
@@ -143,7 +161,7 @@ describe('couldn’t ask', () => {
     expect(screen.getByText("Couldn't ask Google")).toBeTruthy()
     expect(screen.getByText("Couldn't ask Bing")).toBeTruthy()
     expect(screen.getByText("Bing's daily limit")).toBeTruthy()
-    expect(document.querySelector('[data-numbers]')).toBeNull()
+    expect(drawn()).toEqual([])
     const again = screen.getAllByRole('button', { name: 'Try again' })
     expect(again).toHaveLength(1)
     fireEvent.click(again[0])
@@ -163,10 +181,17 @@ describe('the switches', () => {
     })
     expect(document.querySelector('[data-search-view]')?.getAttribute('data-search-view')).toBe('google')
     expect(push).toHaveBeenCalledWith(null, '', '/artists/a1/tools/seo/search?e=google')
-    expect(document.querySelector('[data-numbers="bing"]')).toBeNull()
-    expect(document.querySelectorAll('[data-row="query"]')).toHaveLength(2)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('How Skeen shows up on Google')
+    expect(drawn()).toEqual(['google-spot', 'google-seen', 'google-clicks'])
     expect(screen.getByRole('button', { name: 'Google' }).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '3 months' }))
+    fireEvent.click(screen.getByRole('button', { name: '3m' }))
     expect(nav.push).toHaveBeenCalledWith('/artists/a1/tools/seo/search?e=google&p=3m', { scroll: false })
+  })
+
+  it('Clicks off takes the clicks lines and their numbers away', () => {
+    show(answer(ok(GOOGLE), ok(BING)))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Clicks' }))
+    expect(drawn()).toEqual(['google-spot', 'bing-spot', 'google-seen', 'bing-seen'])
+    expect(facts('Seen and clicked')).toHaveLength(2)
   })
 })

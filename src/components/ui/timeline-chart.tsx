@@ -3,7 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '@/lib/cx'
 import { axisTicks, dayLabel, monotoneSegments, niceCeil, rankFloor, rankTicks, smoothPath, type Pt } from '@/lib/chart'
-import { Icon, type IconName } from './icons'
+
 
 /**
  * Up to five series over the window, on ONE scale that starts at zero.
@@ -46,8 +46,9 @@ import { Icon, type IconName } from './icons'
  */
 export type TimelinePoint = { day: string; views: number; visitors: number; bots?: number }
 export type SeriesColor = 'accent' | 'accent-red' | 'ink' | 'grey' | 'chart-4' | 'chart-5'
-/** A moment marked above the lines: its day, the line it sits on, its glyph and its words. */
-export type ChartPin = { day: string; series: string; icon: IconName; title: string; note?: string }
+/** A moment marked above the lines: its day, the line it sits on, its glyph (any svg: an Icon,
+ *  a SourceGlyph) and its words. */
+export type ChartPin = { day: string; series: string; icon: ReactNode; title: string; note?: string }
 export type Series = {
   key: string
   label: string
@@ -318,7 +319,7 @@ export function TimelineChart({
               onFocus={() => setPinOn(n)}
               onBlur={() => setPinOn(null)}
             >
-              <Icon name={p.icon} size={14} />
+              <span aria-hidden className="flex [&_svg]:h-3.5 [&_svg]:w-3.5">{p.icon}</span>
             </button>
           ))}
           {card && (
@@ -329,7 +330,7 @@ export function TimelineChart({
               style={{ left: `clamp(125px, ${(card.bx / w) * 100}%, calc(100% - 125px))`, top: PIN_Y - PIN_R - 8, transform: 'translate(-50%, -100%)' }}
             >
               <div className="flex items-center gap-2.5 text-[13px] font-semibold text-ink">
-                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-paper ring-[1.5px] ring-inset ring-ink"><Icon name={card.p.icon} size={12} /></span>
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-paper ring-[1.5px] ring-inset ring-ink [&_svg]:h-3 [&_svg]:w-3">{card.p.icon}</span>
                 {card.p.title}
               </div>
               <div className="ml-[34px] mt-1.5 font-space text-[11px] uppercase tracking-[0.08em] text-ink-faint">

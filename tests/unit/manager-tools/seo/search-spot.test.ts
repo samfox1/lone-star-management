@@ -69,22 +69,28 @@ describe('nameSpot', () => {
 })
 
 describe('spotFacts', () => {
-  const pts = [
-    { date: '2026-09-29', spot: 2.6, seen: 10 },
-    { date: '2026-10-01', spot: 2.0, seen: 30 },
-    { date: '2026-10-03', spot: 1.4, seen: 20 },
-  ]
-  it('CRITICAL: now is the latest day, the average is weighted by how often each day was seen, and the climb is places gained since the first day', () => {
-    expect(spotFacts(pts)).toEqual({
-      now: 1.4,
-      average: expect.closeTo((2.6 * 10 + 2.0 * 30 + 1.4 * 20) / 60, 10),
-      climbed: expect.closeTo(1.2, 10), // 2.6 → 1.4: up 1.2 places (a smaller spot is higher)
-      since: '2026-09-29',
+  const pt = (i: number, spot: number, seen = 10) => ({ date: `2026-09-${String(10 + i).padStart(2, '0')}`, spot, seen })
+  it('CRITICAL: now is the last week of readings, weighted by how often each day was seen — a half-counted day seen once does not swing it', () => {
+    // Skeen, 2026-10-06: six days near #2.4, then today at #4 from a single impression.
+    const days = [pt(0, 2.4, 17), pt(1, 2.5, 12), pt(2, 2.4, 17), pt(3, 2.6, 18), pt(4, 2.3, 10), pt(5, 2.5, 9), pt(6, 4, 1)]
+    const f = spotFacts(days)!
+    const week = days.slice(-7)
+    expect(f.now).toBeCloseTo(week.reduce((n, p) => n + p.spot * p.seen, 0) / week.reduce((n, p) => n + p.seen, 0), 10)
+    expect(f.now).toBeLessThan(2.6)
+  })
+  it('CRITICAL: the average is over every day, weighted; the climb is the first week against the last, places gained (a smaller spot is higher)', () => {
+    const days = [...Array.from({ length: 7 }, (_, i) => pt(i, 2.6)), ...Array.from({ length: 7 }, (_, i) => pt(7 + i, 1.4, 30))]
+    expect(spotFacts(days)).toEqual({
+      now: expect.closeTo(1.4, 10),
+      average: expect.closeTo((2.6 * 70 + 1.4 * 210) / 280, 10),
+      climbed: expect.closeTo(1.2, 10),
+      since: '2026-09-10',
     })
   })
-  it('a fall is a negative climb; one day has no climb; no days, no facts', () => {
-    expect(spotFacts([{ date: '2026-10-01', spot: 1.5, seen: 4 }, { date: '2026-10-02', spot: 2, seen: 4 }])!.climbed).toBeCloseTo(-0.5, 10)
-    expect(spotFacts([{ date: '2026-10-01', spot: 1.5, seen: 4 }])!.climbed).toBeNull()
+  it('CRITICAL: no climb until there are two whole weeks to compare; a fall is a negative climb; no days, no facts', () => {
+    expect(spotFacts(Array.from({ length: 13 }, (_, i) => pt(i, 3 - i * 0.1)))!.climbed).toBeNull()
+    const falling = [...Array.from({ length: 7 }, (_, i) => pt(i, 1.5)), ...Array.from({ length: 7 }, (_, i) => pt(7 + i, 2))]
+    expect(spotFacts(falling)!.climbed).toBeCloseTo(-0.5, 10)
     expect(spotFacts([])).toBeNull()
   })
 })

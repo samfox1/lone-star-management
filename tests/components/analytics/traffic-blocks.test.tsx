@@ -24,7 +24,7 @@ const ys = (pts: string) => pts.trim().split(/\s+/).map((p) => Number(p.split(',
 describe('TimelineChart', () => {
   const pointsOf = (c: HTMLElement, key: string) => c.querySelector(`[data-series="${key}"]`)!.getAttribute('data-points')!.trim().split(/\s+/)
   const ysOf = (c: HTMLElement, key: string) => ys(c.querySelector(`[data-series="${key}"]`)!.getAttribute('data-points')!)
-  const S = (key: string, values: number[], color: 'accent' | 'accent-red' | 'ink' | 'chart-4' | 'chart-5' = 'accent', since?: string) =>
+  const S = (key: string, values: (number | null)[], color: 'accent' | 'accent-red' | 'ink' | 'chart-4' | 'chart-5' = 'accent', since?: string) =>
     ({ key, label: key[0].toUpperCase() + key.slice(1), values, color, since })
 
   it('CRITICAL: the scale starts at ZERO, not at the series minimum', () => {
@@ -256,8 +256,8 @@ describe('TimelineChart', () => {
       { day: '2026-09-12', views: 20, visitors: 5 }, { day: '2026-09-13', views: 5, visitors: 4 },
     ]
     const pins = [
-      { day: '2026-09-11', series: 'views', icon: 'bolt' as const, title: 'Busiest day: 40 views' },
-      { day: '2026-09-12', series: 'visitors', icon: 'user' as const, title: 'Visitors counted from here', note: 'and bots filtered' },
+      { day: '2026-09-11', series: 'views', icon: <svg />, title: 'Busiest day: 40 views' },
+      { day: '2026-09-12', series: 'visitors', icon: <svg />, title: 'Visitors counted from here', note: 'and bots filtered' },
     ]
     it('CRITICAL: a pin shows only while its line is drawn, and its card names it with its day on focus', () => {
       const views = render(<TimelineChart points={four} height={100} pins={pins} />)

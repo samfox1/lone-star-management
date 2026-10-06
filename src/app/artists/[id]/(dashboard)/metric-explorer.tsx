@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { cx } from '@/lib/cx'
 import { METRICS, OVERLAYS, WINDOW_OPTIONS, metricFacts, previousWindow, type Metric, type MetricKey, type TimelineDay } from '@/lib/analytics'
 import { formatTrend, growthSize } from '@/lib/format'
 import { ChartLegend, TimelineChart, type ChartPin, type Series, type SeriesColor } from '@/components/ui/timeline-chart'
 import { FactsColumn, type Fact } from '@/components/ui/facts-column'
+import { SquareCheck } from '@/components/ui/square-check'
 import { analyticsPins, type PinKind } from '@/lib/analytics-pins'
-import type { IconName } from '@/components/ui/icons'
+import { Icon, type IconName } from '@/components/ui/icons'
 import { AllDays } from '@/components/ui/analytics-sheets'
 import { Segmented } from './segmented'
 
@@ -102,7 +102,7 @@ export function MetricExplorer({
   // The moments worth marking, from the window's own numbers (lib/analytics-pins.ts); the chart
   // shows each only while its line is drawn.
   const pins: ChartPin[] = analyticsPins({ days: days_, views: byKey.views?.series ?? [], bots: byKey.bots?.series ?? [], countedSince })
-    .map((p) => ({ day: p.day, series: p.series, icon: PIN_ICON[p.kind], title: p.title, note: p.note }))
+    .map((p) => ({ day: p.day, series: p.series, icon: <Icon name={PIN_ICON[p.kind]} size={14} />, title: p.title, note: p.note }))
   const toggle = (k: MetricKey) => setOn((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
 
   return (
@@ -114,30 +114,7 @@ export function MetricExplorer({
             together: a label forwarding to a separate button fired twice. */}
         <div role="group" aria-label="Series" className="flex flex-wrap items-center gap-5">
           {OVERLAYS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="checkbox"
-              aria-checked={on.has(k)}
-              aria-label={META[k].label}
-              onClick={() => toggle(k)}
-              className="group flex cursor-pointer select-none items-center gap-2 font-space text-xs text-ink"
-            >
-              <span
-                aria-hidden
-                className={cx(
-                  'flex h-4 w-4 items-center justify-center rounded-[3px] border transition-colors',
-                  on.has(k) ? 'border-ink bg-ink text-white' : 'border-hairline bg-paper group-hover:border-ink-faint',
-                )}
-              >
-                {on.has(k) && (
-                  <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                    <path d="M2.5 6.2 L5 8.6 L9.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span>{META[k].label}</span>
-            </button>
+            <SquareCheck key={k} label={META[k].label} on={on.has(k)} onToggle={() => toggle(k)} />
           ))}
         </div>
         <Segmented

@@ -39,19 +39,28 @@ export function nameSpot(rows: readonly SearchDayRow[], name: string): SpotPoint
     .map(([date, d]) => ({ date, spot: d.weighted / d.seen, seen: d.seen }))
 }
 
-/** The numbers beside the line: the latest day's spot, the average (weighted by how often each
- *  day was seen), and the places climbed since the first day (positive: higher; null with one day). */
+/**
+ * The numbers beside the line, each weighted by how often the site was seen that day:
+ *   now      the last week of readings (one day alone swings: today, half counted, can be a
+ *            single search at #4 — Skeen on 2026-10-06);
+ *   average  every day;
+ *   climbed  the first week against the last, in places gained (positive: higher), only once
+ *            there are two whole weeks to compare (Sam: "if the data hasnt been collected long
+ *            enough to see this, then remove it").
+ */
 export type SpotFacts = { now: number; average: number; climbed: number | null; since: string }
+
+const WEEK = 7
+const weighted = (ps: readonly SpotPoint[]) => ps.reduce((n, p) => n + p.spot * p.seen, 0) / ps.reduce((n, p) => n + p.seen, 0)
 
 export function spotFacts(points: readonly SpotPoint[]): SpotFacts | null {
   if (!points.length) return null
-  const first = points[0], last = points[points.length - 1]
-  const seen = points.reduce((n, p) => n + p.seen, 0)
+  const now = weighted(points.slice(-WEEK))
   return {
-    now: last.spot,
-    average: points.reduce((n, p) => n + p.spot * p.seen, 0) / seen,
-    climbed: points.length > 1 ? first.spot - last.spot : null,
-    since: first.date,
+    now,
+    average: weighted(points),
+    climbed: points.length >= 2 * WEEK ? weighted(points.slice(0, WEEK)) - now : null,
+    since: points[0].date,
   }
 }
 

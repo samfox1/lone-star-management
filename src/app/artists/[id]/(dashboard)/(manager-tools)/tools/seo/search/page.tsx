@@ -1,6 +1,6 @@
 import { isSearchPeriodKey } from '@/lib/manager-tools/seo/search-stats'
 import { requireArtist } from '../../../../_data'
-import { loadSearchStats } from './load'
+import { loadAiVisits, loadSearchStats } from './load'
 import { SearchTab } from './search-tab'
 
 /**
@@ -10,12 +10,14 @@ import { SearchTab } from './search-tab'
  *
  * The ownership gate (`requireArtist`, RLS) runs FIRST: the loader reads the registrations
  * through the service client. The loader keeps an answer six hours (search/load.ts), so
- * opening the tab asks Google and Bing at most once per period in that time.
+ * opening the tab asks Google and Bing at most once per period in that time. The artist's name
+ * picks out the searches for them ("your spot"); the AI visits are read for the same days.
  */
 export default async function SeoSearchPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const [{ id }, sp] = await Promise.all([params, searchParams])
   const key = isSearchPeriodKey(sp.p) ? sp.p : '28d'
-  await requireArtist(id)
+  const artist = await requireArtist(id)
   const answer = await loadSearchStats(id, key)
-  return <SearchTab answer={answer} />
+  const ai = await loadAiVisits(id, answer.period)
+  return <SearchTab answer={answer} name={artist.name} ai={ai} />
 }
