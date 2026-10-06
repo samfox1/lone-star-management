@@ -144,10 +144,10 @@ describe('Both, side by side', () => {
     nav.params = new URLSearchParams('e=google')
     show(answer(ok(GOOGLE), ok(BING)))
     expect(document.querySelector('[data-name-searches]')).toBeNull() // behind the info button, not a table on the page
-    fireEvent.click(screen.getByRole('button', { name: 'What this ranking is built from' }))
-    const list = within(screen.getByRole('dialog', { name: 'What this ranking is built from' })).getByRole('table').parentElement as HTMLElement
-    expect([...list.querySelectorAll('[data-row="name-search"]')].map((r) => r.textContent)).toEqual(['skeen dj39#2.5', 'skeen music2#3'])
-    expect(list.querySelector('[data-bare-name]')?.textContent).toBe('“Skeen” on its own: not showing up on Google yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Searches behind this ranking' }))
+    const list = screen.getByRole('dialog', { name: 'Searches behind this ranking' })
+    expect([...list.querySelectorAll('[data-row="name-search"]')].map((r) => r.textContent)).toEqual(['skeen dj39 seen#2.5', 'skeen music2 seen#3'])
+    expect(list.querySelector('[data-note-line="bare-name"]')?.textContent).toBe('“Skeen” on its own: not showing up on Google yet')
   })
 
   // Behind the seen / clicked chart's info button: the searches its totals are made of, and what
@@ -156,11 +156,11 @@ describe('Both, side by side', () => {
     nav.params = new URLSearchParams('e=google')
     show(answer(ok(GOOGLE), { engine: 'bing', state: 'no_data', period: PERIOD }))
     expect(document.querySelector('[data-reach-searches]')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'What these numbers are made of' }))
-    const list = within(screen.getByRole('dialog', { name: 'What these numbers are made of' })).getByRole('table').parentElement as HTMLElement
-    expect([...list.querySelectorAll('[data-row="reach-search"]')].map((r) => r.textContent)).toEqual(['skeen dj359', 'skeen music42'])
-    expect(list.querySelector('[data-private="google"]')?.textContent).toBe('Searches Google keeps private: 18 seen · 4 clicks')
-    expect(list.querySelector('[data-private="bing"]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Searches behind these numbers' }))
+    const list = screen.getByRole('dialog', { name: 'Searches behind these numbers' })
+    expect([...list.querySelectorAll('[data-row="reach-search"]')].map((r) => r.textContent)).toEqual(['skeen dj35 seen9 clicks', 'skeen music4 seen2 clicks'])
+    expect(list.querySelector('[data-note-line="private-google"]')?.textContent).toBe('Searches Google keeps private: 18 seen · 4 clicks')
+    expect(list.querySelector('[data-note-line="private-bing"]')).toBeNull()
   })
 
   // The AI list shows each assistant with its visits.

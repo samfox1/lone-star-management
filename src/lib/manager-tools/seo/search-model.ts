@@ -48,12 +48,25 @@ export function searchTitle(view: EngineView, name: string): string {
   return `How ${name} shows up ${view === 'both' ? 'in search' : `on ${ENGINE_NAME[view]}`}`
 }
 
-/** What the ranking chart under the title shows (Sam, 2026-10-06: "add a little more explanation
- *  about whats going on in these charts"). */
-export function searchIntro(view: EngineView, name: string): string {
-  const where = view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]
-  return `Where your site ranks, day by day, when a search on ${where} includes “${name}” (the ⓘ beside the line shows which searches). Only the times your site actually appeared count. #1 is the top result.`
+/** What the ranking chart under the title shows, simply and without naming a search (Sam,
+ *  2026-10-06: "simpler … where this website ranks when users search to locate this artist. Keep
+ *  it vague. dont say 'Skeen' because searching just 'Skeen' doesnt work yet"). The exact searches
+ *  are behind the title's ⓘ. */
+export function searchIntro(view: EngineView): string {
+  return `Where your site ranks on ${view === 'both' ? 'Google and Bing' : ENGINE_NAME[view]} when people search to find you, day by day. #1 is the top result.`
 }
+
+/** The ranking's ⓘ window: a plain title and one line on what is counted. */
+export const NAME_SEARCHES_WORDS = {
+  title: 'Searches behind this ranking',
+  about: 'The searches with your name in them, and your average spot when your site was shown.',
+} as const
+
+/** The seen / clicked chart's ⓘ window. */
+export const REACH_SEARCHES_WORDS = {
+  title: 'Searches behind these numbers',
+  about: 'The searches your site was shown for most, and how many people clicked through.',
+} as const
 
 /** Said under the ranking chart when the bare name is not among its searches (Sam, 2026-10-06:
  *  he searched "Skeen" and the site was nowhere): plainly, never implied by the number. */
