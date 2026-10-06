@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search and Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  /* Black and white. Colour means ONE thing: which number a line is. Five variables, in the
+     categorical order the dataviz validator passed for a white page; each number keeps its own. */
+  @property --cur { syntax: '<color>'; inherits: true; initial-value: #2a78d6; }
+  :root {
+    --paper: #ffffff; --ink: #111111; --ink-2: #6b7280; --ink-3: #9aa0a6; --line: #ececec; --mist: #f4f4f5; --mist-2: #e4e4e7;
+    --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100; --c5: #e87ba4;
+    --ease: cubic-bezier(.22, .8, .24, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: 'Instrument Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 6px; }
+  svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+
+  .mockbar { position: sticky; top: 0; z-index: 50; display: flex; gap: 28px; align-items: center; padding: 12px 40px; background: #fafafa; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+  .mockbar .grp { display: flex; gap: 6px; align-items: center; }
+  .mockbar .grp > span { margin-right: 4px; }
+  .mockbar button { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: #fff; font-size: 12px; }
+  .mockbar button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .is-analytics .search-only { display: none !important; }
+  .is-search .analytics-only { display: none !important; }
+
+  .page { max-width: 1180px; padding: 36px 40px 90px; }
+  .top { display: flex; justify-content: space-between; align-items: center; min-height: 36px; }
+  .engines { display: flex; gap: 14px; align-items: center; }
+  .eng { position: relative; color: var(--ink-3); transition: color .2s; padding: 4px; }
+  .eng svg { width: 18px; height: 18px; }
+  .eng.on, .eng:hover { color: var(--ink); }
+  .eng .pend { position: absolute; top: 1px; right: -2px; width: 6px; height: 6px; border-radius: 50%; background: #d99a2b; }
+  .periods { position: relative; display: flex; gap: 18px; }
+  .periods button { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); padding: 6px 0; transition: color .25s; }
+  .periods button:hover { color: var(--ink); }
+  .periods button.on { color: var(--ink); font-weight: 700; }
+  .uline { position: absolute; bottom: -2px; height: 2px; border-radius: 2px; background: var(--ink); transition: left .45s var(--ease), width .45s var(--ease); }
+
+  .verdict { display: flex; align-items: center; gap: 14px; margin-top: 30px; }
+  .badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fff; flex: none; }
+  .badge.wait { background: var(--mist); color: var(--ink-2); }
+  .badge svg { width: 22px; height: 22px; stroke-width: 2.1; }
+  .badge path.draw { stroke-dasharray: 24; stroke-dashoffset: 24; }
+  .badge.go path.draw { animation: draw .6s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .vt { font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
+  .vs { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
+
+  /* ── chart + the numbers beside it ── */
+  .board { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 36px; margin-top: 30px; align-items: start; }
+  .unit { font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 20px; }
+  .chartwrap { position: relative; margin-top: 8px; }
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .ax { font-family: 'Space Mono', monospace; font-size: 10.5px; fill: var(--ink-3); }
+  .empty { position: absolute; inset: 40% 0 auto; text-align: center; font-size: 14px; color: var(--ink-3); opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .none-on .empty { opacity: 1; }
+  .scrub { pointer-events: none; opacity: 0; transition: opacity .15s; }
+  .scrubbing .scrub { opacity: 1; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; border-radius: 12px; padding: 8px 11px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -100%) translateY(-16px); opacity: 0; transition: opacity .15s; z-index: 4; }
+  .tip b { font-family: 'Space Mono', monospace; font-size: 13px; }
+  .tip .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .tip .row:first-child { margin-top: 0; }
+  .tip .row i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .tip .row span { color: #b8bcc4; }
+  .tip .dt { color: #b8bcc4; font-family: 'Space Mono', monospace; font-size: 11px; }
+  .scrubbing .tip.scrubtip { opacity: 1; }
+
+  .rail { position: relative; padding-top: 4px; }
+  .metric { position: relative; display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: center; width: 100%; padding: 13px 0 13px 14px; text-align: left; transition: opacity .3s; }
+  .metric::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--mc); transform: scaleY(0); transition: transform .35s var(--ease); }
+  .metric.on::before { transform: scaleY(1); }
+  .metric .mi { width: 28px; height: 28px; color: var(--ink-3); transition: color .3s; }
+  .metric .mi svg { width: 28px; height: 28px; stroke-width: 1.5; }
+  .metric.on .mi { color: var(--mc); }
+  .metric:hover .mi svg { stroke-width: 2; }
+  .metric .val { display: flex; align-items: baseline; gap: 9px; }
+  .metric .n { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 26px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink-3); transition: color .3s; }
+  .metric.on .n { color: var(--ink); }
+  .metric .d { font-family: 'Space Mono', monospace; font-size: 11.5px; font-weight: 700; color: var(--ink-3); }
+  .metric.on .d { color: var(--ink); }
+  .metric .lab { font-size: 13px; color: var(--ink-3); margin-top: 5px; transition: color .3s; }
+  .metric.on .lab { color: var(--ink-2); }
+  .metric + .metric { border-top: 1px solid var(--line); }
+  .choose { display: inline-flex; align-items: center; gap: 8px; margin: 14px 0 0 14px; font-size: 13px; color: var(--ink-3); transition: color .2s; }
+  .choose:hover { color: var(--ink); }
+  .pop { position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 8px); padding: 8px; border-radius: 16px; background: #fff; box-shadow: 0 14px 40px rgba(17,17,17,.14), 0 0 0 1px rgba(17,17,17,.05); opacity: 0; transform: translateY(-6px) scale(.98); transform-origin: top left; transition: opacity .2s, transform .3s var(--ease); pointer-events: none; }
+  .pop.show { opacity: 1; transform: none; pointer-events: auto; }
+  .pop button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border-radius: 10px; font-size: 14px; text-align: left; transition: color .2s; color: var(--ink-2); }
+  .pop button:hover { color: var(--ink); }
+  .pop button .pi { width: 20px; height: 20px; color: var(--ink-3); }
+  .pop button .pi svg { width: 20px; height: 20px; }
+  .pop button .ck { margin-left: auto; width: 18px; height: 18px; color: var(--ink); opacity: 0; transition: opacity .2s; }
+  .pop button.in { color: var(--ink); }
+  .pop button.in .pi { color: var(--mc); }
+  .pop button.in .ck { opacity: 1; }
+
+  .pin { cursor: pointer; }
+  .pin .bub { transition: transform .3s var(--ease); transform-box: fill-box; transform-origin: center; }
+  .pin:hover .bub, .pin:focus .bub { transform: scale(1.12); }
+  .card { position: absolute; z-index: 5; width: 280px; padding: 14px 16px; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(17,17,17,.12), 0 0 0 1px rgba(17,17,17,.05); opacity: 0; transform: translate(-50%, calc(-100% - 22px)) scale(.96); transform-origin: bottom center; transition: opacity .22s, transform .32s var(--ease); pointer-events: none; }
+  .card.show { opacity: 1; transform: translate(-50%, calc(-100% - 26px)) scale(1); }
+  .card .h { display: flex; gap: 10px; align-items: center; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .card .ci { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fff; flex: none; }
+  .card .ci.auto { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .card .ci svg { width: 14px; height: 14px; }
+  .card .when { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin: 8px 0 0 38px; }
+  .card .move { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; font-family: 'Space Mono', monospace; font-size: 13px; }
+  .card .move i { width: 8px; height: 8px; border-radius: 50%; }
+  .card .move .a { color: var(--ink-3); }
+  .card .move .b { font-weight: 700; }
+
+  /* ── Analytics views, kept and quieted ── */
+  .sec { margin-top: 64px; }
+  .sec-h { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 14px; margin-bottom: 18px; }
+  .sec-h svg { width: 18px; height: 18px; }
+  .two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 64px; }
+  .rings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px 12px; }
+  .ring { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .ring .rv { position: relative; width: 86px; height: 86px; }
+  .ring svg.r { width: 86px; height: 86px; transform: rotate(-90deg); }
+  .ring .rg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink); }
+  .ring .rg svg { width: 28px; height: 28px; }
+  .ring.zero .rg { color: var(--ink-3); }
+  .ring .rn { font-size: 13px; color: var(--ink-2); }
+  .ring .rp { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; margin-top: -4px; }
+  .ring.zero .rp { color: var(--ink-3); font-weight: 400; }
+  .waffle { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; max-width: 300px; }
+  .waffle i { aspect-ratio: 1; border-radius: 4px; background: var(--mist); display: block; transition: background .45s; }
+  .wleg { display: flex; gap: 22px; margin-top: 22px; }
+  .wleg div { display: flex; align-items: center; gap: 10px; }
+  .wleg svg { width: 24px; height: 24px; }
+  .wleg .wp { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 18px; }
+  .wleg .wn { font-size: 12px; color: var(--ink-2); }
+  .wleg .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .mapwrap { position: relative; }
+  .mapwrap canvas, .mapwrap svg { display: block; width: 100%; height: auto; }
+  .mapwrap svg { position: absolute; inset: 0; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 1fr 54px; gap: 14px; align-items: center; height: 52px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .row:last-child { border-bottom: 0; }
+  .row .nm small { display: block; font-family: 'Space Mono', monospace; font-size: 10.5px; color: var(--ink-3); margin-top: 2px; }
+  .row .meter { height: 4px; border-radius: 99px; background: var(--mist); overflow: hidden; }
+  .row .meter i { display: block; height: 100%; border-radius: 99px; background: var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 1s var(--ease); }
+  .row .v { font-family: 'Space Mono', monospace; font-size: 13px; text-align: right; }
+  .row.cover { grid-template-columns: 44px minmax(0, 1fr) 1fr 44px; height: 60px; }
+  .row.cover img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; display: block; }
+  .row.cover .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .more { margin-top: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); }
+  .srch { display: grid; grid-template-columns: minmax(0, 1fr) 84px 54px 60px; gap: 14px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .srch:last-child { border-bottom: 0; }
+  .srch .spark { width: 84px; height: 22px; }
+  .srch .rk { font-family: 'Space Mono', monospace; font-size: 13px; text-align: right; }
+  .srch .mv { font-family: 'Space Mono', monospace; font-size: 11.5px; font-weight: 700; text-align: right; }
+  .srch .mv.flat { color: var(--ink-3); font-weight: 400; }
+  .srch .mv.newb { justify-self: end; font-weight: 600; font-family: 'Instrument Sans'; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--mist); }
+
+  @media (max-width: 960px) {
+    .board, .two { grid-template-columns: 1fr; gap: 28px; }
+    .rings { grid-template-columns: repeat(4, 1fr); }
+    .page { padding: 28px 16px 60px; }
+    .unit { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- copied from src/components/ui/icons.tsx, source-glyphs.tsx, device-glyphs.tsx -->
+  <symbol id="i-google" viewBox="0 0 24 24"><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" stroke-width="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bing" viewBox="0 0 24 24"><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 2.1 C13.05 8 16 10.95 21.9 12 16 13.05 13.05 16 12 21.9 10.95 16 8 13.05 2.1 12 8 10.95 10.95 8 12 2.1 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-podium" viewBox="0 0 24 24"><path d="M3.5 20.5v-6h5.5v6M9 20.5V8.5h6v12M15 20.5v-4h5.5v4M3 20.5h18"/><path d="M12 3.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 5.3l2-.3z" stroke-width="1.2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.4"/><path d="M5.5 19.5c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M5.2 2.9 L5.2 19.4 L9.7 15.1 L12.5 21.1 L15.2 19.8 L12.4 14 L18.5 13.5 Z"/></symbol>
+  <symbol id="i-cursorfill" viewBox="0 0 24 24"><path d="M5.2 2.9 L5.2 19.4 L9.7 15.1 L12.5 21.1 L15.2 19.8 L12.4 14 L18.5 13.5 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-robot" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4.5V8M9.5 13h.01M14.5 13h.01M9.5 16.2h5"/><circle cx="12" cy="4" r="1"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path d="M4.5 6.5h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H11l-4.5 3.5v-3.5h-2a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 16.5h5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path class="draw" d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2.7" y="2.7" width="18.6" height="18.6" rx="5.6"/><circle cx="12" cy="12" r="4.7"/></g><circle cx="17.4" cy="6.6" r="1.35" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-youtube" viewBox="0 0 24 24"><rect x="1.9" y="4.7" width="20.2" height="14.6" rx="4.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M 9.9 8.4 L 16.3 12 L 9.9 15.6 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-tiktok" viewBox="0 0 24 24"><path d="M13.4 2.6 h3.2 a5.2 5.2 0 0 0 4.8 4.6 v3.2 a8.3 8.3 0 0 1 -4.8 -1.7 v6.5 a6.5 6.5 0 1 1 -6.5 -6.5 q0.7 0 1.4 0.16 v3.3 a3.2 3.2 0 1 0 1.9 2.94 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-facebook" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M13.15 19.5 v-6.5 h2.15 l0.35 -2.55 h-2.5 v-1.6 c0 -0.74 0.2 -1.24 1.28 -1.24 h1.32 V5.6 a17 17 0 0 0 -1.96 -0.1 c-1.95 0 -3.28 1.19 -3.28 3.37 v1.88 H8.4 v2.55 h2.11 v6.5 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-soundcloud" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M3.1 13.2 v3.6"/><path d="M5.8 11.2 v5.6"/><path d="M8.5 9.6 v7.2"/><path d="M11.2 8.4 v8.4"/></g><path d="M13.5 16.8 V7.9 a4.7 4.7 0 0 1 6.6 4.3 h0.3 a2.3 2.3 0 0 1 0 4.6 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-snapchat" viewBox="0 0 24 24"><path d="M12 3.2c2.9 0 4.7 2.1 4.7 4.8v2.4l1.6-.5c.5-.1.8.5.4.8l-1.9 1.2c.6 1.9 2 3.4 3.7 4-.2.6-1.2.9-2.3 1-.2.6-.3 1.1-.9 1.1-.8 0-1.6-.4-2.6.2-.9.6-1.6 1.3-2.7 1.3s-1.8-.7-2.7-1.3c-1-.6-1.8-.2-2.6-.2-.6 0-.7-.5-.9-1.1-1.1-.1-2.1-.4-2.3-1 1.7-.6 3.1-2.1 3.7-4L5.3 10.7c-.4-.3-.1-.9.4-.8l1.6.5V8c0-2.7 1.8-4.8 4.7-4.8z"/></symbol>
+  <symbol id="i-mobile" viewBox="0 0 24 24"><rect x="7.1" y="2.5" width="9.8" height="19" rx="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.6 5.6 h2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="18.4" r="0.95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="18.2" r="0.95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24"><rect x="4.1" y="4.6" width="15.8" height="10.8" rx="1.9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.1 18.7 h19.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
+
+<div class="mockbar">
+  <div class="grp"><span>Page</span><button data-page="search" class="on">Search</button><button data-page="analytics">Analytics</button></div>
+  <div class="grp search-only"><span>Numbers</span><button data-data="ex" class="on">Example, by January</button><button data-data="real">Skeen today (real)</button></div>
+</div>
+
+<main class="page" id="page">
+  <div class="top">
+    <div class="engines search-only">
+      <button class="eng on" aria-label="Google" title="Google"><svg class="ic"><use href="#i-google"/></svg></button>
+      <button class="eng" aria-label="Bing, no numbers yet" title="Bing · no numbers yet"><svg class="ic"><use href="#i-bing"/></svg><i class="pend"></i></button>
+    </div>
+    <span></span>
+    <div class="periods" id="periods"></div>
+  </div>
+
+  <div class="verdict">
+    <span class="badge" id="badge"><svg class="ic" id="badge-ic"><use href="#i-check"/></svg></span>
+    <div><div class="vt" id="vt"></div><div class="vs" id="vs"></div></div>
+  </div>
+
+  <div class="board">
+    <div>
+      <div class="unit" id="unit"></div>
+      <div class="chartwrap" id="chartwrap">
+        <svg class="chart" id="chart" viewBox="0 0 860 380" role="img" aria-label="Chart"></svg>
+        <div class="empty">Turn on a number on the right to see it here</div>
+        <div class="tip scrubtip" id="scrubtip"></div>
+        <div class="card" id="card"></div>
+      </div>
+    </div>
+    <div class="rail" id="rail" aria-label="Numbers on the chart"></div>
+  </div>
+
+  <div id="lower"></div>
+</main>
+
+<script>
+const CITIES30 = [[41.86,-87.65,114],[40.71,-74.01,68],[51.51,-0.13,38],[43.04,-87.91,31],[34.05,-118.28,30],[43.71,-79.4,28],[-33.87,151.21,22],[47.5,19.92,21],[52.37,4.89,21],[30.29,-97.74,18],[48.14,11.57,16],[-37.81,144.96,15],[50.11,8.68,15],[48.85,2.35,15],[33.45,-112.07,15],[32.77,-117.18,14],[51.65,4.86,13],[29.75,-95.37,12],[43.07,-89.36,12],[48.21,16.37,11],[45.51,-73.59,11],[52.53,13.4,11],[22.28,114.17,11],[1.3,103.86,11],[37.34,-121.89,11],[39.74,-104.98,11],[55.68,12.57,10],[45.46,9.19,10],[42.36,-71.06,9],[40.76,-111.89,9],[47.61,-122.33,9],[49.25,-123.12,8],[50.09,14.42,8],[59.43,24.74,8],[41.39,2.16,8],[41.01,28.95,8],[33.75,-84.39,8],[42.33,-83.05,8],[40.9,-73.91,8],[45.84,-119.7,8],[-27.47,153.03,7],[53.55,10,7],[37.77,-122.42,7],[41.26,-95.86,7],[39.98,-83.03,7],[39.95,-75.16,7],[36.17,-86.78,7],[52.37,9.73,6],[50.93,6.95,6],[47.5,19.04,6],[53.33,-6.25,6],[51.92,4.48,6],[52.09,5.12,6],[41.85,-87.79,6],[35.24,-80.85,6],[47.66,-117.43,6],[42.73,-87.8,6],[50.85,4.35,5],[53.55,-113.47,5],[47.37,8.55,5],[51.22,6.78,5],[52.64,-1.13,5],[19.07,72.88,5],[-36.85,174.76,5],[38.73,-9.15,5],[33.79,-117.87,5],[28.54,-81.41,5],[41.73,-87.83,5],[39.79,-86.19,5],[36.17,-115.14,5],[41.49,-81.7,5],[45.52,-122.68,5],[40.44,-80,5],[38.84,-77.43,5],[-31.95,115.86,4],[42.7,23.32,4],[48.78,9.18,4],[49.45,11.08,4],[40.42,-3.7,4],[60.17,24.94,4],[52.41,-1.78,4],[28.65,77.23,4],[12.97,77.59,4],[41.89,12.51,4],[45.07,7.69,4],[56.95,24.11,4],[3.11,101.61,4],[51.7,5.3,4],[50.06,19.94,4],[59.33,18.07,4],[46.05,14.51,4],[34.13,-117.91,4],[33.64,-117.6,4],[38.58,-121.49,4],[34.03,-118.47,4],[25.77,-80.2,4],[27.98,-82.46,4],[39.17,-86.53,4],[40.73,-73.45,4],[38.03,-78.48,4],[42.96,-88.01,4],[47.32,11.12,3],[-34.93,138.6,3],[51.08,4.73,3],[51.13,4.57,3],[-23.55,-46.64,3],[51.05,-114.09,3],[43.43,-80.51,3],[46.81,-71.21,3],[46.95,7.45,3],[48,7.85,3],[48.49,9.2,3],[56.16,10.21,3],[53.65,-3.01,3],[31.97,34.79,3],[28.69,76.94,3],[35.69,139.69,3],[25.68,-100.32,3],[51.99,4.21,3],[52.08,4.3,3],[14.6,120.98,3],[52.23,21.01,3],[44.87,20.64,3],[59.4,17.94,3],[38.41,27.14,3],[48.47,35.04,3],[37.87,-122.27,3],[33.16,-117.35,3],[33.66,-117.98,3],[37.44,-122.14,3],[37.37,-121.96,3],[39.73,-104.83,3],[40.02,-105.27,3],[41.66,-72.78,3],[38.9,-77.04,3],[26.36,-80.08,3],[25.79,-80.13,3],[27.77,-82.68,3],[34.08,-84.29,3],[40.42,-86.88,3],[30.44,-91.19,3],[41.94,-71.29,3],[42.34,-71.21,3],[44.84,-93.3,3],[44.98,-93.26,3],[38.61,-90.32,3],[37.95,-91.77,3],[40.75,-74.16,3],[40.73,-74.08,3],[40.83,-74.21,3],[39.74,-74.28,3],[40.17,-74.04,3],[40.57,-74.74,3],[33.39,-104.52,3],[36.02,-78.89,3],[39.27,-84.46,3],[39.51,-84.75,3],[45.52,-122.99,3],[41.43,-78.56,3],[41.82,-71.41,3],[32.44,-97.79,3],[29.44,-98.56,3],[38.88,-77.1,3],[47.61,-122.2,3],[42.98,-88.11,3],[-33.93,18.42,3],[-33.93,18.87,3],[25.08,55.31,2],[-34.61,-58.38,2],[48.31,14.29,2],[-42.88,147.33,2],[51.22,4.4,2],[51.05,3.72,2],[48.43,-123.49,2],[49.88,-97.15,2],[46.49,-80.99,2],[46.2,6.15,2],[47.42,9.37,2],[49.14,9.22,2],[48.9,9.19,2],[48.37,10.9,2],[53.14,8.21,2],[50.78,6.08,2],[51.46,7.01,2],[51.05,13.74,2],[50.98,11.33,2],[50.63,3.06,2],[48.95,2.25,2],[50.83,-0.14,2],[53.74,-0.34,2],[53.48,-2.24,2],[51.34,-0.11,2],[53.58,-2.18,2],[50.9,-1.4,2],[50.88,-1.03,2],[53.54,-2.64,2],[55.83,-4.43,2],[53.41,-6.44,2],[32.08,34.81,2],[37.57,126.98,2],[55.71,21.14,2],[54.69,25.28,2],[53.22,6.57,2],[51.45,6.05,2],[52.01,4.36,2],[51.83,4.13,2],[52.16,5.39,2],[59.96,11.05,2],[60.39,5.32,2],[-43.53,172.63,2],[14.65,121.05,2],[53.36,17.04,2],[52.11,21.26,2],[38.7,-9.34,2],[46.52,16.2,2],[46.56,15.65,2],[13.75,100.5,2],[33.52,-86.8,2],[33.41,-111.91,2],[33.88,-117.57,2],[33.12,-117.09,2],[37.55,-121.99,2],[33.89,-118.31,2],[33.72,-116.22,2],[37.82,-122.27,2],[34.06,-117.18,2],[38.75,-121.29,2],[34.42,-119.7,2],[37.37,-122.04,2],[34.17,-118.84,2],[39.8,-105.09,2],[40.59,-105.08,2],[41.76,-72.69,2],[41.31,-72.93,2],[26.12,-80.14,2],[29.65,-82.32,2],[30.31,-81.58,2],[27.91,-82.79,2],[30.44,-84.28,2],[32.46,-84.99,2],[32.45,-81.78,2],[42.09,-87.98,2],[42.15,-88.14,2],[42.15,-87.96,2],[41.8,-87.87,2],[41.88,-88.01,2],[42.18,-88,2],[42.04,-87.78,2],[42.03,-88.08,2],[40.43,-86.92,2],[38.2,-85.73,2],[29.95,-90.1,2],[39.29,-76.61,2],[39.37,-76.72,2],[39.07,-76.55,2],[42.38,-71.11,2],[38.22,-90.4,2],[38.63,-90.2,2],[39.54,-119.84,2],[43.04,-71.18,2],[40.82,-73.99,2],[40.79,-74.06,2],[40.29,-74.02,2],[35.08,-106.65,2],[41.7,-73.9,2],[40.86,-73.1,2],[43.07,-76.08,2],[40.8,-73.73,2],[43.05,-76.15,2],[35.25,-81.34,2],[34.22,-77.89,2],[36.1,-80.28,2],[40.63,-75.37,2],[32.78,-79.93,2],[33.98,-80.99,2],[35.05,-85.31,2],[33.05,-96.99,2],[39.04,-77.49,2],[37.23,-80.41,2],[47.67,-122.12,2],[46.06,-118.34,2],[39.63,-79.96,2],[42.96,-89.47,2],[42.91,-87.86,2],[41.32,19.45,1],[41.33,19.82,1],[-34.45,-58.64,1],[-29.79,-58.05,1],[-33.08,-68.47,1],[48.36,16.6,1],[47.72,16.08,1],[48.21,15.64,1],[47.07,15.44,1],[47.38,15.09,1],[47.9,13.95,1],[-28,153.43,1],[-26.66,153.08,1],[-34.19,142.16,1],[44.78,17.21,1],[51.21,3.22,1],[50.85,3.31,1],[50.93,5.34,1],[50.91,3.21,1],[51.19,5.12,1],[50.95,3.12,1],[50.78,4.24,1],[50.89,3.43,1],[50.88,4.47,1],[50.41,4.44,1],[50.63,5.57,1],[43.22,27.91,1],[32.31,-64.81,1],[-16.68,-49.25,1],[-17.53,-43.02,1],[-23.31,-51.16,1],[-5.09,-42.8,1],[-22.47,-43.83,1],[-21.2,-41.89,1],[-22.91,-43.18,1],[-27.63,-52.28,1],[-26.73,-53.52,1],[-23.69,-46.62,1],[-22.98,-49.87,1],[49.06,-122.25,1],[48.45,-123.5,1],[49.32,-123.07,1],[49.27,-122.77,1],[49.17,-123.14,1],[49.11,-122.83,1],[48.44,-123.35,1],[49.33,-123.16,1],[45.27,-66.06,1],[44.64,-63.58,1],[43.39,-79.84,1],[42.98,-81.23,1],[43.87,-79.27,1],[42.77,-81.18,1],[42.86,-80.73,1],[42.3,-83.02,1],[47.39,8.04,1],[47.35,8.37,1],[47.47,8.33,1],[47.56,7.57,1],[47.02,7.24,1],[46.23,6.08,1],[46.22,6.08,1],[47.23,8.82,1],[47.34,7.87,1],[46.19,9.02,1],[45.99,8.95,1],[46.36,8.95,1],[46.52,6.63,1],[47.14,8.59,1],[-33.46,-70.65,1],[39.91,116.4,1],[10.02,-84.21,1],[9.93,-84.14,1],[50.07,14.73,1],[49.59,18.01,1],[49.6,17.25,1],[49.2,16.61,1],[49.01,8.4,1],[49.3,10.59,1],[48.17,12.73,1],[48.92,11.89,1],[47.73,10.31,1],[49.58,10.61,1],[52.22,13.45,1],[50.14,8.5,1],[50.28,9.37,1],[49.68,8.62,1],[51.4,9.47,1],[50.59,8.68,1],[50.22,8.4,1],[50.09,8.24,1],[52.27,10.53,1],[53.45,9.5,1],[52.15,9.95,1],[52.21,9.55,1],[52.03,8.53,1],[50.54,6.56,1],[51.34,6.55,1],[51.96,7.63,1],[49.98,8.28,1],[51.34,12.37,1],[51.79,11.74,1],[54.79,9.44,1],[53.92,9.52,1],[54.32,10.13,1],[55.97,10.15,1],[56.24,9.54,1],[-2.9,-79,1],[36.52,-4.89,1],[38.98,1.3,1],[28.47,-16.25,1],[42.26,3.07,1],[41.36,2.1,1],[41.54,2.11,1],[41.67,2.4,1],[41.45,2.21,1],[41.22,1.73,1],[40.24,-3.7,1],[40.6,-3.71,1],[39.15,-0.43,1],[39.85,-0.16,1],[39.47,-0.38,1],[65.01,25.47,1],[61.5,23.79,1],[42.55,9.43,1],[50.3,3.39,1],[50.69,3.17,1],[50.36,3.53,1],[48.64,2.24,1],[48.8,2.13,1],[49.45,1.15,1],[43.34,3.21,1],[42.7,2.9,1],[43.6,1.44,1],[43.7,7.27,1],[44.36,4.23,1],[45.75,4.85,1],[45.99,4.72,1],[51.3,0.48,1],[53.47,-3.02,1],[51.11,-0.86,1],[54.9,-2.94,1],[52.72,-1.37,1],[50.76,-1.3,1],[51.11,-0.18,1],[51.38,-0.1,1],[53.48,-2.15,1],[53.57,-1.79,1],[51.05,-4.18,1],[52.77,-1.2,1],[51.41,-0.28,1],[50.37,-4.14,1],[51.46,-0.97,1],[51.57,-2.21,1],[51.51,-0.6,1],[51.54,0.71,1],[51.01,-3.1,1],[52.59,-1.98,1],[51.44,-0.73,1],[53.39,-2.58,1],[51.8,-0.21,1],[50.94,-2.63,1],[53.96,-1.08,1],[54.6,-5.93,1],[55.95,-3.2,1],[56.2,-3.17,1],[55.48,-2.55,1],[55.9,-3.52,1],[51.63,-3.74,1],[53.05,-2.99,1],[41.64,41.63,1],[41.69,44.83,1],[37.98,23.73,1],[40.64,22.93,1],[22.45,114.17,1],[45.81,15.98,1],[46.25,20.15,1],[47.53,21.62,1],[47.6,19.36,1],[-7.05,107,1],[53.2,-6.1,1],[52.98,-6.05,1],[32.7,35.3,1],[32.08,34.78,1],[26.18,91.75,1],[21.2,72.83,1],[28.46,77.03,1],[32.74,74.86,1],[23.34,85.31,1],[18.52,73.86,1],[17.38,78.46,1],[26.47,80.35,1],[40.85,14.27,1],[44.49,11.34,1],[44.41,12.2,1],[44.1,9.82,1],[44.91,8.61,1],[45.09,7.88,1],[43.4,13.55,1],[46.49,11.34,1],[45.44,10.99,1],[45.55,11.55,1],[49.19,-2.1,1],[42.87,74.59,1],[37.66,126.83,1],[43.25,76.91,1],[6.94,79.85,1],[7.21,79.84,1],[54.9,23.91,1],[55.93,23.32,1],[34.26,-6.58,1],[35.95,14.42,1],[3.94,73.49,1],[20.72,-103.39,1],[19.43,-99.13,1],[25.68,-100.26,1],[20.59,-100.39,1],[24.8,-107.39,1],[1.55,110.33,1],[9.06,7.5,1],[6.45,3.39,1],[52.78,6.91,1],[52.72,6.48,1],[52.37,5.21,1],[51.98,5.91,1],[52.14,5.58,1],[51.99,6.57,1],[52.29,5.97,1],[50.88,5.98,1],[51.44,5.48,1],[51.48,5.66,1],[51.56,5.09,1],[52.6,4.69,1],[52.22,5.07,1],[52.44,4.83,1],[52.48,6.57,1],[52.31,6.52,1],[52.13,4.66,1],[51.81,4.67,1],[51.84,4.64,1],[52.18,4.47,1],[52.03,5.56,1],[59.91,10.75,1],[63.43,10.4,1],[59.05,10.04,1],[27.7,85.32,1],[52.99,16.92,1],[52.41,16.93,1],[52.65,19.07,1],[49.97,20.57,1],[51.58,21.55,1],[54.39,18.41,1],[53.78,20.49,1],[52.92,14.87,1],[37.14,-8.54,1],[38.76,-9.25,1],[41.29,-8.34,1],[41.15,-8.61,1],[41.12,-8.61,1],[45.27,27.97,1],[44.43,26.11,1],[46.77,23.6,1],[44.81,20.42,1],[44.66,20.93,1],[44.77,20.53,1],[25.87,43.5,1],[24.69,46.72,1],[60.67,17.14,1],[58.41,15.62,1],[56.05,12.69,1],[62.39,17.31,1],[57.71,11.97,1],[1.33,103.93,1],[46.28,15.07,1],[46.25,15.16,1],[49.12,18.42,1],[39.92,32.85,1],[36.81,34.64,1],[25.05,121.53,1],[24.84,121.01,1],[50.45,30.52,1],[49.84,24.02,1],[0.32,32.58,1],[30.82,-88.07,1],[33.45,-86.79,1],[32.22,-110.93,1],[36.06,-94.16,1],[33.84,-117.87,1],[34.07,-117.31,1],[37.7,-121.94,1],[38.68,-121.18,1],[34.09,-117.44,1],[36.75,-119.77,1],[33.87,-117.93,1],[33.77,-117.94,1],[37.01,-121.57,1],[33.96,-118.35,1],[33.92,-118.01,1],[33.77,-118.19,1],[37.64,-121,1],[33.55,-117.21,1],[32.68,-117.1,1],[38.11,-122.57,1],[34.2,-119.18,1],[34.6,-118.23,1],[34.15,-118.14,1],[33.93,-117.41,1],[38.34,-122.7,1],[34.11,-117.81,1],[33.14,-117.17,1],[37.56,-122.33,1],[37.42,-122.17,1],[33.83,-118.31,1],[33.2,-117.24,1],[38.55,-122.82,1],[38.83,-104.82,1],[39.36,-104.6,1],[40.25,-103.8,1],[39.87,-104.97,1],[41.83,-72.73,1],[41.5,-72.9,1],[41.39,-73.45,1],[41.85,-72.64,1],[39.66,-75.56,1],[39.68,-75.75,1],[26.56,-81.95,1],[27.97,-82.8,1],[30.51,-87.21,1],[26.62,-81.84,1],[25.86,-80.28,1],[26.01,-80.15,1],[25.69,-80.16,1],[26.17,-80.21,1],[27.41,-82.66,1],[30.17,-81.84,1],[29.01,-82.18,1],[28.67,-81.21,1],[27.34,-82.53,1],[25.71,-80.29,1],[26.13,-80.11,1],[26.72,-80.12,1],[33.08,-83.23,1],[21.31,-157.86,1],[20.76,-156.45,1],[42.04,-88.28,1],[42.04,-87.69,1],[42.34,-88.04,1],[40.2,-88.4,1],[41.25,-87.83,1],[41.89,-87.8,1],[41.57,-87.78,1],[41.87,-88.11,1],[41.64,-87.45,1],[41.13,-85.13,1],[39.48,-86.06,1],[41.58,-87.5,1],[40.88,-85.5,1],[41.68,-86.25,1],[40,-86.35,1],[42.53,-92.45,1],[39.19,-96.42,1],[38.06,-84.46,1],[37.99,-84.18,1],[32.52,-92.15,1],[38.98,-77.1,1],[38.98,-76.94,1],[39.27,-76.8,1],[39.19,-76.72,1],[39.41,-76.46,1],[38.36,-75.6,1],[42.13,-71.04,1],[42.08,-71.02,1],[42.61,-71.57,1],[41.97,-71.19,1],[42.16,-70.79,1],[42.52,-70.9,1],[42.08,-72.03,1],[42.38,-71.24,1],[42.27,-71.62,1],[42.55,-71.17,1],[42.97,-85.95,1],[42.28,-83.74,1],[42.53,-83.78,1],[42.25,-84.4,1],[42.26,-85.61,1],[42.66,-83.15,1],[42.49,-83.14,1],[42.47,-83.22,1],[42.56,-83.11,1],[42.69,-83.41,1],[45.01,-93.46,1],[44.94,-93.09,1],[38.95,-92.33,1],[38.79,-90.32,1],[38.7,-90.36,1],[38.61,-90.46,1],[41.08,-96.13,1],[43.12,-71.51,1],[43.22,-71.71,1],[40.68,-74.65,1],[40.57,-74.54,1],[40.06,-74.14,1],[40.3,-74.05,1],[40.66,-74.21,1],[40.85,-73.97,1],[40.26,-74.27,1],[40.62,-74.24,1],[40.87,-74.21,1],[40.8,-74.31,1],[39.93,-74.89,1],[40.79,-74.92,1],[40.7,-73.91,1],[40.75,-74.26,1],[40.93,-74.28,1],[40.66,-74.35,1],[44.6,-75.17,1],[40.87,-73,1],[40.77,-73,1],[40.94,-73.11,1],[42.87,-76.98,1],[41.46,-73.67,1],[40.88,-72.94,1],[42.08,-78.43,1],[43.15,-77.62,1],[41.03,-73.76,1],[35.92,-79,1],[35.33,-81.87,1],[35.59,-77.35,1],[41.24,-81.84,1],[39.13,-84.51,1],[41.87,-80.77,1],[41.42,-81.92,1],[41.39,-82.02,1],[33.99,-96.37,1],[35.47,-97.52,1],[36.15,-95.99,1],[45.59,-121.18,1],[41.05,-76.23,1],[40.36,-80.11,1],[40.2,-77.19,1],[42.11,-79.95,1],[39.83,-77.23,1],[40.21,-77.01,1],[40.34,-75.93,1],[40.79,-77.86,1],[41.78,-71.44,1],[41.81,-71.37,1],[32.85,-79.97,1],[36.39,-86.45,1],[35.09,-89.81,1],[36.3,-86.62,1],[30.63,-96.33,1],[31.84,-106.54,1],[32.73,-97.32,1],[32.71,-97.01,1],[33.58,-101.86,1],[33.02,-96.74,1],[32.95,-96.71,1],[32.86,-97.36,1],[29.88,-97.94,1],[29.55,-98.27,1],[40.35,-111.9,1],[44.48,-73.21,1],[38.89,-77.43,1],[36.8,-78.46,1],[37.13,-80.41,1],[36.85,-76.29,1],[38.79,-77.19,1],[36.85,-75.98,1],[48.05,-122.18,1],[47.94,-122.3,1],[47.45,-122.29,1],[47.25,-122.44,1],[48.18,-122.52,1],[46.6,-120.51,1],[44.28,-88.4,1],[43.3,-87.99,1],[43.14,-87.94,1],[44.5,-87.98,1],[44.98,-110.7,1],[-34.9,-56.19,1],[10.82,106.63,1],[10.35,107.08,1],[-25.87,29.23,1],[-15.41,28.29,1]]
+const CITIES7 = [[41.85,-87.65,19],[40.73,-74,10],[-33.87,151.21,8],[47.5,19.92,7],[34.05,-118.29,6],[43.07,-89.37,6],[43.71,-79.4,5],[39.99,-83.05,5],[38.84,-77.43,5],[48.14,11.58,4],[48.85,2.35,4],[45.84,-119.7,4],[42.73,-87.81,4],[52.64,-1.13,3],[51.51,-0.13,3],[41.01,28.95,3],[41.94,-71.29,3],[38.61,-90.32,3],[40.9,-73.91,3],[39.95,-75.16,3],[41.43,-78.56,3],[47.61,-122.2,3],[48.21,16.37,2],[-37.81,144.96,2],[50.85,4.35,2],[46.49,-80.99,2],[50.09,14.42,2],[53.55,10,2],[51.22,6.78,2],[59.43,24.73,2],[53.54,-2.64,2],[55.83,-4.43,2],[47.5,19.04,2],[51.99,4.21,2],[38.41,27.14,2],[33.79,-117.85,2],[37.77,-122.42,2],[26.36,-80.08,2],[41.73,-87.83,2],[39.17,-86.53,2],[42.33,-83.05,2],[38.22,-90.4,2],[36.04,-78.88,2],[41.5,-81.7,2],[40.76,-111.89,2],[47.61,-122.33,2],[43.04,-87.91,2],[41.33,19.82,1],[-34.19,142.16,1],[-31.95,115.86,1],[50.85,3.31,1],[50.93,5.34,1],[51.19,5.12,1],[42.7,23.32,1],[32.31,-64.81,1],[-21.2,-41.89,1],[49.32,-123.07,1],[49.25,-123.12,1],[43.43,-80.51,1],[45.51,-73.59,1],[46.22,6.08,1],[46.36,8.95,1],[39.91,116.4,1],[49.59,18.01,1],[49.01,8.4,1],[49.45,11.08,1],[50.12,8.68,1],[52.27,10.53,1],[52.21,9.55,1],[50.93,6.95,1],[51.34,6.55,1],[51.96,7.63,1],[56.16,10.21,1],[56.24,9.54,1],[-2.9,-79,1],[41.36,2.1,1],[53.47,-3.02,1],[54.9,-2.94,1],[51.38,-0.1,1],[52.41,-1.78,1],[50.9,-1.4,1],[51.44,-0.73,1],[46.25,20.15,1],[28.46,77.03,1],[19.07,72.88,1],[45.46,9.19,1],[54.9,23.91,1],[54.69,25.28,1],[6.45,3.39,1],[52.78,6.91,1],[52.37,4.89,1],[52.16,5.39,1],[52.09,5.12,1],[-36.85,174.76,1],[54.39,18.41,1],[38.73,-9.15,1],[25.87,43.5,1],[46.56,15.65,1],[49.12,18.42,1],[48.47,35.04,1],[50.45,30.52,1],[33.45,-112.07,1],[33.84,-117.87,1],[33.16,-117.35,1],[33.92,-118.01,1],[33.55,-117.21,1],[34.2,-119.18,1],[33.64,-117.6,1],[33.93,-117.41,1],[38.58,-121.49,1],[32.72,-117.16,1],[37.34,-121.89,1],[37.56,-122.33,1],[37.39,-121.96,1],[34.03,-118.47,1],[38.55,-122.82,1],[38.83,-104.82,1],[39.74,-104.98,1],[41.39,-73.45,1],[26.01,-80.15,1],[27.41,-82.66,1],[33.75,-84.39,1],[33.08,-83.23,1],[20.76,-156.45,1],[41.88,-88.01,1],[41.87,-88.11,1],[39.48,-86.06,1],[39.77,-86.16,1],[40.43,-86.91,1],[40,-86.35,1],[38.98,-77.1,1],[39.19,-76.72,1],[42.13,-71.04,1],[42.36,-71.06,1],[42.34,-71.21,1],[42.55,-71.17,1],[42.97,-85.95,1],[42.47,-83.22,1],[42.56,-83.11,1],[44.84,-93.3,1],[45.01,-93.46,1],[40.73,-74.08,1],[35.08,-106.65,1],[40.73,-73.45,1],[42.08,-78.43,1],[35.28,-80.87,1],[35.59,-77.35,1],[35.25,-81.34,1],[36.1,-80.24,1],[39.51,-84.75,1],[45.52,-122.68,1],[40.36,-80.11,1],[40.2,-77.19,1],[42.11,-79.95,1],[40.44,-80,1],[41.82,-71.41,1],[30.24,-97.77,1],[32.44,-97.79,1],[29.76,-95.36,1],[29.45,-98.62,1],[44.48,-73.21,1],[38.88,-77.1,1],[36.8,-78.46,1],[36.85,-76.29,1],[47.94,-122.3,1],[47.25,-122.44,1],[43.3,-87.99,1],[42.98,-88.11,1],[-15.41,28.29,1]]
+
+/* ═══════════ helpers ═══════════ */
+const DAY = 864e5
+const d = (s) => Date.parse(s + 'T00:00:00Z')
+const fmt = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const $ = (id) => document.getElementById(id)
+const NS = 'http://www.w3.org/2000/svg'
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+const ease = (t) => 1 - Math.pow(1 - t, 3)
+const easeIO = (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const icon = (n, cls = 'ic') => `<svg class="${cls}"><use href="#i-${n}"/></svg>`
+const num = (v) => Math.round(v).toLocaleString('en-US')
+const defined = (v) => v !== null && v !== undefined
+const listWords = (xs) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1])
+function monotone(ys) {
+  const n = ys.length
+  if (n < 2) return () => ys[0]
+  const m = [], c1 = [], c2 = [], c3 = []
+  for (let i = 0; i < n - 1; i++) m.push(ys[i + 1] - ys[i])
+  c1.push(m[0])
+  for (let i = 1; i < n - 1; i++) c1.push(m[i - 1] * m[i] <= 0 ? 0 : (2 * m[i - 1] * m[i]) / (m[i - 1] + m[i]))
+  c1.push(m[n - 2])
+  for (let i = 0; i < n - 1; i++) { const k = c1[i] + c1[i + 1] - 2 * m[i]; c2.push(m[i] - c1[i] - k); c3.push(k) }
+  return (x) => { const i = Math.max(0, Math.min(n - 2, Math.floor(x))), t = x - i; return ys[i] + c1[i] * t + c2[i] * t * t + c3[i] * t * t * t }
+}
+function curveOf(vals) { const first = vals.findIndex(defined), f = monotone(vals.slice(first)); return (x) => (x < first - 1e-9 ? null : f(x - first)) }
+function niceStep(mx) { const raw = mx / 4, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => s >= raw) }
+
+/* ═══════════ the two pages ═══════════
+   `kind` decides sharing: numbers of the same kind share one real scale; mixing kinds puts each
+   line on 0..its own best, and the sentence above the chart says so. */
+const SEARCH = {
+  catalog: {
+    spot: { c: 'var(--c1)', icon: 'podium', lab: 'your spot', kind: 'rank', invert: true, show: (v) => '#' + v.toFixed(1), unit: "Where Skeen's site sits in Google when someone searches the name. #1 is the very top." },
+    seen: { c: 'var(--c2)', icon: 'eye', lab: 'seen a week', kind: 'week', show: num, unit: "How many times Google showed Skeen's site in results each week, AI answers included." },
+    page1: { c: 'var(--c3)', icon: 'search', lab: 'searches on page 1', kind: 'searches', show: num, unit: "How many different searches put Skeen's site on Google's first page." },
+    ai: { c: 'var(--c4)', icon: 'ai', lab: 'fans sent by AI', kind: 'ai', show: num, unit: 'Visits from links in ChatGPT, Perplexity and Gemini, counted over the last 4 weeks.' },
+    gclicks: { c: 'var(--c5)', icon: 'cursor', lab: 'clicks from Google a week', kind: 'week', show: num, unit: "People who clicked through from Google to Skeen's site each week." },
+  },
+  rail: ['spot', 'seen', 'page1', 'ai'], on: ['spot'],
+  periods: [['28d', '28d'], ['3m', '3m'], ['all', 'All']],
+  data: {
+    ex: {
+      '28d': { start: '2026-12-02', step: 2, spot: [1.6, 1.6, 1.55, 1.6, 1.5, 1.55, 1.5, 1.45, 1.5, 1.4, 1.45, 1.4, 1.35, 1.4], seen: [190, 195, 200, 205, 200, 210, 205, 210, 215, 210, 215, 220, 215, 215], page1: [12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14], ai: [3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8], gclicks: [28, 29, 30, 30, 31, 32, 31, 32, 33, 33, 34, 34, 34, 34] },
+      '3m': { start: '2026-10-06', step: 7, spot: [2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215], page1: [3, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 14], ai: [0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 8, 8], gclicks: [6, 7, 9, 10, 14, 16, 19, 22, 25, 28, 30, 32, 34] },
+      'all': { start: '2026-09-29', step: 7, spot: [2.6, 2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [38, 40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215], page1: [3, 3, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 14], ai: [0, 0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 8, 8], gclicks: [6, 6, 7, 9, 10, 14, 16, 19, 22, 25, 28, 30, 32, 34] },
+    },
+    real: { start: '2026-09-29', step: 1, spot: [2.26, 2.27, 2.52, 2.77, 3.38, 2.91, 2.58], seen: [23, 15, 23, 30, 16, 22, 12], page1: [3, 2, 2, 2, 3, 2, 2], ai: [0, 0, 0, 0, 0, 0, 0], gclicks: [6, 5, 4, 2, 4, 2, 2], wipFrom: 5 },
+  },
+  pins: {
+    ex: [
+      { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', k: 'spot', a: '', b: 'counting starts' },
+      { date: '2026-10-08', icon: 'reply', title: 'Answered 6 fan questions', k: 'spot', a: '#2.6', b: '#2.3' },
+      { date: '2026-10-27', icon: 'note', title: 'Added press quotes', k: 'seen', a: '70', b: '110 a week' },
+      { date: '2026-11-17', icon: 'links', title: 'Linked from Spotify and SoundCloud', k: 'page1', a: '9', b: '11 on page 1' },
+      { date: '2026-12-01', icon: 'google', auto: true, title: 'Sitemap sent after new tour dates', k: 'seen', a: '165', b: '200 a week' },
+    ],
+    real: [
+      { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', k: 'spot', a: '', b: 'counting starts' },
+      { date: '2026-09-30', icon: 'bing', auto: true, title: 'Added to Bing, sitemap sent', k: 'spot', a: 'too early', b: 'Oct 14' },
+    ],
+  },
+  tiles: {
+    ex: { '28d': { spot: ['#1.4', '↑ 0.2'], seen: ['215', '+25'], page1: ['14', '+2'], ai: ['8', '+5'], gclicks: ['34', '+6'] }, '3m': { spot: ['#1.4', '↑ 1.3'], seen: ['215', '+175'], page1: ['14', '+11'], ai: ['8', '+8'], gclicks: ['34', '+28'] }, 'all': { spot: ['#1.4', '↑ 1.2'], seen: ['215', '+177'], page1: ['14', '+11'], ai: ['8', '+8'], gclicks: ['34', '+28'] } },
+    real: { spot: ['#2.5', ''], seen: ['140', ''], page1: ['3', ''], ai: ['0', ''], gclicks: ['25', ''] },
+  },
+  verdict: (S) => S.data === 'real' ? { wait: true, icon: 'clock', t: 'Too early to tell', s: 'Google started counting Sep 29. Back on Oct 27.' } : { icon: 'check', t: 'Climbing on Google', s: 'Higher, more often, for more searches' },
+}
+
+const A30 = {
+  start: '2026-09-07', step: 1, wipFrom: 29,
+  views: [14, 14, 98, 106, 136, 121, 253, 225, 230, 198, 176, 116, 82, 119, 94, 91, 75, 98, 51, 52, 53, 52, 62, 40, 39, 40, 36, 26, 43, 62],
+  visitors: [null, null, null, null, null, 13, 219, 192, 187, 175, 154, 110, 75, 100, 89, 82, 65, 74, 50, 46, 49, 46, 49, 34, 36, 38, 31, 23, 40, 56],
+  plays: [2, 1, 5, 13, 11, 14, 10, 16, 17, 20, 10, 9, 11, 12, 2, 6, 7, 7, 2, 0, 3, 4, 0, 0, 1, 2, 2, 0, 2, 1],
+  clicks: [1, 0, 7, 6, 5, 17, 84, 81, 83, 71, 72, 39, 26, 47, 29, 24, 21, 41, 21, 13, 19, 10, 22, 11, 9, 13, 10, 11, 13, 40],
+  bots: [null, null, null, null, null, 2, 0, 4, 2, 3, 15, 1, 0, 5, 1, 1, 1, 6, 0, 1, 0, 32, 0, 5, 2, 0, 1, 0, 0, 0],
+}
+const lastN = (D, n) => { const o = { start: new Date(d(D.start) + (D.views.length - n) * DAY).toISOString().slice(0, 10), step: 1, wipFrom: n - 1 }; for (const k of ['views', 'visitors', 'plays', 'clicks', 'bots']) o[k] = D[k].slice(-n); return o }
+const ANALYTICS = {
+  catalog: {
+    views: { c: 'var(--c1)', icon: 'eye', lab: 'views', kind: 'day', show: num, unit: 'Every time someone landed on skeenmusic.com, per day. Robots are left out.' },
+    visitors: { c: 'var(--c2)', icon: 'user', lab: 'visitors', kind: 'day', show: num, unit: 'Different people per day. Someone who comes back the next day counts again.' },
+    plays: { c: 'var(--c3)', icon: 'music', lab: 'song plays', kind: 'day', show: num, unit: 'Songs played on the site, per day.' },
+    clicks: { c: 'var(--c4)', icon: 'cursor', lab: 'link clicks', kind: 'day', show: num, unit: 'Taps on links that leave the site (Spotify, tickets, socials), per day.' },
+    bots: { c: 'var(--c5)', icon: 'robot', lab: 'robots left out', kind: 'day', show: num, unit: 'Visits from robots and crawlers we spotted and kept out of every number, per day.' },
+  },
+  rail: ['views', 'visitors', 'plays', 'clicks'], on: ['views', 'visitors'],
+  periods: [['7d', '7d'], ['30d', '30d']],
+  data: { '30d': A30, '7d': lastN(A30, 7) },
+  pins: [
+    { date: '2026-09-12', icon: 'user', auto: true, title: 'Visitors and sources counted from here', k: 'visitors', a: '', b: 'new counting' },
+    { date: '2026-09-13', icon: 'instagram', auto: true, title: 'Busiest day: 253 views', k: 'views', a: '', b: '145 came from Instagram' },
+    { date: '2026-09-28', icon: 'robot', auto: true, title: '32 robot visits left out', k: 'bots', a: '', b: 'not counted' },
+    { date: '2026-10-05', icon: 'eye', auto: true, title: 'Views now count only when the page is seen', k: 'views', a: '', b: 'a few % lower from here' },
+  ],
+  tiles: {
+    '30d': { views: ['2,801', '+225%'], visitors: ['2,033', ''], plays: ['190', ''], clicks: ['846', ''], bots: ['82', ''] },
+    '7d': { views: ['286', ''], visitors: ['258', ''], plays: ['8', ''], clicks: ['107', ''], bots: ['8', ''] },
+  },
+  verdict: (S) => S.period === '7d' ? { icon: 'trend', t: '286 views this week', s: 'Busiest day is today, with 62 so far' } : { icon: 'trend', t: '2,801 views in 30 days', s: 'Up 225% on the month before. Busiest day Sep 13.' },
+}
+
+/* ═══════════ state ═══════════ */
+const S = { page: 'search', data: 'ex', period: '3m', railOf: { search: [...SEARCH.rail], analytics: [...ANALYTICS.rail] }, onOf: { search: [...SEARCH.on], analytics: [...ANALYTICS.on] } }
+const P = () => (S.page === 'search' ? SEARCH : ANALYTICS)
+const C = (k) => P().catalog[k]
+const rail = () => S.railOf[S.page]
+const on = () => rail().filter((k) => S.onOf[S.page].includes(k))
+const ALL = () => Object.keys(P().catalog)
+const ds = () => (S.page === 'search' ? (S.data === 'real' ? SEARCH.data.real : SEARCH.data.ex[S.period]) : ANALYTICS.data[S.period])
+const len = () => ds()[ALL()[0]].length
+function mode() { const o = on(); if (!o.length) return 'none'; if (o.length === 1) return 'single'; return o.every((k) => C(k).kind === C(o[0]).kind) ? 'shared' : 'progress' }
+function pins() {
+  const D = ds(), t0 = d(D.start), t1 = t0 + (len() - 1) * D.step * DAY
+  const list = S.page === 'search' ? SEARCH.pins[S.data] : ANALYTICS.pins.filter((p) => on().includes(p.k))
+  return list.filter((p) => d(p.date) >= t0 && d(p.date) <= t1)
+}
+
+/* ═══════════ geometry ═══════════ */
+const W = 860, H = 380, L = 56, R = 64, T = 54, B = 44, PH = H - T - B, N = 160
+const X = (u) => L + u * (W - L - R)
+function scaleFor(k) {
+  const D = ds(), m = mode()
+  if (C(k).invert) {
+    const v = D[k].filter(defined), hi = Math.max(3, Math.ceil(Math.max(...v) + .25))
+    return { y: (r) => T + ((r - 1) / (hi - 1)) * PH, ticks: m === 'single' ? Array.from({ length: hi }, (_, i) => ({ v: i + 1, lab: '#' + (i + 1), solid: i === hi - 1 })) : [] }
+  }
+  if (m === 'progress') { const mx = Math.max(...D[k].filter(defined), 0); return { y: (val) => T + (1 - (mx ? val / mx : 0)) * PH, ticks: [] } }
+  const pool = m === 'shared' ? on().flatMap((j) => D[j].filter(defined)) : D[k].filter(defined)
+  const mx = Math.max(...pool, 0), step = niceStep(Math.max(mx, 2)), top = Math.max(step * Math.ceil(mx / step), step)
+  const ticks = []
+  for (let t = 0; t <= top + 1e-9; t += step) ticks.push({ v: t, lab: num(t), solid: t === 0 })
+  return { y: (val) => T + (1 - val / top) * PH, ticks }
+}
+const pix = {}
+function targetPix(k) { const D = ds(), f = curveOf(D[k]), sc = scaleFor(k), n = D[k].length; return Array.from({ length: N + 1 }, (_, i) => { const v = f((i / N) * (n - 1)); return v === null ? null : sc.y(v) }) }
+function pathOf(p, from = 0) { let out = '', pen = false; for (let i = from; i < p.length; i++) { if (p[i] === null) { pen = false; continue } out += `${pen ? 'L' : 'M'}${X(i / N).toFixed(1)},${p[i].toFixed(1)}`; pen = true } return out }
+
+/* ═══════════ svg ═══════════ */
+const svg = $('chart')
+let scrubDots = {}
+function buildSvg() {
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--cur)" stop-opacity=".18"/><stop offset="1" style="stop-color:var(--cur)" stop-opacity="0"/></linearGradient>
+      <clipPath id="reveal"><rect id="revealr" x="0" y="0" width="0" height="${H}"/></clipPath>
+      <clipPath id="solid"><rect id="solidr" x="0" y="0" width="${W}" height="${H}"/></clipPath>
+    </defs>
+    <g id="axes"></g><g id="dates"></g>
+    <rect id="band" y="${T - 10}" height="${PH + 10}" style="fill:var(--cur)" opacity="0" rx="10"/>
+    <g clip-path="url(#reveal)"><path id="areap" fill="url(#area)"/></g>
+    ${ALL().map((k) => `<g id="g-${k}" style="opacity:0"><path id="wip-${k}" fill="none" style="stroke:${C(k).c}" stroke-width="2.6" stroke-dasharray="1 7" stroke-linecap="round" opacity="0"/><path id="ln-${k}" clip-path="url(#solid)" fill="none" style="stroke:${C(k).c}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>`).join('')}
+    <g id="dots"></g>
+    <g class="scrub" id="scrubg"><line id="sl" y1="${T - 16}" y2="${H - B}" stroke="#111" stroke-opacity=".18"/></g>
+    <g id="ends"></g><g id="pinsg"></g>`
+  scrubDots = {}
+  for (const k of ALL()) { const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 5); c.setAttribute('fill', '#fff'); c.setAttribute('style', `stroke:${C(k).c}`); c.setAttribute('stroke-width', 2.5); $('scrubg').appendChild(c); scrubDots[k] = c }
+}
+const xWip = () => { const D = ds(); return D.wipFrom === undefined ? W : X((D.wipFrom - 1) / (len() - 1)) }
+function drawAxes(animate) {
+  const g = document.createElementNS(NS, 'g'), m = mode()
+  if (m === 'progress') {
+    g.innerHTML = [0, .5, 1].map((p) => `<line x1="${L}" x2="${W - R + 30}" y1="${T + p * PH}" y2="${T + p * PH}" stroke="var(--line)" ${p === 1 ? '' : 'stroke-dasharray="2 6"'}/>`).join('') + `<text class="ax" x="${L - 14}" y="${T + 4}" text-anchor="end">best</text><text class="ax" x="${L - 14}" y="${T + PH + 4}" text-anchor="end">0</text>`
+  } else if (m !== 'none') {
+    const sc = scaleFor(on()[0])
+    g.innerHTML = sc.ticks.map((t) => `<line x1="${L}" x2="${W - R + 30}" y1="${sc.y(t.v)}" y2="${sc.y(t.v)}" stroke="var(--line)" ${t.solid ? '' : 'stroke-dasharray="2 6"'}/><text class="ax" x="${L - 14}" y="${sc.y(t.v) + 4}" text-anchor="end">${t.lab}</text>`).join('')
+  } else g.innerHTML = `<line x1="${L}" x2="${W - R + 30}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/>`
+  const box = $('axes'), old = [...box.children]
+  box.appendChild(g)
+  if (animate && !reduce) { g.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.22,.8,.24,1)' }); old.forEach((o) => o.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(() => o.remove())) }
+  else old.forEach((o) => o.remove())
+}
+function drawDates(animate) {
+  const D = ds(), g = $('dates'), n = len(); g.innerHTML = ''
+  const every = n > 20 ? 6 : n > 10 ? 3 : 1, at = []
+  for (let i = 0; i < n; i += every) at.push(i)
+  if (at[at.length - 1] !== n - 1) { if (n - 1 - at[at.length - 1] < every / 2) at.pop(); at.push(n - 1) }
+  for (const i of at) {
+    const t = document.createElementNS(NS, 'text')
+    t.setAttribute('class', 'ax'); t.setAttribute('x', X(i / (n - 1))); t.setAttribute('y', H - 12); t.setAttribute('text-anchor', 'middle')
+    t.textContent = fmt(d(D.start) + i * D.step * DAY)
+    if (animate && !reduce) t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 120 + i * 12, fill: 'backwards' })
+    g.appendChild(t)
+  }
+}
+function renderLines() {
+  const xw = xWip(), k0 = Math.round(((xw - L) / (W - L - R)) * N)
+  $('solidr').setAttribute('width', xw + 1.5)
+  for (const k of ALL()) {
+    if (!pix[k]) continue
+    $('ln-' + k).setAttribute('d', pathOf(pix[k]))
+    const w = $('wip-' + k)
+    if (xw < W) { w.setAttribute('d', pathOf(pix[k], k0)); w.setAttribute('opacity', 1) } else w.setAttribute('opacity', 0)
+  }
+  const o = on()
+  if (mode() === 'single' && pix[o[0]]) { const p = pix[o[0]], first = p.findIndex(defined); $('areap').setAttribute('d', pathOf(p) + `L${X(1)},${H - B}L${X(first / N)},${H - B}Z`) }
+}
+function setColor() { const o = on(); $('chartwrap').style.setProperty('--cur', mode() === 'single' ? getComputedStyle(document.documentElement).getPropertyValue(C(o[0]).c.slice(4, -1)).trim() : '#111111') }
+function fadeGroups(animate) {
+  for (const k of ALL()) { const g = $('g-' + k); g.style.transition = animate && !reduce ? 'opacity .4s' : 'none'; g.style.opacity = on().includes(k) ? 1 : 0 }
+  $('areap').style.transition = 'opacity .4s'; $('areap').style.opacity = mode() === 'single' ? 1 : 0
+  $('chartwrap').classList.toggle('none-on', mode() === 'none')
+}
+function dots(animate) {
+  const D = ds(), g = $('dots'); g.innerHTML = ''
+  if (mode() !== 'single') return
+  const k = on()[0], sc = scaleFor(k), n = len()
+  D[k].forEach((v, i) => {
+    if (!defined(v)) return
+    const c = document.createElementNS(NS, 'circle'), wip = D.wipFrom !== undefined && i >= D.wipFrom
+    c.setAttribute('cx', X(i / (n - 1))); c.setAttribute('cy', sc.y(v)); c.setAttribute('r', n > 20 ? 2.4 : 3.2)
+    c.setAttribute('style', `fill:${wip ? '#fff' : C(k).c};stroke:${C(k).c}`); c.setAttribute('stroke-width', wip ? 1.5 : 0)
+    if (animate && !reduce) c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: i * 12, fill: 'backwards' })
+    g.appendChild(c)
+  })
+}
+const avatarSvg = (k) => `<circle class="pulse" r="18" fill="none" style="stroke:${C(k).c}" stroke-width="1.5" opacity="0"/><circle r="17" fill="#111"/><circle r="17" fill="none" stroke="#fff" stroke-width="2.5"/><text text-anchor="middle" y="5" font-family="Instrument Sans" font-weight="600" font-size="14" fill="#fff">S</text>`
+/* The lead line ends in Skeen, climbing it; every other line on ends in a labelled chip, nudged so
+   none collide. The numbers on the right are the legend, so a line is never colour alone. */
+function ends(animate) {
+  const D = ds(), g = $('ends'), o = on(); g.innerHTML = ''
+  if (!o.length) return
+  const items = o.slice(1).map((k) => ({ k, y: pix[k][N], v: D[k][D[k].length - 1] }))
+  items.sort((a, b) => a.y - b.y)
+  for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 24) items[i].y = items[i - 1].y + 24
+  for (let i = items.length - 1; i >= 0; i--) { const cap = i === items.length - 1 ? H - B - 6 : items[i + 1].y - 24; if (items[i].y > cap) items[i].y = cap }
+  items.forEach(({ k, y, v }) => {
+    const el = document.createElementNS(NS, 'g'), label = C(k).show(v), w = 18 + label.length * 8.2
+    el.innerHTML = `<rect x="24" y="-11" width="${w}" height="22" rx="11" fill="#fff" stroke="var(--line)"/><circle cx="35" cy="0" r="4" style="fill:${C(k).c}"/><text x="44" y="4" font-family="Space Mono" font-weight="700" font-size="12" fill="#111">${label}</text><circle r="4.5" fill="#fff" style="stroke:${C(k).c}" stroke-width="2.5" cy="${pix[k][N] - y}"/>`
+    el.setAttribute('transform', `translate(${X(1)},${y})`)
+    if (animate && !reduce) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+    g.appendChild(el)
+  })
+  const me = document.createElementNS(NS, 'g'); me.id = 'me'; me.innerHTML = avatarSvg(o[0]); me.setAttribute('transform', `translate(${X(1)},${pix[o[0]][N]})`)
+  if (animate && !reduce) me.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+  g.appendChild(me)
+}
+function pulse() { const p = document.querySelector('#me .pulse'); if (p && !reduce) p.animate([{ opacity: .6, r: 17 }, { opacity: 0, r: 34 }], { duration: 1600, easing: 'ease-out', iterations: 2 }) }
+
+let pinEls = []
+function drawPins(hidden) {
+  const D = ds(), g = $('pinsg'), t0 = d(D.start), span = (len() - 1) * D.step * DAY, lead = on()[0]; g.innerHTML = ''
+  if (!lead) { pinEls = []; return }
+  let lastBx = -1e9
+  pinEls = pins().map((p) => {
+    const u = (d(p.date) - t0) / span, x = X(u), top = T - 28, bx = Math.max(x, lastBx + 34); lastBx = bx
+    const tk = on().includes(p.k) ? p.k : lead, py = pix[tk] ? pix[tk][Math.round(u * N)] : null
+    const yLine = defined(py) ? py : H - B
+    const el = document.createElementNS(NS, 'g')
+    el.setAttribute('class', 'pin'); el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', p.title)
+    el.setAttribute('transform', `translate(${bx},${top})`)
+    el.innerHTML = `<line x1="0" x2="${x - bx}" y1="15" y2="${yLine - top - 6}" stroke="#111" stroke-opacity=".2" stroke-dasharray="2 3"/>
+      ${defined(py) ? `<circle cx="${x - bx}" cy="${yLine - top}" r="4.5" fill="#fff" stroke="#111" stroke-width="1.5"/>` : ''}
+      <g class="bub"><circle r="15" fill="${p.auto ? '#fff' : '#111'}" stroke="#111" stroke-width="1.5"/>
+      <svg x="-8" y="-8" width="16" height="16" viewBox="0 0 24 24" style="color:${p.auto ? '#111' : '#fff'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${p.icon}"/></svg></g>`
+    g.appendChild(el)
+    const show = () => card(p, bx, top, u)
+    el.addEventListener('mouseenter', show); el.addEventListener('focus', show)
+    el.addEventListener('mouseleave', hideCard); el.addEventListener('blur', hideCard)
+    if (hidden) el.style.opacity = 0
+    return { el, x: bx }
+  })
+}
+function popPin(p) { p.el.style.opacity = 1; if (reduce) return; p.el.querySelector('.bub').animate([{ transform: 'scale(0)' }, { transform: 'scale(1.18)', offset: .6 }, { transform: 'scale(1)' }], { duration: 520, easing: 'cubic-bezier(.3,1.4,.5,1)' }); p.el.querySelector('line').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 }) }
+function card(p, x, y, u) {
+  const c = $('card'), w = $('chartwrap'), s = w.clientWidth / W
+  c.innerHTML = `<div class="h"><span class="ci ${p.auto ? 'auto' : ''}">${icon(p.icon)}</span>${p.title}</div><div class="when">${fmt(d(p.date))}${p.auto && S.page === 'search' ? ' · done for you' : ''}</div><div class="move"><i style="background:${C(p.k).c}"></i>${p.a ? `<span class="a">${p.a}</span><span class="a">→</span>` : ''}<span class="b">${p.b}</span></div>`
+  c.style.left = Math.min(Math.max(x * s, 150), w.clientWidth - 150) + 'px'; c.style.top = y * s + 'px'; c.classList.add('show')
+  if (S.page === 'search') { const D = ds(), span = (len() - 1) * D.step, bw = Math.min(14 / span, 1 - u) * (W - L - R), band = $('band'); band.setAttribute('x', x); band.setAttribute('width', Math.max(bw, 0)); band.animate([{ opacity: 0 }, { opacity: .07 }], { duration: 250, fill: 'forwards' }) }
+}
+function hideCard() { $('card').classList.remove('show'); $('band').animate([{ opacity: .07 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }) }
+
+/* ═══════════ motion ═══════════ */
+function intro() {
+  buildSvg()
+  for (const k of ALL()) pix[k] = targetPix(k)
+  setColor(); fadeGroups(false); drawAxes(true); drawDates(true); renderLines()
+  $('dots').innerHTML = ''; $('ends').innerHTML = ''; drawPins(true)
+  const o = on()
+  if (!o.length) return
+  const lines = o.map((k) => $('ln-' + k)), lens = lines.map((l) => l.getTotalLength())
+  if (reduce) { $('revealr').setAttribute('width', W); pinEls.forEach(popPin); dots(false); ends(false); return }
+  lines.forEach((l, i) => { l.style.strokeDasharray = lens[i]; l.style.strokeDashoffset = lens[i] })
+  const start = performance.now() + 300, dur = 1700, popped = new Set(), lead = lines[0]
+  const ghost = document.createElementNS(NS, 'g'); ghost.innerHTML = avatarSvg(o[0]); $('ends').appendChild(ghost)
+  const step = (now) => {
+    const e = ease(Math.min(1, Math.max(0, (now - start) / dur)))
+    lines.forEach((l, i) => (l.style.strokeDashoffset = lens[i] * (1 - ease(Math.min(1, Math.max(0, (now - start - i * 90) / dur))))))
+    const pt = lead.getPointAtLength(lens[0] * e)
+    ghost.setAttribute('transform', `translate(${pt.x},${pt.y})`); $('revealr').setAttribute('width', pt.x)
+    pinEls.forEach((p, i) => { if (!popped.has(i) && pt.x >= p.x - 4) { popped.add(i); popPin(p) } })
+    if (now - start < dur + lines.length * 90) requestAnimationFrame(step)
+    else { lines.forEach((l) => (l.style.strokeDasharray = 'none')); ghost.remove(); dots(true); ends(false); pulse() }
+  }
+  requestAnimationFrame(step)
+}
+/* Any change MORPHS: lines that stay bend to the new scale, lines turning on rise from the floor,
+   lines turning off fade. The colour and the axis follow. */
+let morphing = 0, wasOn = []
+function morph({ dates = false } = {}) {
+  const id = ++morphing, from = {}, to = {}
+  for (const k of ALL()) { to[k] = targetPix(k); from[k] = wasOn.includes(k) && pix[k] ? pix[k].slice() : to[k].map((v) => (v === null ? null : H - B)) }
+  setColor(); fadeGroups(true); drawAxes(true); if (dates) drawDates(true)
+  $('dots').innerHTML = ''; $('ends').innerHTML = ''; $('pinsg').innerHTML = ''; $('revealr').setAttribute('width', W)
+  const start = performance.now(), dur = reduce ? 1 : 760
+  const step = (now) => {
+    if (id !== morphing) return
+    const e = easeIO(Math.min(1, (now - start) / dur))
+    for (const k of ALL()) pix[k] = to[k].map((v, i) => (v === null ? null : !defined(from[k][i]) ? v : from[k][i] + (v - from[k][i]) * e))
+    renderLines()
+    if (now - start < dur) requestAnimationFrame(step)
+    else { dots(true); ends(true); drawPins(true); pinEls.forEach((p, i) => setTimeout(() => popPin(p), 50 * i)); pulse(); wasOn = on() }
+  }
+  requestAnimationFrame(step)
+}
+const wrap = $('chartwrap')
+wrap.addEventListener('pointermove', (ev) => {
+  if (ev.target.closest('.pin') || !on().length) { wrap.classList.remove('scrubbing'); return }
+  const D = ds(), n = len(), rect = svg.getBoundingClientRect(), s = rect.width / W, vx = (ev.clientX - rect.left) / s
+  if (vx < L - 10 || vx > W - R + 14) { wrap.classList.remove('scrubbing'); return }
+  const i = Math.max(0, Math.min(n - 1, Math.round(((vx - L) / (W - L - R)) * (n - 1)))), x = X(i / (n - 1))
+  $('sl').setAttribute('x1', x); $('sl').setAttribute('x2', x)
+  let topY = H
+  for (const k of ALL()) {
+    const v = D[k][i], vis = on().includes(k) && defined(v)
+    scrubDots[k].style.display = vis ? '' : 'none'
+    if (!vis) continue
+    const y = scaleFor(k).y(v); scrubDots[k].setAttribute('cx', x); scrubDots[k].setAttribute('cy', y); topY = Math.min(topY, y)
+  }
+  const date = fmt(d(D.start) + i * D.step * DAY) + (D.wipFrom !== undefined && i >= D.wipFrom ? ' · still counting' : '')
+  $('scrubtip').innerHTML = `<div class="row"><span class="dt">${date}</span></div>` + on().map((k) => `<div class="row"><i style="background:${C(k).c}"></i><b>${defined(D[k][i]) ? C(k).show(D[k][i]) : '–'}</b><span>${C(k).lab}</span></div>`).join('')
+  if (topY === H) topY = H - B
+  $('scrubtip').style.left = x * s + 'px'; $('scrubtip').style.top = topY * s + 'px'
+  wrap.classList.add('scrubbing')
+})
+wrap.addEventListener('pointerleave', () => wrap.classList.remove('scrubbing'))
+
+/* ═══════════ the numbers on the right ═══════════ */
+function countUp(el, text, delay) {
+  const m = text.match(/^(\D*)([\d.,]+)(.*)$/)
+  if (!m || reduce) { el.textContent = text; return }
+  const [, pre, raw, post] = m, target = parseFloat(raw.replace(/,/g, '')), dec = (raw.split('.')[1] || '').length, commas = raw.includes(',')
+  const from = pre === '#' ? target + 1.5 : 0, start = performance.now() + delay, dur = 1300
+  const show = (v) => (commas ? Math.round(v).toLocaleString('en-US') : v.toFixed(dec))
+  const step = (now) => { const t = Math.min(1, Math.max(0, (now - start) / dur)); el.textContent = pre + show(from + (target - from) * ease(t)) + post; if (t < 1) requestAnimationFrame(step) }
+  requestAnimationFrame(step)
+}
+const tileVals = () => (S.page === 'search' ? (S.data === 'real' ? SEARCH.tiles.real : SEARCH.tiles.ex[S.period]) : ANALYTICS.tiles[S.period])
+function drawRail(animate) {
+  const vals = tileVals()
+  $('rail').innerHTML = rail().map((k) => `
+    <button class="metric ${on().includes(k) ? 'on' : ''}" data-k="${k}" aria-pressed="${on().includes(k)}" style="--mc:${C(k).c}">
+      <span class="mi">${icon(C(k).icon)}</span>
+      <span><span class="val"><span class="n" data-v="${vals[k][0]}"></span>${vals[k][1] ? `<span class="d">${vals[k][1]}</span>` : ''}</span><span class="lab">${C(k).lab}</span></span>
+    </button>`).join('') +
+    `<button class="choose" id="choose" aria-expanded="false">${icon('sliders')}Choose numbers</button>
+     <div class="pop" id="pop">${ALL().map((k) => `<button data-c="${k}" class="${rail().includes(k) ? 'in' : ''}" style="--mc:${C(k).c}"><span class="pi">${icon(C(k).icon)}</span>${C(k).lab}<span class="ck">${icon('tick')}</span></button>`).join('')}</div>`
+  $('rail').querySelectorAll('.metric').forEach((b, i) => {
+    countUp(b.querySelector('.n'), b.querySelector('.n').dataset.v, animate ? 300 + i * 90 : 0)
+    if (animate && !reduce) b.animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, delay: 150 + i * 70, easing: 'cubic-bezier(.22,.8,.24,1)', fill: 'backwards' })
+    b.addEventListener('click', () => toggle(b.dataset.k))
+  })
+  $('choose').addEventListener('click', (e) => { e.stopPropagation(); const p = $('pop'), open = !p.classList.contains('show'); p.classList.toggle('show', open); $('choose').setAttribute('aria-expanded', open) })
+  $('pop').querySelectorAll('button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); pickMetric(b.dataset.c) }))
+}
+document.addEventListener('click', () => $('pop') && $('pop').classList.remove('show'))
+function unitLine() {
+  const o = on(), m = mode(), u = $('unit')
+  u.textContent = m === 'none' ? 'Nothing on the chart.' : m === 'single' ? C(o[0]).unit
+    : m === 'shared' ? `${listWords(o.map((k) => C(k).lab))[0].toUpperCase() + listWords(o.map((k) => C(k).lab)).slice(1)}, on one scale. Hover for the numbers.`
+    : 'Different kinds of numbers, so each line runs from 0 to its own best. Hover for the numbers.'
+  u.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: reduce ? 1 : 350, easing: 'cubic-bezier(.22,.8,.24,1)' })
+}
+function toggle(k) {
+  wasOn = on()
+  const set = S.onOf[S.page]
+  if (set.includes(k)) set.splice(set.indexOf(k), 1); else set.push(k)
+  $('rail').querySelectorAll('.metric').forEach((b) => { const is = on().includes(b.dataset.k); b.classList.toggle('on', is); b.setAttribute('aria-pressed', is) })
+  unitLine(); morph()
+}
+function pickMetric(k) {
+  const r = S.railOf[S.page]
+  if (r.includes(k)) { if (r.length === 1) return; r.splice(r.indexOf(k), 1); const set = S.onOf[S.page]; if (set.includes(k)) { wasOn = on(); set.splice(set.indexOf(k), 1); morph() } }
+  else { r.push(k); r.sort((a, b) => ALL().indexOf(a) - ALL().indexOf(b)) }
+  drawRail(false); $('pop').classList.add('show'); unitLine()
+}
+
+/* ═══════════ top ═══════════ */
+function verdict() { const v = P().verdict(S), b = $('badge'); b.classList.toggle('wait', !!v.wait); b.classList.remove('go'); $('badge-ic').innerHTML = `<use href="#i-${v.icon}"/>`; $('vt').textContent = v.t; $('vs').textContent = v.s; if (v.icon === 'check') { void b.offsetWidth; setTimeout(() => b.classList.add('go'), reduce ? 0 : 1900) } }
+function periods() {
+  $('periods').innerHTML = P().periods.map(([k, lab]) => `<button data-p="${k}" class="${S.period === k ? 'on' : ''}">${lab}</button>`).join('') + '<span class="uline" id="puline"></span>'
+  $('periods').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setPeriod(b.dataset.p)))
+  requestAnimationFrame(movePul)
+}
+function movePul() { const o = $('periods').querySelector('button.on'), u = $('puline'); if (o && u) { u.style.left = o.offsetLeft + 'px'; u.style.width = o.offsetWidth + 'px' } }
+function setPeriod(p) {
+  if (p === S.period || (S.page === 'search' && S.data === 'real')) return
+  wasOn = on(); S.period = p
+  $('periods').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.p === p)); movePul()
+  drawRail(false); verdict(); lower(); morph({ dates: true })
+}
+
+/* ═══════════ below the chart ═══════════ */
+function lower() {
+  const box = $('lower')
+  if (S.page === 'search') {
+    const k = S.data === 'real' ? 'real' : 'ex'
+    const SR = { ex: [['skeen dj', [2.6, 2.4, 2.1, 1.8, 1.6, 1.4, 1.3], '#1.3', '↑ 1.3'], ['chicago house dj', [9.8, 8.6, 7.9, 7.2], '#7.2', 'new'], ['skeen rushing back remix', [2.4, 2.1, 1.9, 1.8], '#1.8', 'new'], ['dj skeen', [2.4, 2.2, 1.9, 1.7, 1.5], '#1.5', '↑ 0.9']], real: [['skeen dj', [2.6, 2.8], '#2.6', ''], ['dj skeen', [2.5, 2.3], '#2.4', ''], ['skeen music', [2.3, 1.5], '#2.0', '']] }[k]
+    const AI = { ex: [['ChatGPT', 6], ['Perplexity', 2], ['Gemini', 0]], real: [['ChatGPT', 0], ['Perplexity', 0], ['Gemini', 0]] }[k], amax = Math.max(1, ...AI.map((a) => a[1]))
+    box.innerHTML = `<div class="sec two">
+      <div><div class="sec-h">${icon('search')}What people searched</div>${SR.map(([q, tr, rk, mv]) => { const mn = Math.min(...tr, 1), mx = Math.max(...tr) + .2, pts = tr.map((v, i) => `${(i / Math.max(1, tr.length - 1)) * 80 + 2},${((v - mn) / (mx - mn)) * 16 + 3}`).join(' '); return `<div class="srch"><span>${q}</span><svg class="spark" viewBox="0 0 84 22"><polyline points="${pts}" fill="none" style="stroke:var(--c1)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rk">${rk}</span><span class="mv ${mv === 'new' ? 'newb' : !mv ? 'flat' : ''}">${mv || '–'}</span></div>` }).join('')}</div>
+      <div><div class="sec-h">${icon('ai')}Fans sent by AI</div>${AI.map(([n, v]) => `<div class="row"><span class="nm">${n}</span><span class="meter"><i data-w="${v / amax}"></i></span><span class="v">${v}</span></div>`).join('')}</div></div>`
+    grow(); return
+  }
+  const wk = S.period === '7d'
+  // Skeen's real numbers: Sep 7 to Oct 6, and the last 7 days (Sep 30 to Oct 6)
+  const SRC = wk ? [['Instagram', 'instagram', 36], ['YouTube', 'youtube', 30], ['Direct', 'cursorfill', 20], ['Web search', 'google', 10], ['TikTok', 'tiktok', 3], ['Facebook', 'facebook', 0], ['SoundCloud', 'soundcloud', 0], ['Snapchat', 'snapchat', 0]]
+    : [['Instagram', 'instagram', 47], ['Direct', 'cursorfill', 23], ['YouTube', 'youtube', 21], ['Web search', 'google', 6], ['TikTok', 'tiktok', 2], ['Facebook', 'facebook', .2], ['SoundCloud', 'soundcloud', .2], ['Snapchat', 'snapchat', .1]]
+  const DEV = wk ? [['desktop', 'Computer', 54, '#111111'], ['mobile', 'Phone', 44, '#9aa0a6'], ['tablet', 'Tablet', 2, '#d9dade']] : [['mobile', 'Phone', 53, '#111111'], ['desktop', 'Computer', 45, '#9aa0a6'], ['tablet', 'Tablet', 2, '#d9dade']]
+  const CT = wk ? [['United States', 168, 93], ['Germany', 16, 11], ['United Kingdom', 16, 10], ['Australia', 12, 4], ['Canada', 11, 6]] : [['United States', 989, 351], ['Germany', 126, 48], ['United Kingdom', 100, 45], ['Netherlands', 87, 33], ['Canada', 83, 26]]
+  const SONGS = wk ? [['Rushing Back [Skeen Remix]', 4, 'https://oinywwblswidyupkpywa.supabase.co/storage/v1/object/public/media/c6c2ea6e-4135-4ebb-afbe-8c9e21785f57/covers/51bc45ed-1df0-4a83-82a0-d366cee8ae92.jpg'], ['Small Talk (Briston Maroney) [Skeen Remix]', 2, 'https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t500x500.jpg'], ['Skeen LIVE @ Navy Pier Open Air', 1, 'https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t500x500.jpg'], ['What I Want', 1, 'https://i.scdn.co/image/ab67616d0000b273d338d47f8f8964cc04f794e2']]
+    : [['Rushing Back [Skeen Remix]', 86, 'https://oinywwblswidyupkpywa.supabase.co/storage/v1/object/public/media/c6c2ea6e-4135-4ebb-afbe-8c9e21785f57/covers/51bc45ed-1df0-4a83-82a0-d366cee8ae92.jpg'], ['Skeen LIVE @ Navy Pier Open Air', 23, 'https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t500x500.jpg'], ['What I Want', 16, 'https://i.scdn.co/image/ab67616d0000b273d338d47f8f8964cc04f794e2'], ['Small Talk (Briston Maroney) [Skeen Remix]', 13, 'https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t500x500.jpg'], ['You Were There', 4, 'https://i.scdn.co/image/ab67616d0000b27302e3919b9f17620c0e5a12ab']]
+  const R0 = 36, CIRC = 2 * Math.PI * R0
+  box.innerHTML = `
+    <div class="sec two">
+      <div><div class="sec-h">${icon('links')}Where they came from</div><div class="rings">${SRC.map(([n, g, p]) => `<div class="ring ${p < 1 ? 'zero' : ''}"><div class="rv"><svg class="r" viewBox="0 0 86 86"><circle cx="43" cy="43" r="${R0}" fill="none" stroke="#f1f1f3" stroke-width="5"/><circle class="arc" cx="43" cy="43" r="${R0}" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round" stroke-dasharray="${CIRC}" stroke-dashoffset="${CIRC}" data-p="${p}"/></svg><span class="rg">${icon(g)}</span></div><span class="rn">${n}</span><span class="rp">${p < 1 ? (p ? '<1%' : '0%') : Math.round(p) + '%'}</span></div>`).join('')}</div></div>
+      <div><div class="sec-h">${icon('mobile')}Phone or computer</div><div class="waffle" id="waffle">${Array.from({ length: 100 }, () => '<i></i>').join('')}</div>
+        <div class="wleg">${DEV.map(([g, n, p, c]) => `<div><span class="sw" style="background:${c}"></span>${icon(g)}<span><div class="wp">${p}%</div><div class="wn">${n}</div></span></div>`).join('')}</div></div>
+    </div>
+    <div class="sec two">
+      <div><div class="sec-h">${icon('globe')}Where they are</div><div class="mapwrap" id="mapwrap"></div></div>
+      <div><div class="sec-h" style="visibility:hidden">${icon('globe')}.</div>${CT.map(([n, v, c]) => `<div class="row"><span class="nm">${n}<small>${c} cities</small></span><span class="meter"><i data-w="${v / CT[0][1]}"></i></span><span class="v">${num(v)}</span></div>`).join('')}<div class="more">+ ${wk ? 29 : 67} more countries</div></div>
+    </div>
+    <div class="sec"><div class="sec-h">${icon('music')}Most played</div><div class="two" style="gap:0 64px">${[SONGS.slice(0, 3), SONGS.slice(3)].map((col) => `<div>${col.map(([n, v, img]) => `<div class="row cover"><img src="${img}" alt=""><span class="nm">${n}</span><span class="meter"><i data-w="${v / SONGS[0][1]}"></i></span><span class="v">${v}</span></div>`).join('')}</div>`).join('')}</div></div>`
+  grow()
+  // rings draw round, one after another
+  box.querySelectorAll('.arc').forEach((a, i) => { const p = +a.dataset.p; setTimeout(() => { a.style.transition = reduce ? 'none' : 'stroke-dashoffset 1.1s cubic-bezier(.22,.8,.24,1)'; a.style.strokeDashoffset = CIRC * (1 - Math.max(p, p ? 1.2 : 0) / 100) }, reduce ? 0 : 250 + i * 90) })
+  // the waffle fills on a diagonal sweep, phone first
+  const cells = [...$('waffle').children], order = cells.map((_, i) => i).sort((a, b) => ((a % 10) + Math.floor(a / 10)) - ((b % 10) + Math.floor(b / 10)) || a - b)
+  let k = 0; const colours = DEV.flatMap(([, , p, c]) => Array(p).fill(c)); while (colours.length < 100) colours.push('#d9dade')
+  order.forEach((ci, i) => setTimeout(() => (cells[ci].style.background = colours[k++]), reduce ? 0 : 200 + i * 9))
+  drawMap(wk ? CITIES7 : CITIES30)
+}
+function grow() { requestAnimationFrame(() => requestAnimationFrame(() => document.querySelectorAll('.row .meter i').forEach((i, n) => { i.style.transitionDelay = (reduce ? 0 : 50 * n) + 'ms'; i.style.transform = `scaleX(${i.dataset.w})` }))) }
+
+/* The world as quiet dots; every city a visit came from as an ink dot, sized by visits, landing
+   biggest first. Land comes from world-atlas, drawn once into a canvas and sampled on a grid. */
+let LAND = null
+async function drawMap(cities) {
+  const box = $('mapwrap'); if (!box || typeof d3 === 'undefined') return
+  const Wm = 640, Hm = 330
+  box.innerHTML = `<canvas width="${Wm * 2}" height="${Hm * 2}" style="aspect-ratio:${Wm}/${Hm}"></canvas><svg viewBox="0 0 ${Wm} ${Hm}"></svg>`
+  if (!LAND) { const t = await (await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json')).json(); LAND = topojson.feature(t, t.objects.land) }
+  const proj = d3.geoNaturalEarth1().fitExtent([[0, 0], [Wm, Hm]], { type: 'Sphere' }).rotate([-10, 0])
+  const off = document.createElement('canvas'); off.width = Wm; off.height = Hm
+  const oc = off.getContext('2d'); oc.fillStyle = '#000'; oc.beginPath(); d3.geoPath(proj, oc)(LAND); oc.fill()
+  const px = oc.getImageData(0, 0, Wm, Hm).data
+  const cv = box.querySelector('canvas').getContext('2d'); cv.scale(2, 2); cv.fillStyle = '#e4e4e7'
+  for (let y = 3; y < Hm; y += 6) for (let x = 3; x < Wm; x += 6) { if (!(px[(y * Wm + x) * 4 + 3] > 0)) continue; const ll = proj.invert([x, y]); if (ll && ll[1] < -57) continue; cv.beginPath(); cv.arc(x, y, 1.35, 0, 7); cv.fill() }
+  const s = box.querySelector('svg'), mx = Math.max(...cities.map((c) => c[2]))
+  const sorted = [...cities].sort((a, b) => b[2] - a[2])
+  sorted.forEach(([lat, lon, v], i) => {
+    const p = proj([lon, lat]); if (!p) return
+    const c = document.createElementNS(NS, 'circle'), r = 1.6 + Math.sqrt(v / mx) * 9
+    c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]); c.setAttribute('r', r); c.setAttribute('fill', '#111'); c.setAttribute('fill-opacity', v > 2 ? .78 : .5)
+    if (!reduce) c.animate([{ r: 0, opacity: 0 }, { r, opacity: 1 }], { duration: 600, delay: 200 + Math.min(i, 120) * 10, easing: 'cubic-bezier(.3,1.4,.5,1)', fill: 'backwards' })
+    s.appendChild(c)
+  })
+}
+
+/* ═══════════ wiring ═══════════ */
+function boot() {
+  document.body.classList.toggle('is-analytics', S.page === 'analytics'); document.body.classList.toggle('is-search', S.page === 'search')
+  wasOn = on(); periods(); verdict(); drawRail(true); unitLine(); lower(); intro()
+}
+const pick = (attr, val) => document.querySelectorAll(`[data-${attr}]`).forEach((x) => x.classList.toggle('on', x.dataset[attr] === val))
+document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => { S.page = b.dataset.page; pick('page', S.page); S.period = S.page === 'analytics' ? '30d' : S.data === 'real' ? '28d' : '3m'; boot() }))
+document.querySelectorAll('[data-data]').forEach((b) => b.addEventListener('click', () => { S.data = b.dataset.data; pick('data', S.data); S.period = S.data === 'real' ? '28d' : '3m'; boot() }))
+const qs = new URLSearchParams(location.search)
+if (qs.get('page') === 'analytics') { S.page = 'analytics'; pick('page', 'analytics'); S.period = '30d' }
+if (qs.get('data') === 'real') { S.data = 'real'; pick('data', 'real'); if (S.page === 'search') S.period = '28d' }
+if (qs.get('on')) S.onOf[S.page] = qs.get('on').split(',')
+document.fonts.ready.then(boot)
+</script>
+</body>
+</html>
