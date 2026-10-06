@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search and Analytics</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Black and white. Colour means ONE thing: which of the four numbers. Four variables, in the
+     categorical order the dataviz validator passed for a white page. */
+  @property --cur { syntax: '<color>'; inherits: true; initial-value: #2a78d6; }
+  :root {
+    --paper: #ffffff; --ink: #111111; --ink-2: #6b7280; --ink-3: #9aa0a6; --line: #ececec; --mist: #f4f4f5;
+    --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+    --ease: cubic-bezier(.22, .8, .24, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: 'Instrument Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 6px; }
+  svg.ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+
+  .mockbar { position: sticky; top: 0; z-index: 50; display: flex; gap: 28px; align-items: center; padding: 12px 40px; background: #fafafa; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+  .mockbar .grp { display: flex; gap: 6px; align-items: center; }
+  .mockbar .grp > span { margin-right: 4px; }
+  .mockbar button { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: #fff; font-size: 12px; }
+  .mockbar button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .is-analytics .search-only { display: none !important; }
+
+  .page { max-width: 1180px; padding: 36px 40px 80px; }
+
+  /* quiet controls: words and glyphs, the current one ink; no boxes */
+  .top { display: flex; justify-content: space-between; align-items: center; min-height: 36px; }
+  .engines { display: flex; gap: 14px; align-items: center; }
+  .eng { position: relative; color: var(--ink-3); transition: color .2s; padding: 4px; }
+  .eng svg { width: 18px; height: 18px; }
+  .eng.on, .eng:hover { color: var(--ink); }
+  .eng .pend { position: absolute; top: 1px; right: -2px; width: 6px; height: 6px; border-radius: 50%; background: #d99a2b; }
+  .periods { position: relative; display: flex; gap: 18px; }
+  .periods button { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); padding: 6px 0; transition: color .25s; }
+  .periods button:hover { color: var(--ink); }
+  .periods button.on { color: var(--ink); font-weight: 700; }
+  .uline { position: absolute; bottom: -2px; height: 2px; border-radius: 2px; background: var(--ink); transition: left .45s var(--ease), width .45s var(--ease), background .35s; }
+
+  .verdict { display: flex; align-items: center; gap: 14px; margin-top: 30px; }
+  .badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fff; flex: none; }
+  .badge.wait { background: var(--mist); color: var(--ink-2); }
+  .badge svg { width: 22px; height: 22px; stroke-width: 2.1; }
+  .badge path.draw { stroke-dasharray: 24; stroke-dashoffset: 24; }
+  .badge.go path.draw { animation: draw .6s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .vt { font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
+  .vs { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
+
+  /* The four numbers are the chart's switch and its legend. Bare glyphs, no box. */
+  .tiles { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 30px; padding-bottom: 14px; }
+  .tile { display: flex; gap: 14px; align-items: center; padding: 6px 4px; text-align: left; }
+  .tile .ico { width: 30px; height: 30px; flex: none; color: var(--ink); transition: color .35s, transform .35s var(--ease); }
+  .tile .ico svg { width: 30px; height: 30px; stroke-width: 1.5; }
+  .tile:hover .ico svg { stroke-width: 2; }
+  .tile.sel .ico, .all-on .tile .ico { color: var(--mc); }
+  .tile.sel .ico { transform: scale(1.06); }
+  .tile .val { display: flex; align-items: baseline; gap: 10px; }
+  .tile .n { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 30px; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .d { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; opacity: 0; transform: translateY(4px); transition: opacity .4s, transform .4s var(--ease); white-space: nowrap; }
+  .tile .d.show { opacity: 1; transform: none; }
+  .tile .d.flat { color: var(--ink-3); font-weight: 400; }
+  .tile .lab { font-size: 13px; color: var(--ink-2); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+  .tile .lab i { width: 7px; height: 7px; border-radius: 50%; background: var(--mc); display: none; }
+  .all-on .tile .lab i { display: inline-block; animation: popin .35s var(--ease); }
+  @keyframes popin { from { transform: scale(0); } }
+  .tiles .uline { bottom: 0; height: 2.5px; background: var(--mc, var(--ink)); }
+  .all-on .tiles .uline { opacity: 0; }
+
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-top: 26px; }
+  .unit { font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .together { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); transition: color .25s; flex: none; padding: 4px 0; }
+  .together:hover { color: var(--ink); }
+  .together.on { color: var(--ink); font-weight: 600; }
+  .together .dots { display: inline-grid; grid-template-columns: repeat(2, 6px); gap: 2px; }
+  .together .dots i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+  .chartwrap { position: relative; margin-top: 4px; }
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .ax { font-family: 'Space Mono', monospace; font-size: 11px; fill: var(--ink-3); }
+  .scrub { pointer-events: none; opacity: 0; transition: opacity .15s; }
+  .scrubbing .scrub { opacity: 1; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; border-radius: 12px; padding: 8px 11px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -100%) translateY(-16px); opacity: 0; transition: opacity .15s; }
+  .tip b { font-family: 'Space Mono', monospace; font-size: 13px; }
+  .tip .dt { color: #b8bcc4; margin-left: 8px; font-family: 'Space Mono', monospace; font-size: 11px; }
+  .tip .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .tip .row:first-child { margin-top: 0; }
+  .tip .row i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .tip .row span { color: #b8bcc4; }
+  .scrubbing .tip.scrubtip { opacity: 1; }
+
+  .pin { cursor: pointer; }
+  .pin .bub { transition: transform .3s var(--ease); transform-box: fill-box; transform-origin: center; }
+  .pin:hover .bub, .pin:focus .bub { transform: scale(1.12); }
+  .card { position: absolute; z-index: 5; width: 280px; padding: 14px 16px; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(17,17,17,.12), 0 0 0 1px rgba(17,17,17,.05); opacity: 0; transform: translate(-50%, calc(-100% - 22px)) scale(.96); transform-origin: bottom center; transition: opacity .22s, transform .32s var(--ease); pointer-events: none; }
+  .card.show { opacity: 1; transform: translate(-50%, calc(-100% - 26px)) scale(1); }
+  .card .h { display: flex; gap: 10px; align-items: center; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .card .ci { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fff; flex: none; }
+  .card .ci.auto { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .card .ci svg { width: 14px; height: 14px; }
+  .card .when { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin: 8px 0 0 38px; }
+  .card .move { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; font-family: 'Space Mono', monospace; font-size: 13px; }
+  .card .move i { width: 8px; height: 8px; border-radius: 50%; }
+  .card .move .a { color: var(--ink-3); }
+  .card .move .b { font-weight: 700; }
+
+  /* Replay (Search only) */
+  .replay { display: none; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px; align-items: start; margin-top: 30px; --accent: var(--c1); }
+  .show-replay .replay { display: grid; }
+  .show-replay .climb { display: none; }
+  .show-replay .tile { pointer-events: none; }
+  .serp { position: relative; border-radius: 20px; background: var(--mist); padding: 22px; }
+  .q { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 18px; border-radius: 99px; background: #fff; font-size: 17px; }
+  .q svg { width: 17px; height: 17px; }
+  .q .caret { width: 1.5px; height: 20px; background: var(--ink); animation: blink 1s steps(1) infinite; margin-left: -6px; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .lanes { position: relative; margin-top: 16px; }
+  .lane { height: 62px; display: grid; grid-template-columns: 26px 1fr; align-items: center; gap: 12px; }
+  .lane .k { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); text-align: right; }
+  .lane .sk { height: 42px; border-radius: 12px; background: #fff; opacity: .55; display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 0 16px; }
+  .lane .sk i { display: block; height: 7px; border-radius: 99px; background: #e9e9ec; }
+  .me { position: absolute; top: 0; left: 38px; right: 0; height: 54px; border-radius: 14px; background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 14px; box-shadow: 0 8px 24px rgba(17,17,17,.10), 0 0 0 1.5px var(--accent); will-change: transform; }
+  .av { width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; }
+  .me .t { font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .me .u { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .toast { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 12px); display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 10px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 13px; opacity: 0; transition: opacity .25s, transform .4s var(--ease); white-space: nowrap; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .ci { width: 24px; height: 24px; border-radius: 50%; background: #fff; color: var(--ink); display: grid; place-items: center; }
+  .toast .ci svg { width: 13px; height: 13px; }
+  .readout .big { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 72px; letter-spacing: -.05em; line-height: .9; font-variant-numeric: tabular-nums; }
+  .readout .big small { font-size: 32px; color: var(--ink-3); letter-spacing: -.02em; margin-right: 2px; }
+  .readout .sub { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; margin-top: 10px; }
+  .readout .when { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); margin-top: 26px; }
+  .readout .seen { margin-top: 22px; display: flex; align-items: center; gap: 10px; }
+  .readout .seen .n { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 22px; }
+  .player { grid-column: 1 / -1; display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: center; margin-top: 4px; }
+  .play { width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; transition: transform .2s var(--ease); }
+  .play:hover { transform: scale(1.06); }
+  .play svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+  .track { position: relative; height: 56px; cursor: pointer; touch-action: none; }
+  .track .rail { position: absolute; left: 0; right: 0; top: 21px; height: 3px; border-radius: 99px; background: var(--line); }
+  .track .fill { position: absolute; left: 0; top: 21px; height: 3px; border-radius: 99px; background: var(--accent); }
+  .track .head { position: absolute; top: 14px; width: 17px; height: 17px; margin-left: -8.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.12); }
+  .track .tp { position: absolute; top: 9px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; transition: transform .35s var(--ease); }
+  .track .tp.auto { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .track .tp svg { width: 12px; height: 12px; }
+  .track .tp.flash { transform: scale(1.3); }
+  .track .tl { position: absolute; top: 40px; white-space: nowrap; font-family: 'Space Mono', monospace; font-size: 10.5px; color: var(--ink-3); transform: translateX(-50%); }
+
+  /* the lists below the chart: same grammar on both pages */
+  .lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px 64px; margin-top: 52px; }
+  .sec-h { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 14px; margin-bottom: 6px; }
+  .sec-h svg { width: 18px; height: 18px; }
+  .row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 1.1fr 54px; gap: 14px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .row:last-child { border-bottom: 0; }
+  .row .g { width: 22px; height: 22px; color: var(--ink); }
+  .row .g svg { width: 22px; height: 22px; }
+  .row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .meter { height: 4px; border-radius: 99px; background: var(--mist); overflow: hidden; }
+  .row .meter i { display: block; height: 100%; border-radius: 99px; background: var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 1s var(--ease); }
+  .row .v { font-family: 'Space Mono', monospace; font-size: 13px; text-align: right; }
+  .row.cover { grid-template-columns: 40px minmax(0, 1fr) 1.1fr 54px; height: 56px; }
+  .row.cover img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
+  .more { margin-top: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--ink-3); }
+  .devices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 10px; }
+  .dev { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding-top: 6px; }
+  .dev .big { position: relative; width: 56px; height: 56px; color: var(--ink-3); }
+  .dev .big svg { position: absolute; inset: 0; width: 56px; height: 56px; }
+  .dev .big .fillw { position: absolute; inset: 0; color: var(--ink); clip-path: inset(100% 0 0 0); transition: clip-path 1.2s var(--ease); }
+  .dev .pc { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 26px; letter-spacing: -.02em; }
+  .dev .nm { font-size: 13px; color: var(--ink-2); margin-top: -6px; }
+  .srch { display: grid; grid-template-columns: minmax(0, 1fr) 84px 54px 60px; gap: 14px; align-items: center; height: 48px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .srch:last-child { border-bottom: 0; }
+  .srch .spark { width: 84px; height: 22px; }
+  .srch .rk { font-family: 'Space Mono', monospace; font-size: 13px; text-align: right; }
+  .srch .mv { font-family: 'Space Mono', monospace; font-size: 11.5px; font-weight: 700; text-align: right; }
+  .srch .mv.flat { color: var(--ink-3); font-weight: 400; }
+  .srch .mv.newb { justify-self: end; font-weight: 600; font-family: 'Instrument Sans'; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--mist); }
+  .clicks { text-decoration: none; display: inline-flex; align-items: center; gap: 10px; margin-top: 44px; font-size: 14px; color: var(--ink-2); transition: color .2s; }
+  .clicks:hover { color: var(--ink); }
+  .clicks b { color: var(--ink); font-family: 'Space Mono', monospace; }
+
+  @media (max-width: 900px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .lower, .replay { grid-template-columns: 1fr; gap: 36px; }
+    .page { padding: 28px 16px 60px; }
+    .unit { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- copied from src/components/ui/icons.tsx, source-glyphs.tsx, device-glyphs.tsx -->
+  <symbol id="i-google" viewBox="0 0 24 24"><path d="M18.13 6.86 A8 8 0 1 0 20 12" fill="none" stroke="currentColor" stroke-width="3.6"/><rect x="12" y="12" width="9.8" height="3.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-bing" viewBox="0 0 24 24"><path d="M6.3 2.6 L10.5 4.15 v11.4 l4.05 -1.7 -2.1 -1 -1.95 -4.4 6.6 2.95 c1.75 0.8 2.55 1.6 2.55 3 0 1.6 -0.95 2.7 -3.15 3.8 L10.5 21.4 6.3 19 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 2.1 C13.05 8 16 10.95 21.9 12 16 13.05 13.05 16 12 21.9 10.95 16 8 13.05 2.1 12 8 10.95 10.95 8 12 2.1 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-podium" viewBox="0 0 24 24"><path d="M3.5 20.5v-6h5.5v6M9 20.5V8.5h6v12M15 20.5v-4h5.5v4M3 20.5h18"/><path d="M12 3.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 5.3l2-.3z" stroke-width="1.2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.4"/><path d="M5.5 19.5c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5l11 6.5-11 6.5z"/></symbol>
+  <symbol id="i-playfill" viewBox="0 0 24 24"><path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M5.2 2.9 L5.2 19.4 L9.7 15.1 L12.5 21.1 L15.2 19.8 L12.4 14 L18.5 13.5 Z"/></symbol>
+  <symbol id="i-cursorfill" viewBox="0 0 24 24"><path d="M5.2 2.9 L5.2 19.4 L9.7 15.1 L12.5 21.1 L15.2 19.8 L12.4 14 L18.5 13.5 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M4 20V4M20 20H4"/><path d="M8 16l3-4 3 2 4-6"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path d="M4.5 6.5h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H11l-4.5 3.5v-3.5h-2a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 16.5h5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-1 1"/><path d="M13.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l1-1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path class="draw" d="M5 12.5l4.5 4.5L19 6.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2.7" y="2.7" width="18.6" height="18.6" rx="5.6"/><circle cx="12" cy="12" r="4.7"/></g><circle cx="17.4" cy="6.6" r="1.35" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-youtube" viewBox="0 0 24 24"><rect x="1.9" y="4.7" width="20.2" height="14.6" rx="4.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M 9.9 8.4 L 16.3 12 L 9.9 15.6 Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-tiktok" viewBox="0 0 24 24"><path d="M13.4 2.6 h3.2 a5.2 5.2 0 0 0 4.8 4.6 v3.2 a8.3 8.3 0 0 1 -4.8 -1.7 v6.5 a6.5 6.5 0 1 1 -6.5 -6.5 q0.7 0 1.4 0.16 v3.3 a3.2 3.2 0 1 0 1.9 2.94 z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-mobile" viewBox="0 0 24 24"><rect x="7.1" y="2.5" width="9.8" height="19" rx="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.6 5.6 h2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="18.4" r="0.95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="18.2" r="0.95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24"><rect x="4.1" y="4.6" width="15.8" height="10.8" rx="1.9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.1 18.7 h19.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
+
+<div class="mockbar">
+  <div class="grp"><span>Page</span><button data-page="search" class="on">Search</button><button data-page="analytics">Analytics</button></div>
+  <div class="grp search-only"><span>Chart</span><button data-chart="climb" class="on">Climb</button><button data-chart="replay">Replay</button></div>
+  <div class="grp search-only"><span>Numbers</span><button data-data="ex" class="on">Example, by January</button><button data-data="real">Skeen today (real)</button></div>
+</div>
+
+<main class="page" id="page">
+  <div class="top">
+    <div class="engines search-only">
+      <button class="eng on" aria-label="Google" title="Google"><svg class="ic"><use href="#i-google"/></svg></button>
+      <button class="eng" aria-label="Bing, no numbers yet" title="Bing · no numbers yet"><svg class="ic"><use href="#i-bing"/></svg><i class="pend"></i></button>
+    </div>
+    <span></span>
+    <div class="periods" id="periods"></div>
+  </div>
+
+  <div class="verdict">
+    <span class="badge" id="badge"><svg class="ic" id="badge-ic"><use href="#i-check"/></svg></span>
+    <div><div class="vt" id="vt"></div><div class="vs" id="vs"></div></div>
+  </div>
+
+  <div class="tiles" id="tiles" role="tablist" aria-label="What the chart shows"></div>
+
+  <div class="climb">
+    <div class="bar">
+      <div class="unit" id="unit"></div>
+      <button class="together" id="together" aria-pressed="false"><span class="dots"><i style="background:var(--c1)"></i><i style="background:var(--c2)"></i><i style="background:var(--c3)"></i><i style="background:var(--c4)"></i></span>All 4</button>
+    </div>
+    <div class="chartwrap" id="chartwrap">
+      <svg class="chart" id="chart" viewBox="0 0 1100 380" role="img" aria-label="Chart"></svg>
+      <div class="tip scrubtip" id="scrubtip"></div>
+      <div class="card" id="card"></div>
+    </div>
+  </div>
+
+  <div class="replay search-only" id="replay">
+    <div class="serp">
+      <div class="q"><svg class="ic"><use href="#i-google"/></svg><span id="qtext"></span><i class="caret"></i></div>
+      <div class="lanes" id="lanes"></div>
+      <div class="toast" id="toast"></div>
+    </div>
+    <div class="readout">
+      <div class="big"><small>#</small><span id="rbig">2.7</span></div>
+      <div class="sub"><svg class="ic" style="width:16px;height:16px"><use href="#i-podium"/></svg>your spot for <b>&nbsp;skeen dj</b></div>
+      <div class="seen"><svg class="ic" style="color:var(--ink-3)"><use href="#i-eye"/></svg><span class="n" id="rseen">40</span><span style="color:var(--ink-2);font-size:13px">seen that week</span></div>
+      <div class="when" id="rwhen">Oct 6</div>
+    </div>
+    <div class="player">
+      <button class="play" id="play" aria-label="Play"><svg class="ic" id="playic"><use href="#i-play"/></svg></button>
+      <div class="track" id="track"><div class="rail"></div><div class="fill" id="fill"></div><div id="tpins"></div><div class="head" id="head"></div></div>
+    </div>
+  </div>
+
+  <div class="lower" id="lower"></div>
+</main>
+
+<script>
+/* ═══════════ shared helpers ═══════════ */
+const DAY = 864e5
+const d = (s) => Date.parse(s + 'T00:00:00Z')
+const fmt = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const $ = (id) => document.getElementById(id)
+const NS = 'http://www.w3.org/2000/svg'
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+const ease = (t) => 1 - Math.pow(1 - t, 3)
+const easeIO = (t) => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const icon = (n, cls = 'ic') => `<svg class="${cls}"><use href="#i-${n}"/></svg>`
+const num = (v) => Math.round(v).toLocaleString('en-US')
+const defined = (v) => v !== null && v !== undefined
+
+/* Monotone cubic (Fritsch–Carlson) over the defined points: smooth, never invents a peak. */
+function monotone(ys) {
+  const n = ys.length
+  if (n < 2) return () => ys[0]
+  const m = [], c1 = [], c2 = [], c3 = []
+  for (let i = 0; i < n - 1; i++) m.push(ys[i + 1] - ys[i])
+  c1.push(m[0])
+  for (let i = 1; i < n - 1; i++) c1.push(m[i - 1] * m[i] <= 0 ? 0 : (2 * m[i - 1] * m[i]) / (m[i - 1] + m[i]))
+  c1.push(m[n - 2])
+  for (let i = 0; i < n - 1; i++) { const k = c1[i] + c1[i + 1] - 2 * m[i]; c2.push(m[i] - c1[i] - k); c3.push(k) }
+  return (x) => { const i = Math.max(0, Math.min(n - 2, Math.floor(x))), t = x - i; return ys[i] + c1[i] * t + c2[i] * t * t + c3[i] * t * t * t }
+}
+/* A series with a gap at the START (visitors before Sep 12): the curve covers what was counted. */
+function curveOf(vals) {
+  const first = vals.findIndex(defined), f = monotone(vals.slice(first))
+  return (x) => (x < first - 1e-9 ? null : f(x - first))
+}
+function niceStep(mx) { const raw = mx / 4, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => s >= raw) }
+
+/* ═══════════ the two pages: same parts, their own numbers ═══════════ */
+const SEARCH = {
+  keys: ['spot', 'seen', 'page1', 'ai'],
+  periods: [['28d', '28d'], ['3m', '3m'], ['all', 'All']],
+  M: {
+    spot: { c: 'var(--c1)', icon: 'podium', lab: 'your spot', invert: true, show: (v) => '#' + v.toFixed(1),
+      unit: "Where Skeen's site sits in Google when someone searches the name. #1 is the very top." },
+    seen: { c: 'var(--c2)', icon: 'eye', lab: 'seen a week', show: num,
+      unit: "How many times Google showed Skeen's site in results each week, AI answers included." },
+    page1: { c: 'var(--c3)', icon: 'search', lab: 'searches on page 1', show: num,
+      unit: "How many different searches put Skeen's site on Google's first page." },
+    ai: { c: 'var(--c4)', icon: 'ai', lab: 'fans sent by AI', show: num,
+      unit: 'Visits from links in ChatGPT, Perplexity and Gemini, counted over the last 4 weeks.' },
+  },
+  allUnit: 'All four together, each measured from its floor to its best. Up is better; hover for the numbers.',
+  data: {
+    ex: {
+      '28d': { start: '2026-12-02', step: 2, spot: [1.6, 1.6, 1.55, 1.6, 1.5, 1.55, 1.5, 1.45, 1.5, 1.4, 1.45, 1.4, 1.35, 1.4], seen: [190, 195, 200, 205, 200, 210, 205, 210, 215, 210, 215, 220, 215, 215], page1: [12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14], ai: [3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8] },
+      '3m': { start: '2026-10-06', step: 7, spot: [2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215], page1: [3, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 14], ai: [0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 8, 8] },
+      'all': { start: '2026-09-29', step: 7, spot: [2.6, 2.7, 2.6, 2.4, 2.2, 2.0, 1.9, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4], seen: [38, 40, 45, 60, 70, 95, 110, 130, 150, 165, 190, 200, 210, 215], page1: [3, 3, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 14], ai: [0, 0, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 8, 8] },
+    },
+    // Skeen, Google, Sep 29 to Oct 5 (Google still counting Oct 4 and 5). AI: our own site numbers.
+    real: { start: '2026-09-29', step: 1, spot: [2.26, 2.27, 2.52, 2.77, 3.38, 2.91, 2.58], seen: [23, 15, 23, 30, 16, 22, 12], page1: [3, 2, 2, 2, 3, 2, 2], ai: [0, 0, 0, 0, 0, 0, 0], wipFrom: 5 },
+  },
+  pins: {
+    ex: [
+      { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', k: 'spot', a: '', b: 'counting starts' },
+      { date: '2026-10-08', icon: 'reply', title: 'Answered 6 fan questions', k: 'spot', a: '#2.6', b: '#2.3' },
+      { date: '2026-10-27', icon: 'note', title: 'Added press quotes', k: 'seen', a: '70', b: '110 a week' },
+      { date: '2026-11-17', icon: 'links', title: 'Linked from Spotify and SoundCloud', k: 'page1', a: '9', b: '11 on page 1' },
+      { date: '2026-12-01', icon: 'google', auto: true, title: 'Sitemap sent after new tour dates', k: 'seen', a: '165', b: '200 a week' },
+    ],
+    real: [
+      { date: '2026-09-29', icon: 'google', auto: true, title: 'Site added to Google', k: 'spot', a: '', b: 'counting starts' },
+      { date: '2026-09-30', icon: 'bing', auto: true, title: 'Added to Bing, sitemap sent', k: 'spot', a: 'too early', b: 'Oct 14' },
+    ],
+  },
+  tiles: {
+    ex: { '28d': { spot: ['#1.4', '↑ 0.2'], seen: ['215', '+25'], page1: ['14', '+2'], ai: ['8', '+5'] }, '3m': { spot: ['#1.4', '↑ 1.3'], seen: ['215', '+175'], page1: ['14', '+11'], ai: ['8', '+8'] }, 'all': { spot: ['#1.4', '↑ 1.2'], seen: ['215', '+177'], page1: ['14', '+11'], ai: ['8', '+8'] } },
+    real: { spot: ['#2.5', '–'], seen: ['140', '–'], page1: ['3', '–'], ai: ['0', '–'] },
+  },
+  verdict: (S) => S.data === 'real'
+    ? { wait: true, icon: 'clock', t: 'Too early to tell', s: 'Google started counting Sep 29. Back on Oct 27.' }
+    : { icon: 'check', t: 'Climbing on Google', s: 'Higher, more often, for more searches' },
+}
+
+// Skeen, Sep 7 to Oct 6 (today still counting). Visitors were first counted Sep 12.
+const A30 = {
+  start: '2026-09-07', step: 1, wipFrom: 29,
+  views: [14, 14, 98, 106, 136, 121, 253, 225, 230, 198, 176, 116, 82, 119, 94, 91, 75, 98, 51, 52, 53, 52, 62, 40, 39, 40, 36, 26, 43, 62],
+  visitors: [null, null, null, null, null, 13, 219, 192, 187, 175, 154, 110, 75, 100, 89, 82, 65, 74, 50, 46, 49, 46, 49, 34, 36, 38, 31, 23, 40, 56],
+  plays: [2, 1, 5, 13, 11, 14, 10, 16, 17, 20, 10, 9, 11, 12, 2, 6, 7, 7, 2, 0, 3, 4, 0, 0, 1, 2, 2, 0, 2, 1],
+  clicks: [1, 0, 7, 6, 5, 17, 84, 81, 83, 71, 72, 39, 26, 47, 29, 24, 21, 41, 21, 13, 19, 10, 22, 11, 9, 13, 10, 11, 13, 40],
+}
+const lastN = (D, n) => { const o = { start: new Date(d(D.start) + (D.views.length - n) * DAY).toISOString().slice(0, 10), step: 1, wipFrom: n - 1 }; for (const k of ['views', 'visitors', 'plays', 'clicks']) o[k] = D[k].slice(-n); return o }
+const ANALYTICS = {
+  keys: ['views', 'visitors', 'plays', 'clicks'],
+  periods: [['7d', '7d'], ['30d', '30d']],
+  M: {
+    views: { c: 'var(--c1)', icon: 'eye', lab: 'views', show: num,
+      unit: 'Every time someone landed on skeenmusic.com, per day. Robots are left out.' },
+    visitors: { c: 'var(--c2)', icon: 'user', lab: 'visitors', show: num,
+      unit: 'Different people per day. Someone who comes back the next day counts again.' },
+    plays: { c: 'var(--c3)', icon: 'music', lab: 'song plays', show: num,
+      unit: 'Songs played on the site, per day.' },
+    clicks: { c: 'var(--c4)', icon: 'cursor', lab: 'link clicks', show: num,
+      unit: 'Taps on links that leave the site (Spotify, tickets, socials), per day.' },
+  },
+  allUnit: 'All four together, each scaled to its own busiest day. Hover for the numbers.',
+  data: { '30d': A30, '7d': lastN(A30, 7) },
+  pins: [
+    { date: '2026-09-12', icon: 'user', auto: true, title: 'Visitors and sources counted from here', k: 'visitors', a: '', b: 'new counting' },
+    { date: '2026-09-13', icon: 'instagram', auto: true, title: 'Busiest day: 253 views', k: 'views', a: '', b: '145 came from Instagram' },
+    { date: '2026-10-05', icon: 'eye', auto: true, title: 'Views now count only when the page is seen', k: 'views', a: '', b: 'a few % lower from here' },
+  ],
+  tiles: {
+    '30d': { views: ['2,801', '+225%'], visitors: ['2,033', ''], plays: ['190', ''], clicks: ['846', ''] },
+    '7d': { views: ['286', ''], visitors: ['258', ''], plays: ['8', ''], clicks: ['107', ''] },
+  },
+  verdict: (S) => S.period === '7d'
+    ? { icon: 'trend', t: '286 views this week', s: 'Busiest day is today, with 62 so far' }
+    : { icon: 'trend', t: '2,801 views in 30 days', s: 'Up 225% on the month before. Busiest day Sep 13.' },
+}
+
+/* ═══════════ state ═══════════ */
+const S = { page: 'search', data: 'ex', period: '3m', chart: 'climb', view: 'spot', prev: 'spot' }
+const P = () => (S.page === 'search' ? SEARCH : ANALYTICS)
+const KEYS = () => P().keys
+const M = (k) => P().M[k]
+const ds = () => (S.page === 'search' ? (S.data === 'real' ? SEARCH.data.real : SEARCH.data.ex[S.period]) : ANALYTICS.data[S.period])
+const allView = () => S.view === 'all'
+const shown = () => (allView() ? KEYS() : [S.view])
+const len = () => ds()[KEYS()[0]].length
+function pins() {
+  const D = ds(), t0 = d(D.start), t1 = t0 + (len() - 1) * D.step * DAY
+  const list = S.page === 'search' ? SEARCH.pins[S.data] : ANALYTICS.pins.filter((p) => allView() || p.k === S.view)
+  return list.filter((p) => d(p.date) >= t0 && d(p.date) <= t1)
+}
+
+/* ═══════════ geometry ═══════════ */
+const W = 1100, H = 380, L = 64, R = 70, T = 54, B = 44, PH = H - T - B, N = 180
+const X = (u) => L + u * (W - L - R)
+const COLORS = ['--c1', '--c2', '--c3', '--c4']
+
+/* One scale per view. A single number gets its own axis. "All 4" puts each on 0..1: counts from 0
+   to their own best, the spot from the bottom rung to #1. Up is better everywhere. */
+function scaleFor(k, view) {
+  const D = ds(), v = D[k].filter(defined)
+  if (M(k).invert) {
+    const hi = Math.max(3, Math.ceil(Math.max(...v) + .25))
+    const y = (r) => T + ((r - 1) / (hi - 1)) * PH
+    if (view === 'all') return { y, ticks: [] }
+    return { y, ticks: Array.from({ length: hi }, (_, i) => ({ v: i + 1, lab: '#' + (i + 1), solid: i === hi - 1 })) }
+  }
+  const mx = Math.max(...v, 0)
+  if (view === 'all') return { y: (val) => T + (1 - (mx ? val / mx : 0)) * PH, ticks: [] }
+  const step = niceStep(Math.max(mx, 2)), top = Math.max(step * Math.ceil(mx / step), step)
+  const ticks = []
+  for (let t = 0; t <= top + 1e-9; t += step) ticks.push({ v: t, lab: num(t), solid: t === 0 })
+  return { y: (val) => T + (1 - val / top) * PH, ticks }
+}
+const pix = {}
+function targetPix(k, view) {
+  const D = ds(), f = curveOf(D[k]), sc = scaleFor(k, view), n = D[k].length
+  return Array.from({ length: N + 1 }, (_, i) => { const v = f((i / N) * (n - 1)); return v === null ? null : sc.y(v) })
+}
+function pathOf(p, from = 0) {
+  let out = '', pen = false
+  for (let i = from; i < p.length; i++) {
+    if (p[i] === null) { pen = false; continue }
+    out += `${pen ? 'L' : 'M'}${X(i / N).toFixed(1)},${p[i].toFixed(1)}`; pen = true
+  }
+  return out
+}
+
+/* ═══════════ svg skeleton ═══════════ */
+const svg = $('chart')
+function buildSvg() {
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--cur)" stop-opacity=".18"/><stop offset="1" style="stop-color:var(--cur)" stop-opacity="0"/></linearGradient>
+      <clipPath id="reveal"><rect id="revealr" x="0" y="0" width="0" height="${H}"/></clipPath>
+      <clipPath id="solid"><rect id="solidr" x="0" y="0" width="${W}" height="${H}"/></clipPath>
+    </defs>
+    <g id="axes"></g><g id="dates"></g>
+    <rect id="band" y="${T - 10}" height="${PH + 10}" style="fill:var(--cur)" opacity="0" rx="10"/>
+    <g clip-path="url(#reveal)"><path id="areap" fill="url(#area)"/></g>
+    ${KEYS().map((k, i) => `<g id="g-${k}" style="opacity:0"><path id="wip-${k}" fill="none" style="stroke:var(${COLORS[i]})" stroke-width="2.6" stroke-dasharray="1 7" stroke-linecap="round" opacity="0"/><path id="ln-${k}" clip-path="url(#solid)" fill="none" style="stroke:var(${COLORS[i]})" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>`).join('')}
+    <g id="dots"></g>
+    <g class="scrub" id="scrubg"><line id="sl" y1="${T - 16}" y2="${H - B}" stroke="#111" stroke-opacity=".18"/></g>
+    <g id="ends"></g><g id="pinsg"></g>`
+  scrubDots = KEYS().map((k, i) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 5); c.setAttribute('fill', '#fff'); c.setAttribute('style', `stroke:var(${COLORS[i]})`); c.setAttribute('stroke-width', 2.5); $('scrubg').appendChild(c); return c })
+}
+let scrubDots = []
+const xWip = () => { const D = ds(); return D.wipFrom === undefined ? W : X((D.wipFrom - 1) / (len() - 1)) }
+
+function drawAxes(animate) {
+  const g = document.createElementNS(NS, 'g')
+  if (allView()) {
+    g.innerHTML = [0, .5, 1].map((p) => `<line x1="${L}" x2="${W - R + 30}" y1="${T + p * PH}" y2="${T + p * PH}" stroke="var(--line)" ${p === 1 ? '' : 'stroke-dasharray="2 6"'}/>`).join('') +
+      `<text class="ax" x="${L - 16}" y="${T + 4}" text-anchor="end">best</text><text class="ax" x="${L - 16}" y="${T + PH + 4}" text-anchor="end">0</text>`
+  } else {
+    const sc = scaleFor(S.view, S.view)
+    g.innerHTML = sc.ticks.map((t) => `<line x1="${L}" x2="${W - R + 30}" y1="${sc.y(t.v)}" y2="${sc.y(t.v)}" stroke="var(--line)" ${t.solid ? '' : 'stroke-dasharray="2 6"'}/><text class="ax" x="${L - 16}" y="${sc.y(t.v) + 4}" text-anchor="end">${t.lab}</text>`).join('')
+  }
+  const box = $('axes'), old = [...box.children]
+  box.appendChild(g)
+  if (animate && !reduce) {
+    g.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.22,.8,.24,1)' })
+    old.forEach((o) => o.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(() => o.remove()))
+  } else old.forEach((o) => o.remove())
+}
+function drawDates(animate) {
+  const D = ds(), g = $('dates'), n = len(); g.innerHTML = ''
+  const every = n > 20 ? 5 : n > 10 ? 2 : 1
+  const at = []; for (let i = 0; i < n; i += every) at.push(i)
+  if (at[at.length - 1] !== n - 1) { if (n - 1 - at[at.length - 1] < every / 2) at.pop(); at.push(n - 1) }
+  for (const i of at) {
+    const t = document.createElementNS(NS, 'text')
+    t.setAttribute('class', 'ax'); t.setAttribute('x', X(i / (n - 1))); t.setAttribute('y', H - 12); t.setAttribute('text-anchor', 'middle')
+    t.textContent = fmt(d(D.start) + i * D.step * DAY)
+    if (animate && !reduce) t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 120 + i * 15, fill: 'backwards' })
+    g.appendChild(t)
+  }
+}
+function renderLines() {
+  const xw = xWip(), k0 = Math.round(((xw - L) / (W - L - R)) * N)
+  $('solidr').setAttribute('width', xw + 1.5)
+  for (const k of KEYS()) {
+    if (!pix[k]) continue
+    $('ln-' + k).setAttribute('d', pathOf(pix[k]))
+    const w = $('wip-' + k)
+    if (xw < W) { w.setAttribute('d', pathOf(pix[k], k0)); w.setAttribute('opacity', 1) } else w.setAttribute('opacity', 0)
+  }
+  if (!allView() && pix[S.view]) {
+    const p = pix[S.view], first = p.findIndex(defined)
+    $('areap').setAttribute('d', pathOf(p) + `L${X(1)},${H - B}L${X(first / N)},${H - B}Z`)
+  }
+}
+function setColor() {
+  const c = allView() ? '#111111' : getComputedStyle(document.documentElement).getPropertyValue(COLORS[KEYS().indexOf(S.view)]).trim()
+  $('chartwrap').style.setProperty('--cur', c)
+}
+function fadeGroups(animate) {
+  for (const k of KEYS()) { const g = $('g-' + k); g.style.transition = animate && !reduce ? 'opacity .4s' : 'none'; g.style.opacity = shown().includes(k) ? 1 : 0 }
+  $('areap').style.transition = 'opacity .4s'; $('areap').style.opacity = allView() ? 0 : 1
+}
+function dots(animate) {
+  const D = ds(), g = $('dots'); g.innerHTML = ''
+  if (allView()) return
+  const k = S.view, sc = scaleFor(k, k), n = len(), ci = COLORS[KEYS().indexOf(k)]
+  D[k].forEach((v, i) => {
+    if (!defined(v)) return
+    const c = document.createElementNS(NS, 'circle'), wip = D.wipFrom !== undefined && i >= D.wipFrom
+    c.setAttribute('cx', X(i / (n - 1))); c.setAttribute('cy', sc.y(v)); c.setAttribute('r', n > 20 ? 2.4 : 3.2)
+    c.setAttribute('style', `fill:${wip ? '#fff' : `var(${ci})`};stroke:var(${ci})`); c.setAttribute('stroke-width', wip ? 1.5 : 0)
+    if (animate && !reduce) c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: i * 12, fill: 'backwards' })
+    g.appendChild(c)
+  })
+}
+const avatarSvg = (k) => `<circle class="pulse" r="18" fill="none" style="stroke:var(${COLORS[KEYS().indexOf(k)]})" stroke-width="1.5" opacity="0"/><circle r="17" fill="#111"/><circle r="17" fill="none" stroke="#fff" stroke-width="2.5"/><text text-anchor="middle" y="5" font-family="Instrument Sans" font-weight="600" font-size="14" fill="#fff">S</text>`
+/* The end of the line is Skeen, climbing whichever number is picked. In "All 4" each line ends in
+   a labelled chip, nudged apart so none collide (identity is never colour alone). */
+function ends(animate) {
+  const D = ds(), g = $('ends'); g.innerHTML = ''
+  const items = shown().map((k) => ({ k, y: pix[k][N], v: D[k][D[k].length - 1] }))
+  items.sort((a, b) => a.y - b.y)
+  for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 24) items[i].y = items[i - 1].y + 24
+  for (let i = items.length - 1; i >= 0; i--) { const cap = i === items.length - 1 ? H - B - 6 : items[i + 1].y - 24; if (items[i].y > cap) items[i].y = cap }
+  items.forEach(({ k, y, v }) => {
+    const el = document.createElementNS(NS, 'g'), ci = COLORS[KEYS().indexOf(k)]
+    if (!allView()) { el.innerHTML = avatarSvg(k); el.id = 'me'; el.setAttribute('transform', `translate(${X(1)},${pix[k][N]})`) }
+    else {
+      const label = M(k).show(v), w = 18 + label.length * 8.2
+      el.innerHTML = `<rect x="10" y="-11" width="${w}" height="22" rx="11" fill="#fff" stroke="var(--line)"/><circle cx="21" cy="0" r="4" style="fill:var(${ci})"/><text x="30" y="4" font-family="Space Mono" font-weight="700" font-size="12" fill="#111">${label}</text><circle r="4.5" fill="#fff" style="stroke:var(${ci})" stroke-width="2.5" cy="${pix[k][N] - y}"/>`
+      el.setAttribute('transform', `translate(${X(1)},${y})`)
+    }
+    if (animate && !reduce) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+    g.appendChild(el)
+  })
+}
+function pulse() { const p = document.querySelector('#me .pulse'); if (p && !reduce) p.animate([{ opacity: .6, r: 17 }, { opacity: 0, r: 34 }], { duration: 1600, easing: 'ease-out', iterations: 2 }) }
+
+/* ═══════════ pins ═══════════ */
+let pinEls = []
+function drawPins(hidden) {
+  const D = ds(), g = $('pinsg'), t0 = d(D.start), span = (len() - 1) * D.step * DAY; g.innerHTML = ''
+  let lastBx = -1e9
+  pinEls = pins().map((p) => {
+    const u = (d(p.date) - t0) / span, x = X(u), top = T - 28
+    const bx = Math.max(x, lastBx + 34); lastBx = bx
+    const py = allView() ? null : pix[S.view][Math.round(u * N)]
+    const yLine = py === null || py === undefined ? H - B : py
+    const el = document.createElementNS(NS, 'g')
+    el.setAttribute('class', 'pin'); el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', p.title)
+    el.setAttribute('transform', `translate(${bx},${top})`)
+    el.innerHTML = `<line x1="0" x2="${x - bx}" y1="15" y2="${yLine - top - 6}" stroke="#111" stroke-opacity=".2" stroke-dasharray="2 3"/>
+      ${allView() || py === null ? '' : `<circle cx="${x - bx}" cy="${yLine - top}" r="4.5" fill="#fff" stroke="#111" stroke-width="1.5"/>`}
+      <g class="bub"><circle r="15" fill="${p.auto ? '#fff' : '#111'}" stroke="#111" stroke-width="1.5"/>
+      <svg x="-8" y="-8" width="16" height="16" viewBox="0 0 24 24" style="color:${p.auto ? '#111' : '#fff'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${p.icon}"/></svg></g>`
+    g.appendChild(el)
+    const show = () => card(p, bx, top, u)
+    el.addEventListener('mouseenter', show); el.addEventListener('focus', show)
+    el.addEventListener('mouseleave', hideCard); el.addEventListener('blur', hideCard)
+    if (hidden) el.style.opacity = 0
+    return { el, x: bx }
+  })
+}
+function popPin(p) {
+  p.el.style.opacity = 1
+  if (reduce) return
+  p.el.querySelector('.bub').animate([{ transform: 'scale(0)' }, { transform: 'scale(1.18)', offset: .6 }, { transform: 'scale(1)' }], { duration: 520, easing: 'cubic-bezier(.3,1.4,.5,1)' })
+  p.el.querySelector('line').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+}
+function card(p, x, y, u) {
+  const c = $('card'), w = $('chartwrap'), s = w.clientWidth / W, ci = COLORS[KEYS().indexOf(p.k)]
+  c.innerHTML = `<div class="h"><span class="ci ${p.auto ? 'auto' : ''}">${icon(p.icon)}</span>${p.title}</div>
+    <div class="when">${fmt(d(p.date))}${p.auto ? ' · done for you' : ''}</div>
+    <div class="move"><i style="background:var(${ci})"></i>${p.a ? `<span class="a">${p.a}</span><span class="a">→</span>` : ''}<span class="b">${p.b}</span></div>`
+  if (S.page === 'analytics') c.querySelector('.when').textContent = fmt(d(p.date))
+  c.style.left = Math.min(Math.max(x * s, 150), w.clientWidth - 150) + 'px'; c.style.top = y * s + 'px'
+  c.classList.add('show')
+  const D = ds(), span = (len() - 1) * D.step, bw = Math.min(14 / span, 1 - u) * (W - L - R)
+  if (S.page === 'search') { const band = $('band'); band.setAttribute('x', x); band.setAttribute('width', Math.max(bw, 0)); band.animate([{ opacity: 0 }, { opacity: .07 }], { duration: 250, fill: 'forwards' }) }
+}
+function hideCard() { $('card').classList.remove('show'); $('band').animate([{ opacity: .07 }, { opacity: 0 }], { duration: 200, fill: 'forwards' }) }
+
+/* ═══════════ the one orchestrated moment ═══════════ */
+function intro() {
+  buildSvg()
+  for (const k of KEYS()) pix[k] = targetPix(k, allView() ? 'all' : k)
+  setColor(); fadeGroups(false); drawAxes(true); drawDates(true); renderLines()
+  $('dots').innerHTML = ''; $('ends').innerHTML = ''; drawPins(true)
+  const lines = shown().map((k) => $('ln-' + k)), lens = lines.map((l) => l.getTotalLength())
+  if (reduce) { $('revealr').setAttribute('width', W); pinEls.forEach(popPin); dots(false); ends(false); return }
+  lines.forEach((l, i) => { l.style.strokeDasharray = lens[i]; l.style.strokeDashoffset = lens[i] })
+  const start = performance.now() + 300, dur = 1700, popped = new Set(), lead = lines[0]
+  const ghost = document.createElementNS(NS, 'g')
+  if (!allView()) { ghost.innerHTML = avatarSvg(S.view); $('ends').appendChild(ghost) }
+  const step = (now) => {
+    const t = Math.min(1, Math.max(0, (now - start) / dur)), e = ease(t)
+    lines.forEach((l, i) => (l.style.strokeDashoffset = lens[i] * (1 - ease(Math.min(1, Math.max(0, (now - start - i * 90) / dur))))))
+    const pt = lead.getPointAtLength(lens[0] * e)
+    ghost.setAttribute('transform', `translate(${pt.x},${pt.y})`)
+    $('revealr').setAttribute('width', pt.x)
+    pinEls.forEach((p, i) => { if (!popped.has(i) && pt.x >= p.x - 4) { popped.add(i); popPin(p) } })
+    if (now - start < dur + 3 * 90) requestAnimationFrame(step)
+    else { lines.forEach((l) => (l.style.strokeDasharray = 'none')); ghost.remove(); dots(true); ends(false); pulse() }
+  }
+  requestAnimationFrame(step)
+}
+
+/* A change of number or period MORPHS: the line bends into the new one and its colour follows. */
+let morphing = 0
+function morph({ dates = false } = {}) {
+  const id = ++morphing, from = {}, to = {}
+  for (const k of KEYS()) { from[k] = pix[k].slice(); to[k] = targetPix(k, allView() ? 'all' : k) }
+  for (const k of KEYS()) if ($('g-' + k).style.opacity === '0' && shown().includes(k)) from[k] = allView() ? to[k].map((v) => (v === null ? null : H - B)) : pix[S.prev] ? pix[S.prev].slice() : from[k]
+  setColor(); fadeGroups(true); drawAxes(true); if (dates) drawDates(true)
+  $('dots').innerHTML = ''; $('ends').innerHTML = ''; $('pinsg').innerHTML = ''; $('revealr').setAttribute('width', W)
+  const start = performance.now(), dur = reduce ? 1 : 760
+  const step = (now) => {
+    if (id !== morphing) return
+    const t = Math.min(1, (now - start) / dur), e = easeIO(t)
+    for (const k of KEYS()) pix[k] = to[k].map((v, i) => (v === null ? null : from[k][i] === null || from[k][i] === undefined ? v : from[k][i] + (v - from[k][i]) * e))
+    renderLines()
+    if (t < 1) requestAnimationFrame(step)
+    else { dots(true); ends(true); drawPins(true); pinEls.forEach((p, i) => setTimeout(() => popPin(p), 50 * i)); pulse() }
+  }
+  requestAnimationFrame(step)
+}
+
+/* Scrub: the nearest point; one value, or all four with their colours. */
+const wrap = $('chartwrap')
+wrap.addEventListener('pointermove', (ev) => {
+  if (ev.target.closest('.pin')) { wrap.classList.remove('scrubbing'); return }
+  const D = ds(), n = len(), rect = svg.getBoundingClientRect(), s = rect.width / W, vx = (ev.clientX - rect.left) / s
+  if (vx < L - 10 || vx > W - R + 14) { wrap.classList.remove('scrubbing'); return }
+  const i = Math.max(0, Math.min(n - 1, Math.round(((vx - L) / (W - L - R)) * (n - 1)))), x = X(i / (n - 1))
+  $('sl').setAttribute('x1', x); $('sl').setAttribute('x2', x)
+  let topY = H
+  KEYS().forEach((k, j) => {
+    const v = D[k][i], on = shown().includes(k) && defined(v)
+    scrubDots[j].style.display = on ? '' : 'none'
+    if (!on) return
+    const y = scaleFor(k, allView() ? 'all' : k).y(v)
+    scrubDots[j].setAttribute('cx', x); scrubDots[j].setAttribute('cy', y); topY = Math.min(topY, y)
+  })
+  const date = fmt(d(D.start) + i * D.step * DAY) + (D.wipFrom !== undefined && i >= D.wipFrom ? ' · still counting' : '')
+  const val = (k) => (defined(D[k][i]) ? M(k).show(D[k][i]) : '–')
+  $('scrubtip').innerHTML = allView()
+    ? `<div class="row"><b style="font-size:11px;color:#b8bcc4;font-weight:400">${date}</b></div>` + KEYS().map((k, j) => `<div class="row"><i style="background:var(${COLORS[j]})"></i><b>${val(k)}</b><span>${M(k).lab}</span></div>`).join('')
+    : `<b>${val(S.view)}</b><span class="dt">${date}</span>`
+  if (topY === H) topY = H - B
+  $('scrubtip').style.left = x * s + 'px'; $('scrubtip').style.top = topY * s + 'px'
+  wrap.classList.add('scrubbing')
+})
+wrap.addEventListener('pointerleave', () => wrap.classList.remove('scrubbing'))
+
+/* ═══════════ the page around it ═══════════ */
+function countUp(el, text, delay) {
+  const m = text.match(/^(\D*)([\d.,]+)(.*)$/)
+  if (!m || reduce) { el.textContent = text; return }
+  const [, pre, raw, post] = m, target = parseFloat(raw.replace(/,/g, '')), dec = (raw.split('.')[1] || '').length, commas = raw.includes(',')
+  const from = pre === '#' ? target + 1.5 : 0, start = performance.now() + delay, dur = 1300
+  const show = (v) => (commas ? Math.round(v).toLocaleString('en-US') : v.toFixed(dec))
+  const step = (now) => { const t = Math.min(1, Math.max(0, (now - start) / dur)); el.textContent = pre + show(from + (target - from) * ease(t)) + post; if (t < 1) requestAnimationFrame(step) }
+  requestAnimationFrame(step)
+}
+function tileVals() { return S.page === 'search' ? (S.data === 'real' ? SEARCH.tiles.real : SEARCH.tiles.ex[S.period]) : ANALYTICS.tiles[S.period] }
+function tiles(animate) {
+  const vals = tileVals()
+  $('tiles').innerHTML = KEYS().map((k, i) => `
+    <button class="tile" role="tab" data-k="${k}" style="--mc:var(${COLORS[i]})">
+      <span class="ico">${icon(M(k).icon)}</span>
+      <span><span class="val"><span class="n" id="tn${i}"></span><span class="d ${vals[k][1] === '–' ? 'flat' : ''}" id="td${i}">${vals[k][1]}</span></span><span class="lab"><i></i>${M(k).lab}</span></span>
+    </button>`).join('') + '<span class="uline" id="tuline"></span>'
+  KEYS().forEach((k, i) => { countUp($(`tn${i}`), vals[k][0], animate ? 300 + i * 90 : 0); setTimeout(() => $(`td${i}`).classList.add('show'), reduce ? 0 : animate ? 1500 + i * 90 : 30) })
+  $('tiles').querySelectorAll('.tile').forEach((b) => b.addEventListener('click', () => choose(b.dataset.k)))
+}
+function markTiles() {
+  let sel = null
+  $('tiles').querySelectorAll('.tile').forEach((b) => { const on = b.dataset.k === S.view; b.classList.toggle('sel', on); b.setAttribute('aria-selected', on); if (on) sel = b })
+  $('page').classList.toggle('all-on', allView())
+  const ul = $('tuline')
+  if (sel) { ul.style.left = sel.offsetLeft + 'px'; ul.style.width = sel.offsetWidth + 'px'; ul.style.setProperty('--mc', sel.style.getPropertyValue('--mc')) }
+  $('together').classList.toggle('on', allView()); $('together').setAttribute('aria-pressed', allView())
+  const u = $('unit'); u.textContent = allView() ? P().allUnit : M(S.view).unit
+  u.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: reduce ? 1 : 350, easing: 'cubic-bezier(.22,.8,.24,1)' })
+}
+function choose(k) { if (k === S.view || S.chart !== 'climb') return; S.prev = S.view; S.view = k; markTiles(); morph() }
+$('together').addEventListener('click', () => choose(allView() ? (S.prev === 'all' ? KEYS()[0] : S.prev) : 'all'))
+function verdict() {
+  const v = P().verdict(S), b = $('badge')
+  b.classList.toggle('wait', !!v.wait); b.classList.remove('go')
+  $('badge-ic').innerHTML = `<use href="#i-${v.icon}"/>`
+  $('vt').textContent = v.t; $('vs').textContent = v.s
+  if (v.icon === 'check') { void b.offsetWidth; setTimeout(() => b.classList.add('go'), reduce ? 0 : 1900) }
+}
+function periods() {
+  $('periods').innerHTML = P().periods.map(([k, lab]) => `<button data-p="${k}" class="${S.period === k ? 'on' : ''}">${lab}</button>`).join('') + '<span class="uline" id="puline"></span>'
+  $('periods').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setPeriod(b.dataset.p)))
+  requestAnimationFrame(movePul)
+}
+function movePul() { const on = $('periods').querySelector('button.on'), u = $('puline'); if (on && u) { u.style.left = on.offsetLeft + 'px'; u.style.width = on.offsetWidth + 'px' } }
+function setPeriod(p) {
+  if (p === S.period || (S.page === 'search' && S.data === 'real')) return
+  S.period = p; $('periods').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.p === p)); movePul()
+  tiles(false); markTiles(); verdict(); lower()
+  if (S.chart === 'climb' || S.page === 'analytics') morph({ dates: true }); else { pause(); replaySet(); play() }
+}
+
+/* ═══════════ the lists under the chart ═══════════ */
+function meterRows(rows, max, cover = false) {
+  return rows.map((r) => `<div class="row ${cover ? 'cover' : ''}">${cover ? `<img src="${r.img}" alt="">` : `<span class="g">${r.g ? icon(r.g) : ''}</span>`}<span class="nm">${r.name}</span><span class="meter"><i data-w="${r.v / max}"></i></span><span class="v">${r.label ?? num(r.v)}</span></div>`).join('')
+}
+function growMeters() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll('.row .meter i').forEach((i, n) => { i.style.transitionDelay = (reduce ? 0 : 60 * n) + 'ms'; i.style.transform = `scaleX(${i.dataset.w})` })
+    document.querySelectorAll('.dev .fillw').forEach((f) => (f.style.clipPath = `inset(${100 - f.dataset.p}% 0 0 0)`))
+  }))
+}
+function lower() {
+  if (S.page === 'search') {
+    const k = S.data === 'real' ? 'real' : 'ex'
+    const SR = { ex: [['skeen dj', [2.6, 2.4, 2.1, 1.8, 1.6, 1.4, 1.3], '#1.3', '↑ 1.3'], ['chicago house dj', [9.8, 8.6, 7.9, 7.2], '#7.2', 'new'], ['skeen rushing back remix', [2.4, 2.1, 1.9, 1.8], '#1.8', 'new'], ['dj skeen', [2.4, 2.2, 1.9, 1.7, 1.5], '#1.5', '↑ 0.9']], real: [['skeen dj', [2.6, 2.8], '#2.6', '–'], ['dj skeen', [2.5, 2.3], '#2.4', '–'], ['skeen music', [2.3, 1.5], '#2.0', '–']] }[k]
+    const AI = { ex: [['ChatGPT', 6], ['Perplexity', 2], ['Gemini', 0]], real: [['ChatGPT', 0], ['Perplexity', 0], ['Gemini', 0]] }[k]
+    const amax = Math.max(1, ...AI.map((a) => a[1]))
+    $('lower').innerHTML = `
+      <div><div class="sec-h">${icon('search')}What people searched</div>${SR.map(([q, tr, rk, mv]) => { const mn = Math.min(...tr, 1), mx = Math.max(...tr) + .2; const pts = tr.map((v, i) => `${(i / Math.max(1, tr.length - 1)) * 80 + 2},${((v - mn) / (mx - mn)) * 16 + 3}`).join(' '); return `<div class="srch"><span>${q}</span><svg class="spark" viewBox="0 0 84 22"><polyline points="${pts}" fill="none" style="stroke:var(--c1)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="rk">${rk}</span><span class="mv ${mv === 'new' ? 'newb' : mv === '–' ? 'flat' : ''}">${mv}</span></div>` }).join('')}</div>
+      <div><div class="sec-h">${icon('ai')}Fans sent by AI</div>${meterRows(AI.map(([name, v]) => ({ name, v, g: 'ai' })), amax)}
+        <a class="clicks" href="#" onclick="return false">${icon('google')}<b>${S.data === 'real' ? 25 : 61}</b> clicks from Google, see who they were on Analytics ${icon('ext')}</a></div>`
+  } else {
+    const wk = S.period === '7d'
+    // Skeen's real numbers: Sep 7 to Oct 6, and the last 7 days (Sep 30 to Oct 6)
+    const SRC = wk ? [['Instagram', 102, 'instagram'], ['YouTube', 85, 'youtube'], ['Direct', 58, 'cursorfill'], ['Google', 30, 'google'], ['TikTok', 9, 'tiktok']] : [['Instagram', 1094, 'instagram'], ['Direct', 529, 'cursorfill'], ['YouTube', 487, 'youtube'], ['Google and Bing', 151, 'google'], ['TikTok', 36, 'tiktok']]
+    const tot = SRC.reduce((n, r) => n + r[1], 0) + (wk ? 2 : 30), moreSrc = wk ? 1 : 4
+    const CT = wk ? [['United States', 168], ['Germany', 16], ['United Kingdom', 16], ['Australia', 12], ['Canada', 11]] : [['United States', 989], ['Germany', 126], ['United Kingdom', 100], ['Netherlands', 87], ['Canada', 83]]
+    const SONGS_WK = [['Rushing Back [Skeen Remix]', 4, 'https://oinywwblswidyupkpywa.supabase.co/storage/v1/object/public/media/c6c2ea6e-4135-4ebb-afbe-8c9e21785f57/covers/51bc45ed-1df0-4a83-82a0-d366cee8ae92.jpg'], ['Small Talk (Briston Maroney) [Skeen Remix]', 2, 'https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t500x500.jpg'], ['Skeen LIVE @ Navy Pier Open Air', 1, 'https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t500x500.jpg'], ['What I Want', 1, 'https://i.scdn.co/image/ab67616d0000b273d338d47f8f8964cc04f794e2']]
+    const SONGS_MO = [['Rushing Back [Skeen Remix]', 86, 'https://oinywwblswidyupkpywa.supabase.co/storage/v1/object/public/media/c6c2ea6e-4135-4ebb-afbe-8c9e21785f57/covers/51bc45ed-1df0-4a83-82a0-d366cee8ae92.jpg'], ['Skeen LIVE @ Navy Pier Open Air', 23, 'https://i1.sndcdn.com/artworks-meoNkzNdXypr1Iw8-fSaqyQ-t500x500.jpg'], ['What I Want', 16, 'https://i.scdn.co/image/ab67616d0000b273d338d47f8f8964cc04f794e2'], ['Small Talk (Briston Maroney) [Skeen Remix]', 13, 'https://i1.sndcdn.com/artworks-zgNy2DVV1R935OOc-jI4ceg-t500x500.jpg'], ['You Were There', 4, 'https://i.scdn.co/image/ab67616d0000b27302e3919b9f17620c0e5a12ab']]
+    const SONGS = wk ? SONGS_WK : SONGS_MO
+    const DEV = wk ? [['desktop', 'Computer', 54], ['mobile', 'Phone', 44], ['tablet', 'Tablet', 2]] : [['mobile', 'Phone', 53], ['desktop', 'Computer', 44], ['tablet', 'Tablet', 2]]
+    $('lower').innerHTML = `
+      <div><div class="sec-h">${icon('links')}Where they came from</div>${meterRows(SRC.map(([name, v, g]) => ({ name, v, g, label: Math.round((v / tot) * 100) + '%' })), SRC[0][1])}<div class="more">+ ${moreSrc} more</div></div>
+      <div><div class="sec-h">${icon('mobile')}Phone or computer</div><div class="devices">${DEV.map(([g, name, p]) => `<div class="dev"><span class="big">${icon(g)}<span class="fillw" data-p="${p}">${icon(g)}</span></span><span class="pc">${p}%</span><span class="nm">${name}</span></div>`).join('')}</div></div>
+      <div><div class="sec-h">${icon('globe')}Where they are</div>${meterRows(CT.map(([name, v]) => ({ name, v })), CT[0][1])}<div class="more">${wk ? '+ 29 more countries' : '+ 67 more countries'}</div></div>
+      <div><div class="sec-h">${icon('music')}Most played</div>${meterRows(SONGS.map(([name, v, img]) => ({ name, v, img })), SONGS[0][1], true)}</div>`
+  }
+  growMeters()
+}
+
+/* ═══════════ Replay (Search only) ═══════════ */
+let rp = { t: 0, playing: false, raf: 0, last: 0, passed: new Set() }
+function replaySet() {
+  const D = ds(), rows = Math.max(4, Math.ceil(Math.max(...D.spot)) + 1)
+  $('lanes').innerHTML = Array.from({ length: rows }, (_, i) => `<div class="lane"><span class="k">#${i + 1}</span><div class="sk"><i style="width:${38 + ((i * 37) % 30)}%"></i><i style="width:${60 + ((i * 23) % 25)}%;opacity:.6"></i></div></div>`).join('') +
+    `<div class="me" id="mecard"><span class="av">S</span><div><div class="t">Skeen · Chicago house DJ and producer</div><div class="u">skeenmusic.com</div></div></div>`
+  const n = D.spot.length, t0 = d(D.start), span = (n - 1) * D.step * DAY
+  $('tpins').innerHTML = pins().map((p) => `<span class="tp ${p.auto ? 'auto' : ''}" data-u="${(d(p.date) - t0) / span}" title="${p.title}" style="left:${((d(p.date) - t0) / span) * 100}%">${icon(p.icon)}</span>`).join('') +
+    Array.from({ length: n }, (_, i) => (i % (n > 10 ? 3 : 1) && i !== n - 1 ? '' : `<span class="tl" style="left:${(i / (n - 1)) * 100}%;${i === 0 ? 'transform:none' : i === n - 1 ? 'transform:translateX(-100%)' : ''}">${fmt(t0 + i * D.step * DAY)}</span>`)).join('')
+  rp.passed = new Set(); replayAt(0)
+}
+function replayAt(t) {
+  rp.t = t
+  const D = ds(), n = D.spot.length, x = t * (n - 1), r = monotone(D.spot)(x)
+  $('mecard').style.transform = `translateY(${(r - 1) * 62 + 4}px)`
+  $('rbig').textContent = r.toFixed(1); $('rseen').textContent = Math.round(monotone(D.seen)(x))
+  $('rwhen').textContent = fmt(d(D.start) + x * D.step * DAY)
+  $('fill').style.width = t * 100 + '%'; $('head').style.left = t * 100 + '%'
+  const ps = pins()
+  document.querySelectorAll('#tpins .tp').forEach((el, i) => { const u = +el.dataset.u; if (t >= u && !rp.passed.has(i)) { rp.passed.add(i); if (rp.playing) flash(el, ps[i]) } if (t < u) rp.passed.delete(i) })
+}
+function flash(el, p) {
+  el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 420)
+  $('toast').innerHTML = `<span class="ci">${icon(p.icon)}</span>${p.title}`
+  $('toast').classList.add('show'); clearTimeout(rp.tt); rp.tt = setTimeout(() => $('toast').classList.remove('show'), 1700)
+}
+function play() {
+  if (rp.t >= 1) replayAt(0)
+  rp.playing = true; $('playic').innerHTML = '<use href="#i-pause"/>'; rp.last = performance.now()
+  const step = (now) => { if (!rp.playing) return; const t = Math.min(1, rp.t + (now - rp.last) / 6500); rp.last = now; replayAt(t); if (t < 1) rp.raf = requestAnimationFrame(step); else pause() }
+  rp.raf = requestAnimationFrame(step)
+}
+function pause() { rp.playing = false; cancelAnimationFrame(rp.raf); $('playic').innerHTML = '<use href="#i-play"/>' }
+$('play').addEventListener('click', () => (rp.playing ? pause() : play()))
+const track = $('track'), seek = (ev) => { const r = track.getBoundingClientRect(); replayAt(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width))) }
+track.addEventListener('pointerdown', (ev) => { pause(); track.setPointerCapture(ev.pointerId); seek(ev); track.onpointermove = seek })
+track.addEventListener('pointerup', () => (track.onpointermove = null))
+function typeQuery(done) {
+  const q = 'skeen dj', el = $('qtext'); el.textContent = ''
+  if (reduce) { el.textContent = q; done(); return }
+  let i = 0; const tick = () => { el.textContent = q.slice(0, ++i); if (i < q.length) setTimeout(tick, 70); else setTimeout(done, 350) }
+  setTimeout(tick, 300)
+}
+
+/* ═══════════ wiring ═══════════ */
+function boot() {
+  document.body.classList.toggle('is-analytics', S.page === 'analytics')
+  $('page').classList.toggle('show-replay', S.page === 'search' && S.chart === 'replay')
+  periods(); verdict(); tiles(true); requestAnimationFrame(markTiles); lower()
+  if (S.page === 'analytics' || S.chart === 'climb') intro(); else { pause(); replaySet(); typeQuery(play) }
+}
+const pick = (attr, val) => document.querySelectorAll(`[data-${attr}]`).forEach((x) => x.classList.toggle('on', x.dataset[attr] === val))
+document.querySelectorAll('[data-page]').forEach((b) => b.addEventListener('click', () => {
+  S.page = b.dataset.page; pick('page', S.page)
+  S.view = KEYS()[0]; S.prev = S.view
+  S.period = S.page === 'analytics' ? '30d' : S.data === 'real' ? '28d' : '3m'
+  boot()
+}))
+document.querySelectorAll('[data-chart]').forEach((b) => b.addEventListener('click', () => { S.chart = b.dataset.chart; pick('chart', S.chart); if (S.chart === 'replay') S.view = 'spot'; boot() }))
+document.querySelectorAll('[data-data]').forEach((b) => b.addEventListener('click', () => { S.data = b.dataset.data; pick('data', S.data); S.period = S.data === 'real' ? '28d' : '3m'; boot() }))
+const qs = new URLSearchParams(location.search)
+if (qs.get('page') === 'analytics') { S.page = 'analytics'; pick('page', 'analytics'); S.view = 'views'; S.prev = 'views'; S.period = '30d' }
+if (qs.get('data') === 'real') { S.data = 'real'; pick('data', 'real'); if (S.page === 'search') S.period = '28d' }
+if (qs.get('view')) S.view = qs.get('view')
+if (qs.get('chart') === 'replay') { S.chart = 'replay'; pick('chart', 'replay') }
+document.fonts.ready.then(boot)
+</script>
+</body>
+</html>
