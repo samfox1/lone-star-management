@@ -39,7 +39,7 @@ export const STANDARD_AREAS: Area[] = [
   {
     title: 'Profile page',
     about: 'Who the artist is, on one page: the name, bio, type, genre, other names, the year they started and where they are based (the SEO/GEO Facts tab until 2026-10-02).',
-    include: ['tests/components/manager-tools/profile/profile-view.test.tsx', 'tests/unit/manager-tools/profile/profile.test.ts'],
+    include: ['tests/components/manager-tools/profile/', 'tests/unit/manager-tools/profile/'],
   },
   {
     title: 'SEO / GEO saved runs (database)',
