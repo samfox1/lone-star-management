@@ -8,13 +8,36 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
-    include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
-    // Integration tests share ONE real database and the two seeded artists.
-    // Running test files sequentially keeps their fixtures from interleaving
-    // (e.g. a publish snapshotting another file's leftover working rows).
-    // This only orders ONE process. Across processes (two runs at once) the same rule is
-    // kept by the machine-wide lock in vitest.setup.ts → tests/helpers/db-lock.ts.
-    fileParallelism: false,
+    // TWO PROJECTS, split on the tests/ folder rule (AGENTS.md "Where a test goes"). Both
+    // inherit everything else here (`extends: true`). Until 2026-10-05 the whole suite ran one
+    // file at a time for the sake of the integration files alone; the DB-free files share
+    // nothing, and paid ~2 minutes a run waiting on each other's imports and jsdom setup.
+    // `include` is per project, never here: `extends` ADDS arrays, so a root include would put
+    // every unit file into the integration project as well, and run it twice.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'db-free',
+          include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
+          exclude: ['**/node_modules/**', 'tests/integration/**'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['tests/integration/**/*.test.{ts,tsx}'],
+          // Integration tests share ONE real database and the two seeded artists.
+          // Running these files one at a time keeps their fixtures from interleaving
+          // (e.g. a publish snapshotting another file's leftover working rows). Vitest runs a
+          // one-at-a-time project as its own group, after the parallel one finishes.
+          // This only orders ONE process. Across processes (two runs at once) the same rule is
+          // kept by the machine-wide lock in vitest.setup.ts → tests/helpers/db-lock.ts.
+          fileParallelism: false,
+        },
+      },
+    ],
     // Most of this suite crosses the internet to a HOSTED Postgres — a single
     // `publishAll` is ~30 round-trips. Vitest's 5s default is a unit-test budget: it
     // silently assumed <165ms per round-trip and passed only while latency happened to

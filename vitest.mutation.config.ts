@@ -40,7 +40,8 @@ export default defineConfig({
      * integration/ that touches no DB, or a file OUTSIDE it that does, both fail.
      */
     exclude: ['**/node_modules/**', 'tests/integration/**'],
-    fileParallelism: false,
+    // Files run in parallel: nothing in this slice shares state (2026-10-05: 185 s one at a time,
+    // 70 s in parallel). Stryker still runs one worker per sandbox on its own.
     testTimeout: 20_000,
     hookTimeout: 20_000,
     clearMocks: true,
