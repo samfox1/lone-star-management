@@ -132,9 +132,10 @@ export async function deleteEnquiryAction(
 // Enquiry kinds and their recipient lists (20260921120000)
 // ---------------------------------------------------------------------------
 /**
- * Who receives each kind of enquiry. The kinds are the artist's to invent; each one owns a
- * list that is ADDED to the booking address the rung chain resolves (Settings owns that
- * address — these actions never touch it).
+ * Who receives each kind of enquiry. The kinds are the artist's to invent; each one goes ONLY
+ * to its own list (20261002210000, Sam: "I should have to add each one individually"), and only
+ * to the addresses on it that are confirmed (20261006120000). There is no booking address added
+ * on top any more.
  *
  * Every write below goes through the request-bound client, so RLS scopes it to the caller's
  * tenant, AND through `requireOwnedArtist` — belt and braces, per the note in `_owns.ts`.

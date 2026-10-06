@@ -4,9 +4,10 @@
  * THE SLUG IS NOT A NAME. It is the value the artist's site sends as `purpose`, and
  * `resolve_enquiry_recipients` matches it by equality against `enquiry_kinds.slug` to find
  * that kind's recipient list. It is also IMMUTABLE — a trigger refuses any change, because
- * renaming it would leave the site posting a word that matches no kind and every enquiry of
- * that kind would quietly fall back to the primary with its list skipped, no error anywhere
- * (see 20260921120000). The label is the part a human reads and can be changed at will.
+ * renaming it would leave the site posting a word that matches no kind, and every enquiry of
+ * that kind would quietly be filed under `other` (Contact) and go to that list instead, no
+ * error anywhere (submit_enquiry, 20260928141000). The label is the part a human reads and can
+ * be changed at will.
  *
  * So the derivation below has exactly one hard requirement: whatever it returns must satisfy
  * `ek_slug_fmt`, `^[a-z0-9][a-z0-9-]{0,39}$`. A malformed slug is not an ugly name, it is a

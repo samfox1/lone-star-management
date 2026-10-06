@@ -1,9 +1,8 @@
 /**
  * SETTINGS · GENERAL — the artist-level facts that have no other home (Sam, 2026-09-13): the
  * site's address and the platform address, both read-only. The name moved to Profile on
- * 2026-10-02 (PROFILE_TOOL_PLAN.md); the booking email moved to Settings › Email the same day
- * ("Remove email from General"), where it is the Booking row's first address
- * (lib/enquiries/booking.ts).
+ * 2026-10-02 (PROFILE_TOOL_PLAN.md); email left General the same day ("Remove email from
+ * General"): who receives enquiries is set per kind in Settings › Email.
  *
  * Pure. The page reads and passes in; the view renders what comes out.
  */

@@ -29,9 +29,8 @@ export default async function EmailSettingsPage({ params }: { params: Promise<{ 
   // (20261002210000): no booking address or site contact is added, so none is read here.
   //
   // Beside it, which addresses have confirmed (EMAIL_CONFIRM_PLAN.md §3): every address on the
-  // lists, once, confirmed or waiting. confirmStateFrom reads a failure: before 20261006120000
-  // is pushed the function is missing and the page works as it did (TODO there: remove that
-  // fallback after the push); any other failure shows every address waiting, never confirmed.
+  // lists, once, confirmed or waiting. ANY failure of that read, a missing function included,
+  // shows every address waiting, never confirmed (confirmStateFrom).
   const [{ data: kindRows }, status] = await Promise.all([
     supabase.from('enquiry_kinds').select(KIND_SELECT).eq('artist_id', id).order('sort_order').order('created_at'),
     supabase.rpc('email_confirmation_status', { p_artist_id: id }),
